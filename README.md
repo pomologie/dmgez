@@ -2,7 +2,7 @@
 
 A pure Rust library and CLI for creating, reading, and manipulating macOS disk images.
 
-The current implementation wraps an existing sector-aligned raw image in single-segment UDRO or UDZO. The optional `inspect` feature enables metadata inspection, container checksum verification, and raw export. Building an HFS+ filesystem from a file tree is tracked in the sibling HFS+ project.
+The CLI wraps an existing sector-aligned raw image in single-segment UDRO or UDZO. The optional `inspect` feature enables metadata inspection, container checksum verification, and raw export. The `dmgez-config` crate parses and validates version-one project manifests before the build layer accesses source paths. File-tree builds through the CLI still require integration with the sibling HFS+ builder.
 
 ```sh
 cargo run --locked -- wrap-raw volume.raw -o volume.dmg

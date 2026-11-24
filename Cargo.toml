@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/dmgez-cli", "crates/formats/dmgez-udif"]
+members = ["apps/dmgez-cli", "crates/formats/dmgez-udif", "crates/foundation/dmgez-config"]
 default-members = ["apps/dmgez-cli"]
 exclude = ["fuzz"]
 
@@ -19,8 +19,10 @@ plist = { version = "1.10.4", default-features = false }
 proptest = { version = "1.12.0", default-features = false, features = ["std"] }
 quick-xml = { version = "0.42.0", default-features = false }
 rayon = "1.12.0"
+serde = { version = "1.0.229", features = ["derive"] }
 tempfile = "3.27.0"
 thiserror = "2.0.21"
+toml = { version = "1.2.1", default-features = false, features = ["parse", "serde", "std"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
