@@ -3,3 +3,5 @@
 pub mod execution;
 pub mod manifest;
 pub mod preflight;
+#[cfg(feature = "finder-write")]
+pub mod presentation;
