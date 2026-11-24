@@ -309,19 +309,10 @@ impl<S: ReadAt> Image<S> {
 	pub fn read_exact_at(&mut self, offset: u64, output: &mut [u8]) -> Result<(), Error> {
 		let range = admitted_range(offset, output.len() as u64, self.descriptor.logical_bytes)?;
 		self.source.check_unchanged()?;
-		let (mut position, mut written) = (offset, 0);
-		let first = self
-			.logical_order
-			.partition_point(|&i| self.runs[i].logical.end <= offset);
-		let mut ordinal = first;
-		while position < range.end {
-			let index = self.logical_order[ordinal];
-			let run = &self.runs[index];
-			let take = (run.logical.end.min(range.end) - position) as usize;
-			self.read_run(index, position, &mut output[written..written + take])?;
-			written += take;
-			position += take as u64;
-			ordinal += 1;
+		let mut cursor = index::ReadCursor::new(&self.runs, &self.logical_order, range);
+		while let Some((index, piece)) = cursor.next(&self.runs, &self.logical_order) {
+			let target = (piece.start - offset) as usize..(piece.end - offset) as usize;
+			self.read_run(index, piece.start, &mut output[target])?;
 		}
 		self.source.check_unchanged()
 	}

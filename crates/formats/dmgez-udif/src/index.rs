@@ -6,6 +6,10 @@ use crate::{
 	validation::checked_range,
 };
 
+#[cfg(kani)]
+#[path = "../verification/kani/read_ranges.rs"]
+mod read_ranges_proof;
+
 #[derive(Debug)]
 pub(crate) struct Run {
 	pub logical: Range<u64>,
@@ -126,6 +130,39 @@ pub(crate) fn order_runs(runs: &[Run], disk_len: u64) -> Result<Vec<usize>, Erro
 		return Err(Error::Corrupt("mish runs reuse overlapping physical data"));
 	}
 	Ok(ordered)
+}
+
+// A cursor over a request admitted against a contiguous logical partition.
+pub(crate) struct ReadCursor {
+	remaining: Range<u64>,
+	ordinal: usize,
+}
+
+impl ReadCursor {
+	pub(crate) fn new(runs: &[Run], logical_order: &[usize], request: Range<u64>) -> Self {
+		let ordinal =
+			logical_order.partition_point(|&index| runs[index].logical.end <= request.start);
+		Self {
+			remaining: request,
+			ordinal,
+		}
+	}
+
+	pub(crate) fn next(
+		&mut self,
+		runs: &[Run],
+		logical_order: &[usize],
+	) -> Option<(usize, Range<u64>)> {
+		if self.remaining.is_empty() {
+			return None;
+		}
+		let index = logical_order[self.ordinal];
+		let end = runs[index].logical.end.min(self.remaining.end);
+		let piece = self.remaining.start..end;
+		self.remaining.start = end;
+		self.ordinal += 1;
+		Some((index, piece))
+	}
 }
 
 pub(crate) fn bytes(sectors: u64) -> Result<u64, Error> {
