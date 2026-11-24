@@ -2,3 +2,5 @@
 
 #[cfg(feature = "staging")]
 pub mod output;
+#[cfg(feature = "source")]
+pub mod source;

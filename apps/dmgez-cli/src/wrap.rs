@@ -1,9 +1,9 @@
-use std::{
-	fs::{File, Metadata},
-	path::Path,
-};
+use std::{fs::File, path::Path};
 
-use dmgez_core::output::publish_new;
+use dmgez_core::{
+	output::publish_new,
+	source::{CapturedFile, SourceError},
+};
 use dmgez_udif::{
 	Error,
 	writer::{self, Execution, Profile, WriteOptions},
@@ -20,11 +20,7 @@ pub(crate) fn run(
 	serial: bool,
 	threads: Option<usize>,
 ) -> CliResult {
-	let input = File::open(input)?;
-	let before = input.metadata()?;
-	if !before.is_file() {
-		return Err("raw source must be a regular file".into());
-	}
+	let input = CapturedFile::new(File::open(input)?)?;
 	let execution = match (serial, cfg!(feature = "parallel"), threads) {
 		(true, _, _)
 		| (false, false, None | Some(Execution::AUTO_WORKERS | SERIAL_WORKER_COUNT)) => Execution::Serial,
@@ -44,12 +40,13 @@ pub(crate) fn run(
 	};
 	let report = publish_new(
 		destination,
-		|stage| writer::write_image(&input, before.len(), stage, &options),
+		|stage| writer::write_image(input.reader(), input.len(), stage, &options),
 		|_, _| {
-			if changed(&before, &input.metadata()?)? {
-				return Err(Error::SourceChanged);
-			}
-			Ok(())
+			input.validate().map_err(|error| match error {
+				SourceError::Changed => Error::SourceChanged,
+				SourceError::Io(error) => error.into(),
+				error => std::io::Error::other(error).into(),
+			})
 		},
 	)?;
 	println!(
@@ -57,15 +54,4 @@ pub(crate) fn run(
 		report.physical_bytes, report.logical_bytes
 	);
 	Ok(())
-}
-
-fn changed(before: &Metadata, after: &Metadata) -> std::io::Result<bool> {
-	#[cfg(unix)]
-	{
-		use std::os::unix::fs::MetadataExt;
-		if (before.ctime(), before.ctime_nsec()) != (after.ctime(), after.ctime_nsec()) {
-			return Ok(true);
-		}
-	}
-	Ok(before.len() != after.len() || before.modified()? != after.modified()?)
 }

@@ -14,7 +14,7 @@ path = "src/main.rs"
 
 [features]
 default = ["build", "parallel"]
-build = ["dep:dmgez-core", "dep:dmgez-udif", "dmgez-udif/write", "dmgez-udif/zlib"]
+build = ["dep:dmgez-core", "dmgez-core/source", "dep:dmgez-udif", "dmgez-udif/write", "dmgez-udif/zlib"]
 parallel = ["dmgez-udif?/parallel"]
 inspect = ["dep:dmgez-core", "dep:dmgez-udif", "dmgez-udif/read", "dmgez-udif/zlib"]
 

@@ -1,9 +1,6 @@
-use std::{
-	fs::{File, Metadata},
-	io::{Read, Seek, SeekFrom},
-	sync::Mutex,
-	time::SystemTime,
-};
+use std::{fs::File, io};
+
+use dmgez_core::source::{CapturedFile, SourceError};
 
 use crate::{Error, validation::checked_range};
 
@@ -55,31 +52,7 @@ impl ReadAt for &[u8] {
 /// establish an immutable snapshot against a process able to alter the file and
 /// restore its timestamps.
 #[derive(Debug)]
-pub struct FileSource {
-	file: Mutex<File>,
-	stamp: FileStamp,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-struct FileStamp {
-	len: u64,
-	modified: SystemTime,
-	#[cfg(unix)]
-	change_time: (i64, i64),
-}
-
-impl FileStamp {
-	fn read(metadata: &Metadata) -> Result<Self, Error> {
-		#[cfg(unix)]
-		use std::os::unix::fs::MetadataExt;
-		Ok(Self {
-			len: metadata.len(),
-			modified: metadata.modified()?,
-			#[cfg(unix)]
-			change_time: (metadata.ctime(), metadata.ctime_nsec()),
-		})
-	}
-}
+pub struct FileSource(CapturedFile);
 
 impl FileSource {
 	/// Admit a regular file. The caller retains control over how it was opened.
@@ -87,48 +60,39 @@ impl FileSource {
 	/// # Errors
 	/// Returns an error for non-regular inputs or unavailable file metadata.
 	pub fn new(file: File) -> Result<Self, Error> {
-		let metadata = file.metadata()?;
-		if !metadata.is_file() {
-			return Err(Error::InvalidFormat("image source must be a regular file"));
-		}
-		Ok(Self {
-			file: Mutex::new(file),
-			stamp: FileStamp::read(&metadata)?,
-		})
+		CapturedFile::new(file).map(Self).map_err(source_error)
 	}
 }
 
 impl ReadAt for FileSource {
 	fn len(&self) -> u64 {
-		self.stamp.len
+		self.0.len()
 	}
 
 	fn check_unchanged(&self) -> Result<(), Error> {
-		let file = self
-			.file
-			.lock()
-			.map_err(|_| std::io::Error::other("file source lock poisoned"))?;
-		if self.stamp != FileStamp::read(&file.metadata()?)? {
-			return Err(Error::SourceChanged);
-		}
-		Ok(())
+		self.0.validate().map_err(source_error)
 	}
 
 	fn read_exact_at(&self, offset: u64, output: &mut [u8]) -> Result<(), Error> {
-		admitted_range(offset, output.len() as u64, self.len())?;
-		let mut file = self
-			.file
-			.lock()
-			.map_err(|_| std::io::Error::other("file source lock poisoned"))?;
-		if self.stamp != FileStamp::read(&file.metadata()?)? {
-			return Err(Error::SourceChanged);
-		}
-		file.seek(SeekFrom::Start(offset))?;
-		let result = file.read_exact(output);
-		if self.stamp != FileStamp::read(&file.metadata()?)? {
-			return Err(Error::SourceChanged);
-		}
-		Ok(result?)
+		self.0.read_exact_at(offset, output).map_err(source_error)
+	}
+}
+
+fn source_error(error: SourceError) -> Error {
+	match error {
+		SourceError::NotRegularFile => Error::InvalidFormat("image source must be a regular file"),
+		SourceError::Changed => Error::SourceChanged,
+		SourceError::OutOfRange {
+			offset,
+			len,
+			file_len,
+		} => Error::OutOfRange {
+			offset,
+			len,
+			disk_len: file_len,
+		},
+		SourceError::Io(error) => error.into(),
+		error => io::Error::other(error).into(),
 	}
 }
 

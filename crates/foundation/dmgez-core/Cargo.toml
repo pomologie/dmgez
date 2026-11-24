@@ -9,6 +9,7 @@ description = "Shared I/O contracts for dmgez services"
 
 [features]
 default = []
+source = ["dep:thiserror"]
 staging = ["dep:tempfile", "dep:thiserror"]
 
 [dependencies]

@@ -48,6 +48,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e9de72ce2ad1f90dc62fa25f0f430ef85eb4b0d8fa0be4f30373bc40a21d28e"
 
 [[package]]
+name = "dmgez-core"
+version = "0.1.0"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "dmgez-fuzz"
 version = "0.0.0"
 dependencies = [
@@ -60,6 +67,7 @@ name = "dmgez-udif"
 version = "0.1.0"
 dependencies = [
  "crc32fast",
+ "dmgez-core",
  "flate2",
  "plist",
  "quick-xml",
