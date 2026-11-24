@@ -1,0 +1,158 @@
+{
+  "schema_version": 1,
+  "package": "dmgez-cli",
+  "default": [
+    "build",
+    "parallel"
+  ],
+  "features": {
+    "build": [
+      "udif-write",
+      "hfsplus-build",
+      "finder-write",
+      "zlib"
+    ],
+    "parallel": [],
+    "udif-write": [],
+    "udif-read": [],
+    "hfsplus-build": [],
+    "hfsplus-read": [],
+    "finder-write": [],
+    "finder-read": [],
+    "zlib": [],
+    "partition-maps": [],
+    "lzfse": [],
+    "lzma": [],
+    "inspect": [
+      "udif-read",
+      "hfsplus-read",
+      "finder-read",
+      "partition-maps",
+      "zlib"
+    ],
+    "verify": [
+      "udif-read",
+      "hfsplus-read",
+      "partition-maps",
+      "zlib"
+    ],
+    "extract": [
+      "inspect"
+    ],
+    "preview": [
+      "inspect"
+    ],
+    "diff": [
+      "inspect"
+    ],
+    "lint": [
+      "inspect"
+    ],
+    "convert": [
+      "udif-read",
+      "udif-write",
+      "zlib"
+    ],
+    "edit": [
+      "build",
+      "inspect"
+    ],
+    "optimize": [
+      "convert"
+    ],
+    "build-cache": [],
+    "image-processing": [],
+    "badge-icons": [
+      "image-processing"
+    ],
+    "remote": [
+      "udif-read"
+    ],
+    "mount": [
+      "inspect"
+    ],
+    "mount-system": [
+      "mount"
+    ],
+    "mount-fuse": [
+      "mount"
+    ],
+    "mount-winfsp": [
+      "mount"
+    ],
+    "mount-watch": [
+      "mount"
+    ],
+    "install": [
+      "extract"
+    ],
+    "signing-rust": [],
+    "signing-native": [],
+    "notarization-rust": [
+      "signing-rust"
+    ],
+    "notarization-native": [
+      "signing-native"
+    ],
+    "apfs-read": [
+      "udif-read"
+    ],
+    "apfs-build": [
+      "udif-write"
+    ],
+    "encryption": [],
+    "sparse": [],
+    "asif": [],
+    "segmented": [],
+    "legacy-adc": [],
+    "legacy-bzip2": [],
+    "legacy-ndif": [],
+    "legacy-dc42": [],
+    "legacy-udif": [],
+    "legacy": [
+      "legacy-adc",
+      "legacy-bzip2",
+      "legacy-ndif",
+      "legacy-dc42",
+      "legacy-udif"
+    ],
+    "license": [],
+    "mount-write": [
+      "mount"
+    ]
+  },
+  "default_allowed_closure": [
+    "build",
+    "parallel",
+    "udif-write",
+    "hfsplus-build",
+    "finder-write",
+    "zlib"
+  ],
+  "platform_only": {
+    "mount-system": [
+      "macos"
+    ],
+    "mount-fuse": [
+      "linux",
+      "macos"
+    ],
+    "mount-winfsp": [
+      "windows"
+    ],
+    "signing-native": [
+      "macos"
+    ],
+    "notarization-native": [
+      "macos"
+    ]
+  },
+  "notes": [
+    "Only implement/publish features when real functionality exists.",
+    "All edges are additive; mount-watch requires an available backend at runtime.",
+    "mount-write requires qualified transaction support and writable container, not merely mount.",
+    "GUI and MCP separate packages, never CLI dependency.",
+    "Codec and profile negotiation requires relevant reader/writer plus codec feature; `legacy` alone does not imply inspection.",
+    "APFS read/build flags forward filesystem package features; actual operation requires relevant orchestration."
+  ]
+}

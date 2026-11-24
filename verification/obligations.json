@@ -1,0 +1,422 @@
+{
+  "schema_version": 1,
+  "project": "dmgez",
+  "methods": {
+    "kani": "bounded Rust",
+    "lean-linked": "implementation-linked theorem",
+    "tlc": "finite protocol model",
+    "loom": "instrumented concurrency",
+    "shuttle": "seeded schedules",
+    "miri": "UB check",
+    "property": "property test",
+    "state-machine": "reference model test",
+    "fuzz": "fuzz/corpus",
+    "differential": "independent comparison",
+    "native": "native Apple oracle",
+    "fault": "failure injection",
+    "integration": "real integration",
+    "snapshots": "reviewed golden/screenshot",
+    "mutation": "mutation test"
+  },
+  "obligations": [
+    {
+      "id": "D-V01",
+      "activation": "0.1.0",
+      "scope": "UDIF read/write",
+      "requirement_ids": [
+        "D-UDIF-01",
+        "D-UDIF-04"
+      ],
+      "target": "dmgez-udif / checked ranges, endian codecs",
+      "property": "Every accepted slice, sector conversion, count*record-size and offset+len is representable and within the admitted parent range; every rejected input has no dereference/allocation based on invalid geometry.",
+      "assumptions_and_initial_bounds": "Kani full u64 operands; arbitrary 0..64-byte buffer windows and 0..8 records; unwind assertions; header/trailer buffers tested at exact format length.",
+      "required_methods": [
+        "kani",
+        "property",
+        "fuzz"
+      ],
+      "negative_witness": "offset near MAX + length wraps into valid looking offset",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V02",
+      "activation": "0.1.0",
+      "scope": "UDRO/UDZO",
+      "requirement_ids": [
+        "D-UDIF-02",
+        "D-UDIF-03",
+        "D-UDIF-04"
+      ],
+      "target": "dmgez-udif / run validation, logical map",
+      "property": "Each supported map resolves exactly one data or declared zero source per admitted sector; physical compressed spans stay in data fork; run order, comments, terminal rules and checked lengths agree with profile.",
+      "assumptions_and_initial_bounds": "Only fixture-qualified UDIF profiles; finite 0..8 runs and 0..16 sectors; zero/ignore semantics must be established by independent ledger, not an assumption that they are interchangeable.",
+      "required_methods": [
+        "kani",
+        "property",
+        "differential",
+        "native"
+      ],
+      "negative_witness": "gap or overlap hidden by sorted index; ignore run treated as stored zero bytes",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V03",
+      "activation": "0.1.0",
+      "scope": "UDRO/UDZO",
+      "requirement_ids": [
+        "D-UDIF-02",
+        "D-UDIF-03"
+      ],
+      "target": "dmgez-udif / checksum accumulation and finalization",
+      "property": "Stream segmentation does not alter CRC in a single qualified domain; stored digests cover the precise required bytes; a checksum mismatch is never accepted as verified.",
+      "assumptions_and_initial_bounds": "CRC library contract tested with independent known vectors; compare all qualified checksum domains and zero/ignore cases to native fixtures.",
+      "required_methods": [
+        "property",
+        "differential",
+        "native"
+      ],
+      "negative_witness": "valid table CRC but wrong data-fork checksum accepted",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V04",
+      "activation": "0.1.0",
+      "scope": "UDIF reader",
+      "requirement_ids": [
+        "D-UDIF-04"
+      ],
+      "target": "dmgez-udif / indexed reads and bounded decoder",
+      "property": "A request for admitted [a,b) returns exact concatenation of decoded runs or an error; decoded lengths and budget checked before accepting output; unknown run never yields synthetic zeros.",
+      "assumptions_and_initial_bounds": "Qualified codec contracts; small runs <=8 and range partitions; independent arbitrary byte stream, decoder budget including hostile lengths.",
+      "required_methods": [
+        "kani",
+        "property",
+        "fuzz",
+        "differential"
+      ],
+      "negative_witness": "last partial read crosses block boundary and returns data from adjacent block",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V05",
+      "activation": "0.2.0",
+      "scope": "builder",
+      "requirement_ids": [
+        "D-BUILD-02",
+        "D-BUILD-03",
+        "D-BUILD-04",
+        "D-FINDER-01"
+      ],
+      "target": "dmgez-builder / manifest sealing and metadata",
+      "property": "Accepted manifest has unique normalized sibling names, no escape, correct link kinds and stable generated identities; strict packaging rejects any required unavailable/unsupported metadata rather than guessing.",
+      "assumptions_and_initial_bounds": "Filesystem owns canonical equality; host snapshot/identity contracts not absolute concurrency guarantees; generated trees up to 12 nodes plus larger randomized/native cases.",
+      "required_methods": [
+        "property",
+        "differential",
+        "native"
+      ],
+      "negative_witness": "two Unicode equivalent paths silently overwrite; background alias stale CNID",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V06",
+      "activation": "0.2.0",
+      "scope": "builder publication",
+      "requirement_ids": [
+        "D-BUILD-05"
+      ],
+      "target": "dmgez-builder / stage and commit state machine",
+      "property": "Only a complete validated staged image can be published; any earlier failure leaves previous target intact or absent; no source or unrelated file overwritten; stream failure is reported invalid.",
+      "assumptions_and_initial_bounds": "Atomic no-clobber/replace contract of supported host FS; model finite two writers, one cancel, each stage and crash; durability separate from atomic visibility.",
+      "required_methods": [
+        "tlc",
+        "fault",
+        "integration"
+      ],
+      "negative_witness": "ENOSPC after stage; competing builder wins no-clobber race",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V07",
+      "activation": "0.2.0",
+      "scope": "parallel builder",
+      "requirement_ids": [
+        "D-PERF-01"
+      ],
+      "target": "dmgez-udif / admission credits, ordered writer",
+      "property": "Each admitted run owns one bounded credit reservation, written at most once in ordinal order; failure cancels and releases credits exactly once; no partial success.",
+      "assumptions_and_initial_bounds": "TLC <=4 jobs/3 workers, <=4 credits plus fail/cancel/slow head; Loom equivalent small synchronization model/actual instrumented coordinator; fairness for liveness only with runnable workers and responsive sink.",
+      "required_methods": [
+        "tlc",
+        "loom",
+        "shuttle",
+        "property",
+        "fault"
+      ],
+      "negative_witness": "head job slow, later jobs fill queue, consumer blocked waiting on worker-held resource",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V08",
+      "activation": "0.3.0",
+      "scope": "reproducible build",
+      "requirement_ids": [
+        "D-PERF-01",
+        "D-PERF-02",
+        "D-BUILD-05"
+      ],
+      "target": "dmgez-udif / pure run scheduling & assembly",
+      "property": "Given same canonical sector source, options, deterministic codec and metadata, every completed worker permutation has identical emitted sequence and same unsigned bytes as serial.",
+      "assumptions_and_initial_bounds": "Lean proof for pure ordering/refinement linked via extraction; external encoder determinism is an assumption checked on pinned versions; native cross-host fixtures.",
+      "required_methods": [
+        "lean-linked",
+        "property",
+        "differential",
+        "native"
+      ],
+      "negative_witness": "worker completion order controls offsets or plist order",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V09",
+      "activation": "0.4.0",
+      "scope": "inspection/partition windows",
+      "requirement_ids": [
+        "D-READ-01",
+        "D-READ-03",
+        "D-READ-04"
+      ],
+      "target": "dmgez-vfs / bounded source, namespace and checks",
+      "property": "Every subvolume read maps inside authorized immutable image range, selected volume; full verification pass iff all required checks pass; partial/unknown/unsupported not promoted to valid.",
+      "assumptions_and_initial_bounds": "Kani full-width arithmetic, nested windows depth <=4, symbolic status combinations; native multi-volume fixtures.",
+      "required_methods": [
+        "kani",
+        "property",
+        "differential"
+      ],
+      "negative_witness": "partition offset + relative extent escapes selected partition; unsupported checksum treated as valid",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V10",
+      "activation": "0.4.0",
+      "scope": "extract",
+      "requirement_ids": [
+        "D-READ-05"
+      ],
+      "target": "dmgez-operations / extraction path admission and publish",
+      "property": "No extraction side effect outside authorized destination root or authorized replace; path validation rejects ambiguous/reserved names; symlinks not followed for writing; per-item failures accurately reported.",
+      "assumptions_and_initial_bounds": "Kani pure path grammar bounded 0..8 components; handle-based host adapters, reparse rules and actual races tested per OS; lexical proof not host security proof.",
+      "required_methods": [
+        "kani",
+        "property",
+        "fuzz",
+        "fault",
+        "integration"
+      ],
+      "negative_witness": "attacker swaps parent directory for symlink between validation and write",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V11",
+      "activation": "0.5.0",
+      "scope": "GUI project/edit",
+      "requirement_ids": [
+        "D-GUI-01",
+        "D-GUI-02",
+        "D-GUI-03"
+      ],
+      "target": "dmgez-config / command model and dmgez-preview / geometry",
+      "property": "Apply/undo/redo restores semantic project state; preview reads actual selected image and does not mount/execute; all coordinate transforms are finite and invertible where defined.",
+      "assumptions_and_initial_bounds": "Pure commands <=20 operations reference model; native icon/view differences allowed explicitly.",
+      "required_methods": [
+        "property",
+        "state-machine",
+        "snapshots",
+        "integration"
+      ],
+      "negative_witness": "undo changes path identity or hidden flags; malicious preview triggers open/execute",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V12",
+      "activation": "0.6.0",
+      "scope": "signing and release",
+      "requirement_ids": [
+        "D-REL-01",
+        "D-REL-02",
+        "D-REL-04"
+      ],
+      "target": "dmgez-signing / release stage machine",
+      "property": "No sign/notary/staple/publication unless authorized stage preconditions and correct artifact identity hold; stale submission/digest or pending/rejected outcome cannot mark ready.",
+      "assumptions_and_initial_bounds": "TLC <=2 artifact revisions/2 submissions, ambiguous upload failure, accepted/rejected/cancel; native Apple service treated as external, actual acceptance independent.",
+      "required_methods": [
+        "tlc",
+        "state-machine",
+        "fault",
+        "native"
+      ],
+      "negative_witness": "reuse prior accepted ticket for modified file; retry ambiguous upload blindly",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V13",
+      "activation": "0.7.0",
+      "scope": "conversion/edit/cache",
+      "requirement_ids": [
+        "D-OPS-01",
+        "D-PERF-03"
+      ],
+      "target": "dmgez-operations + dmgez-cache / overlay and cache key",
+      "property": "No-op overlay preserves all claimed metadata/logical data; untouched entries remain unchanged; cache hit only for exact logical bytes/profile and verified decoded length/digest; cache cannot silently corrupt image.",
+      "assumptions_and_initial_bounds": "Reference small image <=16 entries, <=8 runs; cryptographic hash assumption explicit, cache treated hostile; exact comparison in tests.",
+      "required_methods": [
+        "property",
+        "fuzz",
+        "fault",
+        "differential"
+      ],
+      "negative_witness": "cached block for same offset but different compression/profile is reused",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V14",
+      "activation": "0.8.0",
+      "scope": "mount and install",
+      "requirement_ids": [
+        "D-MOUNT-01",
+        "D-MOUNT-02",
+        "D-MOUNT-03"
+      ],
+      "target": "dmgez-mount + dmgez-install / session state",
+      "property": "Only managed mount identity may be unmounted; auto-eject requires observed intended fresh copy, verified destination and no outstanding writes under defined completion policy; stale event/old matching app never sufficient.",
+      "assumptions_and_initial_bounds": "TLC finite 2 mounts, 2 apps, 2 destination revisions, event loss/reorder/busy/cancel; host completion evidence not guaranteed by notifications; normal OS unmount may refuse.",
+      "required_methods": [
+        "tlc",
+        "state-machine",
+        "fault",
+        "integration",
+        "native"
+      ],
+      "negative_witness": "pre-existing identical app or delayed event causes premature eject",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V15",
+      "activation": "0.9.0",
+      "scope": "remote and MCP",
+      "requirement_ids": [
+        "D-OPS-03",
+        "D-OPS-04"
+      ],
+      "target": "dmgez remote storage adapter + MCP service / approval state",
+      "property": "Every range read uses same admitted resource identity and exact checked offsets; side effects require matching authorization, path scope and current request identity; redirect/changed resource/approval invalidates state.",
+      "assumptions_and_initial_bounds": "TLC two resources/revisions and approvals, timeout/redirect; strong validator or full snapshot; actual HTTP and OS contracts tested.",
+      "required_methods": [
+        "tlc",
+        "property",
+        "fuzz",
+        "fault",
+        "integration"
+      ],
+      "negative_witness": "server swaps ETag between trailer and block reads; stale approval permits different output",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V16",
+      "activation": "1.0.0",
+      "scope": "UDIF reader/writer and sealed images",
+      "requirement_ids": [
+        "D-UDIF-01",
+        "D-UDIF-03",
+        "D-UDIF-04",
+        "D-READ-01"
+      ],
+      "target": "dmgez-udif / pure checked interval and lookup helpers",
+      "property": "For all representable offsets and validated run-map sizes, Rust range-map lookup refines mathematical partition of logical domain; out-of-domain requests error; concatenated reads equal whole reads.",
+      "assumptions_and_initial_bounds": "Lean spec over naturals, extraction of actual safe Rust helpers; codecs/external I/O treated as tested contracts; no unbounded proof of parser or OS.",
+      "required_methods": [
+        "lean-linked",
+        "property",
+        "differential"
+      ],
+      "negative_witness": "off-by-one at terminal sector or width conversion",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V17",
+      "activation": "1.0.0",
+      "scope": "architecture and release",
+      "requirement_ids": [
+        "D-CI-01",
+        "D-CI-02",
+        "D-CI-03"
+      ],
+      "target": "xtask / feature and dependency graph",
+      "property": "Advertised default closure excludes forbidden runtime categories; no cycles, app dependencies or cross-repo reverse dependency; required evidence matches profile, source and toolchain.",
+      "assumptions_and_initial_bounds": "All implemented target feature combos and pinned metadata; negative test graph mutations; optional signing transitive exception explicit.",
+      "required_methods": [
+        "integration",
+        "mutation"
+      ],
+      "negative_witness": "test-only oracle leaks into normal dependency graph",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    },
+    {
+      "id": "D-V18",
+      "activation": "stretch",
+      "scope": "advanced/legacy/encryption/writable mounts",
+      "requirement_ids": [
+        "D-OPS-05"
+      ],
+      "target": "owning optional format/platform modules",
+      "property": "No unqualified advanced profile accepted for writes; bounds and security contract per envelope/segment/band; encryption auth status honest; writable mounts preserve independent transaction gates.",
+      "assumptions_and_initial_bounds": "Separate threat model, legal fixture and per-variant obligation additions required before activation; no claims about unimplemented formats.",
+      "required_methods": [
+        "property",
+        "fuzz",
+        "differential",
+        "native",
+        "fault"
+      ],
+      "negative_witness": "unknown mandatory flag ignored, segment path escapes root or invalid tag reported valid",
+      "mandatory_when_activated": true,
+      "status": "planned",
+      "evidence": []
+    }
+  ]
+}

@@ -1,0 +1,134 @@
+# Rich 0.3+ profile. image-processing may be required for high-DPI assets.
+schema_version = 1
+[defines]
+VERSION = "2.0.0"
+[image]
+name = "Example Suite ${VERSION}"
+output = "dist/ExampleSuite-${VERSION}.dmg"
+format = "udzo"
+filesystem = "hfsplus"
+size = "auto"
+free_space = "8MiB"
+shrink = true
+partition = "none"
+[compression]
+level = 6
+block_size = "1MiB"
+[performance]
+parallel = "auto"
+threads = 0
+memory_limit = "512MiB"
+max_metadata_bytes = "128MiB"
+max_entries = 1000000
+max_runs = 2000000
+[metadata]
+policy = "strict"
+preserve_permissions = true
+preserve_ownership = true
+preserve_timestamps = true
+preserve_extended_attributes = true
+preserve_resource_forks = true
+preserve_finder_info = true
+preserve_hard_links = true
+[build]
+reproducible = true
+source_date_epoch = 1760000000
+verify_output = false
+fail_on_metadata_loss = true
+overwrite = false
+[[contents]]
+source = "dist/AppOne.app"
+position = [155, 150]
+[[contents]]
+source = "dist/AppTwo.app"
+position = [365, 150]
+[[contents]]
+source = "dist/Example CLI.app"
+destination = "/Utilities/Example CLI.app"
+[[contents]]
+source = "docs"
+destination = "/Documentation"
+include = ["**/*"]
+exclude = ["**/.DS_Store"]
+recursive = true
+position = [155, 335]
+[[contents]]
+type = "directory"
+destination = "/Templates"
+position = [365, 335]
+[[contents]]
+source = "assets/support.dat"
+destination = "/support.dat"
+hidden = true
+[[contents]]
+source = "config"
+destination = "/.config"
+hidden = true
+[[contents]]
+source = "README.pdf"
+destination = "/README.pdf"
+hide_extension = true
+position = [605, 335]
+[[contents]]
+type = "symlink"
+destination = "/Applications"
+target = "/Applications"
+position = [605, 150]
+[volume_icon.images]
+"16" = "assets/icon-16.png"
+"16@2x" = "assets/icon-32.png"
+"32" = "assets/icon-32.png"
+"32@2x" = "assets/icon-64.png"
+"128" = "assets/icon-128.png"
+"128@2x" = "assets/icon-256.png"
+"256" = "assets/icon-256.png"
+"256@2x" = "assets/icon-512.png"
+"512" = "assets/icon-512.png"
+"512@2x" = "assets/icon-1024.png"
+[finder]
+background = { kind = "image", source = "assets/background.png", retina = "assets/background@2x.png" }
+window_position = [100, 100]
+window_size = [760, 480]
+default_view = "icon-view"
+show_toolbar = false
+show_status_bar = false
+show_sidebar = false
+show_tab_view = false
+show_pathbar = false
+show_icon_preview = false
+show_item_info = false
+sidebar_width = 180
+include_icon_view_settings = "auto"
+include_list_view_settings = "auto"
+[finder.icon_view]
+arrange_by = "none"
+grid_offset = [0, 0]
+grid_spacing = 100
+scroll_position = [0, 0]
+label_position = "bottom"
+text_size = 16
+icon_size = 96
+[finder.list_view]
+icon_size = 16
+text_size = 12
+scroll_position = [0, 0]
+sort_by = "name"
+use_relative_dates = true
+calculate_all_sizes = false
+columns = ["name", "date-modified", "size", "kind", "date-added"]
+[finder.list_view.column_widths]
+name = 300
+date-modified = 181
+size = 97
+kind = 115
+date-added = 181
+[finder.list_view.sort_directions]
+name = "ascending"
+date-modified = "descending"
+size = "descending"
+kind = "ascending"
+[[finder.folders]]
+path = "/Utilities"
+window_size = [440, 280]
+[finder.folders.icon_view]
+icon_size = 64

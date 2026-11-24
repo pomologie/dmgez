@@ -1,0 +1,1480 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "dmgez draft configuration schema v1",
+  "description": "Structural mirror only. Semantic path, feature, format, size, metadata, identity, and platform validation is required in the Rust project model. Recognized deferred fields do not imply implementation.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "image": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "output": {
+          "type": "string",
+          "minLength": 1
+        },
+        "format": {
+          "enum": [
+            "udro",
+            "udzo",
+            "ulfo",
+            "ulmo",
+            "raw",
+            "udrw",
+            "udsb",
+            "sparseimage",
+            "asif",
+            "udbz",
+            "udco"
+          ]
+        },
+        "filesystem": {
+          "enum": [
+            "hfsplus",
+            "hfsx",
+            "apfs"
+          ]
+        },
+        "size": {
+          "oneOf": [
+            {
+              "const": "auto"
+            },
+            {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[1-9][0-9]*(B|KiB|MiB|GiB|TiB)$"
+                }
+              ]
+            }
+          ]
+        },
+        "shrink": {
+          "type": "boolean"
+        },
+        "free_space": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9]+(B|KiB|MiB|GiB|TiB)$"
+            }
+          ]
+        },
+        "partition": {
+          "enum": [
+            "none",
+            "gpt",
+            "apm",
+            "mbr"
+          ]
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "output"
+      ]
+    },
+    "contents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "enum": [
+              "copy",
+              "directory",
+              "symlink"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "minLength": 1
+          },
+          "destination": {
+            "type": "string",
+            "pattern": "^/[^\\x00]*$"
+          },
+          "target": {
+            "type": "string",
+            "minLength": 1
+          },
+          "recursive": {
+            "type": "boolean"
+          },
+          "include": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "exclude": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "uniqueItems": true
+          },
+          "hidden": {
+            "type": "boolean"
+          },
+          "hide_extension": {
+            "type": "boolean"
+          },
+          "position": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "custom_icon": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "additionalProperties": false,
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "const": "symlink"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "destination",
+                "target"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "source"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "recursive"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "include"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "exclude"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "const": "directory"
+                }
+              }
+            },
+            "then": {
+              "required": [
+                "destination"
+              ],
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "source"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "target"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "recursive"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "include"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "exclude"
+                    ]
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "if": {
+              "anyOf": [
+                {
+                  "not": {
+                    "required": [
+                      "type"
+                    ]
+                  }
+                },
+                {
+                  "required": [
+                    "type"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "copy"
+                    }
+                  }
+                }
+              ]
+            },
+            "then": {
+              "required": [
+                "source"
+              ],
+              "not": {
+                "required": [
+                  "target"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "metadata": {
+      "type": "object",
+      "properties": {
+        "policy": {
+          "enum": [
+            "strict",
+            "report"
+          ]
+        },
+        "sidecar": {
+          "type": "string",
+          "minLength": 1
+        },
+        "preserve_permissions": {
+          "type": "boolean"
+        },
+        "preserve_ownership": {
+          "type": "boolean"
+        },
+        "preserve_timestamps": {
+          "type": "boolean"
+        },
+        "preserve_extended_attributes": {
+          "type": "boolean"
+        },
+        "preserve_resource_forks": {
+          "type": "boolean"
+        },
+        "preserve_finder_info": {
+          "type": "boolean"
+        },
+        "preserve_hard_links": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "compression": {
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9
+        },
+        "block_size": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(B|KiB|MiB|GiB|TiB)$"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "performance": {
+      "type": "object",
+      "properties": {
+        "parallel": {
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "const": "auto"
+            }
+          ]
+        },
+        "threads": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "memory_limit": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(B|KiB|MiB|GiB|TiB)$"
+            }
+          ]
+        },
+        "max_entries": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "max_metadata_bytes": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "string",
+              "pattern": "^[1-9][0-9]*(B|KiB|MiB|GiB|TiB)$"
+            }
+          ]
+        },
+        "max_runs": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "build": {
+      "type": "object",
+      "properties": {
+        "reproducible": {
+          "type": "boolean"
+        },
+        "source_date_epoch": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "verify_output": {
+          "type": "boolean"
+        },
+        "overwrite": {
+          "type": "boolean"
+        },
+        "fail_on_metadata_loss": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "finder": {
+      "type": "object",
+      "properties": {
+        "background": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "image"
+                },
+                "source": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "retina": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "source"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "color"
+                },
+                "value": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "value"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "template"
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "kind",
+                "name"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "kind": {
+                  "const": "none"
+                }
+              },
+              "additionalProperties": false,
+              "required": [
+                "kind"
+              ]
+            }
+          ]
+        },
+        "window_position": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "window_size": {
+          "type": "array",
+          "items": {
+            "type": "number",
+            "minimum": 1
+          },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "default_view": {
+          "enum": [
+            "icon-view",
+            "list-view",
+            "column-view",
+            "coverflow",
+            "gallery"
+          ]
+        },
+        "sidebar_width": {
+          "type": "number",
+          "minimum": 0
+        },
+        "include_icon_view_settings": {
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "const": "auto"
+            }
+          ]
+        },
+        "include_list_view_settings": {
+          "oneOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "const": "auto"
+            }
+          ]
+        },
+        "icon_view": {
+          "type": "object",
+          "properties": {
+            "arrange_by": {
+              "enum": [
+                "none",
+                "name",
+                "date-modified",
+                "date-created",
+                "date-added",
+                "date-last-opened",
+                "size",
+                "kind",
+                "label",
+                "version",
+                "comments"
+              ]
+            },
+            "grid_offset": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "grid_spacing": {
+              "type": "number",
+              "minimum": 1
+            },
+            "scroll_position": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "label_position": {
+              "enum": [
+                "bottom",
+                "right"
+              ]
+            },
+            "text_size": {
+              "type": "number",
+              "minimum": 1
+            },
+            "icon_size": {
+              "type": "number",
+              "minimum": 1
+            },
+            "positions": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              }
+            }
+          },
+          "additionalProperties": false
+        },
+        "list_view": {
+          "type": "object",
+          "properties": {
+            "icon_size": {
+              "type": "number",
+              "minimum": 1
+            },
+            "text_size": {
+              "type": "number",
+              "minimum": 1
+            },
+            "scroll_position": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            },
+            "sort_by": {
+              "enum": [
+                "name",
+                "date-modified",
+                "date-created",
+                "date-added",
+                "date-last-opened",
+                "size",
+                "kind",
+                "label",
+                "version",
+                "comments"
+              ]
+            },
+            "use_relative_dates": {
+              "type": "boolean"
+            },
+            "calculate_all_sizes": {
+              "type": "boolean"
+            },
+            "columns": {
+              "type": "array",
+              "items": {
+                "enum": [
+                  "name",
+                  "date-modified",
+                  "date-created",
+                  "date-added",
+                  "date-last-opened",
+                  "size",
+                  "kind",
+                  "label",
+                  "version",
+                  "comments"
+                ]
+              },
+              "uniqueItems": true,
+              "minItems": 1
+            },
+            "column_widths": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "date-modified": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "date-created": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "date-added": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "date-last-opened": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "size": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "kind": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "label": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "version": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "comments": {
+                  "type": "number",
+                  "minimum": 1
+                }
+              },
+              "additionalProperties": false
+            },
+            "sort_directions": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "enum": [
+                    "ascending",
+                    "descending"
+                  ]
+                },
+                "date-modified": {
+                  "enum": [
+                    "ascending",
+                    "descending"
+                  ]
+                },
+                "date-created": {
+                  "enum": [
+                    "ascending",
+                    "descending"
+                  ]
+                },
+                "date-added": {
+                  "enum": [
+                    "ascending",
+                    "descending"
+                  ]
+                },
+                "date-last-opened": {
+                  "enum": [
+                    "ascending",
+                    "descending"
+                  ]
+                },
+                "size": {
+                  "enum": [
+                    "ascending",
+                    "descending"
+                  ]
+                },
+                "kind": {
+                  "enum": [
+                    "ascending",
+                    "descending"
+                  ]
+                },
+                "label": {
+                  "enum": [
+                    "ascending",
+                    "descending"
+                  ]
+                },
+                "version": {
+                  "enum": [
+                    "ascending",
+                    "descending"
+                  ]
+                },
+                "comments": {
+                  "enum": [
+                    "ascending",
+                    "descending"
+                  ]
+                }
+              },
+              "additionalProperties": false
+            }
+          },
+          "additionalProperties": false
+        },
+        "show_status_bar": {
+          "type": "boolean"
+        },
+        "show_tab_view": {
+          "type": "boolean"
+        },
+        "show_toolbar": {
+          "type": "boolean"
+        },
+        "show_pathbar": {
+          "type": "boolean"
+        },
+        "show_sidebar": {
+          "type": "boolean"
+        },
+        "show_icon_preview": {
+          "type": "boolean"
+        },
+        "show_item_info": {
+          "type": "boolean"
+        },
+        "folders": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^/[^\\x00]*$"
+              },
+              "background": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "image"
+                      },
+                      "source": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "retina": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "source"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "color"
+                      },
+                      "value": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "value"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "template"
+                      },
+                      "name": {
+                        "type": "string",
+                        "minLength": 1
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "kind",
+                      "name"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "const": "none"
+                      }
+                    },
+                    "additionalProperties": false,
+                    "required": [
+                      "kind"
+                    ]
+                  }
+                ]
+              },
+              "window_position": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "window_size": {
+                "type": "array",
+                "items": {
+                  "type": "number",
+                  "minimum": 1
+                },
+                "minItems": 2,
+                "maxItems": 2
+              },
+              "default_view": {
+                "enum": [
+                  "icon-view",
+                  "list-view",
+                  "column-view",
+                  "coverflow",
+                  "gallery"
+                ]
+              },
+              "sidebar_width": {
+                "type": "number",
+                "minimum": 0
+              },
+              "include_icon_view_settings": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "const": "auto"
+                  }
+                ]
+              },
+              "include_list_view_settings": {
+                "oneOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "const": "auto"
+                  }
+                ]
+              },
+              "icon_view": {
+                "type": "object",
+                "properties": {
+                  "arrange_by": {
+                    "enum": [
+                      "none",
+                      "name",
+                      "date-modified",
+                      "date-created",
+                      "date-added",
+                      "date-last-opened",
+                      "size",
+                      "kind",
+                      "label",
+                      "version",
+                      "comments"
+                    ]
+                  },
+                  "grid_offset": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "grid_spacing": {
+                    "type": "number",
+                    "minimum": 1
+                  },
+                  "scroll_position": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "label_position": {
+                    "enum": [
+                      "bottom",
+                      "right"
+                    ]
+                  },
+                  "text_size": {
+                    "type": "number",
+                    "minimum": 1
+                  },
+                  "icon_size": {
+                    "type": "number",
+                    "minimum": 1
+                  },
+                  "positions": {
+                    "type": "object",
+                    "additionalProperties": {
+                      "type": "array",
+                      "items": {
+                        "type": "number"
+                      },
+                      "minItems": 2,
+                      "maxItems": 2
+                    }
+                  }
+                },
+                "additionalProperties": false
+              },
+              "list_view": {
+                "type": "object",
+                "properties": {
+                  "icon_size": {
+                    "type": "number",
+                    "minimum": 1
+                  },
+                  "text_size": {
+                    "type": "number",
+                    "minimum": 1
+                  },
+                  "scroll_position": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 2,
+                    "maxItems": 2
+                  },
+                  "sort_by": {
+                    "enum": [
+                      "name",
+                      "date-modified",
+                      "date-created",
+                      "date-added",
+                      "date-last-opened",
+                      "size",
+                      "kind",
+                      "label",
+                      "version",
+                      "comments"
+                    ]
+                  },
+                  "use_relative_dates": {
+                    "type": "boolean"
+                  },
+                  "calculate_all_sizes": {
+                    "type": "boolean"
+                  },
+                  "columns": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "name",
+                        "date-modified",
+                        "date-created",
+                        "date-added",
+                        "date-last-opened",
+                        "size",
+                        "kind",
+                        "label",
+                        "version",
+                        "comments"
+                      ]
+                    },
+                    "uniqueItems": true,
+                    "minItems": 1
+                  },
+                  "column_widths": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "number",
+                        "minimum": 1
+                      },
+                      "date-modified": {
+                        "type": "number",
+                        "minimum": 1
+                      },
+                      "date-created": {
+                        "type": "number",
+                        "minimum": 1
+                      },
+                      "date-added": {
+                        "type": "number",
+                        "minimum": 1
+                      },
+                      "date-last-opened": {
+                        "type": "number",
+                        "minimum": 1
+                      },
+                      "size": {
+                        "type": "number",
+                        "minimum": 1
+                      },
+                      "kind": {
+                        "type": "number",
+                        "minimum": 1
+                      },
+                      "label": {
+                        "type": "number",
+                        "minimum": 1
+                      },
+                      "version": {
+                        "type": "number",
+                        "minimum": 1
+                      },
+                      "comments": {
+                        "type": "number",
+                        "minimum": 1
+                      }
+                    },
+                    "additionalProperties": false
+                  },
+                  "sort_directions": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "enum": [
+                          "ascending",
+                          "descending"
+                        ]
+                      },
+                      "date-modified": {
+                        "enum": [
+                          "ascending",
+                          "descending"
+                        ]
+                      },
+                      "date-created": {
+                        "enum": [
+                          "ascending",
+                          "descending"
+                        ]
+                      },
+                      "date-added": {
+                        "enum": [
+                          "ascending",
+                          "descending"
+                        ]
+                      },
+                      "date-last-opened": {
+                        "enum": [
+                          "ascending",
+                          "descending"
+                        ]
+                      },
+                      "size": {
+                        "enum": [
+                          "ascending",
+                          "descending"
+                        ]
+                      },
+                      "kind": {
+                        "enum": [
+                          "ascending",
+                          "descending"
+                        ]
+                      },
+                      "label": {
+                        "enum": [
+                          "ascending",
+                          "descending"
+                        ]
+                      },
+                      "version": {
+                        "enum": [
+                          "ascending",
+                          "descending"
+                        ]
+                      },
+                      "comments": {
+                        "enum": [
+                          "ascending",
+                          "descending"
+                        ]
+                      }
+                    },
+                    "additionalProperties": false
+                  }
+                },
+                "additionalProperties": false
+              },
+              "show_status_bar": {
+                "type": "boolean"
+              },
+              "show_tab_view": {
+                "type": "boolean"
+              },
+              "show_toolbar": {
+                "type": "boolean"
+              },
+              "show_pathbar": {
+                "type": "boolean"
+              },
+              "show_sidebar": {
+                "type": "boolean"
+              },
+              "show_icon_preview": {
+                "type": "boolean"
+              },
+              "show_item_info": {
+                "type": "boolean"
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "path"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "volume_icon": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "type": "string",
+          "minLength": 1
+        },
+        "images": {
+          "type": "object",
+          "properties": {
+            "16": {
+              "type": "string",
+              "minLength": 1
+            },
+            "32": {
+              "type": "string",
+              "minLength": 1
+            },
+            "128": {
+              "type": "string",
+              "minLength": 1
+            },
+            "256": {
+              "type": "string",
+              "minLength": 1
+            },
+            "512": {
+              "type": "string",
+              "minLength": 1
+            },
+            "16@2x": {
+              "type": "string",
+              "minLength": 1
+            },
+            "32@2x": {
+              "type": "string",
+              "minLength": 1
+            },
+            "128@2x": {
+              "type": "string",
+              "minLength": 1
+            },
+            "256@2x": {
+              "type": "string",
+              "minLength": 1
+            },
+            "512@2x": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "additionalProperties": false,
+          "minProperties": 1
+        },
+        "badge": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false,
+      "oneOf": [
+        {
+          "required": [
+            "source"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "images"
+                ]
+              },
+              {
+                "required": [
+                  "badge"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "images"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "source"
+                ]
+              },
+              {
+                "required": [
+                  "badge"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "badge"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "images"
+                ]
+              },
+              {
+                "required": [
+                  "source"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "signing": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backend": {
+          "enum": [
+            "auto",
+            "rust",
+            "native"
+          ]
+        },
+        "apps": {
+          "enum": [
+            "verify",
+            "preserve",
+            "sign"
+          ]
+        },
+        "dmg": {
+          "type": "boolean"
+        },
+        "identity": {
+          "type": "string",
+          "minLength": 1
+        },
+        "credential_ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "pattern": "^/[^\\x00]*$"
+              },
+              "entitlements": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false,
+            "required": [
+              "path",
+              "entitlements"
+            ]
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "notarization": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backend": {
+          "enum": [
+            "auto",
+            "rust",
+            "native"
+          ]
+        },
+        "wait": {
+          "type": "boolean"
+        },
+        "staple": {
+          "type": "boolean"
+        },
+        "credential_ref": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "release": {
+      "type": "object",
+      "properties": {
+        "verify": {
+          "type": "boolean"
+        },
+        "require_notarization": {
+          "type": "boolean"
+        },
+        "require_native_assessment": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "license": {
+      "type": "object",
+      "properties": {
+        "default_language": {
+          "type": "string",
+          "minLength": 1
+        },
+        "licenses": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "buttons": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "agree": {
+                "type": "string",
+                "minLength": 1
+              },
+              "disagree": {
+                "type": "string",
+                "minLength": 1
+              },
+              "print": {
+                "type": "string",
+                "minLength": 1
+              },
+              "save": {
+                "type": "string",
+                "minLength": 1
+              },
+              "language": {
+                "type": "string",
+                "minLength": 1
+              },
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "default_language",
+        "licenses"
+      ]
+    },
+    "defines": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "image"
+  ]
+}

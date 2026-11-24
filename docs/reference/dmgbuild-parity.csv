@@ -1,0 +1,48 @@
+group,upstream_setting,dmgez_mapping,milestone,status,requirement_id,notes
+image,filename,image.output,0.2.0,planned,D-BUILD-01,HFS+/UDRO/UDZO first; formats and APFS tracked separately; size importer supports decimal and binary suffixes.
+image,volume_name,image.name,0.2.0,planned,D-BUILD-01,HFS+/UDRO/UDZO first; formats and APFS tracked separately; size importer supports decimal and binary suffixes.
+image,format,image.format,0.2.0,planned,D-BUILD-01,HFS+/UDRO/UDZO first; formats and APFS tracked separately; size importer supports decimal and binary suffixes.
+image,filesystem,image.filesystem,0.2.0,planned,D-BUILD-01,HFS+/UDRO/UDZO first; formats and APFS tracked separately; size importer supports decimal and binary suffixes.
+image,size,image.size,0.2.0,planned,D-BUILD-01,HFS+/UDRO/UDZO first; formats and APFS tracked separately; size importer supports decimal and binary suffixes.
+image,shrink,image.shrink,0.2.0,planned,D-BUILD-01,HFS+/UDRO/UDZO first; formats and APFS tracked separately; size importer supports decimal and binary suffixes.
+content,files,contents[].source/destination,0.2.0,planned,D-BUILD-02,Nested arbitrary paths; explicit root or folder-relative positions.
+content,symlinks,"contents[].type=symlink,target",0.2.0,planned,D-BUILD-02,Nested arbitrary paths; explicit root or folder-relative positions.
+content,hide,contents[].hidden,0.2.0,planned,D-BUILD-02,Nested arbitrary paths; explicit root or folder-relative positions.
+content,hide_extensions,contents[].hide_extension,0.2.0,planned,D-BUILD-02,Nested arbitrary paths; explicit root or folder-relative positions.
+content,icon_locations,contents[].position,0.2.0,planned,D-BUILD-02,Nested arbitrary paths; explicit root or folder-relative positions.
+content,icon,volume_icon.source,0.2.0,planned,D-FINDER-01,Existing ICNS
+content,badge_icon,volume_icon.badge,0.3.0,planned,D-FINDER-03,Optional badge-icons; independent base artwork; native system icon may differ.
+window,background,finder.background,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
+window,window_rect,finder.window_position+window_size,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
+window,show_status_bar,finder.show_status_bar,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
+window,show_tab_view,finder.show_tab_view,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
+window,show_toolbar,finder.show_toolbar,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
+window,show_pathbar,finder.show_pathbar,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
+window,show_sidebar,finder.show_sidebar,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
+window,sidebar_width,finder.sidebar_width,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
+window,default_view,finder.default_view,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
+window,show_icon_preview,finder.show_icon_preview,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
+window,include_icon_view_settings,finder.include_icon_view_settings,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
+window,include_list_view_settings,finder.include_list_view_settings,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
+icon-view,arrange_by,finder.icon_view.arrange_by,0.3.0,planned,D-FINDER-02,icon_locations mapped to contents[].position or folder-local positions.
+icon-view,grid_offset,finder.icon_view.grid_offset,0.3.0,planned,D-FINDER-02,icon_locations mapped to contents[].position or folder-local positions.
+icon-view,grid_spacing,finder.icon_view.grid_spacing,0.3.0,planned,D-FINDER-02,icon_locations mapped to contents[].position or folder-local positions.
+icon-view,scroll_position,finder.icon_view.scroll_position,0.3.0,planned,D-FINDER-02,icon_locations mapped to contents[].position or folder-local positions.
+icon-view,label_pos,finder.icon_view.label_position,0.3.0,planned,D-FINDER-02,icon_locations mapped to contents[].position or folder-local positions.
+icon-view,text_size,finder.icon_view.text_size,0.3.0,planned,D-FINDER-02,icon_locations mapped to contents[].position or folder-local positions.
+icon-view,icon_size,finder.icon_view.icon_size,0.3.0,planned,D-FINDER-02,icon_locations mapped to contents[].position or folder-local positions.
+list-view,list_icon_size,finder.list_view.icon_size,0.3.0,planned,D-FINDER-02,All ten documented columns and direction/width/order.
+list-view,list_text_size,finder.list_view.text_size,0.3.0,planned,D-FINDER-02,All ten documented columns and direction/width/order.
+list-view,list_scroll_position,finder.list_view.scroll_position,0.3.0,planned,D-FINDER-02,All ten documented columns and direction/width/order.
+list-view,list_sort_by,finder.list_view.sort_by,0.3.0,planned,D-FINDER-02,All ten documented columns and direction/width/order.
+list-view,list_use_relative_dates,finder.list_view.use_relative_dates,0.3.0,planned,D-FINDER-02,All ten documented columns and direction/width/order.
+list-view,list_calculate_all_sizes,finder.list_view.calculate_all_sizes,0.3.0,planned,D-FINDER-02,All ten documented columns and direction/width/order.
+list-view,list_columns,finder.list_view.columns,0.3.0,planned,D-FINDER-02,All ten documented columns and direction/width/order.
+list-view,list_column_widths,finder.list_view.column_widths,0.3.0,planned,D-FINDER-02,All ten documented columns and direction/width/order.
+list-view,list_column_sort_directions,finder.list_view.sort_directions,0.3.0,planned,D-FINDER-02,All ten documented columns and direction/width/order.
+source-only,show_item_info,finder.show_item_info,0.3.0,planned,D-FINDER-02,"Source default, not heading in docs."
+source-only,compression_level,compression.level,0.2.0,planned,D-UDIF-03,Upstream newer version ignores; dmgez honors qualified codec level.
+defines,defines,defines,0.2.0,planned,D-BUILD-01,Typed string substitution only; no Python.
+migration,appdmg JSON,dmgez config import appdmg,0.3.0,planned,D-FINDER-03,Known fields only; no arbitrary Python config execution.
+license,license,license.default_language / licenses / buttons,stretch,deferred,D-OPS-05,"Optional legacy license resource, no guarantee modern macOS displays it."
+execution,arbitrary Python settings,not supported,out-of-scope,excluded,D-BUILD-01,Explicit migration docs/typed variables instead of script execution.

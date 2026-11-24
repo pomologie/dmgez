@@ -1,0 +1,16 @@
+# Initial default builder profile (proposed; paths are illustrative).
+schema_version = 1
+[image]
+name = "Example"
+output = "dist/Example.dmg"
+[[contents]]
+source = "dist/Example.app"
+position = [155, 125]
+[[contents]]
+type = "symlink"
+destination = "/Applications"
+target = "/Applications"
+position = [485, 125]
+[finder]
+window_size = [640, 280]
+background = { kind = "color", value = "#f0f0f0" }

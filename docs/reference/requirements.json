@@ -1,0 +1,744 @@
+{
+  "project": "dmgez",
+  "schema_version": 1,
+  "requirements": [
+    {
+      "id": "D-UDIF-01",
+      "milestone": "0.1.0",
+      "owner": "docs/features/UDIF.md",
+      "requirement": "Parse/serialize standard trailer and bounded resource map without trusting extension.",
+      "source_ids": [
+        "S01",
+        "S02",
+        "S03",
+        "S04"
+      ],
+      "acceptance_tests": [
+        "D-UDIF-01-T01",
+        "D-UDIF-01-T02",
+        "D-UDIF-01-T03",
+        "D-UDIF-01-T04"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-UDIF-02",
+      "milestone": "0.1.0",
+      "owner": "docs/features/UDIF.md",
+      "requirement": "Qualify distinct raw, zero, ignore, comment and terminal block-map and checksum domains.",
+      "source_ids": [
+        "S01",
+        "S02",
+        "S04",
+        "S22"
+      ],
+      "acceptance_tests": [
+        "D-UDIF-02-T01",
+        "D-UDIF-02-T02",
+        "D-UDIF-02-T03",
+        "D-UDIF-02-T04"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-UDIF-03",
+      "milestone": "0.1.0",
+      "owner": "docs/features/UDIF.md",
+      "requirement": "Stream UDRO and UDZO from finite source to nonseekable sink with exact output geometry.",
+      "source_ids": [
+        "S01",
+        "S02",
+        "S04",
+        "S22"
+      ],
+      "acceptance_tests": [
+        "D-UDIF-03-T01",
+        "D-UDIF-03-T02",
+        "D-UDIF-03-T03",
+        "D-UDIF-03-T04"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-UDIF-04",
+      "milestone": "0.1.0",
+      "owner": "docs/features/UDIF.md",
+      "requirement": "Bound reader, run index and decompression for arbitrary logical reads.",
+      "source_ids": [
+        "S01",
+        "S02",
+        "S03"
+      ],
+      "acceptance_tests": [
+        "D-UDIF-04-T01",
+        "D-UDIF-04-T02",
+        "D-UDIF-04-T03",
+        "D-UDIF-04-T04"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-UDIF-05",
+      "milestone": "0.3.0",
+      "owner": "docs/features/UDIF.md",
+      "requirement": "Optional ULFO support and explicit codec-profile negotiation.",
+      "source_ids": [
+        "S01",
+        "S04",
+        "S06",
+        "S22"
+      ],
+      "acceptance_tests": [
+        "D-UDIF-05-T01",
+        "D-UDIF-05-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-UDIF-06",
+      "milestone": "0.4.0",
+      "owner": "docs/features/UDIF.md",
+      "requirement": "Recognize qualified multi-table and signed/stapled UDIF structure, preserve logical view.",
+      "source_ids": [
+        "S01",
+        "S02",
+        "S04",
+        "S10"
+      ],
+      "acceptance_tests": [
+        "D-UDIF-06-T01",
+        "D-UDIF-06-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-BUILD-01",
+      "milestone": "0.2.0",
+      "owner": "docs/features/BUILDER.md",
+      "requirement": "Strict typed TOML, capability negotiation, config overrides and dry-run.",
+      "source_ids": [
+        "S06",
+        "S07"
+      ],
+      "acceptance_tests": [
+        "D-BUILD-01-T01",
+        "D-BUILD-01-T02",
+        "D-BUILD-01-T03"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-BUILD-02",
+      "milestone": "0.2.0",
+      "owner": "docs/features/BUILDER.md",
+      "requirement": "Arbitrary content manifest with nested paths, rename, glob, dotfile, directory and symlink.",
+      "source_ids": [
+        "S06",
+        "S07"
+      ],
+      "acceptance_tests": [
+        "D-BUILD-02-T01",
+        "D-BUILD-02-T02",
+        "D-BUILD-02-T03"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-BUILD-03",
+      "milestone": "0.2.0",
+      "owner": "docs/features/BUILDER.md",
+      "requirement": "Preserve metadata, including signed apps, and report unknown/unavailable data.",
+      "source_ids": [
+        "S07",
+        "S08",
+        "S09"
+      ],
+      "acceptance_tests": [
+        "D-BUILD-03-T01",
+        "D-BUILD-03-T02",
+        "D-BUILD-03-T03",
+        "D-BUILD-03-T04"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-BUILD-04",
+      "milestone": "0.2.0",
+      "owner": "docs/features/BUILDER.md",
+      "requirement": "Canonical path collision validation and stable generated asset identities.",
+      "source_ids": [
+        "S07",
+        "S14"
+      ],
+      "acceptance_tests": [
+        "D-BUILD-04-T01",
+        "D-BUILD-04-T02",
+        "D-BUILD-04-T03"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-BUILD-05",
+      "milestone": "0.2.0",
+      "owner": "docs/features/BUILDER.md",
+      "requirement": "Correct capacity planning, atomic publication and source stability.",
+      "source_ids": [
+        "S04",
+        "S07"
+      ],
+      "acceptance_tests": [
+        "D-BUILD-05-T01",
+        "D-BUILD-05-T02",
+        "D-BUILD-05-T03",
+        "D-BUILD-05-T04"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-FINDER-01",
+      "milestone": "0.2.0",
+      "owner": "docs/features/FINDER.md",
+      "requirement": "Basic root Finder layout, icon positions, background, hidden flags, volume icon.",
+      "source_ids": [
+        "S06",
+        "S14"
+      ],
+      "acceptance_tests": [
+        "D-FINDER-01-T01",
+        "D-FINDER-01-T02",
+        "D-FINDER-01-T03"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-FINDER-02",
+      "milestone": "0.3.0",
+      "owner": "docs/features/FINDER.md",
+      "requirement": "Full applicable window/icon/list settings and compatibility inventory.",
+      "source_ids": [
+        "S06",
+        "S14"
+      ],
+      "acceptance_tests": [
+        "D-FINDER-02-T01",
+        "D-FINDER-02-T02",
+        "D-FINDER-02-T03",
+        "D-FINDER-02-T04"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-FINDER-03",
+      "milestone": "0.3.0",
+      "owner": "docs/features/FINDER.md",
+      "requirement": "Advanced presentation, high-DPI reps, nested layouts and safe config migration.",
+      "source_ids": [
+        "S06",
+        "S14"
+      ],
+      "acceptance_tests": [
+        "D-FINDER-03-T01",
+        "D-FINDER-03-T02",
+        "D-FINDER-03-T03",
+        "D-FINDER-03-T04"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-PERF-01",
+      "milestone": "0.2.0",
+      "owner": "docs/features/PERFORMANCE.md",
+      "requirement": "Default-on optional Rayon bounded scheduler with ordered serial-equivalent output.",
+      "source_ids": [
+        "S22"
+      ],
+      "acceptance_tests": [
+        "D-PERF-01-T01",
+        "D-PERF-01-T02",
+        "D-PERF-01-T03",
+        "D-PERF-01-T04"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-PERF-02",
+      "milestone": "0.3.0",
+      "owner": "docs/features/PERFORMANCE.md",
+      "requirement": "Deterministic unsigned output and reproducible benchmark protocol.",
+      "source_ids": [
+        "S05",
+        "S06",
+        "S22"
+      ],
+      "acceptance_tests": [
+        "D-PERF-02-T01",
+        "D-PERF-02-T02",
+        "D-PERF-02-T03"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-PERF-03",
+      "milestone": "0.7.0",
+      "owner": "docs/features/PERFORMANCE.md",
+      "requirement": "Optional integrity-checked block cache and bounded optimization.",
+      "source_ids": [
+        "S22"
+      ],
+      "acceptance_tests": [
+        "D-PERF-03-T01",
+        "D-PERF-03-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-READ-01",
+      "milestone": "0.4.0",
+      "owner": "docs/features/INSPECTION.md",
+      "requirement": "Partition detection and explicit volume selection without assuming blkx table is partition.",
+      "source_ids": [
+        "S01",
+        "S04",
+        "S21"
+      ],
+      "acceptance_tests": [
+        "D-READ-01-T01",
+        "D-READ-01-T02",
+        "D-READ-01-T03"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-READ-02",
+      "milestone": "0.4.0",
+      "owner": "docs/features/INSPECTION.md",
+      "requirement": "Deep typed inspector and machine-readable reports.",
+      "source_ids": [
+        "S01",
+        "S07",
+        "S14"
+      ],
+      "acceptance_tests": [
+        "D-READ-02-T01",
+        "D-READ-02-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-READ-03",
+      "milestone": "0.4.0",
+      "owner": "docs/features/INSPECTION.md",
+      "requirement": "Lazy VFS ls/tree/stat/cat and exact fork read.",
+      "source_ids": [
+        "S01",
+        "S07"
+      ],
+      "acceptance_tests": [
+        "D-READ-03-T01",
+        "D-READ-03-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-READ-04",
+      "milestone": "0.4.0",
+      "owner": "docs/features/INSPECTION.md",
+      "requirement": "Separate inspect/quick/container/full verification with honest partial results.",
+      "source_ids": [
+        "S01",
+        "S04",
+        "S07"
+      ],
+      "acceptance_tests": [
+        "D-READ-04-T01",
+        "D-READ-04-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-READ-05",
+      "milestone": "0.4.0",
+      "owner": "docs/features/INSPECTION.md",
+      "requirement": "Constrained extraction with metadata/conflict policy.",
+      "source_ids": [
+        "S07",
+        "S08"
+      ],
+      "acceptance_tests": [
+        "D-READ-05-T01",
+        "D-READ-05-T02",
+        "D-READ-05-T03",
+        "D-READ-05-T04"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-GUI-01",
+      "milestone": "0.5.0",
+      "owner": "docs/features/GUI.md",
+      "requirement": "Visual builder edits same project with precise layouts and TOML round-trip.",
+      "source_ids": [
+        "S06",
+        "S14"
+      ],
+      "acceptance_tests": [
+        "D-GUI-01-T01",
+        "D-GUI-01-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-GUI-02",
+      "milestone": "0.5.0",
+      "owner": "docs/features/GUI.md",
+      "requirement": "Interactive actual-DMG VFS and headless preview without drivers.",
+      "source_ids": [
+        "S07",
+        "S14"
+      ],
+      "acceptance_tests": [
+        "D-GUI-02-T01",
+        "D-GUI-02-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-GUI-03",
+      "milestone": "0.5.0",
+      "owner": "docs/features/GUI.md",
+      "requirement": "Responsive technical inspector, large data virtualization, accessibility.",
+      "source_ids": [
+        "S14"
+      ],
+      "acceptance_tests": [
+        "D-GUI-03-T01",
+        "D-GUI-03-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-REL-01",
+      "milestone": "0.6.0",
+      "owner": "docs/features/RELEASE.md",
+      "requirement": "Optional native/Rust signing with explicit scope and source preservation.",
+      "source_ids": [
+        "S09",
+        "S10"
+      ],
+      "acceptance_tests": [
+        "D-REL-01-T01",
+        "D-REL-01-T02",
+        "D-REL-01-T03"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-REL-02",
+      "milestone": "0.6.0",
+      "owner": "docs/features/RELEASE.md",
+      "requirement": "Notarize and staple exact signed artifact with resumable ID and honest release status.",
+      "source_ids": [
+        "S09",
+        "S10"
+      ],
+      "acceptance_tests": [
+        "D-REL-02-T01",
+        "D-REL-02-T02",
+        "D-REL-02-T03"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-REL-03",
+      "milestone": "0.6.0",
+      "owner": "docs/features/RELEASE.md",
+      "requirement": "Semantic/physical diff with explicit policies and stable outputs.",
+      "source_ids": [
+        "S07",
+        "S14"
+      ],
+      "acceptance_tests": [
+        "D-REL-03-T01",
+        "D-REL-03-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-REL-04",
+      "milestone": "0.6.0",
+      "owner": "docs/features/RELEASE.md",
+      "requirement": "Lint and release readiness reports with explicit rules and evidence.",
+      "source_ids": [
+        "S06",
+        "S09",
+        "S14"
+      ],
+      "acceptance_tests": [
+        "D-REL-04-T01",
+        "D-REL-04-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-OPS-01",
+      "milestone": "0.7.0",
+      "owner": "docs/features/ADVANCED.md",
+      "requirement": "Convert container and edit via immutable overlay/new output.",
+      "source_ids": [
+        "S01",
+        "S04",
+        "S07"
+      ],
+      "acceptance_tests": [
+        "D-OPS-01-T01",
+        "D-OPS-01-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-OPS-02",
+      "milestone": "0.7.0",
+      "owner": "docs/features/ADVANCED.md",
+      "requirement": "Analyze actual space/compression and optimize within explicit budget.",
+      "source_ids": [
+        "S01",
+        "S05"
+      ],
+      "acceptance_tests": [
+        "D-OPS-02-T01",
+        "D-OPS-02-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-MOUNT-01",
+      "milestone": "0.8.0",
+      "owner": "docs/features/MOUNT_INSTALL.md",
+      "requirement": "Read-only OS mounts with scoped session lifecycle and backend availability.",
+      "source_ids": [
+        "S04",
+        "S16"
+      ],
+      "acceptance_tests": [
+        "D-MOUNT-01-T01",
+        "D-MOUNT-01-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-MOUNT-02",
+      "milestone": "0.8.0",
+      "owner": "docs/features/MOUNT_INSTALL.md",
+      "requirement": "Explicit virtual install and native drag-out with verified completion.",
+      "source_ids": [
+        "S09",
+        "S15"
+      ],
+      "acceptance_tests": [
+        "D-MOUNT-02-T01",
+        "D-MOUNT-02-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-MOUNT-03",
+      "milestone": "0.8.0",
+      "owner": "docs/features/MOUNT_INSTALL.md",
+      "requirement": "Opt-in external copy monitoring never ejects from event timing alone.",
+      "source_ids": [
+        "S04",
+        "S16"
+      ],
+      "acceptance_tests": [
+        "D-MOUNT-03-T01",
+        "D-MOUNT-03-T02",
+        "D-MOUNT-03-T03"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-OPS-03",
+      "milestone": "0.9.0",
+      "owner": "docs/features/ADVANCED.md",
+      "requirement": "HTTP range reader identity and bounded remote operations.",
+      "source_ids": [
+        "S19"
+      ],
+      "acceptance_tests": [
+        "D-OPS-03-T01",
+        "D-OPS-03-T02",
+        "D-OPS-03-T03"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-OPS-04",
+      "milestone": "0.9.0",
+      "owner": "docs/features/ADVANCED.md",
+      "requirement": "MCP local typed tools and modern optional ULMO/UDRW/partition profiles.",
+      "source_ids": [
+        "S01",
+        "S04",
+        "S18",
+        "S21"
+      ],
+      "acceptance_tests": [
+        "D-OPS-04-T01",
+        "D-OPS-04-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-OPS-05",
+      "milestone": "stretch",
+      "owner": "docs/features/ADVANCED.md",
+      "requirement": "Stretch formats and security features stay off-default and individually qualified.",
+      "source_ids": [
+        "S01",
+        "S04",
+        "S06",
+        "S12",
+        "S20"
+      ],
+      "acceptance_tests": [
+        "D-OPS-05-T01",
+        "D-OPS-05-T02"
+      ],
+      "status": "planned",
+      "mandatory": false
+    },
+    {
+      "id": "D-CI-01",
+      "milestone": "0.2.0",
+      "owner": "ARCHITECTURE.md",
+      "requirement": "Default CLI feature graph excludes unrelated engines, network, GUI, signing, mount and legacy.",
+      "source_ids": [
+        "S17",
+        "S22"
+      ],
+      "acceptance_tests": [
+        "D-CI-01-T01",
+        "D-CI-01-T02"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-CI-02",
+      "milestone": "1.0.0",
+      "owner": "ARCHITECTURE.md",
+      "requirement": "Acyclic workspace, source provenance, security and feature combinations.",
+      "source_ids": [
+        "S17",
+        "S20"
+      ],
+      "acceptance_tests": [
+        "D-CI-02-T01"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-CI-03",
+      "milestone": "1.0.0",
+      "owner": "ARCHITECTURE.md",
+      "requirement": "Stable public API/schema and reproducible release evidence; Dockhand consumer integration.",
+      "source_ids": [
+        "S04",
+        "S06",
+        "S17"
+      ],
+      "acceptance_tests": [
+        "D-CI-03-T01"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-VER-01",
+      "milestone": "0.1.0",
+      "owner": "VERIFICATION.md",
+      "requirement": "Maintain independent test, fault, fuzz, coverage and architecture apparatus from bootstrap.",
+      "source_ids": [
+        "V04",
+        "V07",
+        "V10"
+      ],
+      "acceptance_tests": [
+        "D-VER-01-T01"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-VER-02",
+      "milestone": "0.1.0",
+      "owner": "VERIFICATION.md",
+      "requirement": "Track all activated proof obligations and evidence; run critical bounded Rust safety gates.",
+      "source_ids": [
+        "V04",
+        "V07",
+        "V10"
+      ],
+      "acceptance_tests": [
+        "D-VER-02-T01"
+      ],
+      "status": "planned",
+      "mandatory": true
+    },
+    {
+      "id": "D-VER-03",
+      "milestone": "1.0.0",
+      "owner": "VERIFICATION.md",
+      "requirement": "Qualify activated Lean, protocol and fault gates; retain source-linked evidence and reviewed assumptions.",
+      "source_ids": [
+        "V01",
+        "V02",
+        "V03",
+        "V05",
+        "V10"
+      ],
+      "acceptance_tests": [
+        "D-VER-03-T01"
+      ],
+      "status": "planned",
+      "mandatory": true
+    }
+  ]
+}

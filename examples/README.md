@@ -1,0 +1,3 @@
+# Configuration examples
+
+These are structural examples for the proposed schema, not runnable projects: asset paths are placeholders and no implementation or assets are bundled. `minimal.toml` targets the functional default builder milestone; `multi-app.toml` includes advanced Finder, reproducibility, Retina and folder layout features; `release.toml` requires optional signing/notarization features and separately supplied credentials. Structural validation never enables an unsupported feature. Runtime semantic validation must reject missing files, invalid Unicode/size/path/geometry, feature/profile conflicts, and unavailable metadata. The Rust typed project model is the canonical runtime authority, JSON Schema is a mirror for tooling.

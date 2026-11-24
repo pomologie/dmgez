@@ -1,0 +1,1338 @@
+{
+  "project": "dmgez",
+  "schema_version": 1,
+  "tests": [
+    {
+      "id": "D-UDIF-01-T01",
+      "requirement_ids": [
+        "D-UDIF-01"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Native unsigned tiny image; compare fields and 512-byte trailer; mutate plist offset, header length and count. Accept known layout and reject out-of-bounds before allocation.",
+      "oracle": "native fixture; apple-dmg; unit",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-02-T01",
+      "requirement_ids": [
+        "D-UDIF-02"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Build fixture ledger with zero-only, leading/trailing gaps, mixed raw/zlib and checksum corruption; compare native declared digests and independently computed values; distinguish absent/unsupported/mismatch.",
+      "oracle": "native verify; independent CRC ledger",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-03-T01",
+      "requirement_ids": [
+        "D-UDIF-03"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Wrap generated raw sectors in UDRO/UDZO, nonseekable writer recording offsets; compare fully decoded bytes with native and independent readers; inject short reads/writes; no valid artifact on failure.",
+      "oracle": "hdiutil/diskutil; apple-dmg; udif",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-04-T01",
+      "requirement_ids": [
+        "D-UDIF-04"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Use valid mixed blocks, random requests crossing run edges/EOF, mutated overlapping run, unknown type, truncated zlib and declared huge decoded size. Assert exact bytes, bounded buffers and typed failures.",
+      "oracle": "generated raw expected bytes; fuzz",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-05-T01",
+      "requirement_ids": [
+        "D-UDIF-05"
+      ],
+      "milestone": "0.3.0",
+      "scenario": "Generate native ULFO with zero/raw/mixed runs; compare decoded bytes; generate own and native attach/verify. Disable lzfse and check unsupported error; no silent zlib substitution.",
+      "oracle": "native tool; independent supported decoder",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-06-T01",
+      "requirement_ids": [
+        "D-UDIF-06"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Use multi-table native image and owned signed/stapled fixture; inspect exact ranges, read expected partitions; malformed signature offset and inconsistent table base reject. Verify no trust claim from CRC.",
+      "oracle": "native attach/verify; signature inspection",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-01-T01",
+      "requirement_ids": [
+        "D-BUILD-01"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Validate minimal/suite configs and negative unknown key, wrong type, duplicate position, unsupported codec, explicit parallel in serial build; dry-run performs no output/sign/mount.",
+      "oracle": "schema, CLI integration, filesystem side-effect spy",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-02-T01",
+      "requirement_ids": [
+        "D-BUILD-02"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Use 3 apps, nested docs, hidden file, empty dir, excluded subtree, existing link and Applications link. Compare mounted manifest; no implicit .gitignore or symlink follow.",
+      "oracle": "native mounted manifest; unit",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-03-T01",
+      "requirement_ids": [
+        "D-BUILD-03"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Create owned/ad hoc signed bundle with exec bits, framework links, resource fork, xattrs and regular hardlink. Build from all three OSes with canonical manifest, compare stat/forks/signature; missing mode/sidecar conflict strict fails.",
+      "oracle": "native stat/lstat/xattr/codesign; hfsplus reader",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-04-T01",
+      "requirement_ids": [
+        "D-BUILD-04"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Input composed/decomposed/case-distinct names, generated .DS_Store collision, source/output same inode, nested parent conflict, root reservation. Preflight refuses; normal alias resolves after catalog IDs stable.",
+      "oracle": "native collision and Finder oracle",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-05-T01",
+      "requirement_ids": [
+        "D-BUILD-05"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Use empty image and exact-capacity/undersized manifest; change source while reading, cancel before finalization, existing output without/with overwrite. Old file unchanged on failure, temp cleanup, correct bytes/size.",
+      "oracle": "fault-injected source/sink; native mount",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-FINDER-01-T01",
+      "requirement_ids": [
+        "D-FINDER-01"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Generate two-app installer with .DS_Store, image alias, custom ICNS, hidden support and Applications link; decode independent records and open actual Finder on qualified macOS.",
+      "oracle": "dmgbuild semantics; Finder; ds_parser",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-FINDER-02-T01",
+      "requirement_ids": [
+        "D-FINDER-02"
+      ],
+      "milestone": "0.3.0",
+      "scenario": "Parameterize every parity CSV setting and all documented column/arrangement values; compare decoded records to dmgbuild fixtures; verify explicit flags, widths, sort, grid, legacy view diagnostics.",
+      "oracle": "dmgbuild; Finder, structured expected values",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-FINDER-03-T01",
+      "requirement_ids": [
+        "D-FINDER-03"
+      ],
+      "milestone": "0.3.0",
+      "scenario": "Prebuilt ICNS and multiple PNG reps, background @2x, color syntaxes/template, per-folder view, badging/custom icon where enabled; import appdmg JSON; unknown field and signed-app mutation rejected.",
+      "oracle": "native Finder visual/record checks; import schema",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-PERF-01-T01",
+      "requirement_ids": [
+        "D-PERF-01"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Delay earlier job, fail middle job, cancel full queue, cap workers/memory; compare exact unsigned bytes at 1/2/4/8 workers, check owned buffers and no full raw image.",
+      "oracle": "instrumented scheduler; serial baseline; bench",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-PERF-02-T01",
+      "requirement_ids": [
+        "D-PERF-02"
+      ],
+      "milestone": "0.3.0",
+      "scenario": "Repeat canonical manifest with explicit epoch in separate processes/hosts; compare hashes, profile and run order; run 100 MiB/1 GiB/10 GiB and 100k files baseline with equivalent format/metadata.",
+      "oracle": "digest comparison; controlled benchmark",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-PERF-03-T01",
+      "requirement_ids": [
+        "D-PERF-03"
+      ],
+      "milestone": "0.7.0",
+      "scenario": "Change one chunk, codec level/version and source digest; validate cache hit/miss and corrupted payload fallback, size cap; optimized output decoded bytes unchanged; no historical timing without report.",
+      "oracle": "cache instrumentation; raw byte oracle",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-READ-01-T01",
+      "requirement_ids": [
+        "D-READ-01"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Fixtures partitionless HFS+, GPT/APM/MBR supported layouts, bad GPT CRC, ambiguous/hybrid overlap, unknown fs; inspect outer metadata, choose exact volume; reject out-of-bounds.",
+      "oracle": "native diskutil report; partition library checks",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-READ-02-T01",
+      "requirement_ids": [
+        "D-READ-02"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Inspect volume header, allocation/catalog, file forks/xattrs, extents and covering compressed runs, DS Store records, unknowns, raw internal IDs. Compare known metadata; cap JSON/hex/control escaping.",
+      "oracle": "native file oracle; independent readers",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-READ-03-T01",
+      "requirement_ids": [
+        "D-READ-03"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Open large compressed image with read-counter source, inspect metadata and extract one file crossing runs; compare data/resource bytes; verify bounded decode/cache and no host mount.",
+      "oracle": "instrumented ReadAt; known manifest",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-READ-04-T01",
+      "requirement_ids": [
+        "D-READ-04"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Known good image, invalid CRC, malformed filesystem, unsupported codec and absent checksum. Distinguish all check outcomes and nonzero when required unavailable; never repair source.",
+      "oracle": "native verify/fsck; fault fixtures",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-READ-05-T01",
+      "requirement_ids": [
+        "D-READ-05"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Malicious parent traversal and symlink/junction race, Windows reserved names, existing target, external symlink, hardlink, cancel. Assert no writes outside root, strict losses fail, no implicit overwrite, correct fork bytes.",
+      "oracle": "sandbox test tree; native metadata oracle",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-GUI-01-T01",
+      "requirement_ids": [
+        "D-GUI-01"
+      ],
+      "milestone": "0.5.0",
+      "scenario": "Open commented TOML, add multiple files, drag and align, undo/redo, nested folder, keyboard controls, save/reopen; typed change equals CLI config, comments preserved.",
+      "oracle": "UI reducer tests; actual GUI smoke",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-GUI-02-T01",
+      "requirement_ids": [
+        "D-GUI-02"
+      ],
+      "milestone": "0.5.0",
+      "scenario": "Open real DMG unrelated to config, read decoded background/positions/icons and list/tree, inspect hidden/forks, render PNG; absent/corrupt layout fallback, no automatic exec.",
+      "oracle": "native Finder and record oracle; GUI smoke",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-GUI-03-T01",
+      "requirement_ids": [
+        "D-GUI-03"
+      ],
+      "milestone": "0.5.0",
+      "scenario": "Large catalog/block map; paginate and select file extents, cancel large preview/build; keyboard-only navigation, label/focus/contrast checks and stable memory.",
+      "oracle": "UI test; native accessibility tools; benchmark",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-REL-01-T01",
+      "requirement_ids": [
+        "D-REL-01"
+      ],
+      "milestone": "0.6.0",
+      "scenario": "Sign staged owned nested bundle then DMG; inspect existing signature without resign, wrong identity/backend absent; compare source unchanged and native codesign checks.",
+      "oracle": "protected native signing; mock backend negative",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-REL-02-T01",
+      "requirement_ids": [
+        "D-REL-02"
+      ],
+      "milestone": "0.6.0",
+      "scenario": "Protected Developer ID test submits accepted artifact, resumes after interruption, staples and native validates. Mock pending/reject/changed digest/credential failure; required native check unavailable fails.",
+      "oracle": "Apple service + native validation; mock failure tests",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-REL-03-T01",
+      "requirement_ids": [
+        "D-REL-03"
+      ],
+      "milestone": "0.6.0",
+      "scenario": "Two images same tree different compression, metadata changes, rename candidate, forks, Finder and signature difference; verify content equality distinct from raw equality, exit codes and exclusions.",
+      "oracle": "known expected manifest diff",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-REL-04-T01",
+      "requirement_ids": [
+        "D-REL-04"
+      ],
+      "milestone": "0.6.0",
+      "scenario": "Overlapping/clipped icons, missing link or background, absent exec bit, invalid signature, unknown native assessment; check diagnostics, suppression reason, no auto-modify.",
+      "oracle": "rule fixtures; actual native checks when required",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-OPS-01-T01",
+      "requirement_ids": [
+        "D-OPS-01"
+      ],
+      "milestone": "0.7.0",
+      "scenario": "UDRO\u2194UDZO/raw exact bytes; edit add/remove/rename/layout and preserve supported attrs; unknown loss/invalidated signature warn or block; original digest unchanged after failed edit.",
+      "oracle": "raw compare; native mount; semantic diff",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-OPS-02-T01",
+      "requirement_ids": [
+        "D-OPS-02"
+      ],
+      "milestone": "0.7.0",
+      "scenario": "Known image with mixed raw/zero/compressed runs and known allocation; verify report ratios and no fabricated time; cache/optimize retains same content.",
+      "oracle": "known geometry; bench",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-MOUNT-01-T01",
+      "requirement_ids": [
+        "D-MOUNT-01"
+      ],
+      "milestone": "0.8.0",
+      "scenario": "Per OS driver absent, supported backend actual mount and cat/stat, busy detach, stale PID/session, source identity changes, cancel. Confirm no forced or unrelated unmount.",
+      "oracle": "native OS mount and file read; mock backend",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-MOUNT-02-T01",
+      "requirement_ids": [
+        "D-MOUNT-02"
+      ],
+      "milestone": "0.8.0",
+      "scenario": "Drag owned bundle to Finder disposable target, resource fork/links/mode preservation, cancel and collision, permissions, staged copy and closure only on verified success; test Windows/Linux export fallback.",
+      "oracle": "real OS drag/drop; native metadata checks",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-MOUNT-03-T01",
+      "requirement_ids": [
+        "D-MOUNT-03"
+      ],
+      "milestone": "0.8.0",
+      "scenario": "Preexisting identical app, slow copy, wrong or partial bundle, multiple apps AND, lost events, target changes during verify, busy mount. Eject only verified fresh match and normal OS detach.",
+      "oracle": "actual Finder copy; deterministic watcher simulation",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-OPS-03-T01",
+      "requirement_ids": [
+        "D-OPS-03"
+      ],
+      "milestone": "0.9.0",
+      "scenario": "Mock server valid 206, 200, malformed range, 416, changed ETag, redirect/private IP, timeout and cancel. Read metadata without full download; fail closed on identity mismatch.",
+      "oracle": "mock HTTP integration; I/O counters",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-OPS-04-T01",
+      "requirement_ids": [
+        "D-OPS-04"
+      ],
+      "milestone": "0.9.0",
+      "scenario": "Test stdio handshake, approved revision-bound changes, unauthorized mount/overwrite, symlink escape, malicious file text and output budget. Separately test native ULMO/UDRW/partitioned images per admitted profile.",
+      "oracle": "MCP protocol fixtures; native format/partition oracle",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-OPS-05-T01",
+      "requirement_ids": [
+        "D-OPS-05"
+      ],
+      "milestone": "stretch",
+      "scenario": "Per profile legacy ADC/bzip2/NDIF/DC42, sparse/ASIF, segmented, authorized encryption, license, APFS, writable mounts: detect disabled, native/reference interoperability, corrupt input and appropriate security/crash test; no placeholder success.",
+      "oracle": "profile-specific native/reference tests; independent security review",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-CI-01-T01",
+      "requirement_ids": [
+        "D-CI-01"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Build default, serial, no-default on Linux/macOS/Windows, inspect resolved normal dependency tree and run default without Apple executables; disabled capability error.",
+      "oracle": "cargo metadata/tree; actual cross-platform build",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-CI-02-T01",
+      "requirement_ids": [
+        "D-CI-02"
+      ],
+      "milestone": "1.0.0",
+      "scenario": "Check target dependency graphs, feature matrix, fuzz smoke, licenses/advisories, no proprietary fixtures; build GUI/MCP separately, publish only qualified profiles.",
+      "oracle": "CI graph, cargo-deny, audit, fuzz evidence",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-CI-03-T01",
+      "requirement_ids": [
+        "D-CI-03"
+      ],
+      "milestone": "1.0.0",
+      "scenario": "Build from old qualified TOML via migration, compile library API consumer and Dockhand packaging smoke, compare supported OS/profile matrix and all required evidence artifacts.",
+      "oracle": "contract tests; native compatibility report",
+      "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-VER-01-T01",
+      "requirement_ids": [
+        "D-VER-01"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Run nextest, unit/property and fuzz corpus, negative graph test, 500-line policy and pinned native synthetic fixtures. Inject malformed geometry and verify no panic/escape; critical coverage and exceptions audited.",
+      "oracle": "EVS-1; cargo-nextest; proptest; native checker",
+      "expected": "All required gates in the active scope pass with current evidence; injected invalid evidence is rejected.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-VER-02-T01",
+      "requirement_ids": [
+        "D-VER-02"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Reject missing, stale, dirty, timed-out, unsupported, wrong-profile or vacuous required verification results; run actual Kani on admitted range/geometry helpers with bounds and non-vacuity.",
+      "oracle": "EVS-1; Kani; release evidence validator",
+      "expected": "All required gates in the active scope pass with current evidence; injected invalid evidence is rejected.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-VER-03-T01",
+      "requirement_ids": [
+        "D-VER-03"
+      ],
+      "milestone": "1.0.0",
+      "scenario": "Regenerate actual Rust extraction and verify named theorem dependency closure with no admitted placeholders; run activated TLC/actual fault/counterexample tests, native tests and mutation review; deliberately alter proof target hash and confirm evidence invalidated.",
+      "oracle": "EVS-1; Lean/hax; TLA+/TLC; native oracle; cargo-mutants",
+      "expected": "All required gates in the active scope pass with current evidence; injected invalid evidence is rejected.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-01-T02",
+      "requirement_ids": [
+        "D-UDIF-01"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Trailer shorter than 512 bytes; magic correct only in payload",
+      "oracle": "fuzz; bounded I/O spy",
+      "expected": "InvalidFormat/Corrupt, no seek below zero or fallback to raw",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-01-T03",
+      "requirement_ids": [
+        "D-UDIF-01"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "XML range end wraps u64 or intersects trailer illegally",
+      "oracle": "Kani; read counters",
+      "expected": "Reject before XML allocation",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-01-T04",
+      "requirement_ids": [
+        "D-UDIF-01"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "blkx decoded count disagrees with length; malformed base64; unknown plist key",
+      "oracle": "independent plist fixture",
+      "expected": "Length errors reject; unknown safe key reported, never executed",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-02-T02",
+      "requirement_ids": [
+        "D-UDIF-02"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Native explicit zero run and ignore run pair",
+      "oracle": "native hdiutil/diskutil",
+      "expected": "Separate checksum inputs validated against native ledger; no assumed equivalence",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-02-T03",
+      "requirement_ids": [
+        "D-UDIF-02"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "One bit flipped in table checksum, physical data, or master digest independently",
+      "oracle": "independent CRC ledger",
+      "expected": "Each failed declared domain identified; not verified",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-02-T04",
+      "requirement_ids": [
+        "D-UDIF-02"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Comment record carrying nonzero count or missing terminator",
+      "oracle": "native profile ledger",
+      "expected": "Reject invalid qualified profile; no data emitted for control record",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-03-T02",
+      "requirement_ids": [
+        "D-UDIF-03"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Known length, nonseekable sink; source one sector short/long",
+      "oracle": "raw byte oracle",
+      "expected": "Correct input exact; mismatched source errors, failed sink not published",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-03-T03",
+      "requirement_ids": [
+        "D-UDIF-03"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Raw fallback when zlib output is >= raw input",
+      "oracle": "native and udif reader",
+      "expected": "Same logical bytes; deterministic chosen run kind per policy",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-03-T04",
+      "requirement_ids": [
+        "D-UDIF-03"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Final sector at maximum qualified geometry; checked output cursor addition",
+      "oracle": "Kani; byte counter sink",
+      "expected": "Valid within limits or typed overflow error before write",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-04-T02",
+      "requirement_ids": [
+        "D-UDIF-04"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Read across compressed/raw/zero runs with unaligned start and partial end",
+      "oracle": "raw byte oracle",
+      "expected": "Exact requested bytes equal raw slice",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-04-T03",
+      "requirement_ids": [
+        "D-UDIF-04"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Decoded output shorter/longer than advertised; compressed bomb",
+      "oracle": "instrumented decoder",
+      "expected": "Reject length/budget violation; no full-image allocation",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-04-T04",
+      "requirement_ids": [
+        "D-UDIF-04"
+      ],
+      "milestone": "0.1.0",
+      "scenario": "Cache eviction and two overlapping concurrent reads",
+      "oracle": "Loom; raw oracle",
+      "expected": "Correct bytes and bounded cache, no cross-image identity leak",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-05-T02",
+      "requirement_ids": [
+        "D-UDIF-05"
+      ],
+      "milestone": "0.3.0",
+      "scenario": "Native ULFO fixture plus malformed framing",
+      "oracle": "native; independent decoder",
+      "expected": "Exact valid decoded length; malformed rejects; disabled feature diagnostic",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-UDIF-06-T02",
+      "requirement_ids": [
+        "D-UDIF-06"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Signed then stapled synthetic DMG",
+      "oracle": "native signing/stapler and raw digest",
+      "expected": "Same virtual disk digest, signature ranges not interpreted as runs",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-01-T02",
+      "requirement_ids": [
+        "D-BUILD-01"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Invalid field, missing variable, unknown schema version",
+      "oracle": "schema and I/O spy",
+      "expected": "Reject prior to output or network side effects",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-01-T03",
+      "requirement_ids": [
+        "D-BUILD-01"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "CLI define and typed override conflict with config",
+      "oracle": "snapshot report",
+      "expected": "Documented precedence, no shell/environment expansion",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-02-T02",
+      "requirement_ids": [
+        "D-BUILD-02"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Two .app bundles, nested directory, dotfile, empty dir, ordinary file, symlink",
+      "oracle": "native lstat/manifest",
+      "expected": "All resolved manifest entries included, dotfile visible policy independent",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-02-T03",
+      "requirement_ids": [
+        "D-BUILD-02"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Include **/* and exclude hidden pattern; nested glob ancestor",
+      "oracle": "reference path set",
+      "expected": "Exclusion wins, ancestors retained only when required",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-03-T02",
+      "requirement_ids": [
+        "D-BUILD-03"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Windows-imported app missing executable mode provenance",
+      "oracle": "metadata fixture",
+      "expected": "Strict profile rejects or requires explicit metadata source, no guessing",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-03-T03",
+      "requirement_ids": [
+        "D-BUILD-03"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "AppleDouble resource fork conflicts with native metadata",
+      "oracle": "native sidecar fixture",
+      "expected": "Explicit conflict error/policy; no silent overwrite",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-03-T04",
+      "requirement_ids": [
+        "D-BUILD-03"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Ad hoc signed app with framework symlinks and resource fork outside signed bundle",
+      "oracle": "native codesign and metadata oracle",
+      "expected": "Exact app bytes, links and available attrs; native signature verifies",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-04-T02",
+      "requirement_ids": [
+        "D-BUILD-04"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Unicode equivalent names, case collision and generated .DS_Store collision",
+      "oracle": "native name comparator",
+      "expected": "Reject before writing; identify both entries",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-04-T03",
+      "requirement_ids": [
+        "D-BUILD-04"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Background generated asset length changed after CNID freeze",
+      "oracle": "native Finder",
+      "expected": "IDs stable; alias resolves to actual mounted background",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-05-T02",
+      "requirement_ids": [
+        "D-BUILD-05"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Output path aliases source via hardlink or symlink",
+      "oracle": "host file identity",
+      "expected": "Reject without modifying source or target",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-05-T03",
+      "requirement_ids": [
+        "D-BUILD-05"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "ENOSPC/short write at each stage, sync failure, output race",
+      "oracle": "fault device + host integration",
+      "expected": "Old target intact or explicit durability limitation after commit; no success on failure",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-BUILD-05-T04",
+      "requirement_ids": [
+        "D-BUILD-05"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Source replaced after planning, same path different identity",
+      "oracle": "deterministic identity adapter",
+      "expected": "SourceChanged, no publication",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-FINDER-01-T02",
+      "requirement_ids": [
+        "D-FINDER-01"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Root icon positions and hidden flag, file extension hidden",
+      "oracle": "dmgbuild; Finder",
+      "expected": "Actual serialized properties; native observed positions/visibility",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-FINDER-01-T03",
+      "requirement_ids": [
+        "D-FINDER-01"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Applications symlink",
+      "oracle": "native readlink",
+      "expected": "Link target exactly /Applications; no imported host directory contents",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-FINDER-02-T02",
+      "requirement_ids": [
+        "D-FINDER-02"
+      ],
+      "milestone": "0.3.0",
+      "scenario": "Each stable upstream Finder setting independently varied",
+      "oracle": "dmgbuild; Finder",
+      "expected": "Typed property decoded or explicitly deferred; visible behavior recorded by OS",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-FINDER-02-T03",
+      "requirement_ids": [
+        "D-FINDER-02"
+      ],
+      "milestone": "0.3.0",
+      "scenario": "Forced icon-view disabled with icon-view default",
+      "oracle": "config validation",
+      "expected": "Reject contradictory config; do not silently remove settings",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-FINDER-02-T04",
+      "requirement_ids": [
+        "D-FINDER-02"
+      ],
+      "milestone": "0.3.0",
+      "scenario": "Automatic arrangement plus manual coordinates",
+      "oracle": "native Finder",
+      "expected": "Record warning and actual Finder policy, no silent reposition by builder",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-FINDER-03-T02",
+      "requirement_ids": [
+        "D-FINDER-03"
+      ],
+      "milestone": "0.3.0",
+      "scenario": "All 10 ICNS resolutions including @2x, wrong pixel size",
+      "oracle": "icns independent decoder",
+      "expected": "Correct supplied representations, wrong dimensions rejected",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-FINDER-03-T03",
+      "requirement_ids": [
+        "D-FINDER-03"
+      ],
+      "milestone": "0.3.0",
+      "scenario": "1x and 2x background, root and nested folder layouts",
+      "oracle": "native Finder; image decoder",
+      "expected": "Both resolutions/aliases correct per qualified profile",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-FINDER-03-T04",
+      "requirement_ids": [
+        "D-FINDER-03"
+      ],
+      "milestone": "0.3.0",
+      "scenario": "Unknown .DS_Store record in edit",
+      "oracle": "raw record comparison",
+      "expected": "Preserve safely or explicit loss/error, never drop silently",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-PERF-01-T02",
+      "requirement_ids": [
+        "D-PERF-01"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Out-of-order worker finishes with budget 2 jobs",
+      "oracle": "reference scheduler; Loom",
+      "expected": "Ordered writer identical to serial; credits bounded",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-PERF-01-T03",
+      "requirement_ids": [
+        "D-PERF-01"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Cancellation or worker failure with full queue",
+      "oracle": "Shuttle; actual Rayon tests",
+      "expected": "All tasks joined, reservations released, no partial publication",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-PERF-01-T04",
+      "requirement_ids": [
+        "D-PERF-01"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Single chunk workspace exceeds memory limit",
+      "oracle": "budget allocator instrumentation",
+      "expected": "Reject before allocating; no indefinite wait",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-PERF-02-T02",
+      "requirement_ids": [
+        "D-PERF-02"
+      ],
+      "milestone": "0.3.0",
+      "scenario": "Same canonical manifest, serial vs 1/2/4/8 workers and repeat process",
+      "oracle": "SHA256 and semantic diff",
+      "expected": "Byte-identical unsigned image in pinned deterministic profile",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-PERF-02-T03",
+      "requirement_ids": [
+        "D-PERF-02"
+      ],
+      "milestone": "0.3.0",
+      "scenario": "Large payload from generated bounded source, large entry count separately",
+      "oracle": "memory and temp-file instrumentation",
+      "expected": "No full intermediate; budget respected or typed ResourceLimit",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-PERF-03-T02",
+      "requirement_ids": [
+        "D-PERF-03"
+      ],
+      "milestone": "0.7.0",
+      "scenario": "Cache entry tampered, mismatched codec version, same offset different bytes",
+      "oracle": "independent decoder",
+      "expected": "Reject as cache miss/error; regenerate verified output",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-READ-01-T02",
+      "requirement_ids": [
+        "D-READ-01"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Partition offsets overlap or exceed parent window",
+      "oracle": "Kani; partition ledger",
+      "expected": "Reject invalid volume window; never read beyond parent",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-READ-01-T03",
+      "requirement_ids": [
+        "D-READ-01"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Valid image contains multiple tables but one partitionless volume",
+      "oracle": "native fixture",
+      "expected": "Correct disk/volume identification, table not blindly partition",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-READ-02-T02",
+      "requirement_ids": [
+        "D-READ-02"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Inspect 10 GiB virtual image with tiny metadata",
+      "oracle": "counting source",
+      "expected": "No whole payload decode; read-count and metadata budget bounds",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-READ-03-T02",
+      "requirement_ids": [
+        "D-READ-03"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Two files share physical compressed run; independent read handles",
+      "oracle": "native metadata and raw fixture",
+      "expected": "Each file exact bytes, resource forks distinguishable",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-READ-04-T02",
+      "requirement_ids": [
+        "D-READ-04"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Unsupported checksum/profile and a valid declared checksum",
+      "oracle": "truth-table test",
+      "expected": "Partial/unavailable status, never full pass",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-READ-05-T02",
+      "requirement_ids": [
+        "D-READ-05"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Path traversal, NUL, Windows reserved path/ADS, ambiguous Unicode",
+      "oracle": "fuzz path grammar",
+      "expected": "Reject before side effects",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-READ-05-T03",
+      "requirement_ids": [
+        "D-READ-05"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Symlink/reparse parent swapped after validation",
+      "oracle": "actual platform race harness",
+      "expected": "No escape or unauthorized replace; typed failure",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-READ-05-T04",
+      "requirement_ids": [
+        "D-READ-05"
+      ],
+      "milestone": "0.4.0",
+      "scenario": "Unrepresentable resource fork/xattr on host",
+      "oracle": "native/sidecar round trip",
+      "expected": "Explicit loss or sidecar policy, not silent success",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-GUI-01-T02",
+      "requirement_ids": [
+        "D-GUI-01"
+      ],
+      "milestone": "0.5.0",
+      "scenario": "Edit TOML preserving comments and order; undo/redo",
+      "oracle": "semantic + text snapshots",
+      "expected": "Same canonical project and unaffected formatting",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-GUI-02-T02",
+      "requirement_ids": [
+        "D-GUI-02"
+      ],
+      "milestone": "0.5.0",
+      "scenario": "Open actual DMG with custom background and hidden file",
+      "oracle": "I/O spy, native preview comparison",
+      "expected": "Reads image metadata, navigates without mount; no image executable launched",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-GUI-03-T02",
+      "requirement_ids": [
+        "D-GUI-03"
+      ],
+      "milestone": "0.5.0",
+      "scenario": "100k entry catalog / corrupt nested structure",
+      "oracle": "UI virtual rows/instrumentation",
+      "expected": "Paginated responsive UI with cancel, memory limit and clear diagnostics",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-REL-01-T02",
+      "requirement_ids": [
+        "D-REL-01"
+      ],
+      "milestone": "0.6.0",
+      "scenario": "Signed source app staged for explicit re-sign, nested entitlements",
+      "oracle": "native codesign",
+      "expected": "Source unchanged; inside-out policy, correct nested signatures",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-REL-01-T03",
+      "requirement_ids": [
+        "D-REL-01"
+      ],
+      "milestone": "0.6.0",
+      "scenario": "Unavailable identity/tool on requested backend",
+      "oracle": "mock backend",
+      "expected": "Fail explicit; no silent fallback after side effects",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-REL-02-T02",
+      "requirement_ids": [
+        "D-REL-02"
+      ],
+      "milestone": "0.6.0",
+      "scenario": "Ambiguous submission timeout then resume by ID",
+      "oracle": "Wiremock; state model",
+      "expected": "No blind duplicate submission; status/digest explicit",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-REL-02-T03",
+      "requirement_ids": [
+        "D-REL-02"
+      ],
+      "milestone": "0.6.0",
+      "scenario": "Accepted notarization for digest A but local artifact B",
+      "oracle": "model and native test",
+      "expected": "Do not staple or mark ready",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-REL-04-T02",
+      "requirement_ids": [
+        "D-REL-04"
+      ],
+      "milestone": "0.6.0",
+      "scenario": "Native Gatekeeper unavailable on Linux",
+      "oracle": "report snapshot",
+      "expected": "Unavailable, not pass; separate signature and ticket results",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-REL-03-T02",
+      "requirement_ids": [
+        "D-REL-03"
+      ],
+      "milestone": "0.6.0",
+      "scenario": "Identical file bytes but changed mode/resource fork or Finder layout",
+      "oracle": "native manifest oracle",
+      "expected": "Semantic diff identifies exact changed metadata",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-OPS-01-T02",
+      "requirement_ids": [
+        "D-OPS-01"
+      ],
+      "milestone": "0.7.0",
+      "scenario": "No-op edit with unknown opaque metadata; signed DMG",
+      "oracle": "raw and semantic comparison",
+      "expected": "Preserve or explicit loss, no stale trust; original image unchanged",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-OPS-02-T02",
+      "requirement_ids": [
+        "D-OPS-02"
+      ],
+      "milestone": "0.7.0",
+      "scenario": "Optimize with zero budget or incompressible sample",
+      "oracle": "deterministic sampler",
+      "expected": "Explicit budget failure/selection, no fabricated optimum",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-MOUNT-01-T02",
+      "requirement_ids": [
+        "D-MOUNT-01"
+      ],
+      "milestone": "0.8.0",
+      "scenario": "Unmount request for replaced session device/mountpoint",
+      "oracle": "mock + native mount sessions",
+      "expected": "Never detach unrelated volume, report identity mismatch",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-MOUNT-02-T02",
+      "requirement_ids": [
+        "D-MOUNT-02"
+      ],
+      "milestone": "0.8.0",
+      "scenario": "Promised app drag-out fails midway or destination exists",
+      "oracle": "native OS drag/drop harness",
+      "expected": "No premature close; preserve old destination and report conflict/failure",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-MOUNT-03-T02",
+      "requirement_ids": [
+        "D-MOUNT-03"
+      ],
+      "milestone": "0.8.0",
+      "scenario": "Preexisting identical app, partial copy, quiet period without completion",
+      "oracle": "TLA model; synthetic file events",
+      "expected": "Never auto-eject from these signals alone",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-MOUNT-03-T03",
+      "requirement_ids": [
+        "D-MOUNT-03"
+      ],
+      "milestone": "0.8.0",
+      "scenario": "Multiple apps selected, one copied, busy volume or cancellation",
+      "oracle": "state-machine replay; native",
+      "expected": "Policy requires all chosen targets; no forced unmount",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-OPS-03-T02",
+      "requirement_ids": [
+        "D-OPS-03"
+      ],
+      "milestone": "0.9.0",
+      "scenario": "HTTP 206 with invalid Content-Range, 200 fallback, changed validator",
+      "oracle": "Wiremock",
+      "expected": "Reject inconsistent range/identity or explicit bounded snapshot",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-OPS-03-T03",
+      "requirement_ids": [
+        "D-OPS-03"
+      ],
+      "milestone": "0.9.0",
+      "scenario": "Timeout, partial response, redirect to disallowed address",
+      "oracle": "Toxiproxy; loopback mock",
+      "expected": "Bound retries; no SSRF/path escape",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-OPS-04-T02",
+      "requirement_ids": [
+        "D-OPS-04"
+      ],
+      "milestone": "0.9.0",
+      "scenario": "MCP approved build request changed output or source identity before execution",
+      "oracle": "state-machine and tool integration",
+      "expected": "Approval invalidated; no unauthorized effects",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-CI-01-T02",
+      "requirement_ids": [
+        "D-CI-01"
+      ],
+      "milestone": "0.2.0",
+      "scenario": "Minimal and serial builds plus intentionally added fstool or GUI runtime dep",
+      "oracle": "cargo metadata; negative graph fixtures",
+      "expected": "Graph guard rejects forbidden dependency; serial output works",
+      "status": "planned",
+      "evidence": null
+    },
+    {
+      "id": "D-OPS-05-T02",
+      "requirement_ids": [
+        "D-OPS-05"
+      ],
+      "milestone": "stretch",
+      "scenario": "Legacy magic recognized without feature; writable request unsupported",
+      "oracle": "profile matrix",
+      "expected": "Precise unsupported/feature error; no fallback or write",
+      "status": "planned",
+      "evidence": null
+    }
+  ]
+}

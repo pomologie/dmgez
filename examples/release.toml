@@ -1,0 +1,28 @@
+# Optional release pipeline: build --release. Secret references are names, not secret data.
+schema_version = 1
+[image]
+name = "Example"
+output = "dist/Example.dmg"
+[[contents]]
+source = "dist/Example.app"
+[[contents]]
+type = "symlink"
+destination = "/Applications"
+target = "/Applications"
+[signing]
+enabled = true
+backend = "auto"
+apps = "verify"
+dmg = true
+identity = "Developer ID Application: Example (TEAMID)"
+credential_ref = "release-signing"
+[notarization]
+enabled = true
+backend = "auto"
+wait = true
+staple = true
+credential_ref = "apple-notary"
+[release]
+verify = true
+require_notarization = true
+require_native_assessment = false # require a separate macOS validation job before distribution

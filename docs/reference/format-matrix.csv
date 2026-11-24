@@ -1,0 +1,17 @@
+upstream_format,toml_value,family,milestone,read_features,write_features,scope,status
+UDRO,udro,UDIF,0.1.0,udif-read,udif-write,"standard, native qualify",planned
+UDZO,udzo,UDIF,0.1.0,"udif-read,zlib","udif-write,zlib",default output,planned
+RAW,raw,raw disk,0.7.0,explicit raw source,convert,raw import/export; not UDIF,planned
+ULFO,ulfo,UDIF,0.3.0,"udif-read,lzfse","udif-write,lzfse",separate framing evidence,planned
+ULMO,ulmo,UDIF,0.9.0,"udif-read,lzma","udif-write,lzma",do not assume XZ framing,planned
+UDRW,udrw,UDIF,0.9.0,udif-read,udif-write,modern read/write container; not writable mount guarantee,planned
+UDSB,udsb,sparsebundle,stretch,sparse,sparse,directory/bands; separate adapter,planned
+sparseimage,sparseimage,sparse image,stretch,sparse,sparse,separate variant,planned
+ASIF,asif,ASIF,stretch,asif,asif,research-gated,planned
+UDBZ,udbz,UDIF legacy,stretch,"legacy-bzip2,udif-read","legacy-bzip2,udif-write",off default,planned
+UDCO,udco,UDIF legacy,stretch,"legacy-adc,udif-read","legacy-adc,udif-write",off default,planned
+obsolete UDIF,n/a,legacy,stretch,legacy-udif,legacy-udif,variant ledger,planned
+NDIF,n/a,non-UDIF legacy,stretch,legacy-ndif,legacy-ndif,separate family,planned
+DC42,n/a,non-UDIF legacy,stretch,legacy-dc42,legacy-dc42,separate family,planned
+segmented,n/a,multi-file,stretch,segmented,segmented,identity/resolver,planned
+encrypted,n/a,envelope,stretch,encryption,encryption,authorized credentials; separate APFS crypto,planned
