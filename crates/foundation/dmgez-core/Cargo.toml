@@ -10,11 +10,14 @@ description = "Shared I/O contracts for dmgez services"
 [features]
 default = []
 source = ["dep:thiserror"]
-staging = ["dep:tempfile", "dep:thiserror"]
+staging = ["dep:tempfile", "dep:thiserror", "dep:rustix"]
 
 [dependencies]
 tempfile = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+rustix = { workspace = true, optional = true }
 
 [lints]
 workspace = true

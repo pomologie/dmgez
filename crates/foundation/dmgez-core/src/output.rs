@@ -1,4 +1,4 @@
-//! Same-directory staging and no-clobber publication (C7).
+//! Same-directory staging and publication (C7).
 
 use std::{
 	fs::File,
@@ -8,6 +8,9 @@ use std::{
 
 use tempfile::NamedTempFile;
 use thiserror::Error;
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub mod replace;
 
 /// Failure before a new output could be published.
 #[derive(Debug, Error)]
@@ -62,12 +65,20 @@ pub fn publish_new<T, E>(
 		.filter(|path| !path.as_os_str().is_empty())
 		.unwrap_or_else(|| Path::new("."));
 	let mut stage = NamedTempFile::new_in(parent).map_err(PublishError::Create)?;
-	let report = write(stage.as_file_mut()).map_err(PublishError::Write)?;
-	stage.as_file().sync_all().map_err(PublishError::Sync)?;
-	stage.as_file_mut().rewind().map_err(PublishError::Rewind)?;
+	let report = prepare_stage(stage.as_file_mut(), write)?;
 	validate(StagedReader(stage.as_file_mut()), &report).map_err(PublishError::Validate)?;
 	stage
 		.persist_noclobber(destination)
 		.map_err(|failure| PublishError::Commit(failure.error))?;
+	Ok(report)
+}
+
+fn prepare_stage<T, E>(
+	stage: &mut File,
+	write: impl FnOnce(&mut dyn Write) -> Result<T, E>,
+) -> Result<T, PublishError<E>> {
+	let report = write(stage).map_err(PublishError::Write)?;
+	stage.sync_all().map_err(PublishError::Sync)?;
+	stage.rewind().map_err(PublishError::Rewind)?;
 	Ok(report)
 }
