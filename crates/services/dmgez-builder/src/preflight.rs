@@ -40,6 +40,8 @@ pub enum Availability {
 pub struct BuildCapabilities {
 	/// Clean HFS+ construction with the printable ASCII catalog profile.
 	pub hfsplus_ascii: Availability,
+	/// Clean HFS+ construction with historical Unicode name admission and collation.
+	pub hfsplus_unicode: Availability,
 	/// Finder metadata store writing for the icon-view profile.
 	pub finder_icon_view: Availability,
 	/// Application of explicit hidden and hide-extension filesystem flags.
@@ -122,6 +124,7 @@ pub struct PreflightOptions {
 #[non_exhaustive]
 pub enum FilesystemProfile {
 	HfsplusAscii,
+	HfsplusUnicode,
 }
 
 /// Publication semantics for the admitted operation.
@@ -237,7 +240,7 @@ pub fn preflight(
 	if project.image.filesystem != Filesystem::Hfsplus {
 		return Err(PreflightError::Filesystem(project.image.filesystem));
 	}
-	capabilities.hfsplus_ascii.require(BuildFeature::Hfsplus)?;
+	let filesystem = filesystem_profile(capabilities)?;
 	if project.image.partition != Partition::None {
 		return Err(PreflightError::Partition(project.image.partition));
 	}
@@ -254,7 +257,9 @@ pub fn preflight(
 	{
 		return Err(PreflightError::Compression);
 	}
-	check_known_names(project)?;
+	if filesystem == FilesystemProfile::HfsplusAscii {
+		check_known_names(project)?;
+	}
 	let output = output_plan(project, options)?;
 	let release = release_plan(project, options)?;
 	let finder = finder_plan(project, capabilities)?;
@@ -270,7 +275,7 @@ pub fn preflight(
 	let limits = limits(project)?;
 	let writer = writer_options(project, profile, limits, options.host_threads)?;
 	let result = ExecutionProfile {
-		filesystem: FilesystemProfile::HfsplusAscii,
+		filesystem,
 		capacity: project.image.capacity(),
 		free_space_bytes: project.image.free_space.get(),
 		output,
@@ -287,6 +292,19 @@ pub fn preflight(
 		result.validate_logical_bytes(bytes.get())?;
 	}
 	Ok(result)
+}
+
+fn filesystem_profile(
+	capabilities: BuildCapabilities,
+) -> Result<FilesystemProfile, PreflightError> {
+	match (capabilities.hfsplus_unicode, capabilities.hfsplus_ascii) {
+		(Availability::Available, _) => Ok(FilesystemProfile::HfsplusUnicode),
+		(_, Availability::Available) => Ok(FilesystemProfile::HfsplusAscii),
+		(Availability::Unavailable, _) | (_, Availability::Unavailable) => {
+			Err(PreflightError::BackendUnavailable(BuildFeature::Hfsplus))
+		}
+		_ => Err(PreflightError::FeatureNotCompiled(BuildFeature::Hfsplus)),
+	}
 }
 
 fn check_known_names(project: &Project) -> Result<(), PreflightError> {

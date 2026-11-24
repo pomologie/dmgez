@@ -107,6 +107,12 @@ fn rejects_unsupported_filesystems_formats_partitions_and_catalog_names() {
 		preflight(&unicode, options()),
 		Err(PreflightError::Destination { index: 0 })
 	));
+	let mut unicode_options = options();
+	unicode_options.capabilities.hfsplus_unicode = Availability::Available;
+	assert_eq!(
+		preflight(&unicode, unicode_options).unwrap().filesystem(),
+		FilesystemProfile::HfsplusUnicode
+	);
 }
 
 #[test]
