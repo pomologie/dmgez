@@ -62,6 +62,8 @@ pub enum BuildFeature {
 	Hfsplus,
 	#[error("zlib encoding")]
 	Zlib,
+	#[error("LZFSE encoding")]
+	Lzfse,
 	#[error("parallel encoding")]
 	Parallel,
 	#[error("Finder icon layout")]
@@ -247,12 +249,16 @@ pub fn preflight(
 	let profile = match project.image.format {
 		ImageFormat::Udro => Profile::Udro,
 		ImageFormat::Udzo => Profile::Udzo,
+		ImageFormat::Ulfo => Profile::Ulfo,
 		format => return Err(PreflightError::Format(format)),
 	};
 	if profile == Profile::Udzo && !cfg!(feature = "zlib") {
 		return Err(PreflightError::FeatureNotCompiled(BuildFeature::Zlib));
 	}
-	if profile == Profile::Udro
+	if profile == Profile::Ulfo && !cfg!(feature = "lzfse") {
+		return Err(PreflightError::FeatureNotCompiled(BuildFeature::Lzfse));
+	}
+	if profile != Profile::Udzo
 		&& (project.compression.level.is_some() || project.compression.block_size.is_some())
 	{
 		return Err(PreflightError::Compression);

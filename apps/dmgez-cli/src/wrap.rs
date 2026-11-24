@@ -9,7 +9,7 @@ use dmgez_udif::{
 	writer::{self, Execution, Profile, WriteOptions},
 };
 
-use crate::{CliResult, Format, PARALLEL_FEATURE};
+use crate::{CliResult, Format, LZFSE_FEATURE, PARALLEL_FEATURE};
 
 const SERIAL_WORKER_COUNT: usize = 1;
 
@@ -20,7 +20,12 @@ pub(crate) fn run(
 	serial: bool,
 	threads: Option<usize>,
 ) -> CliResult {
-	let input = CapturedFile::new(File::open(input)?)?;
+	let profile = match format {
+		Format::Udro => Profile::Udro,
+		Format::Udzo => Profile::Udzo,
+		Format::Ulfo if cfg!(feature = "lzfse") => Profile::Ulfo,
+		Format::Ulfo => return Err(Error::FeatureNotCompiled(LZFSE_FEATURE).into()),
+	};
 	let execution = match (serial, cfg!(feature = "parallel"), threads) {
 		(true, _, _)
 		| (false, false, None | Some(Execution::AUTO_WORKERS | SERIAL_WORKER_COUNT)) => Execution::Serial,
@@ -29,10 +34,7 @@ pub(crate) fn run(
 			workers: workers.unwrap_or(Execution::AUTO_WORKERS),
 		},
 	};
-	let profile = match format {
-		Format::Udro => Profile::Udro,
-		Format::Udzo => Profile::Udzo,
-	};
+	let input = CapturedFile::new(File::open(input)?)?;
 	let options = WriteOptions {
 		profile,
 		execution,

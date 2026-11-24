@@ -13,7 +13,7 @@ PROFILES = {
     "inspection": (["--no-default-features", "--features", "inspect"], {"dmgez-core", "dmgez-udif", "flate2"}),
 }
 OUTSIDE_DEFAULT = {
-    "apple-dmg", "apfs", "bzip2", "eframe", "egui", "fstool", "fuser", "notify",
+    "apple-dmg", "apfs", "bzip2", "eframe", "egui", "fstool", "fuser", "lzfse_rust", "notify",
     "reqwest", "rmcp", "tokio", "udif", "winfsp",
 }
 PROFILE_DEPS = {"dmgez-core", "dmgez-udif", "flate2", "rayon"}
@@ -39,11 +39,11 @@ def main():
                 ["cargo", "tree", "--locked", "-p", "dmgez-cli", "-e", "features",
                  "-i", "dmgez-udif", *flags], cwd=ROOT, text=True,
             )
-            for feature in ("read", "write", "parallel", "zlib"):
+            for feature in ("read", "write", "parallel", "zlib", "lzfse"):
                 active = f'dmgez-udif feature "{feature}"' in features
                 expected_active = {
                     "read": profile == "inspection", "write": profile in ("serial", "default"),
-                    "parallel": profile == "default", "zlib": True,
+                    "parallel": profile == "default", "zlib": True, "lzfse": False,
                 }[feature]
                 if active != expected_active:
                     errors.append(f"{profile} profile: unexpected activation state for {feature}")

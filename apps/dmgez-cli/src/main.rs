@@ -13,6 +13,7 @@ const UNWRAP_RAW_COMMAND: &str = "unwrap-raw";
 const THREADS_ARG_ID: &str = "threads";
 const THREADS_VALUE_NAME: &str = "THREADS";
 const PARALLEL_FEATURE: &str = "parallel";
+const LZFSE_FEATURE: &str = "lzfse";
 const VERIFY_CONTAINER_CAPABILITY: &str = "verify-container";
 const COMPILED: &str = "compiled";
 const NOT_COMPILED: &str = "not_compiled";
@@ -62,6 +63,7 @@ enum Format {
 	Udro,
 	#[default]
 	Udzo,
+	Ulfo,
 }
 
 type CliResult = Result<(), Box<dyn Error>>;
@@ -89,6 +91,13 @@ fn run(command: Command) -> CliResult {
 				(
 					PARALLEL_FEATURE,
 					cfg!(all(feature = "build", feature = "parallel")),
+				),
+				(
+					LZFSE_FEATURE,
+					cfg!(all(
+						feature = "lzfse",
+						any(feature = "build", feature = "inspect")
+					)),
 				),
 				(INSPECT_COMMAND, cfg!(feature = "inspect")),
 				(VERIFY_CONTAINER_CAPABILITY, cfg!(feature = "inspect")),
