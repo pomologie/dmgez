@@ -30,3 +30,7 @@ pub use error::Error;
 
 /// UDIF logical sector size in bytes, independent of filesystem block size.
 pub const SECTOR_BYTES: u64 = 512;
+
+#[cfg(kani)]
+#[path = "../verification/kani/checked_range.rs"]
+mod checked_range_proof;

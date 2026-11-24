@@ -2,7 +2,7 @@
 
 Immutable image generation and untrusted reading are the first priority. Model ordering/credits and publication before the parallel builder release, not after it. Do not require APFS or mutable filesystem proofs for the default CLI. Native format checks, data preservation, and proofs of pure Rust are separate evidence. Signing, mount, remote and MCP get their own approval/state gates.
 
-Read the shared ecosystem verification standard EVS-1 (`docs/architecture/ECOSYSTEM_VERIFICATION.md` after handoff). The following is the owning obligation registry summary. Full properties, assumptions, bounds, negative witnesses and conjunctive evidence methods are in `verification/obligations.json`. All obligations are planned. Gate applies only to the activated supported profile; required proofs/tests must pass before that capability ships. Nonblocking advanced capabilities remain disabled if not qualified.
+Read the shared ecosystem verification standard EVS-1 (`docs/architecture/ECOSYSTEM_VERIFICATION.md` after handoff). The following summarizes the repository-wide planning index at `verification/obligations.json`, which defines properties, assumptions, bounds, negative witnesses and required evidence methods. Implemented proof artifacts live in the owning crate’s `verification/` directory. All obligations are planned. Gate applies only to the activated supported profile; required proofs/tests must pass before that capability ships. Nonblocking advanced capabilities remain disabled if not qualified.
 
 | ID | Activation | Scope | Required evidence |
 |---|---|---|---|

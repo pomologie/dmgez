@@ -71,7 +71,7 @@ jobs:
           persist-credentials: false
       - run: cargo install --locked kani-verifier --version '=0.68.0'
       - run: cargo kani setup
-      - run: cargo kani -p dmgez-udif --no-default-features --harness checked_range_matches_mathematical_window
+      - run: bash crates/formats/dmgez-udif/verification/check.sh
 
   native-udif:
     runs-on: macos-15
