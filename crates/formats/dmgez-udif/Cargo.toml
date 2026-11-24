@@ -8,15 +8,18 @@ repository.workspace = true
 description = "Native UDIF disk image codecs for dmgez"
 
 [features]
-default = ["read", "zlib"]
+default = ["read", "write", "zlib"]
 read = ["dep:quick-xml", "dep:plist", "dep:crc32fast"]
+write = ["dep:plist", "dep:crc32fast"]
 zlib = ["dep:flate2"]
+parallel = ["dep:rayon"]
 
 [dependencies]
 crc32fast = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
 plist = { workspace = true, optional = true }
 quick-xml = { workspace = true, optional = true }
+rayon = { workspace = true, optional = true }
 thiserror.workspace = true
 
 [dev-dependencies]

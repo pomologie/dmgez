@@ -17,3 +17,23 @@ pub(crate) fn inflate(stored: &[u8], length: usize) -> Option<Vec<u8>> {
 	decoded.truncate(length);
 	Some(decoded)
 }
+
+#[cfg(feature = "write")]
+pub(crate) fn deflate(raw: &[u8], level: u8) -> Result<Option<Vec<u8>>, crate::Error> {
+	use flate2::{Compress, Compression, FlushCompress, Status};
+
+	// Any stream at least this large is written as raw data.
+	let mut encoded = vec![0; raw.len()];
+	let mut compressor = Compress::new(Compression::new(level.into()), true);
+	let status = compressor
+		.compress(raw, &mut encoded, FlushCompress::Finish)
+		.map_err(crate::Error::Compression)?;
+	let len = usize::try_from(compressor.total_out())
+		.map_err(|_| crate::Error::ResourceLimit("encoded run size"))?;
+	if status != Status::StreamEnd || len >= raw.len() || compressor.total_in() != raw.len() as u64
+	{
+		return Ok(None);
+	}
+	encoded.truncate(len);
+	Ok(Some(encoded))
+}

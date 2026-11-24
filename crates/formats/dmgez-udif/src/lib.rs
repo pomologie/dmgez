@@ -1,28 +1,30 @@
-//! Bounded, native UDIF disk image reading.
+//! Bounded, native UDIF disk image reading and streaming construction.
 //!
 //! The supported profile is single-file, unsigned UDIF v4 with 512-byte
 //! logical sectors. Filesystem bytes are opaque to this crate.
 
-#[cfg(feature = "read")]
+#[cfg(any(feature = "read", feature = "write"))]
 mod binary;
-#[cfg(feature = "read")]
+#[cfg(any(feature = "read", feature = "write"))]
 mod blkx;
-#[cfg(feature = "read")]
+#[cfg(any(feature = "read", feature = "write"))]
 mod checksum;
-#[cfg(all(feature = "read", feature = "zlib"))]
+#[cfg(all(any(feature = "read", feature = "write"), feature = "zlib"))]
 mod codec;
 mod error;
 #[cfg(feature = "read")]
 mod index;
-#[cfg(feature = "read")]
+#[cfg(any(feature = "read", feature = "write"))]
 mod resource;
-#[cfg(feature = "read")]
+#[cfg(any(feature = "read", feature = "write"))]
 mod trailer;
-#[cfg(any(feature = "read", kani))]
+#[cfg(any(feature = "read", all(test, feature = "write"), kani))]
 mod validation;
 
 #[cfg(feature = "read")]
 pub mod reader;
+#[cfg(feature = "write")]
+pub mod writer;
 
 pub use error::Error;
 

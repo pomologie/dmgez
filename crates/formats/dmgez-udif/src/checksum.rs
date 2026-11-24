@@ -61,6 +61,13 @@ impl Checksum {
 	}
 }
 
+#[cfg(feature = "write")]
+pub(crate) fn put_crc32(bytes: &mut [u8], descriptor_offset: usize, crc: u32) {
+	crate::binary::put_u32(bytes, descriptor_offset, CRC32_CHECKSUM_KIND);
+	crate::binary::put_u32(bytes, descriptor_offset + BIT_COUNT_OFFSET, CRC32_BITS);
+	crate::binary::put_u32(bytes, descriptor_offset + PAYLOAD_OFFSET, crc);
+}
+
 pub(crate) fn master_crc(table_crcs: impl IntoIterator<Item = u32>) -> u32 {
 	let mut hash = Hasher::new();
 	for crc in table_crcs {

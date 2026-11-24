@@ -32,11 +32,28 @@ pub enum Error {
 		len: u64,
 		disk_len: u64,
 	},
+	/// The writer needs a nonempty source aligned to 512-byte sectors.
+	#[error("raw source length must be nonzero and a multiple of 512 bytes")]
+	UnalignedSource,
+	/// The source length disagrees with the writer's declared geometry.
+	#[error("raw source {0}")]
+	SourceLength(&'static str),
 	/// The backing source changed after it was admitted.
 	#[error("source changed while reading")]
 	SourceChanged,
-	/// A decoded resource is not a valid property list.
-	#[cfg(feature = "read")]
+	/// The caller requested cancellation.
+	#[error("UDIF write cancelled")]
+	Cancelled,
+	/// The compression primitive failed to encode an admitted block.
+	#[cfg(all(feature = "write", feature = "zlib"))]
+	#[error("zlib compression failed")]
+	Compression(#[source] flate2::CompressError),
+	/// A private parallel worker pool could not start.
+	#[cfg(all(feature = "write", feature = "parallel"))]
+	#[error("could not start UDIF workers")]
+	WorkerPool(#[source] rayon::ThreadPoolBuildError),
+	/// An emitted or decoded resource is not a valid property list.
+	#[cfg(any(feature = "read", feature = "write"))]
 	#[error("UDIF resource property list is invalid")]
 	Resource(#[source] plist::Error),
 	/// Computed CRC32 differs from the one declared in the image.

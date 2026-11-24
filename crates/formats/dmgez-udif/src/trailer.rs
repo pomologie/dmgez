@@ -130,3 +130,30 @@ fn physical_range(
 	let len = binary::u64_at(bytes, length_offset)?;
 	checked_range(start, len, limit).ok_or(Error::Corrupt("koly range outside image body"))
 }
+
+#[cfg(feature = "write")]
+pub(crate) fn encode(
+	sectors: u64,
+	data_len: u64,
+	xml_len: u64,
+	physical_crc: u32,
+	master_crc: u32,
+) -> [u8; BYTES] {
+	use crate::{binary, checksum};
+
+	let mut bytes = [0; BYTES];
+	bytes[..SIGNATURE.len()].copy_from_slice(SIGNATURE);
+	binary::put_u32(&mut bytes, VERSION_OFFSET, VERSION);
+	binary::put_u32(&mut bytes, HEADER_LENGTH_OFFSET, BYTES as u32);
+	binary::put_u32(&mut bytes, FLAGS_OFFSET, FLAG_FLATTENED);
+	binary::put_u64(&mut bytes, DATA_FORK_LENGTH_OFFSET, data_len);
+	binary::put_u32(&mut bytes, SEGMENT_NUMBER_OFFSET, SINGLE_SEGMENT_NUMBER);
+	binary::put_u32(&mut bytes, SEGMENT_COUNT_OFFSET, SINGLE_SEGMENT_COUNT);
+	checksum::put_crc32(&mut bytes, DATA_CHECKSUM_OFFSET, physical_crc);
+	binary::put_u64(&mut bytes, XML_OFFSET, data_len);
+	binary::put_u64(&mut bytes, XML_LENGTH_OFFSET, xml_len);
+	checksum::put_crc32(&mut bytes, MASTER_CHECKSUM_OFFSET, master_crc);
+	binary::put_u32(&mut bytes, IMAGE_VARIANT_OFFSET, PARTITION_IMAGE);
+	binary::put_u64(&mut bytes, SECTOR_COUNT_OFFSET, sectors);
+	bytes
+}

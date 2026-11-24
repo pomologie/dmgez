@@ -7,6 +7,19 @@ const BLOCK_MAPS_KEY: &str = "blkx";
 pub(crate) const BLOCK_MAP_DATA_KEY: &str = "Data";
 pub(crate) const BLOCK_MAP_ID_KEY: &str = "ID";
 
+#[cfg(feature = "write")]
+const BLOCK_MAP_ATTRIBUTES_KEY: &str = "Attributes";
+#[cfg(feature = "write")]
+const BLOCK_MAP_CF_NAME_KEY: &str = "CFName";
+#[cfg(feature = "write")]
+const BLOCK_MAP_NAME_KEY: &str = "Name";
+#[cfg(feature = "write")]
+const WHOLE_DISK_ATTRIBUTES: &str = "0x0050";
+#[cfg(feature = "write")]
+const WHOLE_DISK_ID: &str = "0";
+#[cfg(feature = "write")]
+const WHOLE_DISK_LABEL: &str = "whole disk (unknown partition : 0)";
+
 #[cfg(feature = "read")]
 const BINARY_PLIST_PREFIX: &[u8] = b"bplist";
 #[cfg(feature = "read")]
@@ -100,6 +113,28 @@ pub(crate) fn tables(root: &Value) -> Result<&[Value], Error> {
 		.filter(|tables| !tables.is_empty())
 		.map(Vec::as_slice)
 		.ok_or(Error::Corrupt("resource plist is missing block maps"))
+}
+
+#[cfg(feature = "write")]
+pub(crate) fn encode(table: Vec<u8>) -> Result<Vec<u8>, Error> {
+	use plist::Dictionary;
+
+	let table = Dictionary::from_iter([
+		(BLOCK_MAP_ATTRIBUTES_KEY, WHOLE_DISK_ATTRIBUTES.into()),
+		(BLOCK_MAP_CF_NAME_KEY, WHOLE_DISK_LABEL.into()),
+		(BLOCK_MAP_DATA_KEY, Value::Data(table)),
+		(BLOCK_MAP_ID_KEY, WHOLE_DISK_ID.into()),
+		(BLOCK_MAP_NAME_KEY, WHOLE_DISK_LABEL.into()),
+	]);
+	let resources =
+		Dictionary::from_iter([(BLOCK_MAPS_KEY, Value::Array(vec![Value::Dictionary(table)]))]);
+	let root = Value::Dictionary(Dictionary::from_iter([(
+		RESOURCE_FORK_KEY,
+		Value::Dictionary(resources),
+	)]));
+	let mut xml = Vec::new();
+	root.to_writer_xml(&mut xml).map_err(Error::Resource)?;
+	Ok(xml)
 }
 
 #[cfg(all(test, feature = "read"))]

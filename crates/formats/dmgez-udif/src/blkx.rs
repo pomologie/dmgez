@@ -37,6 +37,9 @@ const RUN_TAG_END: u32 = 0xffff_ffff;
 
 pub(crate) const NO_RUN_COMMENT: u32 = 0;
 
+#[cfg(feature = "write")]
+const WHOLE_DISK_DESCRIPTOR: u32 = 0xffff_fffe;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Kind {
 	Raw,
@@ -62,6 +65,22 @@ impl Kind {
 			RUN_TAG_COMMENT => Self::Comment,
 			RUN_TAG_END => Self::End,
 			other => Self::Unsupported(other),
+		}
+	}
+
+	#[cfg(feature = "write")]
+	fn encode(self) -> u32 {
+		match self {
+			Self::Zero => RUN_TAG_ZERO,
+			Self::Raw => RUN_TAG_RAW,
+			#[cfg(feature = "read")]
+			Self::Ignore => RUN_TAG_IGNORE,
+			Self::Zlib => RUN_TAG_ZLIB,
+			#[cfg(feature = "read")]
+			Self::Comment => RUN_TAG_COMMENT,
+			Self::End => RUN_TAG_END,
+			#[cfg(feature = "read")]
+			Self::Unsupported(code) => code,
 		}
 	}
 }
@@ -145,4 +164,35 @@ fn decode_record(bytes: &[u8; RUN_BYTES]) -> Result<Record, Error> {
 
 pub(crate) fn encoded_len(run_count: usize) -> Option<usize> {
 	HEADER_BYTES.checked_add(run_count.checked_mul(RUN_BYTES)?)
+}
+
+#[cfg(feature = "write")]
+pub(crate) fn encode(
+	sectors: u64,
+	buffer_sectors: u32,
+	crc: u32,
+	records: &[Record],
+) -> Result<Vec<u8>, Error> {
+	let count = u32::try_from(records.len()).map_err(|_| Error::ResourceLimit("run records"))?;
+	let len = encoded_len(records.len()).ok_or(Error::ResourceLimit("run records"))?;
+	let mut bytes = vec![0; len];
+	bytes[..SIGNATURE.len()].copy_from_slice(SIGNATURE);
+	binary::put_u32(&mut bytes, VERSION_OFFSET, VERSION);
+	binary::put_u64(&mut bytes, SECTOR_COUNT_OFFSET, sectors);
+	binary::put_u32(&mut bytes, BUFFER_SECTORS_OFFSET, buffer_sectors);
+	binary::put_u32(&mut bytes, DESCRIPTOR_OFFSET, WHOLE_DISK_DESCRIPTOR);
+	crate::checksum::put_crc32(&mut bytes, CHECKSUM_OFFSET, crc);
+	binary::put_u32(&mut bytes, RUN_COUNT_OFFSET, count);
+	for (record, slot) in records
+		.iter()
+		.zip(bytes[HEADER_BYTES..].as_chunks_mut::<RUN_BYTES>().0)
+	{
+		binary::put_u32(slot, RUN_TAG_OFFSET, record.kind.encode());
+		binary::put_u32(slot, RUN_COMMENT_OFFSET, record.comment);
+		binary::put_u64(slot, RUN_FIRST_SECTOR_OFFSET, record.first_sector);
+		binary::put_u64(slot, RUN_SECTOR_COUNT_OFFSET, record.sector_count);
+		binary::put_u64(slot, RUN_DATA_OFFSET, record.offset);
+		binary::put_u64(slot, RUN_STORED_LEN_OFFSET, record.stored_len);
+	}
+	Ok(bytes)
 }
