@@ -54,10 +54,19 @@ def main():
     hfsplus.add_argument("--hfsplus-packages", type=Path,
                          help="directory containing unpacked versioned HFS+ packages")
     parser.add_argument("--project", type=Path, help="build this TOML project instead of testing")
+    parser.add_argument("--dry-run", action="store_true", help="plan without publishing")
+    parser.add_argument("--define", metavar="NAME=VALUE", action="append", default=[],
+                        help="set a literal project substitution")
+    parser.add_argument("--set", metavar="SECTION.FIELD=VALUE", action="append", default=[],
+                        help="override a typed scalar setting")
+    parser.add_argument("--overwrite", action="store_true",
+                        help="authorize replacement in a trusted local output directory")
     parser.add_argument("--no-default-features", action="store_true")
     options = parser.parse_args()
     if not (sys.platform == "darwin" or sys.platform.startswith("linux")):
         parser.error("the development adapter requires a macOS or Linux host metadata adapter")
+    if not options.project and any((options.dry_run, options.define, options.set, options.overwrite)):
+        parser.error("--dry-run, --define, --set, and --overwrite require --project")
 
     dmgez_source = options.dmgez.resolve(strict=True)
     paths = resolved_packages(dmgez_source, DMGEZ_PACKAGES)
@@ -70,7 +79,16 @@ def main():
     command = ["cargo", "run" if options.project else "test", "--offline", "--locked"]
     command.append("--no-default-features" if options.no_default_features else "--all-features")
     if options.project:
-        command.extend(["--", str(options.project.resolve(strict=True))])
+        command.extend(["--quiet", "--", "--working-directory", str(Path.cwd())])
+        if options.dry_run:
+            command.append("--dry-run")
+        for definition in options.define:
+            command.extend(["--define", definition])
+        for assignment in options.set:
+            command.extend(["--set", assignment])
+        if options.overwrite:
+            command.append("--overwrite")
+        command.extend(["--", str(options.project)])
     with TemporaryDirectory(prefix="dmgez-hfsplus-build.") as isolated:
         isolated = Path(isolated)
         shutil.copy2(dmgez_source / "rust-toolchain.toml", isolated / "rust-toolchain.toml")
@@ -79,7 +97,8 @@ def main():
         for required in ("src", "tests"):
             shutil.copytree(COMPATIBILITY / required, isolated / required)
         (isolated / "Cargo.toml").write_text(isolated_manifest(paths, options.hfsplus_packages is not None), encoding="utf-8")
-        subprocess.run(command, cwd=isolated, check=True)
+        # Preserve the command's status without echoing its definition values on failure.
+        raise SystemExit(subprocess.run(command, cwd=isolated).returncode)
 
 
 if __name__ == "__main__":

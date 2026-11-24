@@ -13,6 +13,7 @@ use dmgez_builder::{
 		Availability, BuildCapabilities, ExecutionProfile, FilesystemProfile, PreflightError,
 		PreflightOptions,
 	},
+	progress::BuildProgress,
 };
 use dmgez_config::{Capacity, Project, VirtualPath};
 use dmgez_udif::writer::{Cancellation, WriteOptions};
@@ -126,6 +127,7 @@ pub fn capabilities() -> BuildCapabilities {
 	let mut capabilities = BuildCapabilities::default();
 	capabilities.hfsplus_unicode = Availability::Available;
 	capabilities.hfsplus_ascii = Availability::Available;
+	capabilities.atomic_replace = Availability::Available;
 	if cfg!(feature = "finder-write") {
 		capabilities.finder_icon_view = Availability::Available;
 	}
@@ -142,11 +144,32 @@ pub fn prepare<'project>(
 	options: PreflightOptions,
 	cancellation: Cancellation,
 ) -> Result<PreparedHfsBuild<'project>, Error> {
-	let build = planning::prepare(project, config_dir, options, cancellation)?;
+	prepare_with_progress(project, config_dir, options, cancellation, |_| {})
+}
+
+/// Admit the build and report shared planning progress on the calling thread.
+///
+/// # Errors
+/// Returns the same errors as [`prepare`].
+pub fn prepare_with_progress<'project>(
+	project: &'project Project,
+	config_dir: &Path,
+	options: PreflightOptions,
+	cancellation: Cancellation,
+	progress: impl Fn(BuildProgress),
+) -> Result<PreparedHfsBuild<'project>, Error> {
+	let build =
+		planning::prepare_with_progress(project, config_dir, options, cancellation, progress)?;
 	Ok(PreparedHfsBuild { project, build })
 }
 
 impl PreparedHfsBuild<'_> {
+	/// The frozen source manifest, capabilities selected by preflight, and destination.
+	#[must_use]
+	pub const fn prepared(&self) -> &PreparedBuild {
+		&self.build
+	}
+
 	/// Resolve exact HFS+ catalog, attributes, geometry, and stream placements.
 	///
 	/// # Errors
@@ -176,6 +199,18 @@ impl<'build> HfsImage<'build> {
 		self,
 		verifier: Option<&OutputVerifier<'_>>,
 	) -> Result<HfsBuildReport<'build>, Error> {
+		self.publish_with_progress(verifier, |_| {})
+	}
+
+	/// Publish the validated image and report shared execution progress.
+	///
+	/// # Errors
+	/// Returns the same errors as [`Self::publish`].
+	pub fn publish_with_progress(
+		self,
+		verifier: Option<&OutputVerifier<'_>>,
+		progress: impl Fn(BuildProgress),
+	) -> Result<HfsBuildReport<'build>, Error> {
 		let output = self.prepared.output_path().ok_or(Error::OutputPath)?;
 		let build = BuildPlan::new(
 			self.prepared.profile(),
@@ -183,7 +218,7 @@ impl<'build> HfsImage<'build> {
 			self.image.reader(),
 			self.logical_bytes(),
 		)?;
-		let report = build.publish(output, verifier)?;
+		let report = build.publish_with_progress(output, verifier, progress)?;
 		Ok(HfsBuildReport {
 			report,
 			metadata_losses: self.metadata_losses,

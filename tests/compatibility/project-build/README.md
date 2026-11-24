@@ -5,9 +5,18 @@ Run this development exercise against adjacent source checkouts with an existing
 ```sh
 python3 run.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplus
 python3 run.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplus --project /path/to/project.toml
+python3 run.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplus \
+  --project /path/to/project.toml --define VERSION=2.0 \
+  --set image.output=Example.dmg --dry-run
 ```
 
-Use `--hfsplus-packages /path/to/unpacked` to select an unpacked set of versioned `hfsplus-builder`, `hfsplus-format`, and `hfsplus-core` 0.1.0 archives that include the chain-free hard-link builder API. The runner resolves paths before Cargo and confines path patches and source copies to a temporary Cargo project. Use `--no-default-features` for the serial profile without Finder store generation. The project build uses its configured output and fails if that path already exists.
+Use `--hfsplus-packages /path/to/unpacked` to select an unpacked set of versioned `hfsplus-builder`, `hfsplus-format`, and `hfsplus-core` 0.1.0 archives that include the chain-free hard-link builder API. The runner resolves paths before Cargo and confines path patches and source copies to a temporary Cargo project. Use `--no-default-features` for the serial profile without Finder store generation.
+
+`--define NAME=VALUE` supplies a literal project substitution. `--set section.field=value` overrides one allowlisted scalar with normal config type and semantic validation. The last value for a repeated name or key wins. Relative TOML paths, including paths built from substitutions, use the config file's directory. The `--project` path and relative path values supplied directly with `--set` use the caller's working directory.
+
+`--dry-run` reports the exact planned virtual size, requested encoding, enabled layout profile, publication and release intent, source counts and metadata-loss count. The physical UDIF size is unknown until encoding. The planner checks source identity, capacity and catalog collisions during dry-run. It leaves the output path and its directory untouched. Progress and up to twenty metadata-loss details go to stderr, with a count of further losses.
+
+The default publication policy preserves an existing destination. Authorize replacement with `--overwrite`, `--set build.overwrite=true`, or `[build] overwrite = true` in the project. Choose a single CLI form for this setting. Use replacement only in a trusted local directory where publishers cooperate with the advisory lock. The builder checks source and destination identity, syncs the completed stage, and atomically replaces the destination. The stdout build summary follows successful publication.
 
 The adapter uses dmgez preflight, source discovery and identity checks, Finder store generation, and staged publication. It binds generated payloads after HFS+ assigns catalog IDs, selects capacity with the same HFS+ planner used for placement, and streams the resulting image through UDIF. The manifest and sealed plan carry borrowed regular-source identities. Each bounded file read acquires an identity-checked handle and releases it before proceeding.
 
