@@ -19,5 +19,12 @@ dmgez-finder = { workspace = true, optional = true }
 dmgez-udif = { workspace = true, features = ["write"] }
 thiserror.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+globset.workspace = true
+rustix.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
 [lints]
 workspace = true

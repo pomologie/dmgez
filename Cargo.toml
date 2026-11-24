@@ -26,10 +26,12 @@ dmgez-finder = { path = "crates/presentation/dmgez-finder" }
 dmgez-udif = { path = "crates/formats/dmgez-udif", default-features = false }
 ds_parser = "=0.4.0"
 flate2 = { version = "1.1.11", default-features = false, features = ["zlib-rs"] }
+globset = { version = "0.4.21", default-features = false }
 plist = { version = "1.10.4", default-features = false }
 proptest = { version = "1.12.0", default-features = false, features = ["std"] }
 quick-xml = { version = "0.42.0", default-features = false }
 rayon = "1.12.0"
+rustix = { version = "1.1.6", features = ["fs"] }
 serde = { version = "1.0.229", features = ["derive"] }
 tempfile = "3.27.0"
 thiserror = "2.0.21"
