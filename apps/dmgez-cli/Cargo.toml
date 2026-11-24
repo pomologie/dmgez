@@ -1,0 +1,30 @@
+[package]
+name = "dmgez-cli"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Create and inspect macOS disk images"
+publish = false
+
+[[bin]]
+name = "dmgez"
+path = "src/main.rs"
+
+[features]
+default = ["build", "parallel"]
+build = ["dep:dmgez-udif", "dmgez-udif/write", "dmgez-udif/zlib", "dep:tempfile"]
+parallel = ["dmgez-udif?/parallel"]
+inspect = ["dep:dmgez-udif", "dmgez-udif/read", "dmgez-udif/zlib", "dep:tempfile"]
+
+[dependencies]
+clap.workspace = true
+dmgez-udif = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
