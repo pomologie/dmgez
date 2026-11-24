@@ -7,9 +7,18 @@ license.workspace = true
 repository.workspace = true
 description = "Generate Finder presentation records for dmgez images"
 
+[features]
+volume-icon = [
+	"dep:crc32fast",
+	"dep:icns",
+	"plist/enable_unstable_features_that_may_break_with_minor_version_bumps",
+]
+
 [dependencies]
+crc32fast = { workspace = true, optional = true }
 dmgez-config.workspace = true
 ds_parser.workspace = true
+icns = { workspace = true, optional = true }
 plist.workspace = true
 thiserror.workspace = true
 

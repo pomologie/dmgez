@@ -6,6 +6,8 @@
 pub mod inspection;
 mod layout;
 mod records;
+#[cfg(feature = "volume-icon")]
+pub mod volume_icon;
 
 use dmgez_config::{Arrangement, Coordinate, FinderOptions, View};
 use thiserror::Error;
