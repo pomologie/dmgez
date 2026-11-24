@@ -10,6 +10,7 @@ cargo run --locked -- wrap-raw volume.raw --format udro --serial -o uncompressed
 cargo run --locked --features lzfse -- wrap-raw volume.raw --format ulfo -o compressed.dmg
 cargo run --locked --features inspect -- inspect volume.dmg
 cargo run --locked --features inspect -- inspect volume.dmg --json --run-limit 32
+cargo run --locked --features inspect -- inspect volume.dmg --partitions --json
 cargo run --locked --features inspect -- verify volume.dmg
 cargo run --locked --features inspect -- verify volume.dmg --quick --json
 cargo run --locked --features inspect -- unwrap-raw volume.dmg -o exported.raw

@@ -55,6 +55,31 @@ fn output_remains_unclobbered_on_conflict_or_invalid_input() {
 	}
 }
 
+#[cfg(feature = "inspect")]
+#[test]
+fn reports_native_gpt_byte_ranges_without_claiming_verification() {
+	const NATIVE_GPT: &[u8] =
+		include_bytes!("../../../crates/foundation/dmgez-vfs/tests/fixtures/native-gpt.dmg");
+	let work = tempfile::tempdir().unwrap();
+	let image = work.path().join("gpt.dmg");
+	fs::write(&image, NATIVE_GPT).unwrap();
+	let output = Command::new(env!("CARGO_BIN_EXE_dmgez"))
+		.arg("inspect")
+		.arg(&image)
+		.args(["--partitions", "--json"])
+		.output()
+		.unwrap();
+	assert!(output.status.success());
+	let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+	assert_eq!(report["disk"]["scheme"], "gpt");
+	assert_eq!(
+		report["disk"]["partitions"][0]["logical"]["offset_bytes"],
+		"20480"
+	);
+	assert_eq!(report["coverage"]["payload"], "not_checked");
+	assert_eq!(report["coverage"]["filesystem"], "not_checked");
+}
+
 #[cfg(all(feature = "build", feature = "inspect"))]
 #[test]
 fn wraps_inspects_verifies_and_exports_through_the_cli() {

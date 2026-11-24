@@ -8,8 +8,8 @@ use std::{
 
 use dmgez_core::output::publish_new;
 use dmgez_inspector::{
-	CheckStatus, ChecksumDeclaration, MAX_RUN_PAGE_SIZE, RunWindow, VerificationMode,
-	VerificationOutcome, VerificationReport,
+	CheckStatus, ChecksumDeclaration, DiskLimits, DiskReport, MAX_RUN_PAGE_SIZE, RunWindow,
+	VerificationMode, VerificationOutcome, VerificationReport,
 };
 use dmgez_udif::reader::{FileSource, Image, Limits};
 use serde::Serialize;
@@ -27,6 +27,11 @@ const UNSUPPORTED_RUNS_KEY: &str = "unsupported_runs";
 const UNAVAILABLE_DECODERS_KEY: &str = "runs_with_unavailable_decoders";
 const RUN_KEY: &str = "runs";
 const NEXT_RUN_OFFSET_KEY: &str = "next_run_offset";
+const DISK_KEY: &str = "disk";
+const DISK_BLOCK_BYTES_KEY: &str = "disk_block_bytes";
+const PARTITION_KEY: &str = "partition";
+const PARTITIONLESS: &str = "partitionless";
+const UNRESOLVED: &str = "unresolved";
 const VERIFICATION_KEY: &str = "verification";
 const DATA_FORK_STATUS_KEY: &str = "data_fork";
 const BLOCK_MAP_STATUS_KEY: &str = "block_map";
@@ -43,7 +48,13 @@ fn open_source(path: &Path) -> Result<FileSource, dmgez_udif::Error> {
 	FileSource::new(File::open(path)?)
 }
 
-pub(crate) fn show(path: &Path, json: bool, offset: usize, limit: Option<usize>) -> CliResult {
+pub(crate) fn show(
+	path: &Path,
+	json: bool,
+	partitions: bool,
+	offset: usize,
+	limit: Option<usize>,
+) -> CliResult {
 	let window = match limit {
 		Some(limit) => Some(RunWindow::new(offset, limit).ok_or_else(|| {
 			io::Error::new(
@@ -53,8 +64,12 @@ pub(crate) fn show(path: &Path, json: bool, offset: usize, limit: Option<usize>)
 		})?),
 		None => None,
 	};
-	let image = Image::open(open_source(path)?, Limits::default())?;
-	let report = dmgez_inspector::inspect(&image, window);
+	let mut image = Image::open(open_source(path)?, Limits::default())?;
+	let report = if partitions {
+		dmgez_inspector::inspect_disk(&mut image, window, DiskLimits::default())
+	} else {
+		dmgez_inspector::inspect(&image, window)
+	};
 	if json {
 		return print_json(&report);
 	}
@@ -90,7 +105,55 @@ pub(crate) fn show(path: &Path, json: bool, offset: usize, limit: Option<usize>)
 			report_field(NEXT_RUN_OFFSET_KEY, offset);
 		}
 	}
+	if let Some(disk) = &report.disk {
+		show_disk(disk);
+	}
 	Ok(())
+}
+
+fn show_disk(disk: &DiskReport) {
+	match disk {
+		DiskReport::Partitioned {
+			scheme,
+			logical_block_bytes,
+			partitions,
+		} => {
+			report_field(DISK_KEY, scheme.as_str());
+			report_field(DISK_BLOCK_BYTES_KEY, logical_block_bytes);
+			for partition in partitions {
+				let slot = partition.id.slot;
+				report_field(
+					format_args!("{PARTITION_KEY}[{slot}]"),
+					format_args!(
+						"{:?}, logical byte {} length {}, {:?}",
+						partition.role,
+						partition.logical.offset_bytes,
+						partition.logical.length_bytes,
+						partition.details
+					),
+				);
+			}
+		}
+		DiskReport::Partitionless {
+			filesystem,
+			logical,
+		} => {
+			report_field(
+				DISK_KEY,
+				format_args!(
+					"{PARTITIONLESS} {filesystem:?}, logical byte {} length {}",
+					logical.offset_bytes, logical.length_bytes
+				),
+			);
+		}
+		DiskReport::Unresolved { diagnostic } => {
+			report_field(
+				DISK_KEY,
+				format_args!("{UNRESOLVED} {:?}", diagnostic.category),
+			);
+		}
+		_ => report_field(DISK_KEY, UNKNOWN),
+	}
 }
 
 pub(crate) fn verify(path: &Path, json: bool, scope: VerificationFlags) -> CliResult {

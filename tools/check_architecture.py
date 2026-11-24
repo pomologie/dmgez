@@ -10,13 +10,13 @@ PROFILES = {
     "minimal": (["--no-default-features"], set()),
     "serial": (["--no-default-features", "--features", "build"], {"dmgez-core", "dmgez-udif", "flate2"}),
     "default": ([], {"dmgez-core", "dmgez-udif", "flate2", "rayon"}),
-    "inspection": (["--no-default-features", "--features", "inspect"], {"dmgez-core", "dmgez-inspector", "dmgez-udif", "flate2", "serde_json"}),
+    "inspection": (["--no-default-features", "--features", "inspect"], {"dmgez-core", "dmgez-inspector", "dmgez-udif", "dmgez-vfs", "flate2", "serde_json"}),
 }
 OUTSIDE_DEFAULT = {
     "apple-dmg", "apfs", "bzip2", "eframe", "egui", "fstool", "fuser", "lzfse_rust", "notify",
     "reqwest", "rmcp", "tokio", "udif", "winfsp",
 }
-PROFILE_DEPS = {"dmgez-core", "dmgez-inspector", "dmgez-udif", "flate2", "rayon", "serde_json"}
+PROFILE_DEPS = {"dmgez-core", "dmgez-inspector", "dmgez-udif", "dmgez-vfs", "flate2", "rayon", "serde_json"}
 
 
 def main():

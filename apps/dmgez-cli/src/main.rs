@@ -45,12 +45,15 @@ enum Command {
 		#[arg(long, id = THREADS_ARG_ID, value_name = THREADS_VALUE_NAME)]
 		threads: Option<usize>,
 	},
-	/// Show UDIF metadata without decoding the disk data.
+	/// Show UDIF metadata and optionally probe the decoded partition map.
 	#[command(name = INSPECT_COMMAND)]
 	Inspect {
 		image: PathBuf,
 		#[arg(long)]
 		json: bool,
+		/// Report logical disk partitions or recognized partitionless geometry.
+		#[arg(long)]
+		partitions: bool,
 		/// First logical run in the optional detail page.
 		#[arg(long, requires = RUN_LIMIT_ARG)]
 		run_offset: Option<usize>,
@@ -152,9 +155,10 @@ fn run(command: Command) -> CliResult {
 		Command::Inspect {
 			image,
 			json,
+			partitions,
 			run_offset,
 			run_limit,
-		} => inspect::show(&image, json, run_offset.unwrap_or(0), run_limit),
+		} => inspect::show(&image, json, partitions, run_offset.unwrap_or(0), run_limit),
 		#[cfg(feature = "inspect")]
 		Command::Verify { image, json, scope } => inspect::verify(&image, json, scope),
 		#[cfg(feature = "inspect")]
