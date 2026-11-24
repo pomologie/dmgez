@@ -12,6 +12,7 @@ use thiserror::Error;
 use crate::{
 	manifest::{self, Limits, Manifest, discover_for_output},
 	preflight::{ExecutionProfile, OutputIntent, PreflightError, PreflightOptions, preflight},
+	progress::BuildProgress,
 };
 
 #[cfg(feature = "finder-write")]
@@ -58,7 +59,7 @@ impl PreparedBuild {
 pub enum Error {
 	#[error(transparent)]
 	Preflight(#[from] PreflightError),
-	#[error("build cancelled before source discovery")]
+	#[error("build preparation cancelled")]
 	Cancelled,
 	#[error("configuration directory must be an absolute path")]
 	RelativeBase,
@@ -87,6 +88,20 @@ pub fn prepare(
 	options: PreflightOptions,
 	cancellation: Cancellation,
 ) -> Result<PreparedBuild, Error> {
+	prepare_with_progress(project, config_dir, options, cancellation, |_| {})
+}
+
+/// Prepares a build and reports source discovery and Finder asset progress.
+///
+/// # Errors
+/// Returns the same failures as [`prepare`].
+pub fn prepare_with_progress(
+	project: &Project,
+	config_dir: &Path,
+	options: PreflightOptions,
+	cancellation: Cancellation,
+	progress: impl Fn(BuildProgress),
+) -> Result<PreparedBuild, Error> {
 	let mut profile = preflight(project, options)?;
 	if cancellation.is_cancelled() {
 		return Err(Error::Cancelled);
@@ -103,6 +118,10 @@ pub fn prepare(
 	let max_entries = limits.max_entries as u64;
 	let defaults = Limits::default();
 	let path = (options.output == OutputIntent::Path).then_some(&project.image.output);
+	progress(BuildProgress::Discovering);
+	if profile.write_options().cancellation.is_cancelled() {
+		return Err(Error::Cancelled);
+	}
 	let manifest = discover_for_output(
 		project,
 		&config_dir,
@@ -115,8 +134,24 @@ pub fn prepare(
 		path,
 		|| profile.write_options().cancellation.is_cancelled(),
 	)?;
+	progress(BuildProgress::SourcesDiscovered {
+		entries: manifest.entries().len(),
+		regular_payload_bytes: manifest.regular_payload_bytes(),
+	});
+	if profile.write_options().cancellation.is_cancelled() {
+		return Err(Error::Cancelled);
+	}
 	#[cfg(feature = "finder-write")]
 	let finder_assets = presentation::generate(project, &manifest, &profile)?;
+	#[cfg(feature = "finder-write")]
+	if !finder_assets.is_empty() {
+		progress(BuildProgress::FinderAssetsPrepared {
+			assets: finder_assets.len(),
+		});
+		if profile.write_options().cancellation.is_cancelled() {
+			return Err(Error::Cancelled);
+		}
+	}
 	Ok(PreparedBuild {
 		profile,
 		manifest,

@@ -7,12 +7,13 @@ use std::{
 };
 
 use dmgez_core::output::{PublishError, StagedReader, publish_new};
-use dmgez_udif::writer::{WriteReport, write_image};
+use dmgez_udif::writer::{WriteOptions, WriteReport, write_image};
 use thiserror::Error;
 
 use crate::{
 	manifest::{self, Manifest},
 	preflight::{ExecutionProfile, OutputPlan, PreflightError, ReleasePlan},
+	progress::BuildProgress,
 };
 
 /// An admitted build backed by a sealed logical filesystem image.
@@ -104,6 +105,19 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 		destination: &Path,
 		verifier: Option<&OutputVerifier<'_>>,
 	) -> Result<BuildReport, ExecuteError> {
+		self.publish_with_progress(destination, verifier, |_| {})
+	}
+
+	/// Publishes a path output and reports progress on the calling thread.
+	///
+	/// # Errors
+	/// Returns the same failures as [`Self::publish`].
+	pub fn publish_with_progress(
+		self,
+		destination: &Path,
+		verifier: Option<&OutputVerifier<'_>>,
+		progress: impl Fn(BuildProgress),
+	) -> Result<BuildReport, ExecuteError> {
 		match self.profile.output() {
 			OutputPlan::Stream => return Err(ExecuteError::Target),
 			OutputPlan::Path { overwrite: true } => return Err(ExecuteError::AtomicReplace),
@@ -123,21 +137,28 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 		let image = publish_new(
 			destination,
 			|stage| {
-				write_image(
+				write_with_progress(
 					self.reader,
 					self.logical_bytes,
 					stage,
 					self.profile.write_options(),
+					&progress,
 				)
 				.map_err(ImageError::from)
 			},
 			|stage, report| {
 				if let Some(verify) = verify {
+					progress(BuildProgress::VerifyingOutput);
+					check_cancellation(self.profile)?;
 					verify(stage, report).map_err(ImageError::Verification)?;
 				}
+				progress(BuildProgress::Publishing);
 				validate_sources(self.manifest, self.profile)
 			},
 		)?;
+		progress(BuildProgress::Completed {
+			physical_bytes: image.physical_bytes,
+		});
 		Ok(BuildReport {
 			image,
 			release,
@@ -152,18 +173,36 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 	/// a source changed, cancellation was requested, or I/O failed. Once
 	/// emission starts the caller must discard the stream on any error.
 	pub fn write_to(self, sink: impl Write) -> Result<BuildReport, ExecuteError> {
+		self.write_to_with_progress(sink, |_| {})
+	}
+
+	/// Writes a stream and reports progress on the calling thread.
+	///
+	/// # Errors
+	/// Returns the same failures as [`Self::write_to`].
+	pub fn write_to_with_progress(
+		self,
+		mut sink: impl Write,
+		progress: impl Fn(BuildProgress),
+	) -> Result<BuildReport, ExecuteError> {
 		if self.profile.output() != OutputPlan::Stream {
 			return Err(ExecuteError::Target);
 		}
 		validate_sources(self.manifest, self.profile)?;
-		let image = write_image(
+		let image = write_with_progress(
 			self.reader,
 			self.logical_bytes,
-			sink,
+			&mut sink,
 			self.profile.write_options(),
+			&progress,
 		)
 		.map_err(|error| ExecuteError::Stream(error.into()))?;
 		validate_sources(self.manifest, self.profile).map_err(ExecuteError::Stream)?;
+		sink.flush()
+			.map_err(|error| ExecuteError::Stream(ImageError::Writer(error.into())))?;
+		progress(BuildProgress::Completed {
+			physical_bytes: image.physical_bytes,
+		});
 		Ok(BuildReport {
 			image,
 			release: self.profile.release(),
@@ -173,17 +212,61 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 }
 
 fn validate_sources(manifest: &Manifest, profile: &ExecutionProfile) -> Result<(), ImageError> {
-	let cancellation = &profile.write_options().cancellation;
 	for entry in manifest.entries() {
-		if cancellation.is_cancelled() {
-			return Err(dmgez_udif::Error::Cancelled.into());
-		}
+		check_cancellation(profile)?;
 		if let Some(source) = &entry.source {
 			source.validate()?;
 		}
 	}
-	if cancellation.is_cancelled() {
+	check_cancellation(profile)
+}
+
+fn check_cancellation(profile: &ExecutionProfile) -> Result<(), ImageError> {
+	if profile.write_options().cancellation.is_cancelled() {
 		return Err(dmgez_udif::Error::Cancelled.into());
 	}
 	Ok(())
+}
+
+fn write_with_progress(
+	reader: impl Read,
+	logical_bytes: u64,
+	sink: impl Write,
+	options: &WriteOptions,
+	progress: &dyn Fn(BuildProgress),
+) -> Result<WriteReport, dmgez_udif::Error> {
+	progress(BuildProgress::WritingImage { logical_bytes });
+	let source = ObservedReader {
+		reader,
+		logical_bytes,
+		logical_bytes_read: 0,
+		chunk_bytes: options.chunk_bytes as u64,
+		progress,
+	};
+	write_image(source, logical_bytes, sink, options)
+}
+
+struct ObservedReader<'observer, R> {
+	reader: R,
+	logical_bytes: u64,
+	logical_bytes_read: u64,
+	chunk_bytes: u64,
+	progress: &'observer dyn Fn(BuildProgress),
+}
+
+impl<R: Read> Read for ObservedReader<'_, R> {
+	fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+		let read = self.reader.read(buf)?;
+		let previous = self.logical_bytes_read;
+		self.logical_bytes_read = previous.saturating_add(read as u64);
+		if self.logical_bytes_read < self.logical_bytes
+			&& self.logical_bytes_read / self.chunk_bytes > previous / self.chunk_bytes
+		{
+			(self.progress)(BuildProgress::ReadingImage {
+				logical_bytes_read: self.logical_bytes_read,
+				logical_bytes: self.logical_bytes,
+			});
+		}
+		Ok(read)
+	}
 }

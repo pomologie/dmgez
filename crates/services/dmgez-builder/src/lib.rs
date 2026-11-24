@@ -8,3 +8,4 @@ pub mod planning;
 pub mod preflight;
 #[cfg(feature = "finder-write")]
 pub mod presentation;
+pub mod progress;

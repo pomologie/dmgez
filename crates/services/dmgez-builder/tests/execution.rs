@@ -1,6 +1,7 @@
 //! Staged and stream output checks for D-BUILD-05 and D-V06.
 
 use std::{
+	cell::RefCell,
 	fs,
 	io::{self, Read},
 	num::NonZeroUsize,
@@ -14,6 +15,7 @@ use dmgez_builder::{
 		Availability, BuildCapabilities, ExecutionProfile, OutputIntent, PreflightOptions,
 		ReleaseIntent, preflight,
 	},
+	progress::BuildProgress,
 };
 use dmgez_config::Project;
 use dmgez_core::output::PublishError;
@@ -75,8 +77,9 @@ fn path_output_requires_requested_verification_and_preserves_an_existing_file() 
 	assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 1);
 
 	fs::remove_file(&path).unwrap();
+	let events = RefCell::new(Vec::new());
 	let accepted = plan()
-		.publish(
+		.publish_with_progress(
 			&path,
 			Some(&|mut reader, report| {
 				let mut stage = Vec::new();
@@ -85,6 +88,13 @@ fn path_output_requires_requested_verification_and_preserves_an_existing_file() 
 				assert!(stage.starts_with(&RAW));
 				Ok(())
 			}),
+			|event| {
+				assert_eq!(
+					path.exists(),
+					matches!(event, BuildProgress::Completed { .. })
+				);
+				events.borrow_mut().push(event);
+			},
 		)
 		.unwrap();
 	assert!(accepted.verified);
@@ -92,6 +102,41 @@ fn path_output_requires_requested_verification_and_preserves_an_existing_file() 
 		fs::metadata(path).unwrap().len(),
 		accepted.image.physical_bytes
 	);
+	assert_eq!(
+		events.into_inner(),
+		[
+			BuildProgress::WritingImage {
+				logical_bytes: LOGICAL_BYTES as u64
+			},
+			BuildProgress::VerifyingOutput,
+			BuildProgress::Publishing,
+			BuildProgress::Completed {
+				physical_bytes: accepted.image.physical_bytes
+			},
+		]
+	);
+}
+
+#[test]
+fn cancellation_at_publication_reports_no_completion_and_cleans_up() {
+	let temp = tempfile::tempdir().unwrap();
+	let path = temp.path().join(DESTINATION);
+	let project = Project::parse(MANIFEST).unwrap();
+	let manifest = discover(&project, temp.path(), Limits::default()).unwrap();
+	let profile = profile(&project, OutputIntent::Path);
+	let plan = BuildPlan::new(&profile, &manifest, RAW.as_slice(), LOGICAL_BYTES as u64).unwrap();
+	let result = plan.publish_with_progress(&path, None, |event| match event {
+		BuildProgress::Publishing => profile.write_options().cancellation.cancel(),
+		BuildProgress::Completed { .. } => panic!("cancelled build reported completion"),
+		_ => {}
+	});
+	assert!(matches!(
+		result,
+		Err(ExecuteError::Path(PublishError::Validate(
+			ImageError::Writer(dmgez_udif::Error::Cancelled)
+		)))
+	));
+	assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
 }
 
 #[test]
