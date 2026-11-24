@@ -166,7 +166,8 @@ fn layout_folders<'a>(
 			};
 			if requests
 				.insert(path.to_ascii_lowercase(), request)
-				.is_some() || folder.path.is_root()
+				.is_some()
+				|| folder.path.is_root()
 			{
 				return Err(Error::AmbiguousFolder {
 					folder: path.to_owned(),
