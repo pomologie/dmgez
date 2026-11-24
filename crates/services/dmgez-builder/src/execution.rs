@@ -6,6 +6,8 @@ use std::{
 	path::Path,
 };
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+use dmgez_core::output::replace::{EntryIdentity, ReplaceError, TargetIdentity, publish_replace};
 use dmgez_core::output::{PublishError, StagedReader, publish_new};
 use dmgez_udif::writer::{WriteOptions, WriteReport, write_image};
 use thiserror::Error;
@@ -47,7 +49,7 @@ pub type OutputVerifier<'context> =
 pub enum ImageError {
 	#[error(transparent)]
 	Writer(#[from] dmgez_udif::Error),
-	#[error("a captured source failed its final identity check")]
+	#[error("a captured source failed its publication checks")]
 	Source(#[from] manifest::Error),
 	#[error("independent staged image verification failed")]
 	Verification(#[source] io::Error),
@@ -59,7 +61,7 @@ pub enum ImageError {
 pub enum ExecuteError {
 	#[error("output target does not match the admitted profile")]
 	Target,
-	#[error("atomic replacement requires a composer with source alias protection")]
+	#[error("atomic replacement is unavailable on this host")]
 	AtomicReplace,
 	#[error("the admitted release plan requires an application-owned staging pipeline")]
 	Release,
@@ -69,6 +71,9 @@ pub enum ExecuteError {
 	BeforeOutput(#[from] ImageError),
 	#[error(transparent)]
 	Path(#[from] PublishError<ImageError>),
+	#[cfg(any(target_os = "linux", target_os = "macos"))]
+	#[error(transparent)]
+	Replace(#[from] ReplaceError<ImageError>),
 	#[error("output stream may be incomplete")]
 	Stream(#[source] ImageError),
 }
@@ -95,7 +100,10 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 	}
 
 	/// Writes and syncs a same-directory stage, verifies it if requested, and
-	/// checks captured source identities before a no-clobber commit.
+	/// rechecks captured source identities before publication. Overwrite
+	/// requires an admitted replacement profile and an explicitly selected
+	/// trusted local directory. Its advisory lock coordinates cooperating
+	/// publishers. See the core replacement contract for filesystem assumptions.
 	///
 	/// # Errors
 	/// Rejects a mismatched output target, unsupported replacement or release
@@ -118,10 +126,12 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 		verifier: Option<&OutputVerifier<'_>>,
 		progress: impl Fn(BuildProgress),
 	) -> Result<BuildReport, ExecuteError> {
-		match self.profile.output() {
-			OutputPlan::Stream => return Err(ExecuteError::Target),
-			OutputPlan::Path { overwrite: true } => return Err(ExecuteError::AtomicReplace),
-			OutputPlan::Path { overwrite: false } => {}
+		let OutputPlan::Path { overwrite } = self.profile.output() else {
+			return Err(ExecuteError::Target);
+		};
+		#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+		if overwrite {
+			return Err(ExecuteError::AtomicReplace);
 		}
 		let verified = self.profile.verify_output();
 		let verify = if verified {
@@ -134,28 +144,38 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 			return Err(ExecuteError::Release);
 		}
 		validate_sources(self.manifest, self.profile)?;
-		let image = publish_new(
-			destination,
-			|stage| {
-				write_with_progress(
-					self.reader,
-					self.logical_bytes,
-					stage,
-					self.profile.write_options(),
-					&progress,
-				)
-				.map_err(ImageError::from)
-			},
-			|stage, report| {
-				if let Some(verify) = verify {
-					progress(BuildProgress::VerifyingOutput);
-					check_cancellation(self.profile)?;
-					verify(stage, report).map_err(ImageError::Verification)?;
-				}
-				progress(BuildProgress::Publishing);
-				validate_sources(self.manifest, self.profile)
-			},
-		)?;
+		let write = |stage: &mut dyn Write| {
+			write_with_progress(
+				self.reader,
+				self.logical_bytes,
+				stage,
+				self.profile.write_options(),
+				&progress,
+			)
+			.map_err(ImageError::from)
+		};
+		let validate = |stage: StagedReader<'_>, report: &WriteReport| {
+			if let Some(verify) = verify {
+				progress(BuildProgress::VerifyingOutput);
+				check_cancellation(self.profile)?;
+				verify(stage, report).map_err(ImageError::Verification)?;
+			}
+			progress(BuildProgress::Publishing);
+			validate_sources(self.manifest, self.profile)
+		};
+		#[cfg(any(target_os = "linux", target_os = "macos"))]
+		let image = if overwrite {
+			publish_replace(
+				destination,
+				|target| authorize_replacement(self.manifest, self.profile, target),
+				write,
+				validate,
+			)?
+		} else {
+			publish_new(destination, write, validate)?
+		};
+		#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+		let image = publish_new(destination, write, validate)?;
 		progress(BuildProgress::Completed {
 			physical_bytes: image.physical_bytes,
 		});
@@ -209,6 +229,36 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 			verified: false,
 		})
 	}
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn authorize_replacement(
+	manifest: &Manifest,
+	profile: &ExecutionProfile,
+	target: TargetIdentity,
+) -> Result<(), ImageError> {
+	let source_identity = |entry: EntryIdentity| manifest::SourceIdentity {
+		device: entry.device,
+		inode: entry.inode,
+	};
+	let destination = target.existing.map(source_identity);
+	let directory = source_identity(target.directory);
+	for entry in manifest.entries() {
+		check_cancellation(profile)?;
+		let Some(source) = &entry.source else {
+			continue;
+		};
+		let identity = source.metadata().identity;
+		if destination == Some(identity)
+			|| (matches!(entry.kind, manifest::EntryKind::Directory) && directory == identity)
+		{
+			return Err(manifest::Error::OutputSourceAlias {
+				path: source.path().into(),
+			}
+			.into());
+		}
+	}
+	check_cancellation(profile)
 }
 
 fn validate_sources(manifest: &Manifest, profile: &ExecutionProfile) -> Result<(), ImageError> {

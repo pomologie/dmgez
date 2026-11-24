@@ -30,6 +30,7 @@ fn profile(project: &Project, output: OutputIntent) -> ExecutionProfile {
 	let mut capabilities = BuildCapabilities::default();
 	capabilities.hfsplus_ascii = Availability::Available;
 	capabilities.verify = Availability::Available;
+	capabilities.atomic_replace = Availability::Available;
 	preflight(
 		project,
 		PreflightOptions {
@@ -175,4 +176,191 @@ fn verified_project(directory: &Path) -> (Project, dmgez_builder::manifest::Mani
 	let project = Project::parse(&format!("{MANIFEST}[build]\nverify_output = true\n")).unwrap();
 	let manifest = discover(&project, directory, Limits::default()).unwrap();
 	(project, manifest)
+}
+
+fn overwrite_project(contents: &str, verify: bool) -> Project {
+	Project::parse(&format!(
+		"{MANIFEST}{contents}[build]\noverwrite = true\nverify_output = {verify}\n"
+	))
+	.unwrap()
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[test]
+fn overwrite_cannot_fall_back_to_no_clobber_on_an_unsupported_host() {
+	let temp = tempfile::tempdir().unwrap();
+	let path = temp.path().join(DESTINATION);
+	let project = overwrite_project("", false);
+	let manifest = discover(&project, temp.path(), Limits::default()).unwrap();
+	let profile = profile(&project, OutputIntent::Path);
+	let build = BuildPlan::new(&profile, &manifest, RAW.as_slice(), LOGICAL_BYTES as u64).unwrap();
+	assert!(matches!(
+		build.publish(&path, None),
+		Err(ExecuteError::AtomicReplace)
+	));
+	assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod replacement {
+	use super::*;
+	use dmgez_builder::manifest::Error as ManifestError;
+	use dmgez_core::output::replace::ReplaceError;
+
+	const INPUT_FILE: &str = "input.bin";
+	const INPUT_DIR: &str = "input-directory";
+	const ALIAS: &str = "alias.dmg";
+	const SOURCE_DATA: &[u8] = b"protected source data";
+	const MUTATED: &[u8] = b"modified by verifier test";
+
+	#[test]
+	fn publishes_a_verified_replacement_only_when_overwrite_is_selected() {
+		let temp = tempfile::tempdir().unwrap();
+		let directory = temp.path().canonicalize().unwrap();
+		let path = directory.join(DESTINATION);
+		fs::write(&path, OLD_DATA).unwrap();
+		let project = Project::parse(MANIFEST).unwrap();
+		let manifest = discover(&project, &directory, Limits::default()).unwrap();
+		let no_clobber = profile(&project, OutputIntent::Path);
+		let build =
+			BuildPlan::new(&no_clobber, &manifest, RAW.as_slice(), LOGICAL_BYTES as u64).unwrap();
+		assert!(
+			matches!(build.publish(&path, None), Err(ExecuteError::Path(PublishError::Commit(error))) if error.kind() == io::ErrorKind::AlreadyExists)
+		);
+		assert_eq!(fs::read(&path).unwrap(), OLD_DATA);
+
+		let project = overwrite_project("", true);
+		let replace = profile(&project, OutputIntent::Path);
+		let build =
+			BuildPlan::new(&replace, &manifest, RAW.as_slice(), LOGICAL_BYTES as u64).unwrap();
+		let events = RefCell::new(Vec::new());
+		let report = build
+			.publish_with_progress(
+				&path,
+				Some(&|mut stage, _| {
+					let mut prefix = [0; LOGICAL_BYTES];
+					stage.read_exact(&mut prefix)?;
+					assert_eq!(prefix, RAW);
+					assert_eq!(fs::read(&path)?, OLD_DATA);
+					Ok(())
+				}),
+				|event| events.borrow_mut().push(event),
+			)
+			.unwrap();
+		assert!(report.verified);
+		assert!(fs::read(&path).unwrap().starts_with(&RAW));
+		assert_eq!(
+			events.into_inner(),
+			[
+				BuildProgress::WritingImage {
+					logical_bytes: LOGICAL_BYTES as u64
+				},
+				BuildProgress::VerifyingOutput,
+				BuildProgress::Publishing,
+				BuildProgress::Completed {
+					physical_bytes: report.image.physical_bytes
+				},
+			]
+		);
+		assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+	}
+
+	#[test]
+	fn replacement_failures_and_publication_cancellation_keep_the_old_output() {
+		let temp = tempfile::tempdir().unwrap();
+		let directory = temp.path().canonicalize().unwrap();
+		let path = directory.join(DESTINATION);
+		fs::write(&path, OLD_DATA).unwrap();
+		let project = overwrite_project("", true);
+		let manifest = discover(&project, &directory, Limits::default()).unwrap();
+		let profile = profile(&project, OutputIntent::Path);
+		let build =
+			|| BuildPlan::new(&profile, &manifest, RAW.as_slice(), LOGICAL_BYTES as u64).unwrap();
+		let failed = build().publish(&path, Some(&|_, _| Err(io::ErrorKind::InvalidData.into())));
+		assert!(matches!(
+			failed,
+			Err(ExecuteError::Replace(ReplaceError::Stage(
+				PublishError::Validate(ImageError::Verification(_))
+			)))
+		));
+		assert_eq!(fs::read(&path).unwrap(), OLD_DATA);
+		let cancelled =
+			build().publish_with_progress(&path, Some(&|_, _| Ok(())), |event| match event {
+				BuildProgress::Publishing => profile.write_options().cancellation.cancel(),
+				BuildProgress::Completed { .. } => {
+					panic!("cancelled replacement reported completion")
+				}
+				_ => {}
+			});
+		assert!(matches!(
+			cancelled,
+			Err(ExecuteError::Replace(ReplaceError::Stage(
+				PublishError::Validate(ImageError::Writer(dmgez_udif::Error::Cancelled))
+			)))
+		));
+		assert_eq!(fs::read(&path).unwrap(), OLD_DATA);
+		assert_eq!(fs::read_dir(&directory).unwrap().count(), 1);
+	}
+
+	#[test]
+	fn refuses_a_replacement_whose_actual_target_or_parent_aliases_a_source() {
+		let temp = tempfile::tempdir().unwrap();
+		let directory = temp.path().canonicalize().unwrap();
+		let source = directory.join(INPUT_FILE);
+		let copied_directory = directory.join(INPUT_DIR);
+		let hard_link = directory.join(ALIAS);
+		fs::write(&source, SOURCE_DATA).unwrap();
+		fs::hard_link(&source, &hard_link).unwrap();
+		fs::create_dir(&copied_directory).unwrap();
+		let project = overwrite_project(
+			&format!(
+				"[[contents]]\nsource = '{INPUT_FILE}'\n[[contents]]\nsource = '{INPUT_DIR}'\n"
+			),
+			false,
+		);
+		let manifest = discover(&project, &directory, Limits::default()).unwrap();
+		let profile = profile(&project, OutputIntent::Path);
+		let inside = copied_directory.join(DESTINATION);
+		for destination in [&source, &hard_link, &inside] {
+			let build =
+				BuildPlan::new(&profile, &manifest, RAW.as_slice(), LOGICAL_BYTES as u64).unwrap();
+			let result = build
+				.publish_with_progress(destination, None, |_| panic!("alias reached the writer"));
+			assert!(matches!(
+				result,
+				Err(ExecuteError::Replace(ReplaceError::Authorize(
+					ImageError::Source(ManifestError::OutputSourceAlias { .. })
+				)))
+			));
+		}
+		assert_eq!(fs::read(source).unwrap(), SOURCE_DATA);
+		assert_eq!(fs::read(hard_link).unwrap(), SOURCE_DATA);
+		assert_eq!(fs::read_dir(copied_directory).unwrap().count(), 0);
+		assert_eq!(fs::read_dir(directory).unwrap().count(), 3);
+	}
+
+	#[test]
+	fn replacement_rechecks_source_identity_after_verification() {
+		let temp = tempfile::tempdir().unwrap();
+		let directory = temp.path().canonicalize().unwrap();
+		let source = directory.join(INPUT_FILE);
+		let path = directory.join(DESTINATION);
+		fs::write(&source, SOURCE_DATA).unwrap();
+		fs::write(&path, OLD_DATA).unwrap();
+		let project = overwrite_project(&format!("[[contents]]\nsource = '{INPUT_FILE}'\n"), true);
+		let manifest = discover(&project, &directory, Limits::default()).unwrap();
+		let profile = profile(&project, OutputIntent::Path);
+		let build =
+			BuildPlan::new(&profile, &manifest, RAW.as_slice(), LOGICAL_BYTES as u64).unwrap();
+		let result = build.publish(&path, Some(&|_, _| fs::write(&source, MUTATED)));
+		assert!(matches!(
+			result,
+			Err(ExecuteError::Replace(ReplaceError::Stage(
+				PublishError::Validate(ImageError::Source(ManifestError::SourceChanged { .. }))
+			)))
+		));
+		assert_eq!(fs::read(path).unwrap(), OLD_DATA);
+		assert_eq!(fs::read(source).unwrap(), MUTATED);
+		assert_eq!(fs::read_dir(directory).unwrap().count(), 2);
+	}
 }
