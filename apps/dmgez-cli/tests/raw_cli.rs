@@ -104,6 +104,66 @@ fn reports_native_gpt_byte_ranges_without_claiming_verification() {
 
 #[cfg(feature = "inspect")]
 #[test]
+fn exports_exactly_the_selected_native_partition_without_clobbering() {
+	const NATIVE_APM: &[u8] =
+		include_bytes!("../../../crates/foundation/dmgez-vfs/tests/fixtures/native-apm.dmg");
+	const NATIVE_PARTITIONLESS: &[u8] =
+		include_bytes!("../../../crates/foundation/dmgez-vfs/tests/fixtures/native-raw.dmg");
+	// hdiutil imageinfo and UDTO export, recorded in the native map fixture ledger.
+	const APM_HFS_SLOT: &str = "2";
+	const APM_HFS_START: usize = 32_768;
+	const APM_HFS_LEN: usize = 16_744_448;
+	const ABSENT_SLOT: &str = "99";
+	const ZERO_SLOT: &str = "0";
+	const EXISTING_BYTES: &[u8] = b"the destination already exists";
+	let work = tempfile::tempdir().unwrap();
+	let image = work.path().join("apm.dmg");
+	let partitionless = work.path().join("partitionless.dmg");
+	let whole = work.path().join("whole.raw");
+	let partition = work.path().join("partition.raw");
+	let rejected_output = work.path().join("rejected.raw");
+	fs::write(&image, NATIVE_APM).unwrap();
+	fs::write(&partitionless, NATIVE_PARTITIONLESS).unwrap();
+	let export = |source: &std::path::Path, output: &std::path::Path, slot: Option<&str>| {
+		let mut command = Command::new(env!("CARGO_BIN_EXE_dmgez"));
+		command.arg("unwrap-raw").arg(source).arg("-o").arg(output);
+		if let Some(slot) = slot {
+			command.args(["--partition", slot]);
+		}
+		command.output().unwrap()
+	};
+	assert!(export(&image, &whole, None).status.success());
+	assert!(
+		export(&image, &partition, Some(APM_HFS_SLOT))
+			.status
+			.success()
+	);
+	let whole_bytes = fs::read(&whole).unwrap();
+	assert_eq!(
+		fs::read(&partition).unwrap(),
+		whole_bytes[APM_HFS_START..APM_HFS_START + APM_HFS_LEN]
+	);
+	for (input, slot) in [
+		(&image, ABSENT_SLOT),
+		(&image, ZERO_SLOT),
+		(&partitionless, APM_HFS_SLOT),
+	] {
+		assert!(!export(input, &rejected_output, Some(slot)).status.success());
+		assert!(!rejected_output.exists());
+	}
+	fs::write(&partition, EXISTING_BYTES).unwrap();
+	assert!(
+		!export(&image, &partition, Some(APM_HFS_SLOT))
+			.status
+			.success()
+	);
+	assert_eq!(fs::read(&partition).unwrap(), EXISTING_BYTES);
+	assert_eq!(fs::read(&image).unwrap(), NATIVE_APM);
+	assert_eq!(fs::read_dir(work.path()).unwrap().count(), 4);
+}
+
+#[cfg(feature = "inspect")]
+#[test]
 fn analyzes_the_native_image_run_map() {
 	const NATIVE_HYBRID: &str = "../../tests/fixtures/images/hybrid-UDZO.dmg";
 	let image = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(NATIVE_HYBRID);

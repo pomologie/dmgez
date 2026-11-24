@@ -963,6 +963,7 @@ dependencies = [
  "dmgez-core",
  "dmgez-inspector",
  "dmgez-udif",
+ "dmgez-vfs",
  "serde",
  "serde_json",
  "tempfile",

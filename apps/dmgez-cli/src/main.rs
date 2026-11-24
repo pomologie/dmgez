@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Display, path::PathBuf, process::ExitCode};
+use std::{error::Error, fmt::Display, num::NonZeroU32, path::PathBuf, process::ExitCode};
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
@@ -18,6 +18,7 @@ const LZFSE_FEATURE: &str = "lzfse";
 const LZMA_FEATURE: &str = "lzma";
 const VERIFY_CONTAINER_CAPABILITY: &str = "verify-container";
 const RUN_LIMIT_ARG: &str = "run_limit";
+const PARTITION_SLOT_VALUE: &str = "SLOT";
 const COMPILED: &str = "compiled";
 const NOT_COMPILED: &str = "not_compiled";
 
@@ -78,12 +79,15 @@ enum Command {
 		#[command(flatten)]
 		scope: VerificationFlags,
 	},
-	/// Export the complete logical disk to a regular file.
+	/// Export the decoded disk or one partition to a regular file.
 	#[command(name = UNWRAP_RAW_COMMAND)]
 	UnwrapRaw {
 		image: PathBuf,
 		#[arg(short, long)]
 		output: PathBuf,
+		/// Export the complete extent of a one-based slot from `inspect --partitions`.
+		#[arg(long, value_name = PARTITION_SLOT_VALUE)]
+		partition: Option<NonZeroU32>,
 	},
 }
 
@@ -182,7 +186,11 @@ fn run(command: Command) -> CliResult {
 		#[cfg(feature = "inspect")]
 		Command::Verify { image, json, scope } => inspect::verify(&image, json, scope),
 		#[cfg(feature = "inspect")]
-		Command::UnwrapRaw { image, output } => inspect::unwrap(&image, &output),
+		Command::UnwrapRaw {
+			image,
+			output,
+			partition,
+		} => inspect::unwrap(&image, &output, partition),
 		#[cfg(not(feature = "inspect"))]
 		Command::Inspect { .. }
 		| Command::Analyze { .. }

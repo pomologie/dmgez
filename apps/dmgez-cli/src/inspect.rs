@@ -3,6 +3,7 @@ use std::{
 	fmt,
 	fs::File,
 	io::{self, Write},
+	num::NonZeroU32,
 	path::Path,
 };
 
@@ -12,6 +13,7 @@ use dmgez_inspector::{
 	VerificationMode, VerificationOutcome, VerificationReport,
 };
 use dmgez_udif::reader::{FileSource, Image, Limits};
+use dmgez_vfs::{Disk, Layout, PartitionId, VolumeId};
 use serde::Serialize;
 
 use crate::{CliResult, VerificationFlags, report_field};
@@ -54,6 +56,7 @@ const ZLIB_ENCODING: &str = "zlib";
 const LZFSE_ENCODING: &str = "lzfse";
 const LZMA2_ENCODING: &str = "lzma2";
 const OTHER_ENCODING: &str = "other";
+const PARTITION_COPY_BUFFER_BYTES: usize = 64 * 1024;
 
 fn open_source(path: &Path) -> Result<FileSource, dmgez_udif::Error> {
 	FileSource::new(File::open(path)?)
@@ -240,8 +243,26 @@ pub(crate) fn verify(path: &Path, json: bool, scope: VerificationFlags) -> CliRe
 	Err(Box::new(VerificationFailure(report)))
 }
 
-pub(crate) fn unwrap(path: &Path, destination: &Path) -> CliResult {
+pub(crate) fn unwrap(path: &Path, destination: &Path, partition: Option<NonZeroU32>) -> CliResult {
 	let mut image = Image::open(open_source(path)?, Limits::default())?;
+	if let Some(slot) = partition {
+		let mut disk = Disk::discover(&mut image, DiskLimits::default())?;
+		let Layout::Partitioned { scheme, .. } = *disk.layout() else {
+			return Err(io::Error::new(
+				io::ErrorKind::InvalidInput,
+				"partition export requires a recognized partition map",
+			)
+			.into());
+		};
+		let mut partition = disk.window(VolumeId::Partition(PartitionId { scheme, slot }))?;
+		let mut scratch = vec![0; PARTITION_COPY_BUFFER_BYTES];
+		publish_new(
+			destination,
+			|stage| partition.write_raw_to(stage, &mut scratch, || false),
+			|_, _| Ok(()),
+		)?;
+		return Ok(());
+	}
 	publish_new(
 		destination,
 		|stage| image.write_raw_to(stage),

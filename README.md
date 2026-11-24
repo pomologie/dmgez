@@ -16,9 +16,10 @@ cargo run --locked --features inspect -- analyze volume.dmg --json
 cargo run --locked --features inspect -- verify volume.dmg
 cargo run --locked --features inspect -- verify volume.dmg --quick --json
 cargo run --locked --features inspect -- unwrap-raw volume.dmg -o exported.raw
+cargo run --locked --features inspect -- unwrap-raw volume.dmg --partition 2 -o partition.raw
 ```
 
-The CLI stages outputs in the destination directory and refuses to replace existing files. The default writer uses bounded parallel compression. A serial-only CLI can be built with `--no-default-features --features build`.
+The CLI stages outputs in the destination directory and refuses to replace existing files. `unwrap-raw --partition` takes a one-based slot reported by `inspect --partitions` and exports that slot's complete logical extent. The default writer uses bounded parallel compression. A serial-only CLI can be built with `--no-default-features --features build`.
 
 The [project-build compatibility runner](tests/compatibility/project-build/README.md) builds version-one TOML projects using the HFS+ builder from a sibling checkout or unpacked packages. File-tree builds in the default CLI require a resolvable versioned HFS+ dependency.
 
