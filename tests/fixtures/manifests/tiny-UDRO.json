@@ -1,0 +1,73 @@
+{
+  "id": "tiny-UDRO",
+  "mode": "UDRO",
+  "license": "Apache-2.0; synthetic data only",
+  "provenance": "Apple hdiutil applied to generated synthetic bytes",
+  "os": "14.7.2",
+  "os_build": "23H311",
+  "architecture": "arm64",
+  "generator_argv": [
+    "/usr/bin/hdiutil",
+    "convert",
+    "tiny.raw",
+    "-srcimagekey",
+    "diskimage-class=CRawDiskImage",
+    "-format",
+    "UDRO",
+    "-o",
+    "tiny-UDRO.dmg",
+    "-quiet"
+  ],
+  "image_sha256": "fc7a4dbc856cf1a6ff474edc028cc73b360cb8aeec511429c2b1bf4d4e7d8208",
+  "raw_sha256": "66c01cd4611dc73d4773c007ad22fe7951a1fcf5c0358b5fec477ada048806d8",
+  "decoded_sha256": "66c01cd4611dc73d4773c007ad22fe7951a1fcf5c0358b5fec477ada048806d8",
+  "decoded_crc32": "2f96947b",
+  "sector_count": 4,
+  "physical_bytes": 5344,
+  "variant": 2,
+  "data_fork": [
+    0,
+    2048
+  ],
+  "data_crc32": "2f96947b",
+  "xml": [
+    2048,
+    2784
+  ],
+  "master_crc32": "f271439c",
+  "tables": [
+    {
+      "id": "0",
+      "first_sector": 0,
+      "sectors": 4,
+      "table_offset": 0,
+      "buffer_sectors": 0,
+      "crc32": "2f96947b",
+      "runs": [
+        [
+          1,
+          0,
+          0,
+          4,
+          0,
+          2048
+        ],
+        [
+          4294967295,
+          0,
+          4,
+          0,
+          2048,
+          0
+        ]
+      ]
+    }
+  ],
+  "native_verify_argv": [
+    "/usr/bin/hdiutil",
+    "verify",
+    "-quiet",
+    "tiny-UDRO.dmg"
+  ],
+  "native_verify_exit_code": 0
+}

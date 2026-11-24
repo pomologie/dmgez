@@ -1,0 +1,6 @@
+docs/temp
+/target/
+/fuzz/target/
+/fuzz/corpus/
+/fuzz/artifacts/
+__pycache__/

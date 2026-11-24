@@ -1,0 +1,79 @@
+{
+  "id": "zero-run",
+  "mode": "derived UDRO probe",
+  "license": "Apache-2.0; synthetic data only",
+  "provenance": "tiny-UDRO.dmg with synthetic type 0x00000000 records, independently verified",
+  "os": "14.7.2",
+  "os_build": "23H311",
+  "architecture": "arm64",
+  "generator_argv": [],
+  "image_sha256": "b4267e4b079888ce7c1249b01df7f5de740fdeaa3a2b3206718497ed48c52c5f",
+  "raw_sha256": "66c01cd4611dc73d4773c007ad22fe7951a1fcf5c0358b5fec477ada048806d8",
+  "decoded_sha256": "66c01cd4611dc73d4773c007ad22fe7951a1fcf5c0358b5fec477ada048806d8",
+  "decoded_crc32": "2f96947b",
+  "sector_count": 4,
+  "physical_bytes": 4443,
+  "variant": 2,
+  "data_fork": [
+    0,
+    1024
+  ],
+  "data_crc32": "cd44d198",
+  "xml": [
+    1024,
+    2907
+  ],
+  "master_crc32": "f271439c",
+  "tables": [
+    {
+      "id": "0",
+      "first_sector": 0,
+      "sectors": 4,
+      "table_offset": 0,
+      "buffer_sectors": 0,
+      "crc32": "2f96947b",
+      "runs": [
+        [
+          0,
+          0,
+          0,
+          1,
+          0,
+          0
+        ],
+        [
+          1,
+          0,
+          1,
+          2,
+          0,
+          1024
+        ],
+        [
+          0,
+          0,
+          3,
+          1,
+          1024,
+          0
+        ],
+        [
+          4294967295,
+          0,
+          4,
+          0,
+          1024,
+          0
+        ]
+      ]
+    }
+  ],
+  "native_verify_argv": [
+    "/usr/bin/hdiutil",
+    "verify",
+    "-quiet",
+    "zero-run.dmg"
+  ],
+  "native_verify_exit_code": 0,
+  "derived_from": "tiny-UDRO.dmg"
+}

@@ -1,0 +1,73 @@
+{
+  "id": "tiny-UDZO",
+  "mode": "UDZO",
+  "license": "Apache-2.0; synthetic data only",
+  "provenance": "Apple hdiutil applied to generated synthetic bytes",
+  "os": "14.7.2",
+  "os_build": "23H311",
+  "architecture": "arm64",
+  "generator_argv": [
+    "/usr/bin/hdiutil",
+    "convert",
+    "tiny.raw",
+    "-srcimagekey",
+    "diskimage-class=CRawDiskImage",
+    "-format",
+    "UDZO",
+    "-o",
+    "tiny-UDZO.dmg",
+    "-quiet"
+  ],
+  "image_sha256": "40701c4d6d5bc1c60f83f7ea7c5e3b9d28a7ca1c9d08758fd2f7bbab175fd6d5",
+  "raw_sha256": "66c01cd4611dc73d4773c007ad22fe7951a1fcf5c0358b5fec477ada048806d8",
+  "decoded_sha256": "66c01cd4611dc73d4773c007ad22fe7951a1fcf5c0358b5fec477ada048806d8",
+  "decoded_crc32": "2f96947b",
+  "sector_count": 4,
+  "physical_bytes": 3596,
+  "variant": 2,
+  "data_fork": [
+    0,
+    300
+  ],
+  "data_crc32": "4d9b5e61",
+  "xml": [
+    300,
+    2784
+  ],
+  "master_crc32": "f271439c",
+  "tables": [
+    {
+      "id": "0",
+      "first_sector": 0,
+      "sectors": 4,
+      "table_offset": 0,
+      "buffer_sectors": 2056,
+      "crc32": "2f96947b",
+      "runs": [
+        [
+          2147483653,
+          0,
+          0,
+          4,
+          0,
+          300
+        ],
+        [
+          4294967295,
+          0,
+          4,
+          0,
+          300,
+          0
+        ]
+      ]
+    }
+  ],
+  "native_verify_argv": [
+    "/usr/bin/hdiutil",
+    "verify",
+    "-quiet",
+    "tiny-UDZO.dmg"
+  ],
+  "native_verify_exit_code": 0
+}

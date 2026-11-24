@@ -1,0 +1,183 @@
+{
+  "id": "hybrid-UDZO",
+  "mode": "UDZO with APM",
+  "license": "Apache-2.0; synthetic data only",
+  "provenance": "Apple hdiutil applied to generated synthetic bytes",
+  "os": "14.7.2",
+  "os_build": "23H311",
+  "architecture": "arm64",
+  "generator_argv": [
+    "/usr/bin/hdiutil",
+    "convert",
+    "hybrid.dmg",
+    "-format",
+    "UDZO",
+    "-o",
+    "hybrid-UDZO.dmg",
+    "-quiet"
+  ],
+  "image_sha256": "d436e53d399a538d3562fc4d44adc1570a16bb27c40117952c8e2c81cb56ce84",
+  "raw_sha256": "460b8b25a72c316d5766db4005bc204ff07e93e9b156c7c9df506d85922185b6",
+  "decoded_sha256": "460b8b25a72c316d5766db4005bc204ff07e93e9b156c7c9df506d85922185b6",
+  "decoded_crc32": "d4f81de3",
+  "sector_count": 1800,
+  "physical_bytes": 6569,
+  "variant": 1,
+  "data_fork": [
+    0,
+    918
+  ],
+  "data_crc32": "20ebcc11",
+  "xml": [
+    918,
+    5139
+  ],
+  "master_crc32": "491964a5",
+  "tables": [
+    {
+      "id": "-1",
+      "first_sector": 0,
+      "sectors": 1,
+      "table_offset": 0,
+      "buffer_sectors": 2056,
+      "crc32": "3e1b1535",
+      "runs": [
+        [
+          2147483653,
+          0,
+          0,
+          1,
+          0,
+          18
+        ],
+        [
+          4294967295,
+          0,
+          1,
+          0,
+          18,
+          0
+        ]
+      ]
+    },
+    {
+      "id": "0",
+      "first_sector": 1,
+      "sectors": 63,
+      "table_offset": 0,
+      "buffer_sectors": 2056,
+      "crc32": "b39c4bd9",
+      "runs": [
+        [
+          2147483653,
+          0,
+          0,
+          63,
+          18,
+          303
+        ],
+        [
+          4294967295,
+          0,
+          63,
+          0,
+          321,
+          0
+        ]
+      ]
+    },
+    {
+      "id": "1",
+      "first_sector": 64,
+      "sectors": 40,
+      "table_offset": 0,
+      "buffer_sectors": 2056,
+      "crc32": "2e841da3",
+      "runs": [
+        [
+          2147483653,
+          0,
+          0,
+          36,
+          321,
+          488
+        ],
+        [
+          2,
+          0,
+          36,
+          2,
+          809,
+          0
+        ],
+        [
+          2147483653,
+          0,
+          38,
+          1,
+          809,
+          109
+        ],
+        [
+          2,
+          0,
+          39,
+          1,
+          918,
+          0
+        ],
+        [
+          4294967295,
+          0,
+          40,
+          0,
+          918,
+          0
+        ]
+      ]
+    },
+    {
+      "id": "2",
+      "first_sector": 104,
+      "sectors": 1696,
+      "table_offset": 0,
+      "buffer_sectors": 0,
+      "crc32": "00000000",
+      "runs": [
+        [
+          2,
+          0,
+          0,
+          1696,
+          918,
+          0
+        ],
+        [
+          4294967295,
+          0,
+          1696,
+          0,
+          918,
+          0
+        ]
+      ]
+    }
+  ],
+  "native_verify_argv": [
+    "/usr/bin/hdiutil",
+    "verify",
+    "-quiet",
+    "hybrid-UDZO.dmg"
+  ],
+  "native_verify_exit_code": 0,
+  "source_generator_argv": [
+    "/usr/bin/hdiutil",
+    "makehybrid",
+    "-hfs",
+    "-hfs-volume-name",
+    "Pomologie Fixture",
+    "-o",
+    "hybrid.dmg",
+    "synthetic"
+  ]
+}
