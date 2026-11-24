@@ -5,6 +5,7 @@ members = [
 	"crates/formats/dmgez-udif",
 	"crates/foundation/dmgez-config",
 	"crates/foundation/dmgez-core",
+	"crates/foundation/dmgez-vfs",
 	"crates/presentation/dmgez-finder",
 	"crates/presentation/dmgez-preview",
 	"crates/services/dmgez-builder",
@@ -27,10 +28,13 @@ dmgez-core = { path = "crates/foundation/dmgez-core", default-features = false }
 dmgez-finder = { path = "crates/presentation/dmgez-finder" }
 dmgez-inspector = { path = "crates/services/dmgez-inspector", default-features = false }
 dmgez-udif = { path = "crates/formats/dmgez-udif", default-features = false }
+dmgez-vfs = { path = "crates/foundation/dmgez-vfs", default-features = false }
 ds_parser = "=0.4.0"
 flate2 = { version = "1.1.11", default-features = false, features = ["zlib-rs"] }
 globset = { version = "0.4.21", default-features = false }
+gpt = { version = "=4.1.0", default-features = false }
 lzfse_rust = { version = "=0.2.1", default-features = false }
+part-tables = { version = "=0.1.0", default-features = false, features = ["apm", "mbr"] }
 plist = { version = "1.10.4", default-features = false }
 proptest = { version = "1.12.0", default-features = false, features = ["std"] }
 quick-xml = { version = "0.42.0", default-features = false }

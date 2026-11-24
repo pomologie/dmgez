@@ -1,0 +1,105 @@
+{
+  "license": "Apache-2.0; synthetic data only",
+  "host": {
+    "os": "macOS 14.7.2",
+    "build": "23H311",
+    "architecture": "arm64"
+  },
+  "raw_create_argv": [
+    "/usr/bin/hdiutil",
+    "create",
+    "-size",
+    "16m",
+    "-layout",
+    "{layout}",
+    "-type",
+    "UDTO",
+    "-fs",
+    "HFS+",
+    "-volname",
+    "PomologieVFS",
+    "{name}"
+  ],
+  "native_inspection_argv": [
+    "/usr/bin/hdiutil",
+    "imageinfo",
+    "-plist",
+    "{name}.cdr"
+  ],
+  "native_convert_argv": [
+    "/usr/bin/hdiutil",
+    "convert",
+    "{name}.cdr",
+    "-format",
+    "UDZO",
+    "-o",
+    "{name}-UDZO.dmg",
+    "-quiet"
+  ],
+  "native_verify_argv": [
+    "/usr/bin/hdiutil",
+    "verify",
+    "{fixture}",
+    "-quiet"
+  ],
+  "native_verify_exit_code": 0,
+  "fixtures": [
+    {
+      "fixture": "native-apm.dmg",
+      "name": "apm",
+      "layout": "SPUD",
+      "slot": 2,
+      "logical_block_bytes": 512,
+      "start": 64,
+      "length": 32704,
+      "raw_sha256": "806cc012859431c2801f87ceec8b3b095270238d43eba71199fdba975a0b0914",
+      "image_sha256": "71d5fcd78bab7c4d8183b5cc19b9687c5f6d66420b566510b89a10134c17b952"
+    },
+    {
+      "fixture": "native-dual-apm.dmg",
+      "source": "repository tests/fixtures/images/hybrid-UDZO.dmg; packaged byte copy",
+      "layout": "Apple",
+      "slot": 2,
+      "logical_block_bytes": 512,
+      "start": 64,
+      "length": 40,
+      "raw_sha256": "460b8b25a72c316d5766db4005bc204ff07e93e9b156c7c9df506d85922185b6",
+      "image_sha256": "d436e53d399a538d3562fc4d44adc1570a16bb27c40117952c8e2c81cb56ce84",
+      "profile": "unsupported 512/2048-byte optical layouts with driver descriptor block size 2048"
+    },
+    {
+      "fixture": "native-gpt.dmg",
+      "name": "gpt",
+      "layout": "GPTSPUD",
+      "slot": 1,
+      "logical_block_bytes": 512,
+      "start": 40,
+      "length": 32688,
+      "partition_type_uuid": "48465300-0000-11AA-AA11-00306543ECAC",
+      "partition_uuid": "2C3748F1-E663-4C61-992E-05F10B43B11C",
+      "raw_sha256": "d6c77fc05b2bb70de01b71c7674a21cc87d98f6b4830a1317332872982d0946b",
+      "image_sha256": "ce8bb95421bd3b546dad8689510ffc2fa1d142bfc84bf56f024099c3d2488029"
+    },
+    {
+      "fixture": "native-mbr.dmg",
+      "name": "mbr",
+      "layout": "MBRSPUD",
+      "slot": 1,
+      "logical_block_bytes": 512,
+      "start": 1,
+      "length": 32767,
+      "raw_sha256": "dbae04489389f47430b437fbf1d9d03b1253367300aedbc22eab32038d41f107",
+      "image_sha256": "f549bea4f6f0b95594e9b121535627ad381eb75b71e8f4082e3f7e4475c17d58"
+    },
+    {
+      "fixture": "native-raw.dmg",
+      "name": "raw",
+      "layout": "NONE",
+      "logical_block_bytes": 512,
+      "start": 0,
+      "length": 32768,
+      "raw_sha256": "28f5392bf3965d81c6b5bfd88ea7cbb3068bc3f623a7027e2d89727133127889",
+      "image_sha256": "396f82d117afd84ca2d22b784c581abeaba788c9d9f0c20e6f136652f31cc376"
+    }
+  ]
+}
