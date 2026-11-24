@@ -1,5 +1,5 @@
 use dmgez_config::Capacity;
-use dmgez_udif::writer::WriteOptions;
+use dmgez_udif::writer::{Cancellation, WriteOptions};
 
 use super::{FilesystemProfile, FinderPlan, OutputPlan, PreflightError, ReleasePlan, Resource};
 
@@ -91,6 +91,10 @@ impl ExecutionProfile {
 	#[must_use]
 	pub const fn write_options(&self) -> &WriteOptions {
 		&self.writer
+	}
+
+	pub(crate) fn set_cancellation(&mut self, cancellation: Cancellation) {
+		self.writer.cancellation = cancellation;
 	}
 
 	/// Checks the logical size selected by the filesystem planner before starting a write.

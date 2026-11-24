@@ -300,6 +300,22 @@ pub fn discover_with_cancellation(
 	project: &Project,
 	config_dir: &Path,
 	limits: Limits,
+	cancelled: impl FnMut() -> bool,
+) -> Result<Manifest, Error> {
+	discover_for_output(
+		project,
+		config_dir,
+		limits,
+		Some(&project.image.output),
+		cancelled,
+	)
+}
+
+pub(crate) fn discover_for_output(
+	project: &Project,
+	config_dir: &Path,
+	limits: Limits,
+	output: Option<&LocalPath>,
 	mut cancelled: impl FnMut() -> bool,
 ) -> Result<Manifest, Error> {
 	if !config_dir.is_absolute() {
@@ -307,7 +323,9 @@ pub fn discover_with_cancellation(
 	}
 	let mut catalog = Catalog::new(limits);
 	#[cfg(unix)]
-	let mut walker = walk::Walker::new(config_dir, &project.image.output);
+	let mut walker = walk::Walker::new(config_dir, output);
+	#[cfg(not(unix))]
+	let _ = output;
 	for content in &project.contents {
 		if cancelled() {
 			return Err(Error::Cancelled);

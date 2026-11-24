@@ -22,7 +22,7 @@ const MAX_PATTERN_BYTES: usize = 64 << 10;
 
 pub(super) struct Walker<'a> {
 	config_dir: &'a Path,
-	output: PathBuf,
+	output: Option<PathBuf>,
 	host: Option<Host>,
 	visited: u64,
 }
@@ -33,10 +33,10 @@ struct Host {
 }
 
 impl<'a> Walker<'a> {
-	pub(super) fn new(config_dir: &'a Path, output: &LocalPath) -> Self {
+	pub(super) fn new(config_dir: &'a Path, output: Option<&LocalPath>) -> Self {
 		Self {
 			config_dir,
-			output: output.resolve(config_dir),
+			output: output.map(|path| path.resolve(config_dir)),
 			host: None,
 			visited: 0,
 		}
@@ -56,7 +56,10 @@ impl<'a> Walker<'a> {
 			Some(host) => host,
 			None => {
 				let anchor = Anchor::new()?;
-				let output = anchor.probe_output(&self.output)?;
+				let output = match &self.output {
+					Some(path) => anchor.probe_output(path)?,
+					None => OutputProbe::default(),
+				};
 				self.host.insert(Host { anchor, output })
 			}
 		};
