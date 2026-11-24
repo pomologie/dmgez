@@ -25,6 +25,7 @@ use hfsplus_builder::{
 use hfsplus_core::ByteLen;
 use thiserror::Error;
 
+mod hard_links;
 mod metadata;
 mod source;
 
@@ -67,6 +68,10 @@ pub enum Error {
 	},
 	#[error("hard-link grouping failed")]
 	HardLinks(#[source] policy::Error),
+	#[error("hard-link source validation failed")]
+	LinkSource(#[source] dmgez_builder::manifest::Error),
+	#[error("hard-link aliases have inconsistent source metadata at {path:?}")]
+	LinkMetadata { path: String },
 	#[error("could not capture regular-source metadata for {path:?}")]
 	Capture {
 		path: String,
@@ -88,7 +93,10 @@ pub enum Error {
 /// One explicit metadata omission or loss and the corresponding image entry.
 #[derive(Debug)]
 pub struct MetadataLoss<'build> {
+	/// The captured image path, or the representative path for a shared inode.
 	pub path: &'build VirtualPath,
+	/// Other catalog paths backed by that same inode.
+	pub aliases: Vec<&'build VirtualPath>,
 	pub details: Vec<policy::Loss>,
 }
 
@@ -223,6 +231,18 @@ fn seal<'build>(
 	)?;
 	let links = policy::HardLinks::discover(manifest, remaining).map_err(Error::HardLinks)?;
 	charge(&mut remaining, links.accounted_bytes())?;
+	let supports_file_hard_links = profile.filesystem() == FilesystemProfile::HfsplusUnicode;
+	let shared_member = |entry| {
+		if supports_file_hard_links && project.metadata.preserve_hard_links {
+			hard_links::Member::new(entry, &links)
+		} else {
+			None
+		}
+	};
+	let shared_count = manifest.entries().iter().filter_map(shared_member).count();
+	charge_many::<hard_links::Member<'_>>(&mut remaining, shared_count)?;
+	let mut members = Vec::new();
+	members.try_reserve_exact(shared_count)?;
 
 	#[cfg(feature = "finder-write")]
 	let generated = prepared.finder_assets();
@@ -236,7 +256,7 @@ fn seal<'build>(
 		)?;
 	}
 
-	let count = manifest.entries().len();
+	let count = manifest.entries().len() - shared_count;
 	#[cfg(feature = "finder-write")]
 	let count = count
 		.checked_add(generated.len())
@@ -255,17 +275,29 @@ fn seal<'build>(
 		policy: &policy,
 		links: &links,
 		project,
+		supports_file_hard_links,
 		remaining: &mut remaining,
 		losses: &mut losses,
 	};
 	for entry in manifest.entries() {
 		check_cancelled(cancellation)?;
+		if let Some(member) = shared_member(entry) {
+			members.push(member);
+			continue;
+		}
 		let (entry, attrs) = capture.entry(entry, generated_seconds)?;
 		if !attrs.is_empty() {
 			pending_attrs.push((entry.path, attrs));
 		}
 		entries.push(entry);
 	}
+	let groups = hard_links::assemble(
+		members,
+		&mut capture,
+		&mut pending_attrs,
+		generated_seconds,
+		cancellation,
+	)?;
 	#[cfg(feature = "finder-write")]
 	for asset in generated {
 		check_cancelled(cancellation)?;
@@ -290,7 +322,9 @@ fn seal<'build>(
 	];
 
 	let mut draft = match profile.filesystem() {
-		FilesystemProfile::HfsplusUnicode => volume::plan(options, entries)?,
+		FilesystemProfile::HfsplusUnicode => {
+			volume::plan_with_hard_links(options, entries, groups)?
+		}
 		FilesystemProfile::HfsplusAscii => volume::plan_ascii(options, entries)?,
 		_ => return Err(Error::UnsupportedProfile),
 	};
@@ -311,6 +345,7 @@ fn seal<'build>(
 	let image = draft.seal_with_capacity(capacity(profile)?)?;
 	profile.validate_logical_bytes(image.image_len().0)?;
 	check_cancelled(cancellation)?;
+	losses.sort_unstable_by(|left, right| left.path.as_str().cmp(right.path.as_str()));
 	Ok(HfsImage {
 		prepared,
 		image,

@@ -22,6 +22,7 @@ pub(super) struct Capture<'scope, 'config, 'build> {
 	pub(super) policy: &'scope policy::Policy<'config>,
 	pub(super) links: &'scope policy::HardLinks,
 	pub(super) project: &'config Project,
+	pub(super) supports_file_hard_links: bool,
 	pub(super) remaining: &'scope mut usize,
 	pub(super) losses: &'scope mut Vec<MetadataLoss<'build>>,
 }
@@ -33,14 +34,7 @@ impl<'build> Capture<'_, '_, 'build> {
 		generated_seconds: u32,
 	) -> Result<(ManifestEntry<'build, Payload<'build>>, Vec<Attribute>), Error> {
 		let path = relative(&entry.destination)?;
-		if entry.finder.hidden.is_some()
-			|| entry.finder.hide_extension.is_some()
-			|| entry.finder.custom_icon.is_some()
-		{
-			return Err(Error::FinderFlags {
-				path: entry.destination.as_str().into(),
-			});
-		}
+		validate_finder_overrides(entry)?;
 		let unsupported_entry = || Error::UnsupportedEntry {
 			path: entry.destination.as_str().into(),
 		};
@@ -62,7 +56,7 @@ impl<'build> Capture<'_, '_, 'build> {
 					source.metadata(),
 					attributes,
 					self.links.group_for(entry),
-					&metadata_capabilities(is_file),
+					&metadata_capabilities(is_file, self.supports_file_hard_links),
 					self.remaining,
 				)
 				.map_err(|cause| Error::Policy {
@@ -72,6 +66,7 @@ impl<'build> Capture<'_, '_, 'build> {
 			if !admitted.losses.is_empty() {
 				self.losses.push(MetadataLoss {
 					path: &entry.destination,
+					aliases: Vec::new(),
 					details: admitted.losses,
 				});
 			}
@@ -151,7 +146,19 @@ impl<'build> Capture<'_, '_, 'build> {
 	}
 }
 
-fn metadata_capabilities(is_file: bool) -> policy::Capabilities {
+pub(super) fn validate_finder_overrides(entry: &manifest::Entry) -> Result<(), Error> {
+	if entry.finder.hidden.is_some()
+		|| entry.finder.hide_extension.is_some()
+		|| entry.finder.custom_icon.is_some()
+	{
+		return Err(Error::FinderFlags {
+			path: entry.destination.as_str().into(),
+		});
+	}
+	Ok(())
+}
+
+fn metadata_capabilities(is_file: bool, supports_file_hard_links: bool) -> policy::Capabilities {
 	policy::Capabilities {
 		permissions: true,
 		ownership: true,
@@ -162,6 +169,7 @@ fn metadata_capabilities(is_file: bool) -> policy::Capabilities {
 		finder_info: true,
 		max_resource_fork_bytes: is_file.then_some(u64::MAX),
 		extended_attributes: Some(can_inline),
+		hard_links: is_file && supports_file_hard_links,
 		..policy::Capabilities::default()
 	}
 }
