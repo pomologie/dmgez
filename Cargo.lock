@@ -260,6 +260,7 @@ name = "dmgez-builder"
 version = "0.1.0"
 dependencies = [
  "dmgez-config",
+ "dmgez-core",
  "dmgez-finder",
  "dmgez-udif",
  "globset",
