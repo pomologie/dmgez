@@ -309,6 +309,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "dmgez-preview"
+version = "0.1.0"
+dependencies = [
+ "dmgez-config",
+ "proptest",
+ "thiserror",
+]
+
+[[package]]
 name = "dmgez-udif"
 version = "0.1.0"
 dependencies = [

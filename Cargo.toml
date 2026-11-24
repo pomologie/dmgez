@@ -6,6 +6,7 @@ members = [
 	"crates/foundation/dmgez-config",
 	"crates/foundation/dmgez-core",
 	"crates/presentation/dmgez-finder",
+	"crates/presentation/dmgez-preview",
 	"crates/services/dmgez-builder",
 ]
 default-members = ["apps/dmgez-cli"]

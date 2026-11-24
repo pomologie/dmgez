@@ -1,0 +1,18 @@
+[package]
+name = "dmgez-preview"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Headless preview geometry for dmgez"
+
+[dependencies]
+dmgez-config.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true
