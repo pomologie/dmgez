@@ -1,9 +1,20 @@
-use std::{fs::File, path::Path};
+use std::{
+	error::Error,
+	fmt,
+	fs::File,
+	io::{self, Write},
+	path::Path,
+};
 
 use dmgez_core::output::publish_new;
-use dmgez_udif::reader::{CheckStatus, Checksum, FileSource, Image, Limits, RunEncoding};
+use dmgez_inspector::{
+	CheckStatus, ChecksumDeclaration, MAX_RUN_PAGE_SIZE, RunWindow, VerificationMode,
+	VerificationOutcome, VerificationReport,
+};
+use dmgez_udif::reader::{FileSource, Image, Limits};
+use serde::Serialize;
 
-use crate::{CliResult, report_field};
+use crate::{CliResult, VerificationFlags, report_field};
 
 const FORMAT_KEY: &str = "format";
 const PHYSICAL_BYTES_KEY: &str = "physical_bytes";
@@ -13,60 +24,108 @@ const BLOCK_MAP_COUNT_KEY: &str = "block_maps";
 const DATA_FORK_CHECKSUM_KEY: &str = "data_fork_checksum";
 const MASTER_CHECKSUM_KEY: &str = "master_checksum";
 const UNSUPPORTED_RUNS_KEY: &str = "unsupported_runs";
+const UNAVAILABLE_DECODERS_KEY: &str = "runs_with_unavailable_decoders";
+const RUN_KEY: &str = "runs";
+const NEXT_RUN_OFFSET_KEY: &str = "next_run_offset";
 const VERIFICATION_KEY: &str = "verification";
 const DATA_FORK_STATUS_KEY: &str = "data_fork";
 const BLOCK_MAP_STATUS_KEY: &str = "block_map";
 const MASTER_STATUS_KEY: &str = "master";
+const STRUCTURE_STATUS_KEY: &str = "structure";
+const PAYLOAD_STATUS_KEY: &str = "payload";
 const FILESYSTEM_STATUS_KEY: &str = "filesystem";
 const UDIF_V4: &str = "UDIF v4";
 const CRC32: &str = "crc32";
-const UNSUPPORTED: &str = "unsupported";
-const PASSED: &str = "passed";
-const NOT_CHECKED: &str = "not_checked";
-const NOT_PRESENT: &str = "not_present";
+const UNKNOWN: &str = "unknown";
+const PARTIAL: &str = "partial";
 
-fn open(path: &Path) -> Result<Image<FileSource>, dmgez_udif::Error> {
-	let source = FileSource::new(File::open(path)?)?;
-	Image::open(source, Limits::default())
+fn open_source(path: &Path) -> Result<FileSource, dmgez_udif::Error> {
+	FileSource::new(File::open(path)?)
 }
 
-pub(crate) fn show(path: &Path) -> CliResult {
-	let image = open(path)?;
-	let descriptor = image.descriptor();
-	report_field(FORMAT_KEY, UDIF_V4);
-	report_field(PHYSICAL_BYTES_KEY, descriptor.physical_bytes);
-	report_field(LOGICAL_BYTES_KEY, descriptor.logical_bytes);
-	report_field(VARIANT_KEY, descriptor.variant);
-	report_field(BLOCK_MAP_COUNT_KEY, descriptor.tables.len());
-	report_field(DATA_FORK_CHECKSUM_KEY, checksum(descriptor.physical_crc));
-	report_field(MASTER_CHECKSUM_KEY, checksum(descriptor.master_crc));
-	report_field(
-		UNSUPPORTED_RUNS_KEY,
-		image
-			.runs()
-			.filter(|run| matches!(run.encoding, RunEncoding::Unsupported(_)))
-			.count(),
-	);
-	report_field(VERIFICATION_KEY, NOT_CHECKED);
-	Ok(())
-}
-
-pub(crate) fn verify(path: &Path) -> CliResult {
-	let verified = open(path)?.verify()?;
-	report_field(DATA_FORK_STATUS_KEY, status(verified.data_fork));
-	for (index, check) in verified.tables.into_iter().enumerate() {
-		report_field(
-			format_args!("{BLOCK_MAP_STATUS_KEY}[{index}]"),
-			status(check),
-		);
+pub(crate) fn show(path: &Path, json: bool, offset: usize, limit: Option<usize>) -> CliResult {
+	let window = match limit {
+		Some(limit) => Some(RunWindow::new(offset, limit).ok_or_else(|| {
+			io::Error::new(
+				io::ErrorKind::InvalidInput,
+				format!("run limit must be between 1 and {MAX_RUN_PAGE_SIZE}"),
+			)
+		})?),
+		None => None,
+	};
+	let image = Image::open(open_source(path)?, Limits::default())?;
+	let report = dmgez_inspector::inspect(&image, window);
+	if json {
+		return print_json(&report);
 	}
-	report_field(MASTER_STATUS_KEY, status(verified.master));
-	report_field(FILESYSTEM_STATUS_KEY, NOT_CHECKED);
+	let container = report.container;
+	report_field(FORMAT_KEY, UDIF_V4);
+	report_field(PHYSICAL_BYTES_KEY, container.physical_bytes);
+	report_field(LOGICAL_BYTES_KEY, container.logical_bytes);
+	report_field(VARIANT_KEY, container.variant);
+	report_field(BLOCK_MAP_COUNT_KEY, container.block_map_count);
+	report_field(
+		DATA_FORK_CHECKSUM_KEY,
+		checksum(container.data_fork_checksum),
+	);
+	report_field(MASTER_CHECKSUM_KEY, checksum(container.master_checksum));
+	report_field(UNSUPPORTED_RUNS_KEY, container.runs.unsupported);
+	report_field(UNAVAILABLE_DECODERS_KEY, container.runs.decode_unavailable);
+	report_field(VERIFICATION_KEY, report.coverage.payload.as_str());
+	if let Some(page) = report.run_page {
+		for (index, run) in (page.offset..).zip(page.runs) {
+			report_field(
+				format_args!("{RUN_KEY}[{index}]"),
+				format_args!(
+					"{:?}, logical byte {} length {}, stored byte {} length {}",
+					run.encoding,
+					run.logical.offset_bytes,
+					run.logical.length_bytes,
+					run.physical.offset_bytes,
+					run.physical.length_bytes,
+				),
+			);
+		}
+		if let Some(offset) = page.next_offset {
+			report_field(NEXT_RUN_OFFSET_KEY, offset);
+		}
+	}
 	Ok(())
+}
+
+pub(crate) fn verify(path: &Path, json: bool, scope: VerificationFlags) -> CliResult {
+	let mode = match scope {
+		VerificationFlags { quick: true, .. } => VerificationMode::Quick,
+		VerificationFlags { full: true, .. } => VerificationMode::Full,
+		_ => VerificationMode::Container,
+	};
+	let report = dmgez_inspector::verify(open_source(path)?, Limits::default(), mode);
+	if json {
+		print_json(&report)?;
+	} else {
+		if let Some(checks) = &report.checksums {
+			report_field(DATA_FORK_STATUS_KEY, checks.data_fork.as_str());
+			for (index, check) in checks.tables.iter().enumerate() {
+				report_field(
+					format_args!("{BLOCK_MAP_STATUS_KEY}[{index}]"),
+					check.as_str(),
+				);
+			}
+			report_field(MASTER_STATUS_KEY, checks.master.as_str());
+		}
+		report_field(STRUCTURE_STATUS_KEY, report.coverage.structure.as_str());
+		report_field(PAYLOAD_STATUS_KEY, report.coverage.payload.as_str());
+		report_field(FILESYSTEM_STATUS_KEY, report.coverage.filesystem.as_str());
+		report_field(VERIFICATION_KEY, outcome(report.outcome));
+	}
+	if report.passed() {
+		return Ok(());
+	}
+	Err(Box::new(VerificationFailure(report)))
 }
 
 pub(crate) fn unwrap(path: &Path, destination: &Path) -> CliResult {
-	let mut image = open(path)?;
+	let mut image = Image::open(open_source(path)?, Limits::default())?;
 	publish_new(
 		destination,
 		|stage| image.write_raw_to(stage),
@@ -75,17 +134,50 @@ pub(crate) fn unwrap(path: &Path, destination: &Path) -> CliResult {
 	Ok(())
 }
 
-fn checksum(value: Checksum) -> String {
+fn print_json(report: &impl Serialize) -> CliResult {
+	let mut stdout = io::stdout().lock();
+	serde_json::to_writer(&mut stdout, report)?;
+	writeln!(stdout)?;
+	Ok(())
+}
+
+fn checksum(value: ChecksumDeclaration) -> String {
 	match value {
-		Checksum::Absent => NOT_PRESENT.into(),
-		Checksum::Crc32(crc) => format!("{CRC32}:{crc:08x}"),
-		Checksum::Unsupported { kind, size_bits } => format!("{UNSUPPORTED}({kind}, {size_bits})"),
+		ChecksumDeclaration::Absent => CheckStatus::NotPresent.as_str().into(),
+		ChecksumDeclaration::Crc32 { value } => format!("{CRC32}:{value:08x}"),
+		ChecksumDeclaration::Unsupported { kind, size_bits } => {
+			format!("{}({kind}, {size_bits})", CheckStatus::Unsupported.as_str())
+		}
+		_ => UNKNOWN.into(),
 	}
 }
 
-fn status(check: CheckStatus) -> &'static str {
-	match check {
-		CheckStatus::Passed => PASSED,
-		CheckStatus::NotPresent => NOT_PRESENT,
+fn outcome(value: VerificationOutcome) -> &'static str {
+	match value {
+		VerificationOutcome::Passed => CheckStatus::Passed.as_str(),
+		VerificationOutcome::Partial => PARTIAL,
+		VerificationOutcome::Failed => CheckStatus::Failed.as_str(),
+		VerificationOutcome::Unsupported => CheckStatus::Unsupported.as_str(),
+		VerificationOutcome::Unavailable => CheckStatus::Unavailable.as_str(),
+		_ => UNKNOWN,
+	}
+}
+
+#[derive(Debug)]
+struct VerificationFailure(VerificationReport);
+
+impl fmt::Display for VerificationFailure {
+	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(
+			formatter,
+			"image verification outcome: {}",
+			outcome(self.0.outcome)
+		)
+	}
+}
+
+impl Error for VerificationFailure {
+	fn source(&self) -> Option<&(dyn Error + 'static)> {
+		self.0.cause().map(|error| error as &dyn Error)
 	}
 }

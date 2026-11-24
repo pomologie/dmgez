@@ -88,6 +88,41 @@ fn wraps_inspects_verifies_and_exports_through_the_cli() {
 	let report = run(&["verify".as_ref(), image.as_os_str()]);
 	assert!(report.contains("master = passed"));
 	assert!(report.contains("filesystem = not_checked"));
+	let inspected = run(&[
+		"inspect".as_ref(),
+		image.as_os_str(),
+		"--json".as_ref(),
+		"--run-limit".as_ref(),
+		"1".as_ref(),
+	]);
+	let inspected: serde_json::Value = serde_json::from_str(&inspected).unwrap();
+	assert_eq!(inspected["schema_version"], 1);
+	assert_eq!(inspected["container"]["logical_bytes"], "1024");
+	assert_eq!(inspected["coverage"]["payload"], "not_checked");
+	assert_eq!(inspected["run_page"]["runs"].as_array().unwrap().len(), 1);
+
+	let quick = run(&[
+		"verify".as_ref(),
+		image.as_os_str(),
+		"--quick".as_ref(),
+		"--json".as_ref(),
+	]);
+	let quick: serde_json::Value = serde_json::from_str(&quick).unwrap();
+	assert_eq!(quick["outcome"], "passed");
+	assert_eq!(quick["coverage"]["structure"], "passed");
+	assert_eq!(quick["coverage"]["payload"], "not_checked");
+
+	let full = Command::new(env!("CARGO_BIN_EXE_dmgez"))
+		.arg("verify")
+		.arg(&image)
+		.args(["--full", "--json"])
+		.output()
+		.unwrap();
+	assert!(!full.status.success());
+	let full: serde_json::Value = serde_json::from_slice(&full.stdout).unwrap();
+	assert_eq!(full["outcome"], "partial");
+	assert_eq!(full["coverage"]["payload"], "passed");
+	assert_eq!(full["coverage"]["filesystem"], "unavailable");
 	run(&[
 		"unwrap-raw".as_ref(),
 		image.as_os_str(),

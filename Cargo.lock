@@ -275,7 +275,10 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "dmgez-core",
+ "dmgez-inspector",
  "dmgez-udif",
+ "serde",
+ "serde_json",
  "tempfile",
 ]
 

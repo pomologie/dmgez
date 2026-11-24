@@ -17,12 +17,15 @@ default = ["build", "parallel"]
 build = ["dep:dmgez-core", "dmgez-core/source", "dep:dmgez-udif", "dmgez-udif/write", "dmgez-udif/zlib"]
 parallel = ["dmgez-udif?/parallel"]
 lzfse = ["dmgez-udif?/lzfse"]
-inspect = ["dep:dmgez-core", "dep:dmgez-udif", "dmgez-udif/read", "dmgez-udif/zlib"]
+inspect = ["dep:dmgez-core", "dep:dmgez-inspector", "dmgez-inspector/zlib", "dep:dmgez-udif", "dmgez-udif/read", "dep:serde", "dep:serde_json"]
 
 [dependencies]
 clap.workspace = true
 dmgez-core = { workspace = true, optional = true, features = ["staging"] }
+dmgez-inspector = { workspace = true, optional = true }
 dmgez-udif = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true

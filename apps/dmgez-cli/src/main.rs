@@ -1,6 +1,6 @@
 use std::{error::Error, fmt::Display, path::PathBuf, process::ExitCode};
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 #[cfg(feature = "inspect")]
 mod inspect;
@@ -15,6 +15,7 @@ const THREADS_VALUE_NAME: &str = "THREADS";
 const PARALLEL_FEATURE: &str = "parallel";
 const LZFSE_FEATURE: &str = "lzfse";
 const VERIFY_CONTAINER_CAPABILITY: &str = "verify-container";
+const RUN_LIMIT_ARG: &str = "run_limit";
 const COMPILED: &str = "compiled";
 const NOT_COMPILED: &str = "not_compiled";
 
@@ -46,9 +47,25 @@ enum Command {
 	},
 	/// Show UDIF metadata without decoding the disk data.
 	#[command(name = INSPECT_COMMAND)]
-	Inspect { image: PathBuf },
-	/// Decode UDIF runs and check declared container CRCs.
-	Verify { image: PathBuf },
+	Inspect {
+		image: PathBuf,
+		#[arg(long)]
+		json: bool,
+		/// First logical run in the optional detail page.
+		#[arg(long, requires = RUN_LIMIT_ARG)]
+		run_offset: Option<usize>,
+		/// Maximum number of runs in the optional detail page.
+		#[arg(long, id = RUN_LIMIT_ARG)]
+		run_limit: Option<usize>,
+	},
+	/// Check UDIF integrity at the requested scope.
+	Verify {
+		image: PathBuf,
+		#[arg(long)]
+		json: bool,
+		#[command(flatten)]
+		scope: VerificationFlags,
+	},
 	/// Export the complete logical disk to a regular file.
 	#[command(name = UNWRAP_RAW_COMMAND)]
 	UnwrapRaw {
@@ -56,6 +73,20 @@ enum Command {
 		#[arg(short, long)]
 		output: PathBuf,
 	},
+}
+
+#[derive(Args)]
+#[group(multiple = false)]
+struct VerificationFlags {
+	/// Check container structure without reading payloads.
+	#[arg(long)]
+	quick: bool,
+	/// Check structure, payload, and all declared container CRCs. This is the default.
+	#[arg(long)]
+	container: bool,
+	/// Request both container and filesystem verification.
+	#[arg(long)]
+	full: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy, ValueEnum)]
@@ -118,9 +149,14 @@ fn run(command: Command) -> CliResult {
 		#[cfg(not(feature = "build"))]
 		Command::WrapRaw { .. } => Err("feature not compiled: build".into()),
 		#[cfg(feature = "inspect")]
-		Command::Inspect { image } => inspect::show(&image),
+		Command::Inspect {
+			image,
+			json,
+			run_offset,
+			run_limit,
+		} => inspect::show(&image, json, run_offset.unwrap_or(0), run_limit),
 		#[cfg(feature = "inspect")]
-		Command::Verify { image } => inspect::verify(&image),
+		Command::Verify { image, json, scope } => inspect::verify(&image, json, scope),
 		#[cfg(feature = "inspect")]
 		Command::UnwrapRaw { image, output } => inspect::unwrap(&image, &output),
 		#[cfg(not(feature = "inspect"))]
