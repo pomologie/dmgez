@@ -1,0 +1,24 @@
+[package]
+name = "dmgez-inspector"
+version = "0.1.0"
+description = "Structured read-only inspection and verification reports for dmgez"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = ["zlib"]
+zlib = ["dmgez-udif/zlib"]
+lzfse = ["dmgez-udif/lzfse"]
+
+[dependencies]
+dmgez-udif = { workspace = true, features = ["read"] }
+serde.workspace = true
+
+[dev-dependencies]
+plist.workspace = true
+serde_json.workspace = true
+
+[lints]
+workspace = true
