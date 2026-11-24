@@ -1,0 +1,18 @@
+# dmgez desktop
+
+Launch the desktop app with `cargo run -p dmgez-gui` or pass a local TOML project or DMG path after `--`. The Open dialog and file parsing run through one bounded document worker. Use the platform Open and history shortcuts or navigate the controls with Tab.
+
+The design workspace lays out project declarations and their implied folders. It uses the shared preview geometry for zoom, clipping, icon selection, and snapping. Volume-label, visibility, and position edits use the typed project document and preserve comments. Save copy creates a new TOML file beside the source project, keeping its relative paths valid.
+
+The image workspace shows the inspector's observed UDIF metadata, partition discovery and first run page. Verification statuses come directly from the report. Mounted images, filesystem browsing, native Finder visualization, and build actions remain separate milestones.
+
+The desktop tests cover bounded project input, native GPT fixture inspection, copy publication and no-clobber behavior, cancelled or failed opens, and grouped position edits with undo and redo.
+
+Run the desktop smoke suite from the workspace root.
+
+```sh
+cargo build --locked -p dmgez-gui
+python3 apps/dmgez/tests/check_desktop.py --binary target/debug/dmgez-gui
+```
+
+Use the `.exe` suffix for a Windows executable. The optional binary check verifies the embedded font set without launching the app. See the [third-party notices](THIRD_PARTY_NOTICES.md) for desktop redistribution inputs.

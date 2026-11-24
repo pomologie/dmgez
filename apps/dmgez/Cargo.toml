@@ -1,0 +1,25 @@
+[package]
+name = "dmgez-gui"
+version = "0.1.0"
+description = "Native project studio and disk image inspector for dmgez"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+dmgez-config = { workspace = true, features = ["project-edit"] }
+dmgez-core = { workspace = true, features = ["staging"] }
+dmgez-inspector = { workspace = true, features = ["zlib"] }
+dmgez-preview.workspace = true
+dmgez-udif = { workspace = true, features = ["read"] }
+eframe.workspace = true
+rfd.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

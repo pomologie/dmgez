@@ -22,4 +22,6 @@ The CLI stages outputs in the destination directory and refuses to replace exist
 
 The [project-build compatibility runner](tests/compatibility/project-build/README.md) builds version-one TOML projects using the HFS+ builder from a sibling checkout or unpacked packages. File-tree builds in the default CLI require a resolvable versioned HFS+ dependency.
 
+The [native desktop app](apps/dmgez/README.md) opens TOML projects for layout editing and disk images for container and partition inspection. Launch it with `cargo run --locked -p dmgez-gui`.
+
 See the [architecture](ARCHITECTURE.md), [roadmap](ROADMAP.md), and [UDIF evidence](docs/reference/UDIF_EVIDENCE.md) for the implemented profile and its verification limits.

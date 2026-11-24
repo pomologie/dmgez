@@ -1,6 +1,7 @@
 [workspace]
 resolver = "3"
 members = [
+	"apps/dmgez",
 	"apps/dmgez-cli",
 	"crates/formats/dmgez-udif",
 	"crates/foundation/dmgez-config",
@@ -27,9 +28,11 @@ dmgez-config = { path = "crates/foundation/dmgez-config" }
 dmgez-core = { path = "crates/foundation/dmgez-core", default-features = false }
 dmgez-finder = { path = "crates/presentation/dmgez-finder" }
 dmgez-inspector = { path = "crates/services/dmgez-inspector", default-features = false }
+dmgez-preview = { path = "crates/presentation/dmgez-preview" }
 dmgez-udif = { path = "crates/formats/dmgez-udif", default-features = false }
 dmgez-vfs = { path = "crates/foundation/dmgez-vfs", default-features = false }
 ds_parser = "=0.4.0"
+eframe = { version = "=0.37.0", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
 flate2 = { version = "1.1.11", default-features = false, features = ["zlib-rs"] }
 globset = { version = "0.4.21", default-features = false }
 gpt = { version = "=4.1.0", default-features = false }
@@ -41,6 +44,7 @@ plist = { version = "1.10.4", default-features = false }
 proptest = { version = "1.12.0", default-features = false, features = ["std"] }
 quick-xml = { version = "0.42.0", default-features = false }
 rayon = "1.12.0"
+rfd = { version = "=0.17.2", default-features = false, features = ["xdg-portal", "wayland"] }
 rustix = { version = "1.1.6", features = ["fs"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"

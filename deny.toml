@@ -6,6 +6,8 @@ allow = ["Apache-2.0", "MIT", "Unicode-3.0", "Zlib"]
 exceptions = [
 	{ allow = ["BlueOak-1.0.0"], crate = "alias_record@0.3.0" },
 	{ allow = ["BlueOak-1.0.0"], crate = "ds_parser@0.4.0" },
+	{ allow = ["OFL-1.1", "Ubuntu-font-1.0"], crate = "epaint_default_fonts@=0.37.0" },
+	{ allow = ["ISC"], crate = "libloading@=0.8.9" },
 ]
 confidence-threshold = 0.9
 
