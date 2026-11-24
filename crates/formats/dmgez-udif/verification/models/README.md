@@ -28,4 +28,17 @@ Run the command from `dmgez-udif`, or invoke the checker by its absolute path. T
 
 On macOS 14.7.2 arm64 with Temurin 21.0.8, the positive configuration visited 23,192 generated states and 13,238 distinct states from 120 initial configurations. TLC completed the search at depth 41 with no invariant, deadlock, or temporal errors. The completion-order witness reached the violation in 14 states, and the lost-credit witness in four.
 
-The production mappings come from `writer.rs` and `writer/scheduler.rs` at dmgez revision `11c6403d29db73489cdfe73e5fbe2403f5645b3a`. At that revision, the `streaming` integration test passed four cases with all features and three with only `write` enabled. These exercise serial and parallel output across worker counts, short and long input, cancellation, sink failure, and insufficient credit before reading. Trace-level Rust replay, Loom, Shuttle, and wider production fault exploration remain open D-V07 evidence.
+The production mappings come from `writer.rs` and `writer/scheduler.rs` at dmgez revision `11c6403d29db73489cdfe73e5fbe2403f5645b3a`. At that revision, the `streaming` integration test passed four cases with all features and three with only `write` enabled. These exercise serial and parallel output across worker counts, short and long input, cancellation, sink failure, and insufficient credit before reading.
+
+## Production I/O replay
+
+The `ordered_faults` integration test replays the model's observable I/O boundaries through `write_image`. It covers all 12 combinations of one to four distinguishable UDRO sectors and explicit widths from one to three, using real Rayon pools at widths two and three. The successful trace checks that the writer fills each batch and emits sectors in input order before admitting the next batch. [Ordered fault tests](../../tests/ordered_faults.rs)
+
+The replay injects a single error or cancellation at each of 108 boundaries across those combinations. It checks the exact trace and accepted byte prefix, including the EOF probe after the final payload write and cancellation observed after a successful flush. It also checks 30 short-write-then-error traces and 12 insufficient-budget admissions. The observable trace covers source reads, data writes, EOF, resource and trailer writes, and flush. Worker completion interleavings, direct reservation drops, Loom, and Shuttle require separate evidence.
+
+```sh
+cargo test --locked -p dmgez-udif --no-default-features --features write,parallel \
+	--test ordered_faults
+```
+
+All three tests passed with `write,parallel` alone and with all features enabled. A scratch mutation at revision `e213ee5` reversed the indexed parallel iterator before collection. The gate rejected its two-chunk, two-worker trace at the first emitted sector, matching the ordering violation in `completion-order.cfg`.
