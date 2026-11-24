@@ -5,6 +5,8 @@ mod finder;
 mod model;
 mod overrides;
 mod parse;
+#[cfg(feature = "project-edit")]
+pub mod project_edit;
 mod release;
 mod value;
 

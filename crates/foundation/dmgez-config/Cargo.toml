@@ -7,10 +7,14 @@ license.workspace = true
 repository.workspace = true
 description = "Versioned project configuration and validation for dmgez"
 
+[features]
+project-edit = ["dep:toml_edit"]
+
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
 toml.workspace = true
+toml_edit = { workspace = true, optional = true }
 
 [lints]
 workspace = true
