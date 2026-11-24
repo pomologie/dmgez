@@ -352,6 +352,7 @@ name = "dmgez-inspector"
 version = "0.1.0"
 dependencies = [
  "dmgez-udif",
+ "dmgez-vfs",
  "plist",
  "serde",
  "serde_json",

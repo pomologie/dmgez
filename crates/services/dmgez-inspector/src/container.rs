@@ -6,7 +6,7 @@ use dmgez_udif::{
 };
 use serde::{Serialize, Serializer};
 
-use crate::{CAPABILITIES, Capabilities, Coverage, ReportOperation, SCHEMA_VERSION};
+use crate::{CAPABILITIES, Capabilities, Coverage, DiskReport, ReportOperation, SCHEMA_VERSION};
 
 const SINGLE_SEGMENT_COUNT: u32 = 1;
 
@@ -24,7 +24,7 @@ pub struct ByteRange {
 }
 
 impl ByteRange {
-	fn admitted(range: &Range<u64>) -> Self {
+	pub(crate) fn admitted(range: &Range<u64>) -> Self {
 		Self {
 			offset_bytes: range.start,
 			length_bytes: range.end - range.start,
@@ -248,6 +248,9 @@ pub struct InspectionReport {
 	pub coverage: Coverage,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub run_page: Option<RunPage>,
+	/// Result of optional bounded partition discovery on the logical disk.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub disk: Option<DiskReport>,
 }
 
 /// Summarizes an opened image without reading or verifying payload bytes.
@@ -275,5 +278,6 @@ pub fn inspect<S: ReadAt>(image: &Image<S>, window: Option<RunWindow>) -> Inspec
 		capabilities: CAPABILITIES,
 		coverage: Coverage::default(),
 		run_page,
+		disk: None,
 	}
 }

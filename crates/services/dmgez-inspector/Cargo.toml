@@ -14,6 +14,7 @@ lzfse = ["dmgez-udif/lzfse"]
 
 [dependencies]
 dmgez-udif = { workspace = true, features = ["read"] }
+dmgez-vfs.workspace = true
 serde.workspace = true
 
 [dev-dependencies]

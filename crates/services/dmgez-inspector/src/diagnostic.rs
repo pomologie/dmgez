@@ -1,9 +1,9 @@
 use dmgez_udif::Error;
 use serde::Serialize;
 
-use crate::CheckStatus;
+use crate::{ByteRange, CheckStatus, DiskScheme};
 
-/// Stage at which verification could not continue.
+/// Stage at which an inspection or verification encountered an error.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[non_exhaustive]
 #[serde(rename_all = "snake_case")]
@@ -24,6 +24,7 @@ pub enum ErrorCategory {
 	FeatureNotCompiled,
 	ResourceLimit,
 	SourceChanged,
+	Conflict,
 	PermissionDenied,
 	Io,
 	Cancelled,
@@ -42,6 +43,7 @@ impl ErrorCategory {
 			Self::InvalidFormat
 			| Self::Corrupt
 			| Self::SourceChanged
+			| Self::Conflict
 			| Self::VerificationFailed => CheckStatus::Failed,
 		}
 	}
@@ -73,9 +75,17 @@ pub enum DiagnosticDetail {
 		expected: u32,
 		actual: u32,
 	},
+	PartitionMap {
+		scheme: DiskScheme,
+	},
+	LogicalRange {
+		requested: ByteRange,
+		#[serde(serialize_with = "crate::decimal")]
+		available_bytes: u64,
+	},
 }
 
-/// First condition preventing the requested verification scope from passing.
+/// First condition preventing the requested operation from continuing.
 /// Serialized diagnostics omit host error strings, resource values and paths.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[non_exhaustive]

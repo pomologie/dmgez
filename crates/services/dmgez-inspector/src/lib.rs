@@ -1,10 +1,11 @@
 //! Versioned reports for the bounded, single-segment UDIF read profile.
 //!
-//! Inspection reads container metadata. Verification checks the requested
-//! scope and records when filesystem or trust checks are unavailable.
+//! Inspection reports container metadata and can probe the logical disk layout.
+//! Verification checks the requested scope and records unavailable checks.
 
 mod container;
 mod diagnostic;
+mod disk;
 mod verification;
 
 use serde::{Serialize, Serializer};
@@ -14,6 +15,10 @@ pub use container::{
 	MAX_RUN_PAGE_SIZE, Run, RunEncoding, RunPage, RunSummary, RunWindow, SegmentId, inspect,
 };
 pub use diagnostic::{Diagnostic, DiagnosticDetail, ErrorCategory, Stage};
+pub use disk::{
+	DiskLimits, DiskReport, DiskScheme, PartitionDetails, PartitionGuid, PartitionIdentifier,
+	PartitionReport, PartitionRole, RecognizedFilesystem, inspect_disk,
+};
 pub use verification::{
 	ChecksumChecks, VerificationMode, VerificationOutcome, VerificationReport, verify,
 };
