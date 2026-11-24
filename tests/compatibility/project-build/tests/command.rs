@@ -6,7 +6,7 @@ use std::{
 	process::{Command, Output},
 };
 
-use dmgez_udif::reader::{FileSource, Image, Limits};
+use dmgez_udif::reader::{FileSource, Image, Limits, RunEncoding};
 
 const BINARY: &str = env!("CARGO_BIN_EXE_dmgez-hfs-adapter-probe");
 const CONFIG_DIRECTORY: &str = "project";
@@ -16,6 +16,7 @@ const CLI_OUTPUT: &str = "from-caller.dmg";
 const CLI_OUTPUT_OVERRIDE: &str = "image.output=from-caller.dmg";
 const CLI_SIZE_OVERRIDE: &str = "image.size=256KiB";
 const CLI_FORMAT_OVERRIDE: &str = "image.format=udro";
+const ULMO_FORMAT_OVERRIDE: &str = "image.format=ulmo";
 const CLI_SIZE_BYTES: u64 = 256 * 1024;
 const SOURCE_NAME: &str = "payload=literal.txt";
 const SOURCE_DEFINE: &str = "CONTENTS=payload=literal.txt";
@@ -109,6 +110,74 @@ fn dry_run_reports_exact_capacity_and_resolves_each_path_from_its_origin() {
 	assert_eq!(image.descriptor().logical_bytes, CLI_SIZE_BYTES);
 	image.verify().unwrap();
 	assert!(!root.join(CONFIG_DIRECTORY).join(TOML_OUTPUT).exists());
+}
+
+#[test]
+fn ulmo_requires_the_optional_codec_and_preserves_the_logical_image() {
+	let caller = tempfile::tempdir().unwrap();
+	let root = caller.path().canonicalize().unwrap();
+	let isolated = tempfile::tempdir().unwrap();
+	project(&root);
+	let output = root.join(CONFIG_DIRECTORY).join(TOML_OUTPUT);
+	let reproducible = [
+		"--set",
+		CLI_SIZE_OVERRIDE,
+		"--set",
+		"build.reproducible=true",
+		"--set",
+		"build.source_date_epoch=946684800",
+	];
+	let options = [&reproducible[..], &["--set", ULMO_FORMAT_OVERRIDE]].concat();
+	let preview = run_from_isolate(
+		&root,
+		isolated.path(),
+		&[&options[..], &["--dry-run"]].concat(),
+	);
+	if !cfg!(feature = "lzma") {
+		for refused in [preview, run_from_isolate(&root, isolated.path(), &options)] {
+			assert!(!refused.status.success());
+			let stderr = String::from_utf8(refused.stderr).unwrap();
+			assert!(
+				stderr.contains("feature not compiled: LZMA2 encoding"),
+				"{stderr}"
+			);
+			assert!(!stderr.contains("Discovering source paths"));
+		}
+		assert!(!output.exists());
+		assert_eq!(
+			fs::read_dir(root.join(CONFIG_DIRECTORY)).unwrap().count(),
+			2
+		);
+		return;
+	}
+
+	let (summary, _) = successful(preview);
+	assert!(summary.contains("format=Ulmo\n"));
+	assert!(summary.contains(&format!("logical_bytes={CLI_SIZE_BYTES}\n")));
+	assert!(!output.exists());
+	successful(run_from_isolate(&root, isolated.path(), &options));
+	let source = FileSource::new(fs::File::open(output).unwrap()).unwrap();
+	let mut ulmo = Image::open(source, Limits::default()).unwrap();
+	assert!(
+		ulmo.runs()
+			.any(|run| run.encoding == RunEncoding::Lzma2 && run.encoding.can_decode())
+	);
+	ulmo.verify().unwrap();
+
+	let baseline = [
+		&reproducible[..],
+		&["--set", CLI_FORMAT_OVERRIDE, "--set", CLI_OUTPUT_OVERRIDE],
+	]
+	.concat();
+	successful(run_from_isolate(&root, isolated.path(), &baseline));
+	let source = FileSource::new(fs::File::open(root.join(CLI_OUTPUT)).unwrap()).unwrap();
+	let mut udro = Image::open(source, Limits::default()).unwrap();
+	let mut compressed = Vec::new();
+	let mut raw = Vec::new();
+	ulmo.write_raw_to(&mut compressed).unwrap();
+	udro.write_raw_to(&mut raw).unwrap();
+	assert_eq!(compressed.len() as u64, CLI_SIZE_BYTES);
+	assert_eq!(compressed, raw);
 }
 
 #[test]

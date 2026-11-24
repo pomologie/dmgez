@@ -61,7 +61,9 @@ def main():
                         help="override a typed scalar setting")
     parser.add_argument("--overwrite", action="store_true",
                         help="authorize replacement in a trusted local output directory")
-    parser.add_argument("--no-default-features", action="store_true")
+    parser.add_argument("--no-default-features", action="store_true",
+                        help="use the serial profile without Finder store generation")
+    parser.add_argument("--lzma", action="store_true", help="enable the optional ULMO codec")
     options = parser.parse_args()
     if not (sys.platform == "darwin" or sys.platform.startswith("linux")):
         parser.error("the development adapter requires a macOS or Linux host metadata adapter")
@@ -77,7 +79,10 @@ def main():
         paths.update(resolved_packages(options.hfsplus_packages, unpacked))
 
     command = ["cargo", "run" if options.project else "test", "--offline", "--locked"]
-    command.append("--no-default-features" if options.no_default_features else "--all-features")
+    if options.no_default_features:
+        command.append("--no-default-features")
+    if options.lzma:
+        command.extend(["--features", "lzma"])
     if options.project:
         command.extend(["--quiet", "--", "--working-directory", str(Path.cwd())])
         if options.dry_run:
