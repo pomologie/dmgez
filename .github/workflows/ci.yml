@@ -60,6 +60,7 @@ jobs:
       - run: |
           corpus=$(mktemp -d)
           cp tests/fixtures/images/*.dmg "$corpus/"
+          cp crates/formats/dmgez-udif/tests/fixtures/apple-ulfo.dmg "$corpus/"
           CARGO_NET_OFFLINE=true cargo +nightly-2026-11-04 fuzz run udif "$corpus" -- -max_total_time=20 -max_len=65536 -timeout=5 -rss_limit_mb=1024
           git diff --exit-code -- fuzz/Cargo.lock
 
@@ -72,6 +73,7 @@ jobs:
       - run: cargo install --locked kani-verifier --version '=0.68.0'
       - run: cargo kani setup
       - run: bash crates/formats/dmgez-udif/verification/check.sh
+      - run: bash crates/foundation/dmgez-vfs/verification/check.sh
 
   native-udif:
     runs-on: macos-15

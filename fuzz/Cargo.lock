@@ -69,6 +69,7 @@ dependencies = [
  "crc32fast",
  "dmgez-core",
  "flate2",
+ "lzfse_rust",
  "plist",
  "quick-xml",
  "thiserror",
@@ -147,6 +148,12 @@ dependencies = [
  "arbitrary",
  "cc",
 ]
+
+[[package]]
+name = "lzfse_rust"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5edeac3ec657925dececc672bdd58fa2212291886ddcb3e08aa46924c78340c6"
 
 [[package]]
 name = "memchr"
