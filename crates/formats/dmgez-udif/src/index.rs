@@ -85,6 +85,7 @@ pub(crate) fn normalize(
 				));
 			}
 			Kind::Zlib if physical.is_empty() => return Err(Error::Corrupt("empty zlib run")),
+			Kind::Lzfse if physical.is_empty() => return Err(Error::Corrupt("empty LZFSE run")),
 			Kind::Zero | Kind::Ignore if !physical.is_empty() => {
 				return Err(Error::Corrupt("zero or ignore run has physical data"));
 			}

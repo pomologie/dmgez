@@ -14,6 +14,8 @@ mod codec;
 mod error;
 #[cfg(feature = "read")]
 mod index;
+#[cfg(all(any(feature = "read", feature = "write"), feature = "lzfse"))]
+mod lzfse;
 #[cfg(any(feature = "read", feature = "write"))]
 mod resource;
 #[cfg(any(feature = "read", feature = "write"))]

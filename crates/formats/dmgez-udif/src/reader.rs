@@ -117,8 +117,23 @@ pub enum RunEncoding {
 	Ignore,
 	/// Zlib compressed extent. Reading it requires `zlib` support.
 	Zlib,
+	/// LZFSE compressed extent. Reading it requires `lzfse` support.
+	Lzfse,
 	/// A recognized map contains an unimplemented run kind.
 	Unsupported(u32),
+}
+
+impl RunEncoding {
+	/// Whether the current build can decode this admitted run type.
+	#[must_use]
+	pub const fn can_decode(self) -> bool {
+		match self {
+			Self::Zlib => cfg!(feature = "zlib"),
+			Self::Lzfse => cfg!(feature = "lzfse"),
+			Self::Unsupported(_) => false,
+			Self::Raw | Self::Zero | Self::Ignore => true,
+		}
+	}
 }
 
 /// One admitted run in logical order, before any payload decoding.
@@ -213,7 +228,7 @@ impl<S: ReadAt> Image<S> {
 			let first_run = runs.len();
 			let normalized = index::normalize(&table, trailer.logical_bytes, &trailer.data)?;
 			for run in &normalized {
-				if run.kind == Kind::Zlib {
+				if matches!(run.kind, Kind::Zlib | Kind::Lzfse) {
 					if range_len(&run.physical) > limits.max_compressed_bytes as u64 {
 						return Err(Error::ResourceLimit("compressed run size"));
 					}
@@ -275,6 +290,7 @@ impl<S: ReadAt> Image<S> {
 				Kind::Zero => RunEncoding::Zero,
 				Kind::Ignore => RunEncoding::Ignore,
 				Kind::Zlib => RunEncoding::Zlib,
+				Kind::Lzfse => RunEncoding::Lzfse,
 				Kind::Unsupported(kind) => RunEncoding::Unsupported(kind),
 				Kind::Comment | Kind::End => unreachable!("index contains only logical runs"),
 			};
@@ -405,7 +421,7 @@ impl<S: ReadAt> Image<S> {
 				output.fill(0);
 				Ok(())
 			}
-			Kind::Zlib => self.read_zlib(index, within, output),
+			Kind::Zlib | Kind::Lzfse => self.read_compressed(index, within, output),
 			Kind::Unsupported(kind) => Err(Error::UnsupportedRun {
 				kind,
 				sector: run.logical.start / SECTOR_BYTES,
@@ -415,40 +431,9 @@ impl<S: ReadAt> Image<S> {
 			}
 		}
 	}
-
-	#[cfg(feature = "zlib")]
-	fn read_zlib(&mut self, index: usize, within: u64, output: &mut [u8]) -> Result<(), Error> {
-		if self
-			.cache
-			.as_ref()
-			.is_none_or(|(cached, _)| *cached != index)
-		{
-			self.cache = None;
-			let run = &self.runs[index];
-			let mut stored = vec![0; range_len(&run.physical) as usize];
-			self.source.read_exact_at(run.physical.start, &mut stored)?;
-			let decoded = crate::codec::inflate(&stored, range_len(&run.logical) as usize).ok_or(
-				Error::InvalidZlib {
-					offset: run.physical.start,
-					logical_offset: run.logical.start,
-				},
-			)?;
-			self.cache = Some((index, decoded));
-		}
-		let (_, decoded) = self
-			.cache
-			.as_ref()
-			.ok_or(Error::Corrupt("missing decoded run"))?;
-		let within = within as usize;
-		output.copy_from_slice(&decoded[within..within + output.len()]);
-		Ok(())
-	}
-
-	#[cfg(not(feature = "zlib"))]
-	fn read_zlib(&mut self, _: usize, _: u64, _: &mut [u8]) -> Result<(), Error> {
-		Err(Error::FeatureNotCompiled("zlib"))
-	}
 }
+
+mod compressed;
 
 fn range_len(range: &Range<u64>) -> u64 {
 	range.end - range.start

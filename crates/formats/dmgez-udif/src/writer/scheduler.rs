@@ -5,6 +5,9 @@ use crate::Error;
 use super::{Execution, RawChunk, StoredChunk, WriteAdmission, WriteOptions};
 
 const CODEC_WORKSPACE_BYTES: usize = 1 << 20;
+// Pinned LZFSE ring encoder uses fixed rings, history and FSE tables. Budget slack
+// also covers the tables' initialization; raw and encoded payloads are separate.
+const LZFSE_WORKSPACE_BYTES: usize = 3 << 20;
 const AUTO_MAX_WORKERS: usize = 8;
 const MAX_WORKERS: usize = 32;
 
@@ -19,6 +22,7 @@ pub(super) fn admit(
 	let per_chunk = match options.profile {
 		super::Profile::Udro => options.chunk_bytes,
 		super::Profile::Udzo => 2 * options.chunk_bytes + CODEC_WORKSPACE_BYTES,
+		super::Profile::Ulfo => 2 * options.chunk_bytes + LZFSE_WORKSPACE_BYTES,
 	};
 	let capacity = options.max_buffer_bytes / per_chunk;
 	let workers = match options.execution {

@@ -31,6 +31,7 @@ const RUN_TAG_RAW: u32 = 1;
 #[cfg(feature = "read")]
 const RUN_TAG_IGNORE: u32 = 2;
 const RUN_TAG_ZLIB: u32 = 0x8000_0005;
+const RUN_TAG_LZFSE: u32 = 0x8000_0007;
 #[cfg(feature = "read")]
 const RUN_TAG_COMMENT: u32 = 0x7fff_fffe;
 const RUN_TAG_END: u32 = 0xffff_ffff;
@@ -47,6 +48,7 @@ pub(crate) enum Kind {
 	#[cfg(feature = "read")]
 	Ignore,
 	Zlib,
+	Lzfse,
 	#[cfg(feature = "read")]
 	Comment,
 	End,
@@ -62,6 +64,7 @@ impl Kind {
 			RUN_TAG_RAW => Self::Raw,
 			RUN_TAG_IGNORE => Self::Ignore,
 			RUN_TAG_ZLIB => Self::Zlib,
+			RUN_TAG_LZFSE => Self::Lzfse,
 			RUN_TAG_COMMENT => Self::Comment,
 			RUN_TAG_END => Self::End,
 			other => Self::Unsupported(other),
@@ -76,6 +79,7 @@ impl Kind {
 			#[cfg(feature = "read")]
 			Self::Ignore => RUN_TAG_IGNORE,
 			Self::Zlib => RUN_TAG_ZLIB,
+			Self::Lzfse => RUN_TAG_LZFSE,
 			#[cfg(feature = "read")]
 			Self::Comment => RUN_TAG_COMMENT,
 			Self::End => RUN_TAG_END,

@@ -22,6 +22,9 @@ pub enum Error {
 	/// The compressed stream did not match its declared physical and logical ranges.
 	#[error("invalid zlib stream at physical byte {offset} for logical byte {logical_offset}")]
 	InvalidZlib { offset: u64, logical_offset: u64 },
+	/// The LZFSE stream did not match its declared physical and logical ranges.
+	#[error("invalid LZFSE stream at physical byte {offset} for logical byte {logical_offset}")]
+	InvalidLzfse { offset: u64, logical_offset: u64 },
 	/// An input or configured operation exceeds an admitted resource budget.
 	#[error("resource limit: {0}")]
 	ResourceLimit(&'static str),
