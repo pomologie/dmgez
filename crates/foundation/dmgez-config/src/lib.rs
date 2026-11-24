@@ -3,6 +3,7 @@
 mod content;
 mod finder;
 mod model;
+mod overrides;
 mod parse;
 mod release;
 mod value;
@@ -16,6 +17,7 @@ pub use model::{
 	Build, Capacity, Compression, CompressionError, Filesystem, Image, ImageError, ImageFormat,
 	Metadata, MetadataPolicy, Partition, Performance, PerformanceError, Project,
 };
+pub use overrides::{ConfigOverride, OverrideError};
 pub use parse::{ConfigError, DefineError, MAX_MANIFEST_BYTES, SCHEMA_VERSION};
 pub use release::{
 	AppSigning, Backend, Buttons, License, Notarization, Release, Signing, SigningRule,

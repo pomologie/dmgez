@@ -1,11 +1,12 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::Path};
 
 use thiserror::Error;
 use toml::{Table, Value};
 
 use crate::{
-	CompressionError, Content, ContentError, ImageError, PerformanceError, Project, VolumeIcon,
-	VolumeIconError, content::validate_destinations, model::RawProject,
+	CompressionError, ConfigOverride, Content, ContentError, ImageError, OverrideError,
+	PerformanceError, Project, VolumeIcon, VolumeIconError, content::validate_destinations,
+	model::RawProject, overrides,
 };
 
 /// The version understood by this parser.
@@ -38,6 +39,8 @@ pub enum ConfigError {
 	Schema,
 	#[error(transparent)]
 	Define(#[from] DefineError),
+	#[error(transparent)]
+	Override(#[from] OverrideError),
 	#[error("invalid image settings: {0}")]
 	Image(#[from] ImageError),
 	#[error("invalid compression settings: {0}")]
@@ -89,6 +92,27 @@ impl Project {
 		input: &str,
 		defines: &BTreeMap<String, String>,
 	) -> Result<Self, ConfigError> {
+		Self::parse_with_overrides(input, defines, &[], Path::new(""))
+	}
+
+	/// Parses a manifest with explicit definitions and typed scalar overrides.
+	/// Explicit definitions replace manifest definitions during substitution.
+	/// Overrides replace substituted TOML values in input order, with the last
+	/// assignment winning for a repeated key. The effective project receives the
+	/// same schema and semantic validation as [`Self::parse`].
+	///
+	/// Only relative override paths use `working_directory`, which must be
+	/// absolute for those paths. Paths originating in TOML retain their original
+	/// config-relative semantics. No filesystem access occurs during parsing.
+	/// # Errors
+	/// Returns a configuration error for invalid TOML, substitutions, effective
+	/// settings, or override paths that cannot be anchored to the working directory.
+	pub fn parse_with_overrides(
+		input: &str,
+		defines: &BTreeMap<String, String>,
+		assignments: &[ConfigOverride],
+		working_directory: &Path,
+	) -> Result<Self, ConfigError> {
 		if input.len() > MAX_MANIFEST_BYTES {
 			return Err(ConfigError::TooLarge);
 		}
@@ -109,7 +133,9 @@ impl Project {
 		for (_, value) in &mut document {
 			variables.expand(value, 0, &mut remaining_bytes)?;
 		}
-		let raw: RawProject = document.try_into().map_err(|_| ConfigError::Schema)?;
+		overrides::apply(&mut document, assignments, remaining_bytes)?;
+		let mut raw: RawProject = document.try_into().map_err(|_| ConfigError::Schema)?;
+		overrides::anchor_paths(&mut raw, assignments, working_directory)?;
 		Self::try_from(raw)
 	}
 }

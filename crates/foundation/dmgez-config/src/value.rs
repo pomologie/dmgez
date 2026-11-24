@@ -176,6 +176,10 @@ impl LocalPath {
 	pub fn resolve(&self, directory: &Path) -> PathBuf {
 		directory.join(&self.0)
 	}
+
+	pub(crate) fn anchor(&mut self, directory: &Path) {
+		self.0 = self.resolve(directory);
+	}
 }
 
 impl<'de> Deserialize<'de> for LocalPath {
