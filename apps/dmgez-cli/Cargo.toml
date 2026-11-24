@@ -14,14 +14,14 @@ path = "src/main.rs"
 
 [features]
 default = ["build", "parallel"]
-build = ["dep:dmgez-udif", "dmgez-udif/write", "dmgez-udif/zlib", "dep:tempfile"]
+build = ["dep:dmgez-core", "dep:dmgez-udif", "dmgez-udif/write", "dmgez-udif/zlib"]
 parallel = ["dmgez-udif?/parallel"]
-inspect = ["dep:dmgez-udif", "dmgez-udif/read", "dmgez-udif/zlib", "dep:tempfile"]
+inspect = ["dep:dmgez-core", "dep:dmgez-udif", "dmgez-udif/read", "dmgez-udif/zlib"]
 
 [dependencies]
 clap.workspace = true
+dmgez-core = { workspace = true, optional = true, features = ["staging"] }
 dmgez-udif = { workspace = true, optional = true }
-tempfile = { workspace = true, optional = true }
 
 [dev-dependencies]
 tempfile.workspace = true

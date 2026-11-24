@@ -1,8 +1,9 @@
 use std::{fs::File, path::Path};
 
+use dmgez_core::output::publish_new;
 use dmgez_udif::reader::{CheckStatus, Checksum, FileSource, Image, Limits, RunEncoding};
 
-use crate::{CliResult, output, report_field};
+use crate::{CliResult, report_field};
 
 const FORMAT_KEY: &str = "format";
 const PHYSICAL_BYTES_KEY: &str = "physical_bytes";
@@ -66,7 +67,12 @@ pub(crate) fn verify(path: &Path) -> CliResult {
 
 pub(crate) fn unwrap(path: &Path, destination: &Path) -> CliResult {
 	let mut image = open(path)?;
-	output::publish(destination, |stage| Ok(image.write_raw_to(stage)?))
+	publish_new(
+		destination,
+		|stage| image.write_raw_to(stage),
+		|_, _| Ok(()),
+	)?;
+	Ok(())
 }
 
 fn checksum(value: Checksum) -> String {

@@ -8,15 +8,15 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 MAX_LINES = 500
 PROFILES = {
     "minimal": (["--no-default-features"], set()),
-    "serial": (["--no-default-features", "--features", "build"], {"dmgez-udif", "flate2"}),
-    "default": ([], {"dmgez-udif", "flate2", "rayon"}),
-    "inspection": (["--no-default-features", "--features", "inspect"], {"dmgez-udif", "flate2"}),
+    "serial": (["--no-default-features", "--features", "build"], {"dmgez-core", "dmgez-udif", "flate2"}),
+    "default": ([], {"dmgez-core", "dmgez-udif", "flate2", "rayon"}),
+    "inspection": (["--no-default-features", "--features", "inspect"], {"dmgez-core", "dmgez-udif", "flate2"}),
 }
 OUTSIDE_DEFAULT = {
     "apple-dmg", "apfs", "bzip2", "eframe", "egui", "fstool", "fuser", "notify",
     "reqwest", "rmcp", "tokio", "udif", "winfsp",
 }
-PROFILE_DEPS = {"dmgez-udif", "flate2", "rayon"}
+PROFILE_DEPS = {"dmgez-core", "dmgez-udif", "flate2", "rayon"}
 
 
 def main():

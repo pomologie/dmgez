@@ -4,8 +4,6 @@ use clap::{Parser, Subcommand, ValueEnum};
 
 #[cfg(feature = "inspect")]
 mod inspect;
-#[cfg(any(feature = "build", feature = "inspect"))]
-mod output;
 #[cfg(feature = "build")]
 mod wrap;
 

@@ -1,0 +1,19 @@
+[package]
+name = "dmgez-core"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared I/O contracts for dmgez services"
+
+[features]
+default = []
+staging = ["dep:tempfile", "dep:thiserror"]
+
+[dependencies]
+tempfile = { workspace = true, optional = true }
+thiserror = { workspace = true, optional = true }
+
+[lints]
+workspace = true

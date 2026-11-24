@@ -1,6 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["apps/dmgez-cli", "crates/formats/dmgez-udif", "crates/foundation/dmgez-config"]
+members = [
+	"apps/dmgez-cli",
+	"crates/formats/dmgez-udif",
+	"crates/foundation/dmgez-config",
+	"crates/foundation/dmgez-core",
+]
 default-members = ["apps/dmgez-cli"]
 exclude = ["fuzz"]
 
@@ -13,6 +18,7 @@ repository = "https://github.com/pomologie/dmgez"
 [workspace.dependencies]
 clap = { version = "4.6.8", features = ["derive"] }
 crc32fast = "1.5.5"
+dmgez-core = { path = "crates/foundation/dmgez-core", default-features = false }
 dmgez-udif = { path = "crates/formats/dmgez-udif", default-features = false }
 flate2 = { version = "1.1.11", default-features = false, features = ["zlib-rs"] }
 plist = { version = "1.10.4", default-features = false }

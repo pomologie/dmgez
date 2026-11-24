@@ -3,12 +3,13 @@ use std::{
 	path::Path,
 };
 
+use dmgez_core::output::publish_new;
 use dmgez_udif::{
 	Error,
 	writer::{self, Execution, Profile, WriteOptions},
 };
 
-use crate::{CliResult, Format, PARALLEL_FEATURE, output};
+use crate::{CliResult, Format, PARALLEL_FEATURE};
 
 const SERIAL_WORKER_COUNT: usize = 1;
 
@@ -19,7 +20,7 @@ pub(crate) fn run(
 	serial: bool,
 	threads: Option<usize>,
 ) -> CliResult {
-	let mut input = File::open(input)?;
+	let input = File::open(input)?;
 	let before = input.metadata()?;
 	if !before.is_file() {
 		return Err("raw source must be a regular file".into());
@@ -41,13 +42,16 @@ pub(crate) fn run(
 		execution,
 		..WriteOptions::default()
 	};
-	let report = output::publish(destination, |stage| {
-		let report = writer::write_image(&mut input, before.len(), stage, &options)?;
-		if changed(&before, &input.metadata()?)? {
-			return Err(Error::SourceChanged.into());
-		}
-		Ok(report)
-	})?;
+	let report = publish_new(
+		destination,
+		|stage| writer::write_image(&input, before.len(), stage, &options),
+		|_, _| {
+			if changed(&before, &input.metadata()?)? {
+				return Err(Error::SourceChanged);
+			}
+			Ok(())
+		},
+	)?;
 	println!(
 		"wrote {} bytes from {} logical bytes",
 		report.physical_bytes, report.logical_bytes
