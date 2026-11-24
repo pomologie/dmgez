@@ -25,6 +25,9 @@ pub enum Error {
 	/// The LZFSE stream did not match its declared physical and logical ranges.
 	#[error("invalid LZFSE stream at physical byte {offset} for logical byte {logical_offset}")]
 	InvalidLzfse { offset: u64, logical_offset: u64 },
+	/// The XZ stream did not match the ULMO profile or its declared mapping.
+	#[error("invalid ULMO stream at physical byte {offset} for logical byte {logical_offset}")]
+	InvalidLzma { offset: u64, logical_offset: u64 },
 	/// An input or configured operation exceeds an admitted resource budget.
 	#[error("resource limit: {0}")]
 	ResourceLimit(&'static str),

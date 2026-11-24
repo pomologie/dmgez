@@ -9,7 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "=0.4.13"
-dmgez-udif = { path = "../crates/formats/dmgez-udif", default-features = false, features = ["read", "zlib", "lzfse"] }
+dmgez-udif = { path = "../crates/formats/dmgez-udif", default-features = false, features = ["read", "zlib", "lzfse", "lzma"] }
 
 [[bin]]
 name = "udif"

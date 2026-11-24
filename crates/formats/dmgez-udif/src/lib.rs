@@ -16,6 +16,8 @@ mod error;
 mod index;
 #[cfg(all(any(feature = "read", feature = "write"), feature = "lzfse"))]
 mod lzfse;
+#[cfg(all(any(feature = "read", feature = "write"), feature = "lzma"))]
+mod lzma;
 #[cfg(any(feature = "read", feature = "write"))]
 mod resource;
 #[cfg(any(feature = "read", feature = "write"))]

@@ -7,10 +7,12 @@ use dmgez_udif::{
 use libfuzzer_sys::fuzz_target;
 
 const MAX_INPUT_BYTES: usize = 64 * 1024;
+// The Apple ULFO and ULMO fixtures contain two 1 MiB runs and a tail sector.
+const MAX_LOGICAL_BYTES: u64 = 3 << 20;
 const READ_WINDOW_BYTES: usize = SECTOR_BYTES as usize;
 const FUZZ_LIMITS: Limits = Limits {
 	max_physical_bytes: MAX_INPUT_BYTES as u64,
-	max_logical_bytes: 2 * 1024 * 1024,
+	max_logical_bytes: MAX_LOGICAL_BYTES,
 	max_xml_bytes: 48 * 1024,
 	max_tables: 32,
 	max_records: 1024,

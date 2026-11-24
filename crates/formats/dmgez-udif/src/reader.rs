@@ -119,6 +119,8 @@ pub enum RunEncoding {
 	Zlib,
 	/// LZFSE compressed extent. Reading it requires `lzfse` support.
 	Lzfse,
+	/// LZMA2 compressed extent in an XZ stream. Reading it requires `lzma` support.
+	Lzma2,
 	/// A recognized map contains an unimplemented run kind.
 	Unsupported(u32),
 }
@@ -130,6 +132,7 @@ impl RunEncoding {
 		match self {
 			Self::Zlib => cfg!(feature = "zlib"),
 			Self::Lzfse => cfg!(feature = "lzfse"),
+			Self::Lzma2 => cfg!(feature = "lzma"),
 			Self::Unsupported(_) => false,
 			Self::Raw | Self::Zero | Self::Ignore => true,
 		}
@@ -228,7 +231,7 @@ impl<S: ReadAt> Image<S> {
 			let first_run = runs.len();
 			let normalized = index::normalize(&table, trailer.logical_bytes, &trailer.data)?;
 			for run in &normalized {
-				if matches!(run.kind, Kind::Zlib | Kind::Lzfse) {
+				if run.kind.is_compressed() {
 					if range_len(&run.physical) > limits.max_compressed_bytes as u64 {
 						return Err(Error::ResourceLimit("compressed run size"));
 					}
@@ -291,6 +294,7 @@ impl<S: ReadAt> Image<S> {
 				Kind::Ignore => RunEncoding::Ignore,
 				Kind::Zlib => RunEncoding::Zlib,
 				Kind::Lzfse => RunEncoding::Lzfse,
+				Kind::Lzma2 => RunEncoding::Lzma2,
 				Kind::Unsupported(kind) => RunEncoding::Unsupported(kind),
 				Kind::Comment | Kind::End => unreachable!("index contains only logical runs"),
 			};
@@ -412,7 +416,7 @@ impl<S: ReadAt> Image<S> {
 				output.fill(0);
 				Ok(())
 			}
-			Kind::Zlib | Kind::Lzfse => self.read_compressed(index, within, output),
+			Kind::Zlib | Kind::Lzfse | Kind::Lzma2 => self.read_compressed(index, within, output),
 			Kind::Unsupported(kind) => Err(Error::UnsupportedRun {
 				kind,
 				sector: run.logical.start / SECTOR_BYTES,

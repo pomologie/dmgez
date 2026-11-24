@@ -13,6 +13,7 @@ read = ["dep:dmgez-core", "dep:quick-xml", "dep:plist", "dep:crc32fast"]
 write = ["dep:plist", "dep:crc32fast"]
 zlib = ["dep:flate2"]
 lzfse = ["dep:lzfse_rust"]
+lzma = ["dep:lzma-rust2"]
 parallel = ["dep:rayon"]
 
 [dependencies]
@@ -20,6 +21,7 @@ crc32fast = { workspace = true, optional = true }
 dmgez-core = { workspace = true, optional = true, features = ["source"] }
 flate2 = { workspace = true, optional = true }
 lzfse_rust = { workspace = true, optional = true }
+lzma-rust2 = { workspace = true, optional = true }
 plist = { workspace = true, optional = true }
 quick-xml = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }

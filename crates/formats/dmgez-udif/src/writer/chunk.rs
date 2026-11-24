@@ -20,6 +20,8 @@ impl RawChunk {
 			}
 			#[cfg(feature = "lzfse")]
 			Profile::Ulfo => crate::lzfse::encode(&self.0)?.map(|bytes| (Kind::Lzfse, bytes)),
+			#[cfg(feature = "lzma")]
+			Profile::Ulmo => crate::lzma::encode(&self.0)?.map(|bytes| (Kind::Lzma2, bytes)),
 			_ => None,
 		};
 		let (kind, bytes) = compressed.unwrap_or((Kind::Raw, self.0));

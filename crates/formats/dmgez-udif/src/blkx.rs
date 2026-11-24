@@ -32,6 +32,7 @@ const RUN_TAG_RAW: u32 = 1;
 const RUN_TAG_IGNORE: u32 = 2;
 const RUN_TAG_ZLIB: u32 = 0x8000_0005;
 const RUN_TAG_LZFSE: u32 = 0x8000_0007;
+const RUN_TAG_LZMA2: u32 = 0x8000_0008;
 #[cfg(feature = "read")]
 const RUN_TAG_COMMENT: u32 = 0x7fff_fffe;
 const RUN_TAG_END: u32 = 0xffff_ffff;
@@ -49,6 +50,7 @@ pub(crate) enum Kind {
 	Ignore,
 	Zlib,
 	Lzfse,
+	Lzma2,
 	#[cfg(feature = "read")]
 	Comment,
 	End,
@@ -57,6 +59,12 @@ pub(crate) enum Kind {
 }
 
 impl Kind {
+	const COMPRESSED: [Self; 3] = [Self::Zlib, Self::Lzfse, Self::Lzma2];
+
+	pub(crate) fn is_compressed(self) -> bool {
+		Self::COMPRESSED.contains(&self)
+	}
+
 	#[cfg(feature = "read")]
 	fn decode(code: u32) -> Self {
 		match code {
@@ -65,6 +73,7 @@ impl Kind {
 			RUN_TAG_IGNORE => Self::Ignore,
 			RUN_TAG_ZLIB => Self::Zlib,
 			RUN_TAG_LZFSE => Self::Lzfse,
+			RUN_TAG_LZMA2 => Self::Lzma2,
 			RUN_TAG_COMMENT => Self::Comment,
 			RUN_TAG_END => Self::End,
 			other => Self::Unsupported(other),
@@ -80,6 +89,7 @@ impl Kind {
 			Self::Ignore => RUN_TAG_IGNORE,
 			Self::Zlib => RUN_TAG_ZLIB,
 			Self::Lzfse => RUN_TAG_LZFSE,
+			Self::Lzma2 => RUN_TAG_LZMA2,
 			#[cfg(feature = "read")]
 			Self::Comment => RUN_TAG_COMMENT,
 			Self::End => RUN_TAG_END,

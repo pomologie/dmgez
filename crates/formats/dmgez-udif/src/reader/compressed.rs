@@ -27,6 +27,10 @@ impl<S: ReadAt> Image<S> {
 						offset,
 						logical_offset,
 					},
+					Kind::Lzma2 => Error::InvalidLzma {
+						offset,
+						logical_offset,
+					},
 					Kind::Zlib => Error::InvalidZlib {
 						offset,
 						logical_offset,
@@ -57,6 +61,10 @@ fn decoder(kind: Kind) -> Result<Decoder, Error> {
 		Kind::Lzfse => Ok(crate::lzfse::decode),
 		#[cfg(not(feature = "lzfse"))]
 		Kind::Lzfse => Err(Error::FeatureNotCompiled("lzfse")),
+		#[cfg(feature = "lzma")]
+		Kind::Lzma2 => Ok(crate::lzma::decode),
+		#[cfg(not(feature = "lzma"))]
+		Kind::Lzma2 => Err(Error::FeatureNotCompiled("lzma")),
 		_ => Err(Error::Corrupt("uncompressed run entered decoder")),
 	}
 }

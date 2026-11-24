@@ -41,6 +41,8 @@ pub enum Profile {
 	Udzo,
 	/// LZFSE runs, explicit zeros and raw fallback for incompressible data.
 	Ulfo,
+	/// LZMA2 in XZ runs, explicit zeros and raw fallback for incompressible data.
+	Ulmo,
 }
 
 /// Per-write compression scheduling.
@@ -170,6 +172,9 @@ impl WriteOptions {
 		}
 		if self.profile == Profile::Ulfo && !cfg!(feature = "lzfse") {
 			return Err(Error::FeatureNotCompiled("lzfse"));
+		}
+		if self.profile == Profile::Ulmo && !cfg!(feature = "lzma") {
+			return Err(Error::FeatureNotCompiled("lzma"));
 		}
 		if self.max_physical_bytes <= trailer::BYTES as u64 {
 			return Err(Error::ResourceLimit("physical image size"));
@@ -375,16 +380,21 @@ impl<W: Write> DataFork<W> {
 			stored_len: 0,
 		});
 		let raw_runs = self.count(Kind::Raw);
-		let compressed_runs = self.count(Kind::Zlib) + self.count(Kind::Lzfse);
+		let compressed_runs = self
+			.records
+			.iter()
+			.filter(|record| record.kind.is_compressed())
+			.count();
 		let zero_runs = self.count(Kind::Zero);
 		let buffer_sectors = match options.profile {
 			Profile::Udro => RAW_ONLY_BUFFER_SECTORS,
 			Profile::Udzo => {
 				(options.chunk_bytes as u32 / SECTOR_BYTES as u32) + ZLIB_BUFFER_HEADROOM_SECTORS
 			}
-			// Native ULFO declares enough sectors for one compressed run and its
+			// Native ULFO and ULMO declare enough sectors for one compressed run and its
 			// decoded extent together, rounded up before taking the maximum.
-			Profile::Ulfo => self.lzfse_buffer_sectors()?,
+			Profile::Ulfo => self.combined_buffer_sectors(Kind::Lzfse)?,
+			Profile::Ulmo => self.combined_buffer_sectors(Kind::Lzma2)?,
 		};
 		let physical_crc = self.hash.finalize();
 		let master_crc = checksum::master_crc([table_crc]);
@@ -424,11 +434,11 @@ impl<W: Write> DataFork<W> {
 		})
 	}
 
-	fn lzfse_buffer_sectors(&self) -> Result<u32, Error> {
+	fn combined_buffer_sectors(&self, kind: Kind) -> Result<u32, Error> {
 		let sectors = self
 			.records
 			.iter()
-			.filter(|record| record.kind == Kind::Lzfse)
+			.filter(|record| record.kind == kind)
 			.map(|record| record.sector_count + record.stored_len.div_ceil(SECTOR_BYTES))
 			.max()
 			.unwrap_or(RAW_ONLY_BUFFER_SECTORS.into());
