@@ -5,6 +5,9 @@ use std::num::NonZeroU32;
 use dmgez_udif::SECTOR_BYTES;
 use dmgez_vfs::{Disk, Error, Layout, Limits, PartitionId, PartitionRole, Raw, Scheme, VolumeId};
 
+#[path = "maps/access.rs"]
+mod access;
+
 const SECTOR: usize = SECTOR_BYTES as usize;
 const EMPTY: [u8; SECTOR] = [0; SECTOR];
 const MBR_TABLE_OFFSET: usize = 446;
@@ -28,6 +31,11 @@ fn selector(scheme: Scheme, slot: u32) -> VolumeId {
 fn unknown_bytes_do_not_create_a_whole_disk_volume() {
 	let mut disk = Disk::discover(Raw(EMPTY.as_slice()), Limits::default()).unwrap();
 	assert_eq!(disk.layout(), &Layout::Unknown);
+	assert!(matches!(disk.select_volume(None), Err(Error::NoVolume)));
+	assert!(matches!(
+		disk.select_volume(Some(VolumeId::WholeDisk)),
+		Err(Error::UnknownVolume(VolumeId::WholeDisk))
+	));
 	assert!(matches!(
 		disk.window(VolumeId::WholeDisk),
 		Err(Error::UnknownVolume(_))
@@ -42,6 +50,7 @@ fn reads_only_the_selected_partition_and_nested_window() {
 	image[..SECTOR].copy_from_slice(&zero);
 	image[3 * SECTOR..5 * SECTOR].fill(0xCD);
 	let mut disk = Disk::discover(Raw(image.as_slice()), Limits::default()).unwrap();
+	assert_eq!(disk.select_volume(None).unwrap(), selector(Scheme::Mbr, 2));
 	assert!(matches!(
 		disk.window(selector(Scheme::Mbr, 1)),
 		Err(Error::UnknownVolume(_))
@@ -111,6 +120,16 @@ fn extended_chain_uses_distinct_logical_slots_and_rejects_cycles() {
 	assert_eq!(partitions[0].role, PartitionRole::ExtendedContainer);
 	assert_eq!(partitions[1].range, 11 * SECTOR_BYTES..15 * SECTOR_BYTES);
 	assert_eq!(partitions[2].range, 21 * SECTOR_BYTES..26 * SECTOR_BYTES);
+	assert!(matches!(
+		disk.select_volume(None),
+		Err(Error::AmbiguousVolumes { candidates: 2 })
+	));
+	let explicit = selector(Scheme::Mbr, 6);
+	assert_eq!(disk.select_volume(Some(explicit)).unwrap(), explicit);
+	assert!(matches!(
+		disk.select_volume(Some(selector(Scheme::Mbr, 3))),
+		Err(Error::NoDataWindow(_))
+	));
 	assert_eq!(
 		disk.window(selector(Scheme::Mbr, 5)).unwrap().len(),
 		4 * SECTOR_BYTES

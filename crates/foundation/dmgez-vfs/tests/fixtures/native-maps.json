@@ -53,7 +53,14 @@
       "start": 64,
       "length": 32704,
       "raw_sha256": "806cc012859431c2801f87ceec8b3b095270238d43eba71199fdba975a0b0914",
-      "image_sha256": "71d5fcd78bab7c4d8183b5cc19b9687c5f6d66420b566510b89a10134c17b952"
+      "image_sha256": "71d5fcd78bab7c4d8183b5cc19b9687c5f6d66420b566510b89a10134c17b952",
+      "partition_export_oracle": {
+        "argv": ["/usr/bin/hdiutil", "convert", "native-apm.dmg", "-format", "UDTO", "-o", "apm", "-quiet"],
+        "offset_bytes": 32768,
+        "length_bytes": 16744448,
+        "crc32": "f09ee540",
+        "sha256": "b8e1612be22ff3db2e3281758d71ed66b828a0d0c8be2f7a4b5854a77a8a3353"
+      }
     },
     {
       "fixture": "native-dual-apm.dmg",

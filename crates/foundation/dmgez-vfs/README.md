@@ -2,7 +2,11 @@
 
 `Disk::discover` classifies an immutable byte source independently of the UDIF block-map table layout. Pass a decoded `dmgez_udif::reader::Image` or a `Raw` source. `Layout` reports the scheme, logical block size, and map entries, or bounded HFS+ or HFSX volume geometry for a partitionless source. Unknown input has no inferred volume ID.
 
-`Disk::window` selects an explicit `VolumeId` and grants access to the corresponding byte range. `Disk::data_window` selects the usable data extent, including the APM data subrange when present. A window rechecks its bounds for every read. Subwindows preserve the parent bounds. IDs refer to entries in the opened view.
+`Disk::select_volume` checks an explicit `VolumeId` for an eligible data extent or resolves the sole usable extent when the selector is omitted. It reports typed errors for zero or multiple eligible volumes. Map metadata, free space, and extended containers are excluded from automatic selection.
+
+`Disk::window` opens the complete range for an explicit selector. `Disk::data_window` opens the usable data extent, including the APM data subrange when present. A window rechecks its bounds for every read. Subwindows preserve the parent bounds and absolute logical offsets. IDs refer to entries in the opened view.
+
+`Window::write_raw_to` streams an opened extent into a caller-owned sink with a caller-sized buffer and cancellation check between chunks. The operation checks source identity at EOF before flushing. A failure can leave a prefix in the sink. Callers publishing a destination path own its staging and cleanup.
 
 ## Supported map profiles
 
@@ -16,6 +20,6 @@ The read adapters reuse the upstream parser APIs. Local guards bound `part-table
 
 ## Evidence
 
-The integration tests cover the partition portion of D-READ-01-T01. Apple `hdiutil imageinfo` on the generated raw APM, GPT, MBR, and HFS+ fixtures reported the test ranges, and `hdiutil verify -quiet` verified all five compressed fixtures. The repository’s optical fixture records the unsupported dual-stride APM case. Negative tests exercise conflicting and damaged maps, malformed APM bounds, EBR cycles, probe budgets, and nested range escapes. The partitionless fixture covers the HFS+ geometry probe. Fixture provenance and digests are in [tests/fixtures/native-maps.json](tests/fixtures/native-maps.json).
+The integration tests cover the partition portion of D-READ-01-T01. Apple `hdiutil imageinfo` on the generated raw APM, GPT, MBR, and HFS+ fixtures reported the test ranges, and `hdiutil verify -quiet` verified all five compressed fixtures. A separate `hdiutil convert -format UDTO` extraction supplies the known length and checksum of the exported APM partition. The repository’s optical fixture records the unsupported dual-stride APM case. Focused tests exercise conflicting and damaged maps, malformed APM bounds, EBR cycles, probe budgets, ambiguous selection, nested range escapes, cancellation, and source and sink failures. The partitionless fixture covers the HFS+ geometry probe. Fixture provenance and digests are in [tests/fixtures/native-maps.json](tests/fixtures/native-maps.json).
 
 The crate-local Kani harness covers the range translation portion of D-V09. It checks four nested windows against widened arithmetic over full-width unsigned input. Other D-V09 proof and verification obligations remain tracked in the repository index. [Verification](verification/README.md)

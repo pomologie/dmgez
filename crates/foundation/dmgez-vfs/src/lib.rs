@@ -147,7 +147,7 @@ impl Default for Limits {
 	}
 }
 
-/// Failure opening or reading a logical disk/partition.
+/// Failure discovering, selecting, or streaming a logical disk extent.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum Error {
@@ -177,6 +177,16 @@ pub enum Error {
 	UnknownVolume(VolumeId),
 	#[error("partition has no admitted filesystem data window: {0:?}")]
 	NoDataWindow(PartitionId),
+	#[error("no usable volume is available on this disk")]
+	NoVolume,
+	#[error("{candidates} usable volumes require an explicit selector")]
+	AmbiguousVolumes { candidates: usize },
+	#[error("a nonempty raw export requires a nonempty copy buffer")]
+	EmptyCopyBuffer,
+	#[error("raw export cancelled")]
+	Cancelled,
+	#[error("raw export sink failed")]
+	Sink(#[source] std::io::Error),
 	#[error("corrupt partitionless HFS volume geometry")]
 	VolumeGeometry,
 }
@@ -253,6 +263,31 @@ impl<S: LogicalDisk> Disk<S> {
 		&self.layout
 	}
 
+	/// Resolve a requested filesystem data extent, or the only eligible extent.
+	///
+	/// # Errors
+	/// Rejects missing selectors, metadata-only entries, and automatic selection
+	/// with zero or multiple eligible extents.
+	pub fn select_volume(&self, requested: Option<VolumeId>) -> Result<VolumeId, Error> {
+		if let Some(id) = requested {
+			self.volume_data_range(id)?;
+			return Ok(id);
+		}
+		match &self.layout {
+			Layout::Partitionless { .. } => Ok(VolumeId::WholeDisk),
+			Layout::Partitioned { partitions, .. } => {
+				let mut eligible = partitions.iter().filter(|entry| entry.data_range.is_some());
+				let first = eligible.next().ok_or(Error::NoVolume)?;
+				let candidates = 1 + eligible.count();
+				if candidates != 1 {
+					return Err(Error::AmbiguousVolumes { candidates });
+				}
+				Ok(VolumeId::Partition(first.id))
+			}
+			Layout::Unknown => Err(Error::NoVolume),
+		}
+	}
+
 	/// Return a window over the complete partition or admitted partitionless volume.
 	///
 	/// # Errors
@@ -270,17 +305,21 @@ impl<S: LogicalDisk> Disk<S> {
 	/// # Errors
 	/// Fails if the requested record is missing or has no filesystem data window.
 	pub fn data_window(&mut self, id: VolumeId) -> Result<Window<'_, S>, Error> {
-		let range = match &self.layout {
-			Layout::Partitionless { range, .. } if id == VolumeId::WholeDisk => range.clone(),
+		let range = self.volume_data_range(id)?.clone();
+		Ok(Window::new(&mut self.source, range))
+	}
+
+	fn volume_data_range(&self, id: VolumeId) -> Result<&Range<u64>, Error> {
+		match &self.layout {
+			Layout::Partitionless { range, .. } if id == VolumeId::WholeDisk => Ok(range),
 			_ => {
 				let partition = self.partition(id)?;
 				partition
 					.data_range
-					.clone()
-					.ok_or(Error::NoDataWindow(partition.id))?
+					.as_ref()
+					.ok_or(Error::NoDataWindow(partition.id))
 			}
-		};
-		Ok(Window::new(&mut self.source, range))
+		}
 	}
 
 	fn partition(&self, id: VolumeId) -> Result<&Partition, Error> {

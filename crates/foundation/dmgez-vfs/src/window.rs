@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::{io::Write, ops::Range};
 
 use crate::{Error, LogicalDisk};
 
@@ -39,6 +39,42 @@ impl<'source, S: LogicalDisk> Window<'source, S> {
 	pub fn read_exact_at(&mut self, offset: u64, output: &mut [u8]) -> Result<(), Error> {
 		let absolute = self.translate(offset, output.len() as u64)?;
 		Ok(self.source.read_exact_at(absolute.start, output)?)
+	}
+
+	/// Stream the selected extent in order, using the caller's scratch buffer.
+	/// Each chunk passes the same bounds and source checks as a positional read.
+	///
+	/// # Errors
+	/// Rejects an empty scratch buffer for a nonempty extent. Stops on
+	/// cancellation or read and write failures, which may leave a prefix in the
+	/// caller's sink. A successful copy rechecks source identity and flushes the
+	/// sink.
+	pub fn write_raw_to(
+		&mut self,
+		mut sink: impl Write,
+		scratch: &mut [u8],
+		mut is_cancelled: impl FnMut() -> bool,
+	) -> Result<(), Error> {
+		let len = self.len();
+		if len != 0 && scratch.is_empty() {
+			return Err(Error::EmptyCopyBuffer);
+		}
+		let mut offset = 0;
+		while offset < len {
+			if is_cancelled() {
+				return Err(Error::Cancelled);
+			}
+			let chunk_len = (len - offset).min(scratch.len() as u64) as usize;
+			let chunk = &mut scratch[..chunk_len];
+			self.read_exact_at(offset, chunk)?;
+			sink.write_all(chunk).map_err(Error::Sink)?;
+			offset += chunk_len as u64;
+		}
+		if is_cancelled() {
+			return Err(Error::Cancelled);
+		}
+		self.read_exact_at(len, &mut [])?;
+		sink.flush().map_err(Error::Sink)
 	}
 
 	/// Reborrow a bounded subrange of this window.
