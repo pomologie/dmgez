@@ -1,0 +1,29 @@
+[package]
+name = "dmgez-hfs-adapter-probe"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+
+[features]
+default = ["finder-write", "parallel"]
+finder-write = ["dmgez-builder/finder-write"]
+parallel = ["dmgez-builder/parallel"]
+
+[dependencies]
+dmgez-builder = { path = @dmgez-builder@, default-features = false, features = ["zlib"] }
+dmgez-config = { path = @dmgez-config@ }
+dmgez-core = { path = @dmgez-core@, default-features = false, features = ["source"] }
+dmgez-udif = { path = @dmgez-udif@, default-features = false, features = ["write"] }
+hfsplus-builder = { version = "=0.1.0", path = @hfsplus-builder@ }
+hfsplus-core = { version = "=0.1.0", path = @hfsplus-core@ }
+hfsplus-format = { version = "=0.1.0", path = @hfsplus-format@ }
+thiserror = "=2.0.21"
+
+[dev-dependencies]
+dmgez-udif = { path = @dmgez-udif@, default-features = false, features = ["read", "zlib"] }
+rustix = { version = "1.1.6", features = ["fs"] }
+tempfile = "=3.27.0"
+
+[lints.rust]
+unsafe_code = "forbid"
