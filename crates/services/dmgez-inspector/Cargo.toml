@@ -11,6 +11,7 @@ repository.workspace = true
 default = ["zlib"]
 zlib = ["dmgez-udif/zlib"]
 lzfse = ["dmgez-udif/lzfse"]
+lzma = ["dmgez-udif/lzma"]
 
 [dependencies]
 dmgez-udif = { workspace = true, features = ["read"] }

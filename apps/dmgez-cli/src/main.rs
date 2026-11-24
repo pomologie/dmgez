@@ -15,6 +15,7 @@ const THREADS_ARG_ID: &str = "threads";
 const THREADS_VALUE_NAME: &str = "THREADS";
 const PARALLEL_FEATURE: &str = "parallel";
 const LZFSE_FEATURE: &str = "lzfse";
+const LZMA_FEATURE: &str = "lzma";
 const VERIFY_CONTAINER_CAPABILITY: &str = "verify-container";
 const RUN_LIMIT_ARG: &str = "run_limit";
 const COMPILED: &str = "compiled";
@@ -106,6 +107,7 @@ enum Format {
 	#[default]
 	Udzo,
 	Ulfo,
+	Ulmo,
 }
 
 type CliResult = Result<(), Box<dyn Error>>;
@@ -138,6 +140,13 @@ fn run(command: Command) -> CliResult {
 					LZFSE_FEATURE,
 					cfg!(all(
 						feature = "lzfse",
+						any(feature = "build", feature = "inspect")
+					)),
+				),
+				(
+					LZMA_FEATURE,
+					cfg!(all(
+						feature = "lzma",
 						any(feature = "build", feature = "inspect")
 					)),
 				),

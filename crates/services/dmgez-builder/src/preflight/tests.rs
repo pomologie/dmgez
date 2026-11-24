@@ -91,10 +91,10 @@ fn rejects_unsupported_filesystems_formats_partitions_and_catalog_names() {
 		Err(PreflightError::Partition(Partition::Gpt))
 	));
 	unsupported.image.partition = Partition::None;
-	unsupported.image.format = ImageFormat::Ulmo;
+	unsupported.image.format = ImageFormat::Udrw;
 	assert!(matches!(
 		preflight(&unsupported, options()),
-		Err(PreflightError::Format(ImageFormat::Ulmo))
+		Err(PreflightError::Format(ImageFormat::Udrw))
 	));
 	unsupported.image.format = ImageFormat::Udro;
 	unsupported.compression.level = Some(5);
@@ -235,6 +235,26 @@ fn zlib_availability_is_checked_before_source_resolution() {
 		assert!(matches!(
 			preflight(&project, options()),
 			Err(PreflightError::FeatureNotCompiled(BuildFeature::Zlib))
+		));
+	}
+}
+
+#[test]
+fn ulmo_availability_is_checked_before_source_resolution() {
+	let mut project = project("");
+	project.image.format = ImageFormat::Ulmo;
+	if cfg!(feature = "lzma") {
+		assert_eq!(
+			preflight(&project, options())
+				.unwrap()
+				.write_options()
+				.profile,
+			Profile::Ulmo
+		);
+	} else {
+		assert!(matches!(
+			preflight(&project, options()),
+			Err(PreflightError::FeatureNotCompiled(BuildFeature::Lzma))
 		));
 	}
 }

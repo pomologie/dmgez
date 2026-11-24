@@ -17,6 +17,7 @@ const UDRO: &[u8] = include_bytes!("../../../../tests/fixtures/images/tiny-UDRO.
 const UDZO: &[u8] = include_bytes!("../../../../tests/fixtures/images/tiny-UDZO.dmg");
 const HYBRID_UDZO: &[u8] = include_bytes!("../../../../tests/fixtures/images/hybrid-UDZO.dmg");
 const ULFO: &[u8] = include_bytes!("../../../formats/dmgez-udif/tests/fixtures/apple-ulfo.dmg");
+const ULMO: &[u8] = include_bytes!("../../../formats/dmgez-udif/tests/fixtures/apple-ulmo.dmg");
 const NATIVE_LOGICAL_BYTES: u64 = 2048;
 const NATIVE_UDZO_FORK_BYTES: u64 = 300;
 const TRAILER_BYTES: usize = 512;
@@ -316,13 +317,21 @@ fn failed_admission_has_a_versioned_report_without_host_error_text() {
 
 #[test]
 fn compiled_decoder_availability_agrees_with_verification() {
-	for (fixture, encoding) in [(UDZO, RunEncoding::Zlib), (ULFO, RunEncoding::Lzfse)] {
+	for (fixture, encoding) in [
+		(UDZO, RunEncoding::Zlib),
+		(ULFO, RunEncoding::Lzfse),
+		(ULMO, RunEncoding::Lzma2),
+	] {
 		let image = Image::open(fixture, Limits::default()).unwrap();
 		let inspection = inspect(&image, RunWindow::new(0, MAX_RUN_PAGE_SIZE));
 		let page = inspection.run_page.unwrap();
 		let matching = page.runs.iter().filter(|run| run.encoding == encoding);
 		assert!(matching.clone().next().is_some());
 		let unavailable = matching.filter(|run| !run.decoder_available).count();
+		if encoding == RunEncoding::Lzma2 {
+			assert!(inspection.container.runs.lzma2 > 0);
+			assert_eq!(inspection.container.runs.unsupported, 0);
+		}
 		let verification = verify(fixture, Limits::default(), VerificationMode::Container);
 		assert_eq!(verification.passed(), unavailable == 0);
 		assert_eq!(inspection.container.runs.decode_unavailable, unavailable);

@@ -9,7 +9,7 @@ use dmgez_udif::{
 	writer::{self, Execution, Profile, WriteOptions},
 };
 
-use crate::{CliResult, Format, LZFSE_FEATURE, PARALLEL_FEATURE};
+use crate::{CliResult, Format, LZFSE_FEATURE, LZMA_FEATURE, PARALLEL_FEATURE};
 
 const SERIAL_WORKER_COUNT: usize = 1;
 
@@ -25,6 +25,8 @@ pub(crate) fn run(
 		Format::Udzo => Profile::Udzo,
 		Format::Ulfo if cfg!(feature = "lzfse") => Profile::Ulfo,
 		Format::Ulfo => return Err(Error::FeatureNotCompiled(LZFSE_FEATURE).into()),
+		Format::Ulmo if cfg!(feature = "lzma") => Profile::Ulmo,
+		Format::Ulmo => return Err(Error::FeatureNotCompiled(LZMA_FEATURE).into()),
 	};
 	let execution = match (serial, cfg!(feature = "parallel"), threads) {
 		(true, _, _)

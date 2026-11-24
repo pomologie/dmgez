@@ -64,6 +64,8 @@ pub enum BuildFeature {
 	Zlib,
 	#[error("LZFSE encoding")]
 	Lzfse,
+	#[error("LZMA2 encoding")]
+	Lzma,
 	#[error("parallel encoding")]
 	Parallel,
 	#[error("Finder icon layout")]
@@ -250,6 +252,7 @@ pub fn preflight(
 		ImageFormat::Udro => Profile::Udro,
 		ImageFormat::Udzo => Profile::Udzo,
 		ImageFormat::Ulfo => Profile::Ulfo,
+		ImageFormat::Ulmo => Profile::Ulmo,
 		format => return Err(PreflightError::Format(format)),
 	};
 	if profile == Profile::Udzo && !cfg!(feature = "zlib") {
@@ -257,6 +260,9 @@ pub fn preflight(
 	}
 	if profile == Profile::Ulfo && !cfg!(feature = "lzfse") {
 		return Err(PreflightError::FeatureNotCompiled(BuildFeature::Lzfse));
+	}
+	if profile == Profile::Ulmo && !cfg!(feature = "lzma") {
+		return Err(PreflightError::FeatureNotCompiled(BuildFeature::Lzma));
 	}
 	if profile != Profile::Udzo
 		&& (project.compression.level.is_some() || project.compression.block_size.is_some())

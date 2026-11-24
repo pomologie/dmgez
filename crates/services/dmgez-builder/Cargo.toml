@@ -11,6 +11,7 @@ description = "Plan and execute dmgez image builds"
 default = ["finder-write", "parallel", "zlib"]
 finder-write = ["dep:dmgez-finder"]
 lzfse = ["dmgez-udif/lzfse"]
+lzma = ["dmgez-udif/lzma"]
 parallel = ["dmgez-udif/parallel"]
 zlib = ["dmgez-udif/zlib"]
 

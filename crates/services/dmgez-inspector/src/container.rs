@@ -140,6 +140,7 @@ pub struct RunSummary {
 	pub ignore: usize,
 	pub zlib: usize,
 	pub lzfse: usize,
+	pub lzma2: usize,
 	pub unsupported: usize,
 	/// Runs whose codec is unknown or whose decoder is disabled in this build.
 	pub decode_unavailable: usize,
@@ -155,6 +156,7 @@ impl RunSummary {
 			UdifEncoding::Ignore => self.ignore += 1,
 			UdifEncoding::Zlib => self.zlib += 1,
 			UdifEncoding::Lzfse => self.lzfse += 1,
+			UdifEncoding::Lzma2 => self.lzma2 += 1,
 			_ => self.unsupported += 1,
 		}
 	}
@@ -170,6 +172,7 @@ pub enum RunEncoding {
 	Ignore,
 	Zlib,
 	Lzfse,
+	Lzma2,
 	Unsupported { code: u32 },
 	Unreported,
 }
@@ -182,6 +185,7 @@ impl From<UdifEncoding> for RunEncoding {
 			UdifEncoding::Ignore => Self::Ignore,
 			UdifEncoding::Zlib => Self::Zlib,
 			UdifEncoding::Lzfse => Self::Lzfse,
+			UdifEncoding::Lzma2 => Self::Lzma2,
 			UdifEncoding::Unsupported(code) => Self::Unsupported { code },
 			_ => Self::Unreported,
 		}

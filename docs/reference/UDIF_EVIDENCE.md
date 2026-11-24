@@ -19,6 +19,7 @@ These observations apply to unsigned single-segment UDIF v4 files with XML resou
 | `0x00000001` | Read the exact stored bytes | Include stored logical bytes |
 | `0x00000002` | Ignore region, exposed as zero in raw export | Exclude the region entirely |
 | `0x80000005` | Decode one exact zlib stream | Include decoded logical bytes |
+| `0x80000008` | Decode one qualified single-block LZMA2/XZ stream | Include decoded logical bytes |
 | `0x7ffffffe` and `0xffffffff` | Comment and terminator, no logical payload | Exclude |
 
 Formats are corroborated by the [libmodi format register](https://github.com/libyal/libmodi/blob/main/documentation/Mac%20OS%20disk%20image%20types.asciidoc). Apple `hdiutil verify` accepted the explicit zero, ignore and comment probes. It rejected the negative zero probe whose checksum excluded the zero bytes. Apple-generated APM UDZO provided independently observed ignore runs in stored and free partitions. Export preserves the declared logical disk size, including the trailing ignore region.
@@ -28,5 +29,7 @@ Formats are corroborated by the [libmodi format register](https://github.com/lib
 `tests/compatibility/verify_udif.py` compares Apple-generated and dmgez-generated images for tiny, mixed and all-zero input in UDRO and UDZO. Exported bytes matched through both Apple and 7-Zip (17.05), and Apple verified the emitted checksums. With `--attach-hfs`, macOS attached and mounted a dmgez UDZO containing an Apple-generated clean partitionless HFS+ volume. `fsck_hfs -fn` reported the attached volume clean. This evidence covers the UDIF layer and Apple-generated payload. The native HFS+ constructor and the broader host and oracle matrix remain open gates.
 
 The checked-in corpus and its malformed probes cover parts of D-UDIF-01 through D-UDIF-04 and D-V01 through D-V04. Signed resources, encryption, segmentation, binary plists, other compressors and filesystem-level checks remain outside the implemented profile. The initial raw wrap CLI accepts regular files. The writer API accepts a finite stream and a caller-owned sink.
+
+The optional `lzma` profile reads and writes [Apple-qualified ULMO streams](../../crates/formats/dmgez-udif/tests/fixtures/apple-ulmo.md). The raw wrap CLI, TOML builder preflight, and inspector share this profile. Inspection identifies the run encoding even when payload decoding is disabled.
 
 The macOS bootstrap run passed 16 nextest cases and the Kani 0.68.0 checked-range harness over arbitrary `u64` inputs. The nightly integrated parser fuzz smoke completed 803,954 runs in 21 seconds using the six native fixtures as seeds. `cargo-llvm-cov` reported 91.34% line coverage for the hosted all-feature workspace. Several critical format modules remain below the proposed per-module threshold. Linux x86-64 and Windows arm64 passed target `cargo check`. Native Linux and Windows execution, the implementation-linked Lean pilot, and complete release evidence remain open.

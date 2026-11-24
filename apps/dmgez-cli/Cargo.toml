@@ -17,6 +17,7 @@ default = ["build", "parallel"]
 build = ["dep:dmgez-core", "dmgez-core/source", "dep:dmgez-udif", "dmgez-udif/write", "dmgez-udif/zlib"]
 parallel = ["dmgez-udif?/parallel"]
 lzfse = ["dmgez-udif?/lzfse"]
+lzma = ["dmgez-udif?/lzma"]
 inspect = ["dep:dmgez-core", "dep:dmgez-inspector", "dmgez-inspector/zlib", "dep:dmgez-udif", "dmgez-udif/read", "dep:serde", "dep:serde_json"]
 
 [dependencies]

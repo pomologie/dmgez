@@ -55,6 +55,28 @@ fn output_remains_unclobbered_on_conflict_or_invalid_input() {
 	}
 }
 
+#[cfg(feature = "build")]
+#[test]
+fn raw_ulmo_wrap_requires_the_optional_codec() {
+	const COMPRESSIBLE_BYTES: usize = 64 * 1024;
+	let work = tempfile::tempdir().unwrap();
+	let source = work.path().join("source.raw");
+	let destination = work.path().join("output.dmg");
+	fs::write(&source, vec![8; COMPRESSIBLE_BYTES]).unwrap();
+	let output = Command::new(env!("CARGO_BIN_EXE_dmgez"))
+		.arg("wrap-raw")
+		.arg(source)
+		.args(["--format", "ulmo", "-o"])
+		.arg(&destination)
+		.output()
+		.unwrap();
+	assert_eq!(output.status.success(), cfg!(feature = "lzma"));
+	assert_eq!(destination.exists(), cfg!(feature = "lzma"));
+	if !cfg!(feature = "lzma") {
+		assert!(String::from_utf8_lossy(&output.stderr).contains("feature not compiled: lzma"));
+	}
+}
+
 #[cfg(feature = "inspect")]
 #[test]
 fn reports_native_gpt_byte_ranges_without_claiming_verification() {

@@ -71,6 +71,12 @@ pub enum DiagnosticDetail {
 		#[serde(serialize_with = "crate::decimal")]
 		logical_offset_bytes: u64,
 	},
+	InvalidLzma {
+		#[serde(serialize_with = "crate::decimal")]
+		physical_offset_bytes: u64,
+		#[serde(serialize_with = "crate::decimal")]
+		logical_offset_bytes: u64,
+	},
 	ChecksumMismatch {
 		expected: u32,
 		actual: u32,
@@ -125,6 +131,16 @@ impl Diagnostic {
 			} => (
 				ErrorCategory::Corrupt,
 				Some(DiagnosticDetail::InvalidLzfse {
+					physical_offset_bytes: offset,
+					logical_offset_bytes: logical_offset,
+				}),
+			),
+			Error::InvalidLzma {
+				offset,
+				logical_offset,
+			} => (
+				ErrorCategory::Corrupt,
+				Some(DiagnosticDetail::InvalidLzma {
 					physical_offset_bytes: offset,
 					logical_offset_bytes: logical_offset,
 				}),
