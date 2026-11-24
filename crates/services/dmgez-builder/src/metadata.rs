@@ -8,6 +8,8 @@ use thiserror::Error;
 
 use crate::manifest::{self, SourceSnapshot};
 
+pub mod policy;
+
 const FINDER_INFO_BYTES: usize = 32;
 const ATTRIBUTE_SEPARATOR: u8 = 0;
 const FINDER_INFO_NAME: &[u8] = b"com.apple.FinderInfo";
