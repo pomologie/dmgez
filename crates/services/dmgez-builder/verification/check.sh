@@ -21,7 +21,9 @@ run_dir=$(mktemp -d "${TMPDIR:-/tmp}/dmgez-publication.XXXXXXXX")
 trap 'rm -rf -- "$run_dir"' EXIT
 models=$verification_dir/models
 cp -- "$models"/Publication.tla "$models"/Publication.cfg \
-	"$models"/PublicationEnospc.cfg "$models"/PublicationRace.cfg "$run_dir/"
+	"$models"/PublicationEnospc.cfg "$models"/PublicationRace.cfg \
+	"$models"/CheckedReplace.tla "$models"/CheckedReplace.cfg \
+	"$models"/CheckedReplaceObserved.cfg "$models"/CheckedReplaceUntrusted.cfg "$run_dir/"
 
 tlc_workers=1
 tlc_seed=1
@@ -29,14 +31,14 @@ tlc_fingerprint=0
 invariant_violation_exit=12
 
 check_model() {
-	local config=$1 expected_exit=$2 invariant=${3:-} witness=${4:-}
+	local module=$1 config=$2 expected_exit=$3 invariant=${4:-} witness=${5:-}
 	local log=$run_dir/$config.log tlc_exit=0
 
 	(
 		cd -- "$run_dir"
 		java -Xmx256m -XX:+UseParallelGC -jar "$jar" \
 			-workers "$tlc_workers" -seed "$tlc_seed" -fp "$tlc_fingerprint" \
-			-noGenerateSpecTE -metadir "$config-states" -config "$config.cfg" Publication.tla
+			-noGenerateSpecTE -metadir "$config-states" -config "$config.cfg" "$module.tla"
 	) > "$log" 2>&1 || tlc_exit=$?
 
 	if [[ $tlc_exit != "$expected_exit" ]]; then
@@ -51,13 +53,16 @@ check_model() {
 			cat -- "$log" >&2
 			return 1
 		fi
-		printf '%s rejected the mutation through %s\n' "$config" "$invariant"
+		printf '%s produced the expected violation of %s\n' "$config" "$invariant"
 	else
 		grep -Fx -- 'Model checking completed. No error has been found.' "$log"
 	fi
 	grep -E '^TLC2 Version|^[0-9]+ states generated|^The depth of the complete state graph search' "$log"
 }
 
-check_model Publication 0
-check_model PublicationEnospc "$invariant_violation_exit" CompleteCheckedPublication 'phase |-> "write failed"'
-check_model PublicationRace "$invariant_violation_exit" NoClobber 'commits = {WriterA, WriterB}'
+check_model Publication Publication 0
+check_model Publication PublicationEnospc "$invariant_violation_exit" CompleteCheckedPublication 'phase |-> "write failed"'
+check_model Publication PublicationRace "$invariant_violation_exit" NoClobber 'commits = {WriterA, WriterB}'
+check_model CheckedReplace CheckedReplace 0
+check_model CheckedReplace CheckedReplaceObserved 0
+check_model CheckedReplace CheckedReplaceUntrusted "$invariant_violation_exit" AuthorizedPublication 'kind |-> "late overwrite"'

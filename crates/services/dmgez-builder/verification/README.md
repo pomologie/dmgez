@@ -1,5 +1,7 @@
 # Builder publication verification
 
+## Staged no-clobber
+
 The [publication model](models/Publication.tla) covers the staged no-clobber path of D-V06 and D-BUILD-05. It explores two attempts targeting the same destination, initially vacant or occupied. Each attempt can fail at any stage from admission through commit. The model allows one cancellation request and at most one crash, either of one process or of the whole system. The process crash can occur after the destination becomes visible and before the caller receives success. After power loss, the model explores whether the destination directory entry survives and whether owned staging files remain. Both attempts are terminal after power recovery.
 
 - `CompleteCheckedPublication` requires each visible new image to contain the complete staged data, with a successful file sync and final check.
@@ -7,9 +9,9 @@ The [publication model](models/Publication.tla) covers the staged no-clobber pat
 
 The model assumes a stable destination directory, distinct owned staging files, and a host primitive that atomically installs a new entry only when vacant. A successful file sync establishes the staged-data premise. The builder leaves parent-directory durability to the host filesystem, so the model permits a newly installed entry to disappear after power loss. An initially occupied entry is assumed durable. A cancellation request is observed at admission, writing, or the final check. After the final check succeeds, the publication call can complete even if cancellation arrives before commit. The model encodes safety without fairness assumptions and enables stuttering only after both attempts end and restart, if needed, completes.
 
-The modeled path is [builder execution](../src/execution.rs) through [shared output publication](../../../foundation/dmgez-core/src/output.rs). Atomic replacement requires source-alias protection and is rejected by the current builder. Source identity and directory confinement depend on the host discovery layer. Host primitive qualification, crash replay, and deterministic fault injection at each boundary remain separate D-V06 evidence. [Obligation registry](../../../../verification/obligations.json)
+The builder uses `publish_new` for this profile. Source identity and directory confinement depend on the host discovery layer. Host primitive qualification, crash replay, and deterministic fault injection at each boundary remain separate D-V06 evidence. [Builder execution](../src/execution.rs) · [Shared output publication](../../../foundation/dmgez-core/src/output.rs) · [Obligation registry](../../../../verification/obligations.json)
 
-## Model actions and production checks
+### Model actions and production checks
 
 | Model action | Production operation |
 | --- | --- |
@@ -28,20 +30,40 @@ The modeled path is [builder execution](../src/execution.rs) through [shared out
 
 The builder tests observe optional-verifier success and failure, cancellation before staging, and an invalid caller-owned stream after a short sink write. These tests exercise production behavior at selected observable boundaries. The model's intermediate steps and crash schedules still need instrumented Rust replay. [Builder execution tests](../tests/execution.rs)
 
+## Checked atomic replacement
+
+The [replacement model](models/CheckedReplace.tla) covers two attempts with one advisory directory lock on a trusted local filesystem. Cooperating writers hold the lock from capture through commit or abort. A contender can return `Busy` while the lock is held, or acquire it after release and capture a fresh predecessor. Each attempt may fail from lock acquisition through rename. The model permits one cancellation request and one process crash. Death releases the lock, may leave an owned stage, and preserves any already visible commit. Power-loss durability remains a separate host concern.
+
+The initial target can be absent, a regular predecessor, a source alias, or a non-regular entry. The model also exercises rejection of a protected source directory. A writer authorizes the captured directory and target, then writes, syncs, rewinds and validates its stage. It rechecks the stage identity and fingerprint, directory identity, and target fingerprint in that order. A target token represents the complete fingerprint, so the `ChangedTarget` token can represent either an inode replacement or a metadata change to the same inode. An initially absent target uses the native no-clobber commit, which tests actual vacancy at the syscall. A present target uses ordinary atomic rename against the captured directory descriptor after the final check. [Replacement implementation and host contract](../../../foundation/dmgez-core/src/output/replace.rs)
+
+- `ExclusivePublisher` requires every attempt in a locked phase to hold the directory lock.
+- `AuthorizedPublication` checks each rename against its actual predecessor, directory, and stage at the syscall. The stage must still be the owned, complete, synced and validated one.
+- `AbortsPreserveOutput` checks that the visible target follows the history of external edits and installs. Attempts ending in failure or lock contention contribute no install.
+- `ForeignStagePreserved` requires rejected stage substitutions to remain in the namespace rather than being removed during cleanup.
+
+`CheckedReplace.cfg` checks cooperating writers in the trusted directory. `CheckedReplaceObserved.cfg` additionally allows a single stage, directory, or target change before its corresponding recheck. That configuration also allows one late target creation after a vacant target passes its final check. The native no-clobber branch preserves the resulting entry. Host rechecks and the protocol's guards are distinct model steps, so TLC can exercise the changes at their actual boundaries.
+
+`CheckedReplaceUntrusted.cfg` injects one noncooperating target change after a present target passes the final recheck. The same production-modeled rename proceeds and violates `AuthorizedPublication` because its actual predecessor differs from the captured one. This counterexample marks the trusted-directory boundary of advisory locking and ordinary rename. Descriptor-relative addressing and fingerprint checks alone cannot make the final check and rename conditional on the same inode.
+
+The native Rust tests exercise replacement with old handles kept open, protected and non-regular destinations, rejection after precommit target or directory changes, cooperative lock contention, stage substitution, and verification or write failure preserving the predecessor. The builder tests cover the optional overwrite profile and source-alias authorizer. The late present-target mutation is a model counterexample outside the production contract. [Core replacement tests](../../../foundation/dmgez-core/tests/replacement.rs) · [Builder execution tests](../tests/execution.rs)
+
 ## Reproduction
 
-Supply the official TLA+ Tools v1.8.0 JAR and run the checker from the repository root. It verifies the release digest before running TLC, uses one breadth-first worker with seed 1 and fingerprint 0, and checks the exact invariant diagnostic and trace witness for both mutations. TLC's default deadlock check remains enabled. [Pinned release asset and SHA-256](https://github.com/tlaplus/tlaplus/releases/expanded_assets/v1.8.0)
+Supply the official TLA+ Tools v1.8.0 JAR and run the checker from the repository root. It verifies the release digest before running TLC, uses one breadth-first worker with seed 1 and fingerprint 0, and checks the exact invariant diagnostics and trace witnesses expected from the negative configurations. TLC's default deadlock check remains enabled. [Pinned release asset and SHA-256](https://github.com/tlaplus/tlaplus/releases/expanded_assets/v1.8.0)
 
 ```sh
 TLA2TOOLS_JAR=/path/to/tla2tools.jar bash crates/services/dmgez-builder/verification/check.sh
 cargo nextest run --locked -p dmgez-core -p dmgez-builder --features dmgez-core/staging \
-	--test publication --test execution
+	--test publication --test replacement --test execution
 ```
 
-Initial local evidence used Java Temurin 21.0.8 on macOS 14.7.2 arm64, TLC revision `bc1b506`, and a working tree based on dmgez `11c6403`. The publication model completed and all five targeted Rust tests passed. Both mutated searches stopped at their first counterexample.
+Local evidence uses Java Temurin 21.0.8 on macOS 14.7.2 arm64 and TLC revision `bc1b506`. The initial no-clobber evidence used a working tree based on dmgez `11c6403` and passed the five targeted Rust tests. The expanded check used the builder replacement commit `dc9d0f0` and passed all 18 targeted Rust tests. Each negative search stopped at its first counterexample.
 
 | Configuration | States generated | Distinct states | Depth | Result |
 | --- | ---: | ---: | ---: | --- |
 | `Publication` | 19,310 | 3,120 | 16 | Complete, exit 0 |
 | `PublicationEnospc` | 469 | 181 | 6 | Partial unchecked image became visible, exit 12 |
 | `PublicationRace` | 11,065 | 1,976 | 15 | Second writer replaced the winner, exit 12 |
+| `CheckedReplace` | 14,576 | 6,066 | 28 | Complete, exit 0 |
+| `CheckedReplaceObserved` | 35,342 | 14,946 | 28 | Complete, exit 0 |
+| `CheckedReplaceUntrusted` | 2,906 | 1,361 | 14 | Present target changed between check and rename, exit 12 |
