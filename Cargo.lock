@@ -237,6 +237,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9e9de72ce2ad1f90dc62fa25f0f430ef85eb4b0d8fa0be4f30373bc40a21d28e"
 
 [[package]]
+name = "dmgez-builder"
+version = "0.1.0"
+dependencies = [
+ "dmgez-config",
+ "dmgez-finder",
+ "dmgez-udif",
+ "thiserror",
+]
+
+[[package]]
 name = "dmgez-cli"
 version = "0.1.0"
 dependencies = [

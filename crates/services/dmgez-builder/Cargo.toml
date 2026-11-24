@@ -1,0 +1,23 @@
+[package]
+name = "dmgez-builder"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Plan and execute dmgez image builds"
+
+[features]
+default = ["finder-write", "parallel", "zlib"]
+finder-write = ["dep:dmgez-finder"]
+parallel = ["dmgez-udif/parallel"]
+zlib = ["dmgez-udif/zlib"]
+
+[dependencies]
+dmgez-config.workspace = true
+dmgez-finder = { workspace = true, optional = true }
+dmgez-udif = { workspace = true, features = ["write"] }
+thiserror.workspace = true
+
+[lints]
+workspace = true
