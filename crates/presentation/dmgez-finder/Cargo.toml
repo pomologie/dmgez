@@ -1,0 +1,17 @@
+[package]
+name = "dmgez-finder"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Generate Finder presentation records for dmgez images"
+
+[dependencies]
+dmgez-config.workspace = true
+ds_parser.workspace = true
+plist.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

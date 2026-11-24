@@ -3,6 +3,10 @@ yanked = "deny"
 
 [licenses]
 allow = ["Apache-2.0", "MIT", "Unicode-3.0", "Zlib"]
+exceptions = [
+	{ allow = ["BlueOak-1.0.0"], crate = "alias_record@0.3.0" },
+	{ allow = ["BlueOak-1.0.0"], crate = "ds_parser@0.4.0" },
+]
 confidence-threshold = 0.9
 
 [bans]

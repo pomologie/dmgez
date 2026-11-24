@@ -1,0 +1,150 @@
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	mem::size_of,
+};
+
+use dmgez_config::Coordinate;
+use ds_parser::{
+	BrowserWindowSettings, DSStore, FieldKey, FinderViewStyle, IconLocation, IconViewProperties,
+	PropertyList, Record, layout::BTreeMaster,
+};
+
+use crate::{Error, LayoutItem};
+
+const CURRENT_FOLDER: &str = ".";
+const PARENT_FOLDER: &str = "..";
+const STORE_VERSION: u32 = 1;
+const MAX_CATALOG_NAME_BYTES: usize = 255;
+const PRINTABLE_ASCII: std::ops::RangeInclusive<u8> = b' '..=b'~';
+const NAME_SEPARATORS: [char; 2] = ['/', ':'];
+const UTF16_UNIT_BYTES: usize = size_of::<u16>();
+const LENGTH_BYTES: usize = size_of::<u32>();
+const FOUR_CC_BYTES: usize = size_of::<[u8; 4]>();
+const RECORD_HEADER_BYTES: usize = LENGTH_BYTES + 2 * FOUR_CC_BYTES;
+const SCALAR_BYTES: usize = size_of::<u32>();
+const LOCATION_TRAILING_BYTES: usize = size_of::<[u8; 8]>();
+const LOCATION_BYTES: usize = 2 * SCALAR_BYTES + LOCATION_TRAILING_BYTES;
+const LEAF_HEADER_BYTES: usize = 2 * SCALAR_BYTES;
+
+pub(super) struct Store {
+	records: Vec<Record>,
+	used_bytes: usize,
+}
+
+impl Store {
+	pub fn for_layout(
+		window: BrowserWindowSettings,
+		icons: IconViewProperties,
+	) -> Result<Self, Error> {
+		let mut store = Self {
+			records: Vec::new(),
+			used_bytes: LEAF_HEADER_BYTES,
+		};
+		let window_bytes = plist_payload_size(&window.to_property_list())?;
+		let icon_bytes = plist_payload_size(&icons.to_property_list())?;
+		store.push(CURRENT_FOLDER, FieldKey::bwsp, window, window_bytes)?;
+		store.push(
+			CURRENT_FOLDER,
+			FieldKey::icvl,
+			FinderViewStyle::Icon.fourcc(),
+			FOUR_CC_BYTES,
+		)?;
+		store.push(CURRENT_FOLDER, FieldKey::icvp, icons, icon_bytes)?;
+		store.push(CURRENT_FOLDER, FieldKey::vSrn, STORE_VERSION, SCALAR_BYTES)?;
+		Ok(store)
+	}
+
+	pub fn position_items(
+		&mut self,
+		items: &[LayoutItem<'_>],
+		configured: Option<&BTreeMap<String, [Coordinate; 2]>>,
+	) -> Result<(), Error> {
+		if let Some(configured) = configured {
+			for name in configured.keys() {
+				validate_item_name(name)?;
+			}
+		}
+		let mut matched = BTreeSet::new();
+		let mut positioned = BTreeSet::new();
+		for item in items {
+			let folder_position =
+				configured.and_then(|positions| positions.get_key_value(item.name));
+			let position = match (item.position, folder_position) {
+				(Some(_), Some(_)) => return Err(Error::DuplicatePosition(item.name.to_owned())),
+				(Some(position), None) => position,
+				(None, Some((name, position))) => {
+					matched.insert(name);
+					*position
+				}
+				(None, None) => continue,
+			};
+			validate_item_name(item.name)?;
+			if !positioned.insert(item.name.to_ascii_lowercase()) {
+				return Err(Error::DuplicateName(item.name.to_owned()));
+			}
+			let [x, y] = position.map(Coordinate::get);
+			let location = match (integer_point(x), integer_point(y)) {
+				(Some(x), Some(y)) => IconLocation::new(x, y),
+				_ => return Err(Error::Position(item.name.to_owned())),
+			};
+			self.push(
+				item.name,
+				FieldKey::Iloc,
+				location,
+				LENGTH_BYTES + LOCATION_BYTES,
+			)?;
+		}
+		if let Some(configured) = configured
+			&& let Some(name) = configured.keys().find(|name| !matched.contains(name))
+		{
+			return Err(Error::MissingItem(name.clone()));
+		}
+		Ok(())
+	}
+
+	pub fn finish(self) -> Result<Vec<u8>, Error> {
+		Ok(DSStore::new(self.records).to_bytes()?)
+	}
+
+	fn push(
+		&mut self,
+		name: &str,
+		field: FieldKey,
+		value: impl Into<ds_parser::Value>,
+		payload_bytes: usize,
+	) -> Result<(), Error> {
+		// Names have already been restricted to ASCII, so each byte is one
+		// UTF-16 unit. Plist values are measured with the same plist serializer
+		// the dependency writes. Exclude the unqualified multi-leaf writer.
+		let record_bytes = RECORD_HEADER_BYTES + name.len() * UTF16_UNIT_BYTES + payload_bytes;
+		self.used_bytes += record_bytes;
+		if self.used_bytes > BTreeMaster::PAGE_SIZE.as_usize() {
+			return Err(Error::StoreBudget);
+		}
+		self.records.push(Record::new(name, field, value));
+		Ok(())
+	}
+}
+
+fn plist_payload_size(plist: &PropertyList) -> Result<usize, Error> {
+	let mut bytes = Vec::new();
+	plist.to_writer_binary(&mut bytes)?;
+	Ok(LENGTH_BYTES + bytes.len())
+}
+
+fn validate_item_name(name: &str) -> Result<(), Error> {
+	if name.is_empty()
+		|| name.len() > MAX_CATALOG_NAME_BYTES
+		|| name == CURRENT_FOLDER
+		|| name == PARENT_FOLDER
+		|| name.contains(NAME_SEPARATORS)
+		|| !name.bytes().all(|byte| PRINTABLE_ASCII.contains(&byte))
+	{
+		return Err(Error::ItemName);
+	}
+	Ok(())
+}
+
+fn integer_point(point: f64) -> Option<u32> {
+	((0.0..=f64::from(u32::MAX)).contains(&point) && point.fract() == 0.0).then_some(point as u32)
+}
