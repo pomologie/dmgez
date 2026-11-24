@@ -2,7 +2,7 @@
 
 A pure Rust library and CLI for creating, reading, and manipulating macOS disk images.
 
-The CLI wraps an existing sector-aligned raw image in single-segment UDRO or UDZO. Enable `lzfse` for ULFO. The optional `inspect` feature enables metadata reports, container verification, and raw export.
+The CLI wraps an existing sector-aligned raw image in single-segment UDRO or UDZO. Enable `lzfse` for ULFO. The optional `inspect` feature enables metadata reports, run-space analysis, container verification, and raw export.
 
 ```sh
 cargo run --locked -- wrap-raw volume.raw -o volume.dmg
@@ -11,6 +11,7 @@ cargo run --locked --features lzfse -- wrap-raw volume.raw --format ulfo -o comp
 cargo run --locked --features inspect -- inspect volume.dmg
 cargo run --locked --features inspect -- inspect volume.dmg --json --run-limit 32
 cargo run --locked --features inspect -- inspect volume.dmg --partitions --json
+cargo run --locked --features inspect -- analyze volume.dmg --json
 cargo run --locked --features inspect -- verify volume.dmg
 cargo run --locked --features inspect -- verify volume.dmg --quick --json
 cargo run --locked --features inspect -- unwrap-raw volume.dmg -o exported.raw

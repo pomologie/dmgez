@@ -9,6 +9,7 @@ mod wrap;
 
 const WRAP_RAW_COMMAND: &str = "wrap-raw";
 const INSPECT_COMMAND: &str = "inspect";
+const ANALYZE_COMMAND: &str = "analyze";
 const UNWRAP_RAW_COMMAND: &str = "unwrap-raw";
 const THREADS_ARG_ID: &str = "threads";
 const THREADS_VALUE_NAME: &str = "THREADS";
@@ -60,6 +61,13 @@ enum Command {
 		/// Maximum number of runs in the optional detail page.
 		#[arg(long, id = RUN_LIMIT_ARG)]
 		run_limit: Option<usize>,
+	},
+	/// Measure stored and logical byte counts from a disk image's run map.
+	#[command(name = ANALYZE_COMMAND)]
+	Analyze {
+		image: PathBuf,
+		#[arg(long)]
+		json: bool,
 	},
 	/// Check UDIF integrity at the requested scope.
 	Verify {
@@ -134,6 +142,7 @@ fn run(command: Command) -> CliResult {
 					)),
 				),
 				(INSPECT_COMMAND, cfg!(feature = "inspect")),
+				(ANALYZE_COMMAND, cfg!(feature = "inspect")),
 				(VERIFY_CONTAINER_CAPABILITY, cfg!(feature = "inspect")),
 				(UNWRAP_RAW_COMMAND, cfg!(feature = "inspect")),
 			] {
@@ -160,13 +169,16 @@ fn run(command: Command) -> CliResult {
 			run_limit,
 		} => inspect::show(&image, json, partitions, run_offset.unwrap_or(0), run_limit),
 		#[cfg(feature = "inspect")]
+		Command::Analyze { image, json } => inspect::analyze(&image, json),
+		#[cfg(feature = "inspect")]
 		Command::Verify { image, json, scope } => inspect::verify(&image, json, scope),
 		#[cfg(feature = "inspect")]
 		Command::UnwrapRaw { image, output } => inspect::unwrap(&image, &output),
 		#[cfg(not(feature = "inspect"))]
-		Command::Inspect { .. } | Command::Verify { .. } | Command::UnwrapRaw { .. } => {
-			Err("feature not compiled: inspect".into())
-		}
+		Command::Inspect { .. }
+		| Command::Analyze { .. }
+		| Command::Verify { .. }
+		| Command::UnwrapRaw { .. } => Err("feature not compiled: inspect".into()),
 	}
 }
 

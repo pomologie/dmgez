@@ -43,6 +43,17 @@ const UDIF_V4: &str = "UDIF v4";
 const CRC32: &str = "crc32";
 const UNKNOWN: &str = "unknown";
 const PARTIAL: &str = "partial";
+const OUTSIDE_DATA_FORK_KEY: &str = "outside_data_fork_bytes";
+const UNMAPPED_DATA_FORK_KEY: &str = "unmapped_data_fork_bytes";
+const MAPPED_STORAGE_RATIO_KEY: &str = "mapped_storage_ratio";
+const CONTAINER_STORAGE_RATIO_KEY: &str = "container_storage_ratio";
+const RAW_ENCODING: &str = "raw";
+const ZERO_ENCODING: &str = "zero";
+const IGNORE_ENCODING: &str = "ignore";
+const ZLIB_ENCODING: &str = "zlib";
+const LZFSE_ENCODING: &str = "lzfse";
+const LZMA2_ENCODING: &str = "lzma2";
+const OTHER_ENCODING: &str = "other";
 
 fn open_source(path: &Path) -> Result<FileSource, dmgez_udif::Error> {
 	FileSource::new(File::open(path)?)
@@ -154,6 +165,48 @@ fn show_disk(disk: &DiskReport) {
 		}
 		_ => report_field(DISK_KEY, UNKNOWN),
 	}
+}
+
+pub(crate) fn analyze(path: &Path, json: bool) -> CliResult {
+	let image = Image::open(open_source(path)?, Limits::default())?;
+	let report = dmgez_inspector::analyze(&image);
+	if json {
+		return print_json(&report);
+	}
+	report_field(PHYSICAL_BYTES_KEY, report.container_bytes);
+	report_field(LOGICAL_BYTES_KEY, report.runs.logical_bytes);
+	report_field(OUTSIDE_DATA_FORK_KEY, report.outside_data_fork_bytes);
+	report_field(UNMAPPED_DATA_FORK_KEY, report.unmapped_data_fork_bytes);
+	report_field(
+		MAPPED_STORAGE_RATIO_KEY,
+		format_args!("{}/{}", report.runs.stored_bytes, report.runs.logical_bytes),
+	);
+	report_field(
+		CONTAINER_STORAGE_RATIO_KEY,
+		format_args!("{}/{}", report.container_bytes, report.runs.logical_bytes),
+	);
+	let groups = report.by_encoding;
+	for (encoding, group) in [
+		(RAW_ENCODING, groups.raw),
+		(ZERO_ENCODING, groups.zero),
+		(IGNORE_ENCODING, groups.ignore),
+		(ZLIB_ENCODING, groups.zlib),
+		(LZFSE_ENCODING, groups.lzfse),
+		(LZMA2_ENCODING, groups.lzma2),
+		(OTHER_ENCODING, groups.other),
+	] {
+		if group.count > 0 {
+			report_field(
+				encoding,
+				format_args!(
+					"{} runs, {} logical bytes, {} stored bytes",
+					group.count, group.logical_bytes, group.stored_bytes
+				),
+			);
+		}
+	}
+	report_field(VERIFICATION_KEY, report.coverage.payload.as_str());
+	Ok(())
 }
 
 pub(crate) fn verify(path: &Path, json: bool, scope: VerificationFlags) -> CliResult {

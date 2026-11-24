@@ -3,6 +3,7 @@
 //! Inspection reports container metadata and can probe the logical disk layout.
 //! Verification checks the requested scope and records unavailable checks.
 
+mod analysis;
 mod container;
 mod diagnostic;
 mod disk;
@@ -10,6 +11,7 @@ mod verification;
 
 use serde::{Serialize, Serializer};
 
+pub use analysis::{AnalysisReport, RunSpace, RunSpaceByEncoding, analyze};
 pub use container::{
 	ByteRange, ChecksumDeclaration, ContainerFormat, ContainerSummary, InspectionReport,
 	MAX_RUN_PAGE_SIZE, Run, RunEncoding, RunPage, RunSummary, RunWindow, SegmentId, inspect,
@@ -33,6 +35,7 @@ pub const SCHEMA_VERSION: u32 = 1;
 pub enum ReportOperation {
 	Inspect,
 	Verify,
+	Analyze,
 }
 
 /// Layers supported by this report service. Availability of individual run

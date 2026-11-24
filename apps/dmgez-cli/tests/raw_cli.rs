@@ -80,6 +80,27 @@ fn reports_native_gpt_byte_ranges_without_claiming_verification() {
 	assert_eq!(report["coverage"]["filesystem"], "not_checked");
 }
 
+#[cfg(feature = "inspect")]
+#[test]
+fn analyzes_the_native_image_run_map() {
+	const NATIVE_HYBRID: &str = "../../tests/fixtures/images/hybrid-UDZO.dmg";
+	let image = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(NATIVE_HYBRID);
+	let output = Command::new(env!("CARGO_BIN_EXE_dmgez"))
+		.arg("analyze")
+		.arg(image)
+		.arg("--json")
+		.output()
+		.unwrap();
+	assert!(output.status.success());
+	let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+	assert_eq!(report["operation"], "analyze");
+	assert_eq!(report["container_bytes"], "6569");
+	assert_eq!(report["runs"]["logical_bytes"], "921600");
+	assert_eq!(report["runs"]["stored_bytes"], "918");
+	assert_eq!(report["by_encoding"]["ignore"]["count"], 3);
+	assert_eq!(report["coverage"]["payload"], "not_checked");
+}
+
 #[cfg(all(feature = "build", feature = "inspect"))]
 #[test]
 fn wraps_inspects_verifies_and_exports_through_the_cli() {
