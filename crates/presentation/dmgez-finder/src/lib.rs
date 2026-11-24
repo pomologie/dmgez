@@ -1,8 +1,9 @@
-//! Generate deterministic Finder presentation stores for new image folders.
+//! Generate and inspect Finder presentation stores for image folders.
 //!
 //! The initial profile writes icon-view settings and integer item positions.
 //! Each store uses one B-tree leaf and contains no host filesystem references.
 
+pub mod inspection;
 mod layout;
 mod records;
 

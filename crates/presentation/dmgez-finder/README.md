@@ -17,7 +17,13 @@ The writer is limited to one 4096-byte B-tree leaf. In a scratch test, `ds_parse
 ```sh
 python3 -m venv /tmp/dmgez-finder-oracle
 /tmp/dmgez-finder-oracle/bin/python -m pip install ds_store==1.3.4 mac_alias==2.2.3
-PATH="/tmp/dmgez-finder-oracle/bin:$PATH" cargo test --locked -p dmgez-finder -- --include-ignored
+PATH="/tmp/dmgez-finder-oracle/bin:$PATH" cargo test --locked -p dmgez-finder --test layout --test inspection -- --include-ignored
 ```
+
+## Read-only inspection
+
+`inspection::inspect` reports `bwsp`, `icvp`, `icvl`, `Iloc` and `vSrn` from single-leaf stores. The caller sets limits on input bytes, record counts, filenames and flat binary plist dictionaries. Unknown records retain their name and four-byte tags when their payload length is known. Unreported plist fields retain key names only. Alias resolution, free-list verification and multi-leaf inspection remain outside this profile.
+
+The D-READ-02 layout checks use an independent Python-written synthetic store and an unchanged, Finder-authored fixture with three icon locations. The native fixture uses a 128-byte physical leaf allocation. The Python fixture uses an 8192-byte allocation for a 4096-byte logical leaf. Both allocations produce bounded record reads. [Native fixture provenance](tests/fixtures/README.md)
 
 `ds_parser` 0.4.0 and its transitive dependency `alias_record` 0.3.0 use the Blue Oak Model License 1.0.0. [License text](https://blueoakcouncil.org/license/1.0.0)
