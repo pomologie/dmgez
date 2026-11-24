@@ -1,0 +1,19 @@
+[package]
+name = "dmgez-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "=0.4.13"
+dmgez-udif = { path = "../crates/formats/dmgez-udif", default-features = false, features = ["read", "zlib"] }
+
+[[bin]]
+name = "udif"
+path = "fuzz_targets/udif.rs"
+test = false
+doc = false
+bench = false
