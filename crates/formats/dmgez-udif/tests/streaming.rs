@@ -1,6 +1,9 @@
 #![cfg(feature = "write")]
 
-use std::io::{self, Write};
+use std::{
+	io::{self, Read, Write},
+	num::NonZeroUsize,
+};
 
 use dmgez_udif::{
 	Error, SECTOR_BYTES,
@@ -46,6 +49,44 @@ fn rejects_unaligned_short_long_and_over_budget_input() {
 		write_image(&aligned[..], SECTOR_BYTES, io::sink(), &physical),
 		Err(Error::ResourceLimit(_))
 	));
+}
+
+#[test]
+fn validates_the_same_payload_budget_before_streaming() {
+	struct Unopened;
+	impl Read for Unopened {
+		fn read(&mut self, _buffer: &mut [u8]) -> io::Result<usize> {
+			panic!("rejected writer must not read source bytes");
+		}
+	}
+
+	let mut options = WriteOptions {
+		profile: Profile::Udro,
+		chunk_bytes: SECTOR_SIZE,
+		max_buffer_bytes: SECTOR_SIZE - 1,
+		..WriteOptions::default()
+	};
+	let Err(Error::ResourceLimit(expected)) = options.admit(NonZeroUsize::MIN) else {
+		panic!("pure admission must reject insufficient payload memory");
+	};
+	assert!(matches!(
+		write_image(Unopened, SECTOR_BYTES, io::sink(), &options),
+		Err(Error::ResourceLimit(actual)) if actual == expected
+	));
+
+	options.max_buffer_bytes = SECTOR_SIZE;
+	let logical = [0; 2 * SECTOR_SIZE];
+	let logical_bytes = logical.len() as u64;
+	let admitted = options.admit(NonZeroUsize::MIN).unwrap();
+	let report = write_image(logical.as_slice(), logical_bytes, io::sink(), &options).unwrap();
+	assert_eq!(
+		report.raw_runs,
+		options.max_data_runs(logical_bytes).unwrap()
+	);
+	assert_eq!(
+		report.accounted_payload_bytes,
+		admitted.accounted_payload_bytes()
+	);
 }
 
 #[test]

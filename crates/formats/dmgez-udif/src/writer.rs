@@ -4,6 +4,7 @@ mod scheduler;
 
 use std::{
 	io::{self, Read, Write},
+	num::NonZeroUsize,
 	sync::{
 		Arc,
 		atomic::{AtomicBool, Ordering},
@@ -25,7 +26,7 @@ const DEFAULT_ZLIB_LEVEL: u8 = 6;
 const MAX_ZLIB_LEVEL: u8 = 9;
 const DEFAULT_IMAGE_SIZE_LIMIT_BYTES: u64 = 1 << 40;
 const DEFAULT_PAYLOAD_BUDGET_BYTES: usize = 32 << 20;
-const TERMINATOR_RECORD_COUNT: u64 = 1;
+const TERMINATOR_RECORD_COUNT: usize = 1;
 const RAW_ONLY_BUFFER_SECTORS: u32 = 0;
 // Native 1 MiB zlib chunks declare 2056 buffer sectors for 2048 decoded sectors.
 const ZLIB_BUFFER_HEADROOM_SECTORS: u32 = 8;
@@ -117,6 +118,93 @@ impl Default for WriteOptions {
 	}
 }
 
+/// Resolved worker width and peak charged payload allocations for one batch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct WriteAdmission {
+	workers: NonZeroUsize,
+	accounted_payload_bytes: usize,
+}
+
+impl WriteAdmission {
+	/// Returns serial execution or a fixed parallel width already admitted by the budget.
+	#[must_use]
+	pub const fn execution(self) -> Execution {
+		if self.workers.get() == NonZeroUsize::MIN.get() {
+			Execution::Serial
+		} else {
+			Execution::Parallel {
+				workers: self.workers.get(),
+			}
+		}
+	}
+
+	/// Returns the admitted peak in-flight payload and accounted codec scratch.
+	#[must_use]
+	pub const fn accounted_payload_bytes(self) -> usize {
+		self.accounted_payload_bytes
+	}
+}
+
+impl WriteOptions {
+	/// Maximum number of data runs under the current single-table profile.
+	pub const MAX_DATA_RUNS: usize = MAX_RECORDS - TERMINATOR_RECORD_COUNT;
+
+	/// Validates encoder settings and resolves worker width without allocating or reading.
+	/// An explicit worker count is a cap chosen by the caller. The supplied
+	/// host width is used only by automatic parallel scheduling.
+	///
+	/// # Errors
+	///
+	/// Rejects unavailable codec or scheduling features, invalid chunk size or
+	/// level, and budgets insufficient for the requested scheduling.
+	pub fn admit(&self, available_workers: NonZeroUsize) -> Result<WriteAdmission, Error> {
+		self.validate_chunk_bytes()?;
+		if self.zlib_level > MAX_ZLIB_LEVEL {
+			return Err(Error::ResourceLimit("zlib level must be between 0 and 9"));
+		}
+		if self.profile == Profile::Udzo && !cfg!(feature = "zlib") {
+			return Err(Error::FeatureNotCompiled("zlib"));
+		}
+		if self.max_physical_bytes <= trailer::BYTES as u64 {
+			return Err(Error::ResourceLimit("physical image size"));
+		}
+		scheduler::admit(self, available_workers)
+	}
+
+	/// Returns the worst-case data run count for a finite logical disk.
+	/// Adjacent zero chunks may reduce the emitted count.
+	///
+	/// # Errors
+	///
+	/// Rejects invalid geometry, chunk settings, or sizes exceeding the
+	/// logical size or single-table record limits.
+	pub fn max_data_runs(&self, logical_bytes: u64) -> Result<usize, Error> {
+		if logical_bytes == 0 || !logical_bytes.is_multiple_of(SECTOR_BYTES) {
+			return Err(Error::UnalignedSource);
+		}
+		if logical_bytes > self.max_logical_bytes {
+			return Err(Error::ResourceLimit("logical disk size"));
+		}
+		self.validate_chunk_bytes()?;
+		let runs = logical_bytes.div_ceil(self.chunk_bytes as u64);
+		if runs > Self::MAX_DATA_RUNS as u64 {
+			return Err(Error::ResourceLimit("maximum block-map records"));
+		}
+		Ok(runs as usize)
+	}
+
+	fn validate_chunk_bytes(&self) -> Result<(), Error> {
+		if !(SECTOR_BYTES as usize..=MAX_CHUNK_BYTES).contains(&self.chunk_bytes)
+			|| !self.chunk_bytes.is_multiple_of(SECTOR_BYTES as usize)
+		{
+			return Err(Error::ResourceLimit(
+				"chunk size must be sector-aligned and at most 1 MiB",
+			));
+		}
+		Ok(())
+	}
+}
+
 /// Geometry and checksums of a successfully completed streaming write.
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
@@ -155,10 +243,18 @@ pub fn write_image(
 	options: &WriteOptions,
 ) -> Result<WriteReport, Error> {
 	options.cancellation.check()?;
-	let max_runs = admit(logical_bytes, options)?;
-	let scheduler = Scheduler::new(options)?;
+	let max_records = options.max_data_runs(logical_bytes)? + TERMINATOR_RECORD_COUNT;
+	let available_workers = match options.execution {
+		#[cfg(feature = "parallel")]
+		Execution::Parallel {
+			workers: Execution::AUTO_WORKERS,
+		} => std::thread::available_parallelism().unwrap_or(NonZeroUsize::MIN),
+		_ => NonZeroUsize::MIN,
+	};
+	let admission = options.admit(available_workers)?;
+	let scheduler = Scheduler::new(admission)?;
 	let mut logical_crc = Hasher::new();
-	let mut data = DataFork::new(&mut sink, max_runs, options.max_physical_bytes);
+	let mut data = DataFork::new(&mut sink, max_records, options.max_physical_bytes);
 	let mut unread = logical_bytes;
 	while unread != 0 {
 		let mut batch = Vec::with_capacity(scheduler.width());
@@ -192,37 +288,11 @@ pub fn write_image(
 		Err(err) => return Err(err.into()),
 	}
 	options.cancellation.check()?;
-	data.finish(logical_crc.finalize(), options, scheduler.accounted_bytes())
-}
-
-fn admit(logical_bytes: u64, options: &WriteOptions) -> Result<usize, Error> {
-	if logical_bytes == 0 || !logical_bytes.is_multiple_of(SECTOR_BYTES) {
-		return Err(Error::UnalignedSource);
-	}
-	if logical_bytes > options.max_logical_bytes {
-		return Err(Error::ResourceLimit("logical disk size"));
-	}
-	if !(SECTOR_BYTES as usize..=MAX_CHUNK_BYTES).contains(&options.chunk_bytes)
-		|| !options.chunk_bytes.is_multiple_of(SECTOR_BYTES as usize)
-	{
-		return Err(Error::ResourceLimit(
-			"chunk size must be sector-aligned and at most 1 MiB",
-		));
-	}
-	if options.zlib_level > MAX_ZLIB_LEVEL {
-		return Err(Error::ResourceLimit("zlib level must be between 0 and 9"));
-	}
-	if options.profile == Profile::Udzo && !cfg!(feature = "zlib") {
-		return Err(Error::FeatureNotCompiled("zlib"));
-	}
-	let records = logical_bytes.div_ceil(options.chunk_bytes as u64) + TERMINATOR_RECORD_COUNT;
-	if records > MAX_RECORDS as u64 {
-		return Err(Error::ResourceLimit("maximum block-map records"));
-	}
-	if options.max_physical_bytes <= trailer::BYTES as u64 {
-		return Err(Error::ResourceLimit("physical image size"));
-	}
-	Ok(records as usize)
+	data.finish(
+		logical_crc.finalize(),
+		options,
+		admission.accounted_payload_bytes(),
+	)
 }
 
 struct RawChunk(Vec<u8>);

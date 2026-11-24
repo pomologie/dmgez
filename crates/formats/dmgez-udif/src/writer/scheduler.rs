@@ -1,53 +1,62 @@
+use std::num::NonZeroUsize;
+
 use crate::Error;
 
-use super::{Execution, RawChunk, StoredChunk, WriteOptions};
+use super::{Execution, RawChunk, StoredChunk, WriteAdmission, WriteOptions};
 
 const CODEC_WORKSPACE_BYTES: usize = 1 << 20;
-const SERIAL_WIDTH: usize = 1;
-#[cfg(feature = "parallel")]
 const AUTO_MAX_WORKERS: usize = 8;
 const MAX_WORKERS: usize = 32;
 
+pub(super) fn admit(
+	options: &WriteOptions,
+	available_workers: NonZeroUsize,
+) -> Result<WriteAdmission, Error> {
+	if !cfg!(feature = "parallel") && matches!(options.execution, Execution::Parallel { .. }) {
+		return Err(Error::FeatureNotCompiled("parallel"));
+	}
+	// Charge encoder scratch and both raw and encoded buffers before admitting any input.
+	let per_chunk = match options.profile {
+		super::Profile::Udro => options.chunk_bytes,
+		super::Profile::Udzo => 2 * options.chunk_bytes + CODEC_WORKSPACE_BYTES,
+	};
+	let capacity = options.max_buffer_bytes / per_chunk;
+	let workers = match options.execution {
+		Execution::Serial => NonZeroUsize::MIN,
+		Execution::Parallel {
+			workers: Execution::AUTO_WORKERS,
+		} => NonZeroUsize::new(available_workers.get().min(AUTO_MAX_WORKERS).min(capacity))
+			.unwrap_or(NonZeroUsize::MIN),
+		Execution::Parallel { workers } => {
+			NonZeroUsize::new(workers).expect("automatic scheduling already handled zero workers")
+		}
+	};
+	let width = workers.get();
+	if width > MAX_WORKERS || width > capacity {
+		return Err(Error::ResourceLimit(
+			"worker count or payload buffer budget",
+		));
+	}
+	Ok(WriteAdmission {
+		workers,
+		accounted_payload_bytes: width * per_chunk,
+	})
+}
+
 pub(super) struct Scheduler {
-	width: usize,
-	accounted_bytes: usize,
+	width: NonZeroUsize,
 	#[cfg(feature = "parallel")]
 	pool: Option<rayon::ThreadPool>,
 }
 
 impl Scheduler {
-	pub(super) fn new(options: &WriteOptions) -> Result<Self, Error> {
-		// Include encoder scratch and both raw and encoded buffers before reading any input.
-		let per_chunk = match options.profile {
-			super::Profile::Udro => options.chunk_bytes,
-			super::Profile::Udzo => 2 * options.chunk_bytes + CODEC_WORKSPACE_BYTES,
-		};
-		let capacity = options.max_buffer_bytes / per_chunk;
-		let width = match options.execution {
-			Execution::Serial => SERIAL_WIDTH,
-			#[cfg(feature = "parallel")]
-			Execution::Parallel {
-				workers: Execution::AUTO_WORKERS,
-			} => std::thread::available_parallelism()
-				.map_or(SERIAL_WIDTH, std::num::NonZero::get)
-				.min(AUTO_MAX_WORKERS)
-				.min(capacity)
-				.max(SERIAL_WIDTH),
-			#[cfg(not(feature = "parallel"))]
-			Execution::Parallel { .. } => return Err(Error::FeatureNotCompiled("parallel")),
-			#[cfg(feature = "parallel")]
-			Execution::Parallel { workers } => workers,
-		};
-		if width > MAX_WORKERS || width > capacity {
-			return Err(Error::ResourceLimit(
-				"worker count or payload buffer budget",
-			));
-		}
+	pub(super) fn new(admission: WriteAdmission) -> Result<Self, Error> {
+		let width = admission.workers;
 		#[cfg(feature = "parallel")]
-		let pool = if width > SERIAL_WIDTH {
+		let pool = if width > NonZeroUsize::MIN {
 			Some(
 				rayon::ThreadPoolBuilder::new()
-					.num_threads(width)
+					.num_threads(width.get())
 					.build()
 					.map_err(Error::WorkerPool)?,
 			)
@@ -56,18 +65,13 @@ impl Scheduler {
 		};
 		Ok(Self {
 			width,
-			accounted_bytes: width * per_chunk,
 			#[cfg(feature = "parallel")]
 			pool,
 		})
 	}
 
 	pub(super) fn width(&self) -> usize {
-		self.width
-	}
-
-	pub(super) fn accounted_bytes(&self) -> usize {
-		self.accounted_bytes
+		self.width.get()
 	}
 
 	pub(super) fn encode(
