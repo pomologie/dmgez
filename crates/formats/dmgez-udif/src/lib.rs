@@ -22,6 +22,9 @@ mod lzma;
 #[cfg(any(feature = "read", feature = "write"))]
 mod resource;
 mod signature_append;
+mod signature_directory;
+#[cfg(feature = "signature-integrity")]
+mod signature_integrity;
 mod signature_ticket;
 #[cfg(any(feature = "read", feature = "write"))]
 mod trailer;
@@ -40,7 +43,15 @@ pub use signature_append::{
 	portable_signing_limit, signed_signature_range, trailer_for_signature_digest,
 	validate_signature_append, validate_staple_layout, validate_unsigned_signature_fields,
 };
-pub use signature_ticket::{has_stapled_ticket, validate_ticket_addition};
+pub use signature_directory::{EmbeddedCodeDirectory, embedded_code_directory};
+#[cfg(feature = "signature-integrity")]
+pub use signature_integrity::{
+	SignatureIntegrityError, read_embedded_signature, verify_code_directory_digests,
+	verify_signature_integrity,
+};
+pub use signature_ticket::{
+	MAX_EMBEDDED_SIGNATURE_BYTES, has_stapled_ticket, validate_ticket_addition,
+};
 pub use trailer_header::{TRAILER_BYTES, check_trailer_header};
 
 #[cfg(kani)]

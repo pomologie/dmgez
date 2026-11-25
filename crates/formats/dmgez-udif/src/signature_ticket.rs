@@ -5,14 +5,15 @@ use crate::Error;
 // Apple Security's sigblob.h and codedirectory.h define these wire values.
 // diskimagerep.cpp reads the ticket from the embedded signature.
 const EMBEDDED_SIGNATURE_MAGIC: u32 = 0xfade_0cc0;
-const TICKET_SLOT: u32 = 0x0001_0002;
+pub(super) const TICKET_SLOT: u32 = 0x0001_0002;
 const BLOB_WRAPPER_MAGIC: u32 = 0xfade_0b01;
 const WORD_BYTES: usize = size_of::<u32>();
 const BLOB_HEADER_BYTES: usize = 2 * WORD_BYTES;
 const SUPERBLOB_HEADER_BYTES: usize = 3 * WORD_BYTES;
 const INDEX_ENTRY_BYTES: usize = 2 * WORD_BYTES;
 const MAX_COMPONENTS: usize = 64;
-const MAX_SIGNATURE_BYTES: usize = 16 * 1024 * 1024;
+/// Maximum size of an embedded UDIF signature accepted by the envelope parser.
+pub const MAX_EMBEDDED_SIGNATURE_BYTES: usize = 16 * 1024 * 1024;
 
 /// Reports whether a bounded, well-formed embedded signature has a ticket slot.
 ///
@@ -58,10 +59,10 @@ pub fn validate_ticket_addition(before: &[u8], after: &[u8]) -> Result<(), Error
 	Ok(())
 }
 
-struct Component<'signature> {
-	slot: u32,
+pub(super) struct Component<'signature> {
+	pub(super) slot: u32,
 	offset: usize,
-	data: &'signature [u8],
+	pub(super) data: &'signature [u8],
 }
 
 impl<'signature> Component<'signature> {
@@ -70,8 +71,8 @@ impl<'signature> Component<'signature> {
 	}
 }
 
-fn components(signature: &[u8]) -> Result<Vec<Component<'_>>, Error> {
-	if signature.len() > MAX_SIGNATURE_BYTES {
+pub(super) fn components(signature: &[u8]) -> Result<Vec<Component<'_>>, Error> {
+	if signature.len() > MAX_EMBEDDED_SIGNATURE_BYTES {
 		return Err(Error::ResourceLimit("UDIF embedded signature bytes"));
 	}
 	if word(signature, 0)? != EMBEDDED_SIGNATURE_MAGIC
@@ -142,7 +143,7 @@ fn read_component(signature: &[u8], offset: usize, payload_offset: usize) -> Res
 	))
 }
 
-fn word(bytes: &[u8], offset: usize) -> Result<u32, Error> {
+pub(super) fn word(bytes: &[u8], offset: usize) -> Result<u32, Error> {
 	bytes
 		.get(offset..)
 		.and_then(<[u8]>::first_chunk::<WORD_BYTES>)
@@ -151,7 +152,7 @@ fn word(bytes: &[u8], offset: usize) -> Result<u32, Error> {
 		.ok_or(Error::Corrupt("truncated UDIF embedded signature field"))
 }
 
-fn size(bytes: &[u8], offset: usize) -> Result<usize, Error> {
+pub(super) fn size(bytes: &[u8], offset: usize) -> Result<usize, Error> {
 	usize::try_from(word(bytes, offset)?)
 		.map_err(|_| Error::ResourceLimit("UDIF embedded signature field"))
 }

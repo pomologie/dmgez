@@ -1,0 +1,36 @@
+{
+  "id": "tiny-UDZO-adhoc-sha256",
+  "mode": "UDZO with one ad hoc SHA-256 CodeDirectory",
+  "license": "Apache-2.0; synthetic data only",
+  "provenance": "Copy of tiny-UDZO.dmg with a deterministic ad hoc signature and no signing identity or timestamp",
+  "derived_from": "tiny-UDZO.dmg",
+  "os": "14.7.2",
+  "os_build": "23H311",
+  "architecture": "arm64",
+  "generator_argv": [
+    "/usr/bin/codesign",
+    "--sign",
+    "-",
+    "--timestamp=none",
+    "--digest-algorithm=sha256",
+    "--identifier",
+    "org.dmgez.udif-fixture",
+    "--",
+    "tiny-UDZO-adhoc-sha256.dmg"
+  ],
+  "image_sha256": "5b2bd2040ed7234affd8db97f05717a7541f821470d1451d26699f4ec1f8395e",
+  "physical_bytes": 3947,
+  "signature_offset": 3084,
+  "signature_bytes": 351,
+  "code_directory_offset": 3120,
+  "requirements_offset": 3415,
+  "code_directory_version": 131328,
+  "native_verify_argv": [
+    "/usr/bin/codesign",
+    "--verify",
+    "--strict",
+    "--",
+    "tiny-UDZO-adhoc-sha256.dmg"
+  ],
+  "native_verify_exit_code": 0
+}
