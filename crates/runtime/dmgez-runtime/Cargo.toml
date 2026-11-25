@@ -1,0 +1,29 @@
+[package]
+name = "dmgez-runtime"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared disk image workflows for dmgez applications"
+
+[features]
+image = ["dep:dmgez-inspector", "dep:dmgez-udif", "dep:dmgez-vfs", "dep:thiserror"]
+raw-export = ["image", "dep:dmgez-core", "dmgez-core/staging"]
+
+[dependencies]
+# Workspace formats
+dmgez-udif = { workspace = true, optional = true, features = ["read"] }
+
+# Workspace foundation
+dmgez-core = { workspace = true, optional = true }
+dmgez-vfs = { workspace = true, optional = true }
+
+# Workspace inspection
+dmgez-inspector = { workspace = true, optional = true }
+
+# Diagnostics
+thiserror = { workspace = true, optional = true }
+
+[lints]
+workspace = true

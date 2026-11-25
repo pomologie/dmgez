@@ -15,8 +15,11 @@ dmgez-udif = { workspace = true, features = ["read"] }
 dmgez-config.workspace = true
 dmgez-core = { workspace = true, features = ["source"] }
 
-# Workspace services
+# Workspace inspection
 dmgez-inspector.workspace = true
+
+# Workspace runtime
+dmgez-runtime = { workspace = true, features = ["image"] }
 
 # Hashes and checksums
 sha2.workspace = true

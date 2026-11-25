@@ -1152,6 +1152,7 @@ dependencies = [
  "dmgez-mount",
  "dmgez-operations",
  "dmgez-preview",
+ "dmgez-runtime",
  "dmgez-signing",
  "dmgez-udif",
  "dmgez-vfs",
@@ -1218,6 +1219,7 @@ dependencies = [
  "dmgez-inspector",
  "dmgez-lint",
  "dmgez-preview",
+ "dmgez-runtime",
  "dmgez-udif",
  "eframe",
  "rfd",
@@ -1263,6 +1265,7 @@ dependencies = [
  "dmgez-config",
  "dmgez-core",
  "dmgez-inspector",
+ "dmgez-runtime",
  "dmgez-udif",
  "fs_at",
  "rmcp",
@@ -1319,6 +1322,17 @@ dependencies = [
  "epaint",
  "png",
  "proptest",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "dmgez-runtime"
+version = "0.1.0"
+dependencies = [
+ "dmgez-core",
+ "dmgez-inspector",
+ "dmgez-udif",
+ "dmgez-vfs",
  "thiserror 2.0.21",
 ]
 

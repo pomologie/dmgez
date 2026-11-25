@@ -24,6 +24,9 @@ dmgez-core = { workspace = true, features = ["staging"] }
 # Workspace presentation
 dmgez-preview.workspace = true
 
+# Workspace runtime
+dmgez-runtime = { workspace = true, features = ["image"] }
+
 # Workspace services
 dmgez-inspector = { workspace = true, features = ["zlib"] }
 dmgez-lint.workspace = true

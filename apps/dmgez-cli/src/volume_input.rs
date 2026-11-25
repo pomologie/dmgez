@@ -1,4 +1,13 @@
-use std::{io, num::NonZeroU32, path::Path};
+use std::{num::NonZeroU32, path::Path};
+
+#[cfg(any(
+	feature = "apfs-read",
+	all(
+		any(feature = "hfsplus-extract", feature = "hfsplus-install"),
+		any(target_os = "linux", target_os = "macos")
+	)
+))]
+use std::io;
 
 #[cfg(feature = "apfs-read")]
 use dmgez_apfs_read::{
@@ -7,8 +16,9 @@ use dmgez_apfs_read::{
 };
 #[cfg(feature = "hfsplus-read")]
 use dmgez_hfsplus_read::browse::{self, HfsView, VolumeSignature};
-use dmgez_udif::reader::{FileSource, Image, Limits as ImageLimits, ReadAt};
-use dmgez_vfs::{Disk, Layout, Limits as DiskLimits, LogicalDisk, PartitionId, Raw, VolumeId};
+use dmgez_runtime::disk::{self, Encoding};
+use dmgez_udif::reader::{FileSource, Limits as ImageLimits, ReadAt};
+use dmgez_vfs::{Disk, Limits as DiskLimits, LogicalDisk, VolumeId};
 #[cfg(feature = "apfs-read")]
 use dmgez_vfs::{Filesystem, volume::VolumeView};
 
@@ -334,32 +344,17 @@ pub(super) fn with_logical_disk<T>(
 	raw: bool,
 	read: impl FnOnce(&mut dyn LogicalDisk) -> CliResult<T>,
 ) -> CliResult<T> {
-	let borrowed = BorrowedSource(source);
-	let mut raw_disk;
-	let mut udif_disk;
-	let logical: &mut dyn LogicalDisk = if raw {
-		raw_disk = Raw(borrowed);
-		&mut raw_disk
+	let encoding = if raw {
+		Encoding::Raw
 	} else {
-		udif_disk = Image::open_release(borrowed, ImageLimits::default())?;
-		&mut udif_disk
+		Encoding::Udif(ImageLimits::default())
 	};
-	read(logical)
+	disk::with_logical_disk(BorrowedSource(source), encoding, read)
 }
 
 pub(super) fn select(
 	disk: &Disk<impl LogicalDisk>,
 	slot: Option<NonZeroU32>,
 ) -> CliResult<VolumeId> {
-	let Some(slot) = slot else {
-		return Ok(disk.select_volume(None)?);
-	};
-	let Layout::Partitioned { scheme, .. } = *disk.layout() else {
-		return Err(io::Error::new(
-			io::ErrorKind::InvalidInput,
-			"partition selection requires a recognized partition map",
-		)
-		.into());
-	};
-	Ok(disk.select_volume(Some(VolumeId::Partition(PartitionId { scheme, slot })))?)
+	Ok(disk::select_volume(disk, slot)?)
 }

@@ -16,9 +16,9 @@ PROFILES = {
     "minimal": (["--no-default-features"], set()),
     "serial": (["--no-default-features", "--features", "build"], {"dmgez-core", "dmgez-udif", "flate2"}),
     "default": ([], RUST_SIGNING_DEPS | {"rayon"}),
-    "inspection": (["--no-default-features", "--features", "inspect"], {"dmgez-core", "dmgez-inspector", "dmgez-udif", "dmgez-vfs", "flate2", "serde_json"}),
+    "inspection": (["--no-default-features", "--features", "inspect"], {"dmgez-core", "dmgez-inspector", "dmgez-runtime", "dmgez-udif", "dmgez-vfs", "flate2", "serde_json"}),
     "remote_inspection": (["--no-default-features", "--features", "remote"],
-                          {"dmgez-core", "dmgez-inspector", "dmgez-udif", "dmgez-vfs", "flate2", "rustls", "serde_json", "ureq"}),
+                          {"dmgez-core", "dmgez-inspector", "dmgez-runtime", "dmgez-udif", "dmgez-vfs", "flate2", "rustls", "serde_json", "ureq"}),
     "conversion": (["--no-default-features", "--features", "convert"], {"dmgez-core", "dmgez-operations", "dmgez-udif", "flate2"}),
     "parallel_conversion": (["--no-default-features", "--features", "convert,parallel"], {"dmgez-core", "dmgez-operations", "dmgez-udif", "flate2", "rayon"}),
     "comparison": (["--no-default-features", "--features", "diff"], {"dmgez-core", "dmgez-diff", "dmgez-udif", "dmgez-vfs", "flate2", "serde_json"}),
@@ -38,7 +38,7 @@ OUTSIDE_DEFAULT = {
     "hfsplus-reader", "lzfse_rust", "lzma-rust2", "notify",
     "reqwest", "rmcp", "tokio", "udif", "winfsp",
 }
-PROFILE_DEPS = {"apple-codesign", "blake3", "dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-inspector", "dmgez-lint", "dmgez-macho", "dmgez-operations", "dmgez-preview", "dmgez-signing", "dmgez-udif", "dmgez-vfs", "ds_parser", "epaint", "flate2", "png", "rayon", "rustls", "serde_json", "sha2", "ureq"}
+PROFILE_DEPS = {"apple-codesign", "blake3", "dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-inspector", "dmgez-lint", "dmgez-macho", "dmgez-operations", "dmgez-preview", "dmgez-runtime", "dmgez-signing", "dmgez-udif", "dmgez-vfs", "ds_parser", "epaint", "flate2", "png", "rayon", "rustls", "serde_json", "sha2", "ureq"}
 
 
 def main():

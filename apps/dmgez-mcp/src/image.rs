@@ -1,9 +1,10 @@
 use std::cell::Cell;
 
-use dmgez_inspector::{ContainerSummary, inspect};
+use dmgez_inspector::ContainerSummary;
+use dmgez_runtime::image::{ImageSession, InspectionScope, MetadataBudget};
 use dmgez_udif::{
 	Error, TRAILER_BYTES,
-	reader::{FileSource, Image, Limits, ReadAt},
+	reader::{FileSource, Limits, ReadAt},
 };
 use rmcp::schemars::{self, JsonSchema};
 use serde::Serialize;
@@ -158,12 +159,13 @@ impl LocalRoot {
 			remaining_bytes: Cell::new(MAX_METADATA_BYTES),
 			remaining_reads: Cell::new(MAX_METADATA_READS),
 		};
-		let result = Image::open_release_with_metadata_limit(
+		let result = ImageSession::open(
 			&source,
 			IMAGE_LIMITS,
-			MAX_METADATA_BYTES as u64,
+			MetadataBudget::CombinedBytes(MAX_METADATA_BYTES as u64),
 		)
-		.map(|image| Summary::from(&inspect(&image, None).container));
+		.and_then(|mut image| image.inspect(InspectionScope::Container, None))
+		.map(|report| Summary::from(&report.container));
 		source
 			.file
 			.check_unchanged()

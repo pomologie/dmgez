@@ -4,9 +4,10 @@ use std::{fmt::Write as _, num::NonZeroU16};
 
 use dmgez_hfsplus_read::browse::{self, VolumeSignature};
 use dmgez_inspector::{DiskLimits, volume_queries::MAX_LIST_OFFSET};
+use dmgez_runtime::disk::{Encoding, with_logical_disk};
 use dmgez_udif::{
 	Cancellation, Error as ImageError,
-	reader::{Image, Limits, ReadAt},
+	reader::{Limits, ReadAt},
 };
 use dmgez_vfs::{
 	Disk, VolumeId,
@@ -209,30 +210,31 @@ fn browse_image(source: impl ReadAt, request: Request) -> Result<Observation, Er
 		#[cfg(feature = "actual-preview")]
 		Request::Preview { location, .. } => location,
 	};
-	let image = Image::open_release(source, Limits::default())?;
-	let mut disk = Disk::discover(image, DiskLimits::default())?;
-	let selected = disk.select_volume(Some(location.volume))?;
-	let limits = browse::Limits {
-		max_read_requests: MAX_FS_READS,
-		max_read_bytes: MAX_FS_READ_BYTES,
-		..browse::Limits::default()
-	};
-	match request {
-		Request::Page { location, offset } => {
-			browse::with_view_signature(&mut disk, selected, limits, |view, filesystem| {
-				folder_page(view, location, filesystem, offset)
-			})?
+	with_logical_disk(source, Encoding::Udif(Limits::default()), |logical| {
+		let mut disk = Disk::discover(logical, DiskLimits::default())?;
+		let selected = disk.select_volume(Some(location.volume))?;
+		let limits = browse::Limits {
+			max_read_requests: MAX_FS_READS,
+			max_read_bytes: MAX_FS_READ_BYTES,
+			..browse::Limits::default()
+		};
+		match request {
+			Request::Page { location, offset } => {
+				browse::with_view_signature(&mut disk, selected, limits, |view, filesystem| {
+					folder_page(view, location, filesystem, offset)
+				})?
+			}
+			Request::Details { folder, name } => {
+				browse::with_view(&mut disk, selected, limits, |view| {
+					entry_details(view, &folder, name)
+				})?
+			}
+			#[cfg(feature = "actual-preview")]
+			Request::Preview { location, max_side } => {
+				preview::render(&mut disk, selected, limits, location, max_side)
+			}
 		}
-		Request::Details { folder, name } => {
-			browse::with_view(&mut disk, selected, limits, |view| {
-				entry_details(view, &folder, name)
-			})?
-		}
-		#[cfg(feature = "actual-preview")]
-		Request::Preview { location, max_side } => {
-			preview::render(&mut disk, selected, limits, location, max_side)
-		}
-	}
+	})
 }
 
 fn folder<B: VolumeBackend<Error = browse::Error>>(

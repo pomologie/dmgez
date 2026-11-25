@@ -2,11 +2,12 @@ use std::{fs::File, sync::Arc};
 
 use dmgez_inspector::{
 	DiskLimits, InspectionReport, RunPage, RunWindow, VerificationMode, VerificationReport,
-	inspect_disk, inspect_runs, verify_with_cancellation,
+	verify_with_cancellation,
 };
+use dmgez_runtime::image::{ImageSession, InspectionScope, MetadataBudget};
 use dmgez_udif::{
 	Cancellation, Error,
-	reader::{FileSource, Image, Limits, ReadAt},
+	reader::{FileSource, Limits, ReadAt},
 };
 
 pub(crate) const RUN_PAGE_SIZE: usize = 64;
@@ -25,13 +26,15 @@ pub(crate) mod browse;
 impl ImageTab {
 	pub(crate) fn open(file: File) -> Result<Self, Error> {
 		let source = ImageSource(Arc::new(FileSource::new(file)?));
-		let mut image = Image::open_release(source.clone(), Limits::default())?;
-		let report = inspect_disk(
-			&mut image,
+		let mut image = ImageSession::open(
+			source.clone(),
+			Limits::default(),
+			MetadataBudget::ReaderLimits,
+		)?;
+		let report = image.inspect(
+			InspectionScope::Disk(DiskLimits::default()),
 			RunWindow::new(0, RUN_PAGE_SIZE),
-			DiskLimits::default(),
-		);
-		source.check_unchanged()?;
+		)?;
 		Ok(Self {
 			snapshot: Arc::new(ImageSnapshot { source, image }),
 			report,
@@ -44,16 +47,14 @@ impl ImageTab {
 
 pub(crate) struct ImageSnapshot {
 	source: ImageSource,
-	image: Image<ImageSource>,
+	image: ImageSession<ImageSource>,
 }
 
 impl ImageSnapshot {
 	pub(crate) fn run_page(&self, offset: usize) -> Result<RunPage, Error> {
 		let window = RunWindow::new(offset, RUN_PAGE_SIZE)
 			.ok_or(Error::ResourceLimit("desktop run page size"))?;
-		let page = inspect_runs(&self.image, window);
-		self.source.check_unchanged()?;
-		Ok(page)
+		self.image.run_page(window)
 	}
 
 	pub(crate) fn verify(&self, cancellation: &Cancellation) -> VerificationReport {

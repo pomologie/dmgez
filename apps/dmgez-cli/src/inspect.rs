@@ -1,19 +1,18 @@
 use std::{
 	error::Error,
 	fmt,
-	fs::File,
 	io::{self, Write},
 	num::NonZeroU32,
 	path::Path,
 };
 
-use dmgez_core::output::publish_new;
 use dmgez_inspector::{
 	CheckStatus, ChecksumDeclaration, DiagnosticDetail, DiskLimits, DiskReport, MAX_RUN_PAGE_SIZE,
 	RunWindow, VerificationMode, VerificationOutcome, VerificationReport,
 };
-use dmgez_udif::reader::{FileSource, Image, Limits, ReadAt};
-use dmgez_vfs::{Disk, Layout, PartitionId, VolumeId};
+pub(super) use dmgez_runtime::image::open_file as open_source;
+use dmgez_runtime::image::{ImageSession, InspectionScope, MetadataBudget, export_raw};
+use dmgez_udif::reader::{Limits, ReadAt};
 use serde::Serialize;
 
 use crate::{CliResult, inspect_command::Arguments, verify_command, volume_commands::Filesystem};
@@ -71,14 +70,9 @@ const ZLIB_ENCODING: &str = "zlib";
 const LZFSE_ENCODING: &str = "lzfse";
 const LZMA2_ENCODING: &str = "lzma2";
 const OTHER_ENCODING: &str = "other";
-const PARTITION_COPY_BUFFER_BYTES: usize = 64 * 1024;
 
 fn report_field(key: impl std::fmt::Display, value: impl std::fmt::Display) {
 	println!("{key} = {value}");
-}
-
-pub(super) fn open_source(path: &Path) -> Result<FileSource, dmgez_udif::Error> {
-	FileSource::new(File::open(path)?)
 }
 
 pub(super) fn show<S: ReadAt>(
@@ -96,13 +90,13 @@ pub(super) fn show<S: ReadAt>(
 		),
 		None => None,
 	};
-	let mut image = Image::open_release(open()?, Limits::default())?;
-	let report = if arguments.partitions {
-		dmgez_inspector::inspect_disk(&mut image, window, DiskLimits::default())
+	let mut image = ImageSession::open(open()?, Limits::default(), MetadataBudget::ReaderLimits)?;
+	let scope = if arguments.partitions {
+		InspectionScope::Disk(DiskLimits::default())
 	} else {
-		dmgez_inspector::inspect(&image, window)
+		InspectionScope::Container
 	};
-	image.check_source_unchanged()?;
+	let report = image.inspect(scope, window)?;
 	if arguments.json {
 		return print_json(&report);
 	}
@@ -199,9 +193,12 @@ fn show_disk(disk: &DiskReport) {
 }
 
 pub(crate) fn analyze(path: &Path, json: bool) -> CliResult {
-	let image = Image::open_release(open_source(path)?, Limits::default())?;
-	let report = dmgez_inspector::analyze(&image);
-	image.check_source_unchanged()?;
+	let image = ImageSession::open(
+		open_source(path)?,
+		Limits::default(),
+		MetadataBudget::ReaderLimits,
+	)?;
+	let report = image.analyze()?;
 	if json {
 		return print_json(&report);
 	}
@@ -364,30 +361,7 @@ fn show_filesystem_coverage(report: &VerificationReport) {
 }
 
 pub(crate) fn unwrap(path: &Path, destination: &Path, partition: Option<NonZeroU32>) -> CliResult {
-	let mut image = Image::open_release(open_source(path)?, Limits::default())?;
-	if let Some(slot) = partition {
-		let mut disk = Disk::discover(&mut image, DiskLimits::default())?;
-		let Layout::Partitioned { scheme, .. } = *disk.layout() else {
-			return Err(io::Error::new(
-				io::ErrorKind::InvalidInput,
-				"partition export requires a recognized partition map",
-			)
-			.into());
-		};
-		let mut partition = disk.window(VolumeId::Partition(PartitionId { scheme, slot }))?;
-		let mut scratch = vec![0; PARTITION_COPY_BUFFER_BYTES];
-		publish_new(
-			destination,
-			|stage| partition.write_raw_to(stage, &mut scratch, || false),
-			|_, _| Ok(()),
-		)?;
-		return Ok(());
-	}
-	publish_new(
-		destination,
-		|stage| image.write_raw_to(stage),
-		|_, _| Ok(()),
-	)?;
+	export_raw(path, destination, partition)?;
 	Ok(())
 }
 

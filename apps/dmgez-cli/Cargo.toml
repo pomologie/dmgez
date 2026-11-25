@@ -30,6 +30,8 @@ inspect = [
 	"dep:dmgez-core",
 	"dep:dmgez-inspector",
 	"dmgez-inspector/zlib",
+	"dep:dmgez-runtime",
+	"dmgez-runtime/raw-export",
 	"dep:dmgez-udif",
 	"dmgez-udif/read",
 	"dep:dmgez-vfs",
@@ -92,6 +94,9 @@ dmgez-preview = { workspace = true, optional = true }
 
 # Workspace security
 dmgez-signing = { workspace = true, optional = true }
+
+# Workspace runtime
+dmgez-runtime = { workspace = true, optional = true }
 
 # Workspace services
 dmgez-diff = { workspace = true, optional = true }

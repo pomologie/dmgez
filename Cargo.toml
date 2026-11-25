@@ -36,6 +36,7 @@ members = [
 
 	# Runtime
 	"crates/runtime/dmgez-operations",
+	"crates/runtime/dmgez-runtime",
 ]
 default-members = ["apps/dmgez-cli"]
 exclude = [
@@ -88,6 +89,7 @@ dmgez-lint = { path = "crates/inspection/dmgez-lint" }
 
 # Workspace runtime
 dmgez-operations = { path = "crates/runtime/dmgez-operations", default-features = false }
+dmgez-runtime = { path = "crates/runtime/dmgez-runtime", default-features = false }
 
 # Compression
 flate2 = { version = "=1.1.11", default-features = false, features = ["zlib-rs"] }
