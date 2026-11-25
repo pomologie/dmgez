@@ -15,14 +15,24 @@ project-build = []
 volume-icon = ["finder-write", "dmgez-hfsplus/volume-icon"]
 
 [dependencies]
-clap = { version = "=4.6.8", features = ["derive"] }
-dmgez-builder = { path = @dmgez-builder@, default-features = false }
+# Workspace foundation
 dmgez-config = { path = @dmgez-config@ }
+
+# Workspace services
+dmgez-builder = { path = @dmgez-builder@, default-features = false }
 dmgez-hfsplus = { path = @dmgez-hfsplus@, default-features = false }
 
+# Command-line interface
+clap = { version = "=4.6.8", features = ["derive"] }
+
 [dev-dependencies]
+# Workspace formats
 dmgez-udif = { path = @dmgez-udif@, default-features = false, features = ["read", "zlib"] }
+
+# HFS+ libraries
 hfsplus-format = "=0.1.0"
+
+# Filesystem access and staging
 rustix = { version = "1.1.6", features = ["fs"] }
 tempfile = "=3.27.0"
 

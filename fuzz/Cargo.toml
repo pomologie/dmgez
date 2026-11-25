@@ -8,7 +8,7 @@ edition = "2024"
 cargo-fuzz = true
 
 [dependencies]
-# Workspace crates
+# Workspace formats
 dmgez-udif = { path = "../crates/formats/dmgez-udif", default-features = false, features = ["read", "zlib", "lzfse", "lzma"] }
 
 # Fuzzing
