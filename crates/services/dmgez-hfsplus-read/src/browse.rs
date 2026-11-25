@@ -7,8 +7,9 @@ use std::{
 use dmgez_vfs::{
 	Disk, LogicalDisk, VolumeId, Window,
 	volume::{
-		DirectoryEntry, DirectoryPage, DirectoryReader, ForkKind, ForkReader, HardLink, LookupName,
-		Metadata, NodeKind, Quarantine, QuarantineScope, RawName, VolumeBackend, VolumeView,
+		DirectoryEntry, DirectoryPage, DirectoryReader, FinderInfo, ForkKind, ForkReader, HardLink,
+		LookupName, Metadata, NodeKind, Quarantine, QuarantineScope, RawName, VolumeBackend,
+		VolumeView,
 	},
 };
 use hfsplus_core::{ByteLen, ByteOffset, ReadAt};
@@ -25,6 +26,7 @@ use hfsplus_reader::{
 	overflow::{ForkKind as HfsFork, OverflowError, OverflowLimits},
 };
 
+mod finder_info;
 mod quarantine;
 mod xattrs;
 
@@ -90,6 +92,8 @@ pub enum Error {
 	ForkSelection,
 	#[error("admitted HFS+ attribute owner is missing")]
 	MissingAttributeOwner,
+	#[error("admitted HFS+ FinderInfo owner is missing")]
+	MissingFinderInfoOwner,
 	#[error("the visible HFS+ hard link and its inode both own the same attribute name")]
 	AmbiguousAttributeOwner,
 	#[error("admitted regular file is missing")]
@@ -276,6 +280,10 @@ impl<'volume, 'disk, S: LogicalDisk> VolumeBackend for HfsBackend<'volume, 'disk
 			gid: permissions.gid,
 			hard_link,
 		}))
+	}
+
+	fn finder_info(&mut self, node: CatalogId) -> Result<FinderInfo, Error> {
+		self.effective_finder_info(node)
 	}
 
 	fn read_dir(&mut self, directory: CatalogId) -> Result<Self::Directory<'_>, Error> {

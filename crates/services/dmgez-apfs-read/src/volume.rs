@@ -10,8 +10,8 @@ use apfs_reader::{
 	InodeCount, InodeId, VolumeView as NativeView, XattrData,
 };
 use dmgez_vfs::volume::{
-	DirectoryEntry, DirectoryPage, DirectoryReader, ForkKind, ForkReader, HardLink, LookupName,
-	Metadata, NodeKind, Quarantine, QuarantineScope, RawName, VolumeBackend,
+	DirectoryEntry, DirectoryPage, DirectoryReader, FinderInfo, ForkKind, ForkReader, HardLink,
+	LookupName, Metadata, NodeKind, Quarantine, QuarantineScope, RawName, VolumeBackend,
 };
 use thiserror::Error;
 
@@ -154,6 +154,13 @@ where
 			gid: inode.group,
 			hard_link,
 		}))
+	}
+
+	fn finder_info(&mut self, node: Node) -> Result<FinderInfo, Self::Error> {
+		Ok(self
+			.view
+			.finder_info(node.inode)?
+			.map_or(FinderInfo::Absent, FinderInfo::Present))
 	}
 
 	fn read_dir(&mut self, directory: Node) -> Result<Self::Directory<'_>, Self::Error> {
