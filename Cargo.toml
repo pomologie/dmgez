@@ -17,6 +17,7 @@ members = [
 ]
 default-members = ["apps/dmgez-cli"]
 exclude = [
+	"crates/services/dmgez-apfs-read",
 	"crates/services/dmgez-hfsplus",
 	"crates/services/dmgez-hfsplus-read",
 	"fuzz",
@@ -66,4 +67,4 @@ toml_edit = { version = "0.25.19", default-features = false, features = ["displa
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(feature, values("project-build", "hfsplus-read", "hfsplus-verify", "hfsplus-extract", "hfsplus-decmpfs"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(feature, values("project-build", "hfsplus-read", "hfsplus-verify", "hfsplus-extract", "hfsplus-decmpfs", "apfs-read"))'] }

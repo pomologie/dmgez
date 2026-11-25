@@ -6,6 +6,7 @@ use apfs_container::{Container, LookupOptions};
 use apfs_core::{ByteOffset, ReadAt};
 use apfs_format::object::{ObjectId, TransactionId};
 use apfs_reader::{Error as NativeError, Limit, TreeLimits, VolumeView as NativeView};
+use dmgez_apfs_read::{ApfsContainer, OpenError, VolumeRole, VolumeSelector};
 use dmgez_apfs_volume_read_compatibility::{AdapterError, ApfsBackend};
 use dmgez_operations::extract::{
 	NameError, NameLimits, NamePlanError, NameProfile, preflight_names,
@@ -26,6 +27,12 @@ const HARD_LINKS: &[u8] = include_bytes!("fixtures/sonoma-hard-link-blocks.bin")
 const PAYLOADS: &[u8] = include_bytes!("fixtures/sonoma-payload-blocks.bin");
 const APFS_VOLUME: ObjectId = ObjectId(1026);
 const SELECTED_XID: TransactionId = TransactionId(4);
+const ABSENT_XID: TransactionId = TransactionId(u64::MAX);
+const ABSENT_VOLUME: ObjectId = ObjectId(u64::MAX);
+const HARD_LINK_VOLUME_NAME: &str = "Pomologie APFS Hard Links";
+const HARD_LINK_VOLUME_UUID: [u8; 16] = [
+	0xd3, 0x76, 0x00, 0xdc, 0x3e, 0xf5, 0x43, 0x93, 0x8e, 0x07, 0x31, 0xdb, 0xaa, 0x91, 0xe9, 0xb6,
+];
 const FIRST_PAGE: NonZeroU16 = NonZeroU16::MIN;
 const OVERSIZED_PAGE: NonZeroU16 = NonZeroU16::new(4).unwrap();
 const EXPECTED_ROOT: [&str; 3] = ["Docs", "More", "primary.bin"];
@@ -43,6 +50,49 @@ const RAW_TARGET: &[u8] = b"../large.bin";
 const TARGET_NAME: &str = "large.bin";
 const EMPTY_NAME: &str = "empty.txt";
 const UNCAPTURED_BLOCK: u64 = 100;
+
+#[test]
+fn production_selection_matches_native_volume_identity_and_exact_checkpoint() {
+	let encoded = NativeBlocks::from_packed(HARD_LINKS).wrap_udif();
+	let mut disk = disk(&encoded);
+	let window = disk.data_window(VOLUME).unwrap();
+	assert!(matches!(
+		ApfsContainer::open(window, Some(ABSENT_XID)),
+		Err(OpenError::Container(
+			apfs_container::Error::CheckpointNotFound { transaction, .. }
+		)) if transaction == ABSENT_XID
+	));
+
+	let window = disk.data_window(VOLUME).unwrap();
+	let explicit = ApfsContainer::open(window, Some(SELECTED_XID)).unwrap();
+	let list = explicit.volumes().unwrap();
+	let [volume] = list.as_slice() else {
+		panic!("expected one native APFS volume");
+	};
+	assert_eq!(volume.object_id, APFS_VOLUME);
+	assert_eq!(volume.uuid, HARD_LINK_VOLUME_UUID);
+	assert_eq!(volume.name.as_str(), HARD_LINK_VOLUME_NAME);
+	assert_eq!(volume.role, VolumeRole::Unspecified);
+	assert_eq!(volume.checkpoint, SELECTED_XID);
+	assert_eq!(volume.checkpoint, explicit.checkpoint());
+	for selector in [
+		None,
+		Some(VolumeSelector::Uuid(HARD_LINK_VOLUME_UUID)),
+		Some(VolumeSelector::ObjectId(APFS_VOLUME)),
+	] {
+		assert_eq!(explicit.open_volume(selector).unwrap().info(), *volume);
+	}
+	let missing = VolumeSelector::ObjectId(ABSENT_VOLUME);
+	assert!(matches!(
+		explicit.open_volume(Some(missing)),
+		Err(OpenError::UnknownVolume(selector)) if selector == missing
+	));
+
+	let window = disk.data_window(VOLUME).unwrap();
+	let latest = ApfsContainer::open(window, None).unwrap();
+	assert_eq!(latest.checkpoint(), SELECTED_XID);
+	assert_eq!(latest.open_volume(None).unwrap().info(), *volume);
+}
 
 #[test]
 fn native_aliases_keep_distinct_handles_and_checked_shared_forks() {

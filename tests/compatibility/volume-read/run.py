@@ -15,6 +15,8 @@ ENGINE_VERSION = "0.1.0"
 HFSPLUS_CORE_PACKAGE = "hfsplus-pomologie-core"
 HFSPLUS_ADAPTER_PACKAGE = "dmgez-hfsplus-read"
 HFSPLUS_ENGINE = "hfsplus"
+APFS_ENGINE = "apfs"
+APFS_ADAPTER_PACKAGE = "dmgez-apfs-read"
 HFSX_FEATURE = "hfsx-fixture"
 DMGEZ_PACKAGES = {
     "dmgez-operations": "crates/services/dmgez-operations",
@@ -28,7 +30,7 @@ ENGINE_PACKAGES = {
         "hfsplus-builder": "crates/filesystem/hfsplus-builder",
         "hfsplus-reader": "crates/filesystem/hfsplus-reader",
     },
-    "apfs": {
+    APFS_ENGINE: {
         "apfs-core": "crates/foundation/apfs-core",
         "apfs-format": "crates/formats/apfs-format",
         "apfs-container": "crates/container/apfs-container",
@@ -37,7 +39,11 @@ ENGINE_PACKAGES = {
 }
 PACKAGE_PATCHES = {
     HFSPLUS_ENGINE: (HFSPLUS_CORE_PACKAGE, "hfsplus-format", "hfsplus-reader"),
-    "apfs": ("apfs-core", "apfs-format", "apfs-container"),
+    APFS_ENGINE: tuple(ENGINE_PACKAGES[APFS_ENGINE]),
+}
+ADAPTER_PACKAGES = {
+    HFSPLUS_ENGINE: HFSPLUS_ADAPTER_PACKAGE,
+    APFS_ENGINE: APFS_ADAPTER_PACKAGE,
 }
 
 
@@ -82,11 +88,9 @@ def run(dmgez, engine, source, packaged, hfsx):
     recipe = RUNNER / engine
     packages = resolve_packages(dmgez, DMGEZ_PACKAGES)
     packages.update(resolve_packages(source, locations))
-    if engine == HFSPLUS_ENGINE:
-        packages.update(resolve_packages(dmgez, {
-            HFSPLUS_ADAPTER_PACKAGE: f"crates/services/{HFSPLUS_ADAPTER_PACKAGE}",
-        }))
-    patches = PACKAGE_PATCHES[engine] if packaged or engine == HFSPLUS_ENGINE else ()
+    adapter = ADAPTER_PACKAGES[engine]
+    packages.update(resolve_packages(dmgez, {adapter: f"crates/services/{adapter}"}))
+    patches = PACKAGE_PATCHES[engine]
     fixtures = [recipe / "fixtures.json"]
     command = ["cargo", "test", "--offline", "--locked"]
     if hfsx:

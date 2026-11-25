@@ -1,5 +1,4 @@
 use std::{
-	cell::RefCell,
 	error::Error as StdError,
 	num::{NonZeroU16, NonZeroU32},
 };
@@ -10,53 +9,13 @@ use apfs_reader::{
 	DirectoryCursor, DirectoryEntry as NativeEntry, Error as NativeError, FileData, FileKind,
 	InodeCount, InodeId, VolumeView as NativeView, XattrData,
 };
-use dmgez_vfs::{
-	Error as DiskError, LogicalDisk, Window,
-	volume::{
-		DirectoryEntry, DirectoryPage, DirectoryReader, ForkKind, ForkReader, HardLink, LookupName,
-		Metadata, NodeKind, RawName, VolumeBackend,
-	},
+use dmgez_vfs::volume::{
+	DirectoryEntry, DirectoryPage, DirectoryReader, ForkKind, ForkReader, HardLink, LookupName,
+	Metadata, NodeKind, RawName, VolumeBackend,
 };
 use thiserror::Error;
 
-/// Mutable logical read cache behind APFS's immutable-source interface.
-pub struct WindowSource<'disk, S> {
-	length: u64,
-	window: RefCell<Window<'disk, S>>,
-}
-
-impl<'disk, S: LogicalDisk> WindowSource<'disk, S> {
-	pub fn new(window: Window<'disk, S>) -> Self {
-		Self {
-			length: window.len(),
-			window: RefCell::new(window),
-		}
-	}
-}
-
-#[derive(Debug, Error)]
-pub enum SourceError {
-	#[error("APFS window already has an active positional read")]
-	ActiveRead,
-	#[error("APFS window read failed")]
-	Disk(#[from] DiskError),
-}
-
-impl<S: LogicalDisk> ReadAt for WindowSource<'_, S> {
-	type Error = SourceError;
-
-	fn len(&self) -> u64 {
-		self.length
-	}
-
-	fn read_exact_at(&self, offset: ByteOffset, output: &mut [u8]) -> Result<(), Self::Error> {
-		self.window
-			.try_borrow_mut()
-			.map_err(|_| SourceError::ActiveRead)?
-			.read_exact_at(offset.0, output)?;
-		Ok(())
-	}
-}
+use crate::VolumeInfo;
 
 /// Visible identity retains the APFS sibling ID while forks use the inode.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -81,13 +40,23 @@ pub enum AdapterError<E: StdError + 'static> {
 	Allocation,
 }
 
+/// VFS adapter for a checked APFS volume view.
 pub struct ApfsBackend<'source, S> {
 	view: NativeView<'source, S>,
 }
 
 impl<'source, S> ApfsBackend<'source, S> {
+	#[must_use]
 	pub fn new(view: NativeView<'source, S>) -> Self {
 		Self { view }
+	}
+}
+
+impl<S: ReadAt> ApfsBackend<'_, S> {
+	/// Checked metadata for this volume at the selected checkpoint.
+	#[must_use]
+	pub fn info(&self) -> VolumeInfo {
+		VolumeInfo::from(self.view.volume())
 	}
 }
 
@@ -108,6 +77,10 @@ where
 			inode: self.view.root().id,
 			sibling: None,
 		})
+	}
+
+	fn numeric_id(&self, node: Node) -> Option<u64> {
+		Some(node.inode.as_raw())
 	}
 
 	fn lookup(

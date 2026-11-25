@@ -97,6 +97,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "dmgez-apfs-read"
+version = "0.1.0"
+dependencies = [
+ "apfs-container",
+ "apfs-core",
+ "apfs-format",
+ "apfs-reader",
+ "dmgez-vfs",
+ "thiserror",
+]
+
+[[package]]
 name = "dmgez-apfs-volume-read-compatibility"
 version = "0.0.0"
 dependencies = [
@@ -104,6 +116,7 @@ dependencies = [
  "apfs-core",
  "apfs-format",
  "apfs-reader",
+ "dmgez-apfs-read",
  "dmgez-operations",
  "dmgez-udif",
  "dmgez-vfs",
