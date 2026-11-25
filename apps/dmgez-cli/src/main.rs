@@ -26,6 +26,7 @@ mod project_input;
 ))]
 mod report_output;
 mod signing;
+mod staple;
 mod verify_command;
 mod volume_commands;
 #[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
@@ -136,6 +137,8 @@ enum Command {
 	},
 	/// Submit a signed disk image for notarization or check a submission's status.
 	Notarize(notarize::Arguments),
+	/// Attach and validate a notarization ticket on a new disk image copy.
+	Staple(staple::Arguments),
 	/// Translate appdmg JSON settings into a new dmgez project.
 	#[command(name = IMPORT_APPDMG_COMMAND)]
 	ImportAppdmg {
@@ -265,7 +268,11 @@ fn main() -> ExitCode {
 	let command = Cli::parse().command;
 	let error_status = if matches!(
 		command,
-		Command::Diff(_) | Command::Lint { .. } | Command::Sign { .. } | Command::Notarize(_)
+		Command::Diff(_)
+			| Command::Lint { .. }
+			| Command::Sign { .. }
+			| Command::Notarize(_)
+			| Command::Staple(_)
 	) {
 		ExitCode::from(REPORT_ERROR_EXIT_CODE)
 	} else {
@@ -421,6 +428,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		} => Err(format!("feature not compiled: {LINT_COMMAND}").into()),
 		Command::Sign { action } => return signing::run(&action),
 		Command::Notarize(arguments) => return notarize::run(&arguments),
+		Command::Staple(arguments) => staple::run(&arguments),
 		#[cfg(feature = "appdmg-import")]
 		Command::ImportAppdmg {
 			settings,
