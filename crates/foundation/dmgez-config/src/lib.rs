@@ -28,7 +28,7 @@ pub use model::{
 pub use overrides::{ConfigOverride, OverrideError};
 pub use parse::{ConfigError, DefineError, MAX_MANIFEST_BYTES, SCHEMA_VERSION};
 pub use release::{
-	AppSigning, Backend, Buttons, License, Notarization, Release, Signing, SigningRule,
+	AppSigning, Backend, Buttons, License, Notarization, Release, Signing, SigningMode, SigningRule,
 };
 pub use value::{
 	AutoFlag, Bytes, Coordinate, Dimension, LocalPath, Size, SizeError, Text, VirtualPath,

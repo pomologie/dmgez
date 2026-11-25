@@ -3,9 +3,9 @@
 use std::{collections::BTreeMap, path::Path};
 
 use dmgez_config::{
-	AppSigning, Background, Capacity, Column, CompressionError, ConfigError, ContentError,
+	AppSigning, Backend, Background, Capacity, Column, CompressionError, ConfigError, ContentError,
 	DefineError, Direction, Filesystem, IconSlot, ImageError, ImageFormat, Payload, Project,
-	VolumeIcon,
+	SigningMode, VolumeIcon,
 };
 
 const MINIMAL: &str = include_str!("../../../../examples/minimal.toml");
@@ -89,6 +89,38 @@ fn admits_checked_in_examples_without_opening_their_paths() {
 }
 
 #[test]
+fn keeps_developer_id_as_the_legacy_signing_mode() {
+	let manifest = format!("{HEADER}[signing]\nenabled=true\ndmg=true\n");
+	let signing = Project::parse(&manifest).unwrap().signing.unwrap();
+	assert_eq!(signing.mode, SigningMode::DeveloperId);
+	assert_eq!(signing.backend.unwrap_or_default(), Backend::Auto);
+	assert!(signing.identifier.is_none());
+}
+
+#[test]
+fn parses_explicit_signing_modes_and_backends() {
+	const DISK_IDENTIFIER: &str = "org.pomologie.test-installer";
+	for (mode, expected_mode) in [
+		("developer-id", SigningMode::DeveloperId),
+		("ad-hoc", SigningMode::AdHoc),
+	] {
+		for (backend, expected_backend) in [
+			("auto", Backend::Auto),
+			("rust", Backend::Rust),
+			("native", Backend::Native),
+		] {
+			let manifest = format!(
+				"{HEADER}[signing]\nenabled=true\ndmg=true\nmode='{mode}'\nbackend='{backend}'\nidentifier='{DISK_IDENTIFIER}'\n"
+			);
+			let signing = Project::parse(&manifest).unwrap().signing.unwrap();
+			assert_eq!(signing.mode, expected_mode);
+			assert_eq!(signing.backend, Some(expected_backend));
+			assert_eq!(signing.identifier.unwrap().as_str(), DISK_IDENTIFIER);
+		}
+	}
+}
+
+#[test]
 fn keeps_draft_format_and_localized_license_fields() {
 	let project = Project::parse(&format!(
 		"{HEADER}format='ulmo'\nfilesystem='apfs'\n\
@@ -160,6 +192,9 @@ fn rejects_unknown_fields_in_all_scopes_and_omits_values_from_errors() {
 		"[finder]\nbackground={kind='image', source='image.png', unknown='private'}",
 		"[finder]\nbackground={kind='none', unknown='private'}",
 		"[signing]\nunknown='private'",
+		"[signing]\nmode='private'",
+		"[signing]\nbackend='private'",
+		"[signing]\nprivate_key='private'",
 	] {
 		let error = Project::parse(&format!("{HEADER}{section}\n")).unwrap_err();
 		assert!(matches!(error, ConfigError::Schema), "{section}");

@@ -1352,7 +1352,15 @@
             "auto",
             "rust",
             "native"
-          ]
+          ],
+          "default": "auto"
+        },
+        "mode": {
+          "enum": [
+            "developer-id",
+            "ad-hoc"
+          ],
+          "default": "developer-id"
         },
         "apps": {
           "enum": [
@@ -1363,6 +1371,10 @@
         },
         "dmg": {
           "type": "boolean"
+        },
+        "identifier": {
+          "type": "string",
+          "minLength": 1
         },
         "identity": {
           "type": "string",

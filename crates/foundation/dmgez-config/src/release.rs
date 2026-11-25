@@ -25,6 +25,18 @@ pub enum AppSigning {
 	Sign,
 }
 
+/// The authentication policy for a requested signing operation.
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq)]
+#[non_exhaustive]
+#[serde(rename_all = "kebab-case")]
+pub enum SigningMode {
+	/// Authenticate the signature with a Developer ID Application identity.
+	#[default]
+	DeveloperId,
+	/// Seal the artifact without a signing identity.
+	AdHoc,
+}
+
 /// Signing configuration. Credential references name credentials supplied at execution.
 #[derive(Clone, Debug, Deserialize)]
 #[non_exhaustive]
@@ -32,8 +44,13 @@ pub enum AppSigning {
 pub struct Signing {
 	pub enabled: Option<bool>,
 	pub backend: Option<Backend>,
+	/// Signing policy. Omission selects Developer ID for existing manifests.
+	#[serde(default)]
+	pub mode: SigningMode,
 	pub apps: Option<AppSigning>,
 	pub dmg: Option<bool>,
+	/// Code-signing identifier for the disk image.
+	pub identifier: Option<Text>,
 	pub identity: Option<Text>,
 	pub credential_ref: Option<Text>,
 	#[serde(default)]
