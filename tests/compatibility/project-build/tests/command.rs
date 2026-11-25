@@ -202,6 +202,40 @@ output = 'image.dmg'
 	assert!(!root.path().join(IMAGE_NAME).exists());
 }
 
+#[cfg(not(feature = "badge-icons"))]
+#[test]
+fn refuses_a_volume_badge_before_discovering_sources_when_disabled() {
+	const PROJECT: &str = r#"
+schema_version = 1
+
+[image]
+name = 'Volume badge feature test'
+output = 'image.dmg'
+
+[volume_icon]
+badge = 'absent.png'
+"#;
+	const PROJECT_NAME: &str = "volume-badge.toml";
+	const IMAGE_NAME: &str = "image.dmg";
+	let root = tempfile::tempdir().unwrap();
+	fs::write(root.path().join(PROJECT_NAME), PROJECT).unwrap();
+	let output = Command::new(BINARY)
+		.current_dir(root.path())
+		.arg("--working-directory")
+		.arg(root.path())
+		.args([PROJECT_NAME, "--dry-run"])
+		.output()
+		.unwrap();
+	assert!(!output.status.success());
+	let stderr = String::from_utf8(output.stderr).unwrap();
+	assert!(
+		stderr.contains("feature not compiled: Finder volume icon badge (badge-icons)"),
+		"{stderr}"
+	);
+	assert!(!stderr.contains("Discovering source paths"));
+	assert!(!root.path().join(IMAGE_NAME).exists());
+}
+
 #[test]
 fn ulmo_requires_the_optional_codec_and_preserves_the_logical_image() {
 	let caller = tempfile::tempdir().unwrap();

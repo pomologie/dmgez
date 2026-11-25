@@ -8,6 +8,10 @@ use hfsplus_format::{catalog::ThreadKind, volume::CatalogId};
 
 use super::*;
 
+#[cfg(feature = "badge-icons")]
+#[path = "badge_icon.rs"]
+mod badge;
+
 const ICON_SOURCE: &str = "source.icns";
 const ICON_ASSET: &str = ".VolumeIcon.icns";
 const ICON_BYTES: &[u8] = include_bytes!("apple-iconutil.icns");
