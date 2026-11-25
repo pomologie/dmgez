@@ -36,7 +36,17 @@ The optional `lint` command checks configured Finder icon geometry in one declar
 
 `import-appdmg` translates documented appdmg JSON settings into a new version-one TOML manifest. Relative asset paths keep their original settings directory. A relative `--image-output` is interpreted from the new manifest's directory. The command reports unmapped behavior and refuses to replace an existing manifest.
 
-The [project-build compatibility runner](tests/compatibility/project-build/README.md) builds version-one TOML projects using the HFS+ builder from a sibling checkout or unpacked packages. File-tree builds in the default CLI require a resolvable versioned HFS+ dependency.
+## Build from a TOML project
+
+While the versioned HFS+ dependencies are unpublished, compose the standalone CLI locally on macOS or Linux using a sibling checkout or unpacked 0.1.0 packages. The compose tool uses a temporary Cargo workspace and the local Cargo cache. The resulting binary contains the builder and runs directly.
+
+```sh
+python3 tools/compose_hfsplus_cli.py --hfsplus ../hfsplus
+target/hfsplus-cli/debug/dmgez build project.toml --dry-run
+target/hfsplus-cli/debug/dmgez build project.toml
+```
+
+Use `--hfsplus-packages PATH` for unpacked packages, or `--no-default-features --features build` for a serial build with Finder support. The compose tool's `--test` mode runs the build command's integration tests. Use `dmgez capabilities` to check whether the binary includes project building. The [compatibility runner](tests/compatibility/project-build/README.md) exercises the same build service and command implementation with the native fixtures.
 
 The [native desktop app](apps/dmgez/README.md) opens TOML projects for layout editing and disk images for container and partition inspection. Launch it with `cargo run --locked -p dmgez-gui`.
 

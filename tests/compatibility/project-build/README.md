@@ -2,6 +2,8 @@
 
 Run this development exercise against adjacent source checkouts with an existing Cargo cache.
 
+The runner links the product-owned `dmgez-hfsplus` service and copies the actual CLI build command into its isolated test package. Use the [local composition tool](../../../README.md#build-from-a-toml-project) to compile `dmgez build` directly into a standalone binary.
+
 ```sh
 python3 run.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplus
 python3 run.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplus --project /path/to/project.toml
