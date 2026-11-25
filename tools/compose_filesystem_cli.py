@@ -80,6 +80,7 @@ FEATURE_ADDITIONS = {
         "dep:dmgez-udif", "dmgez-udif/read", "dep:serde", "dep:serde_json", "dep:sha2",
     ],
     "finder-write": ["dmgez-builder?/finder-write", f"{ADAPTER}?/finder-write"],
+    "compression-cache": ["project-build", "dmgez-builder/compression-cache", f"{ADAPTER}/compression-cache"],
     "volume-icon": ["finder-write", f"{ADAPTER}?/volume-icon"],
     "badge-icons": ["volume-icon", f"{ADAPTER}?/badge-icons"],
 }

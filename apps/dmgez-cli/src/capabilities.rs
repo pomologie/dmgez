@@ -7,6 +7,7 @@ use super::{
 	image_edit, install, installer_test, notarize, project_edit, signing, volume_commands,
 };
 
+const COMPRESSION_CACHE_CAPABILITY: &str = "compression-cache";
 const HFSPLUS_ANALYSIS_CAPABILITY: &str = "hfsplus-analysis";
 
 pub(super) fn write() {
@@ -14,6 +15,13 @@ pub(super) fn write() {
 	for (name, compiled) in [
 		(BUILD_PROJECT_COMMAND, cfg!(feature = "project-build")),
 		(BUILD_RELEASE_CAPABILITY, cfg!(feature = "project-release")),
+		(
+			COMPRESSION_CACHE_CAPABILITY,
+			cfg!(all(
+				feature = "compression-cache",
+				any(target_os = "linux", target_os = "macos")
+			)),
+		),
 		(project_edit::FEATURE, cfg!(feature = "project-edit")),
 		(image_edit::FEATURE, cfg!(feature = "image-edit")),
 		(WRAP_RAW_COMMAND, cfg!(feature = "build")),

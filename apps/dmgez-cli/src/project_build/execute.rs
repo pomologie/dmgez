@@ -102,6 +102,13 @@ pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> CliResult
 	if report.report.release == ReleasePlan::ConfiguredStagesDeferred {
 		writeln!(io::stderr().lock(), "{RELEASE_DEFERRED}")?;
 	}
+	#[cfg(feature = "compression-cache")]
+	if let Some(cache) = report.report.cache {
+		let mut output = io::stderr().lock();
+		writeln!(output, "cache_hits={}", cache.hits)?;
+		writeln!(output, "cache_misses={}", cache.misses)?;
+		writeln!(output, "cache_rejected={}", cache.rejected)?;
+	}
 	let image = report.report.image;
 	writeln!(
 		io::stdout().lock(),
@@ -131,6 +138,9 @@ fn write_dry_run(
 	writeln!(output, "output={:?}", prepared.output_path())?;
 	writeln!(output, "publication={:?}", profile.output())?;
 	writeln!(output, "release={:?}", profile.release())?;
+	if profile.cache().is_some() {
+		writeln!(output, "compression_cache=enabled")?;
+	}
 	writeln!(output, "logical_bytes={}", image.logical_bytes())?;
 	writeln!(output, "physical_bytes=unknown")?;
 	writeln!(output, "resolved_entries={}", manifest.entries().len())?;

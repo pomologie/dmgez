@@ -2,6 +2,12 @@ use std::process::Command;
 
 #[cfg(all(
 	feature = "project-build",
+	any(target_os = "linux", target_os = "macos")
+))]
+#[path = "project_build/compression_cache.rs"]
+mod compression_cache;
+#[cfg(all(
+	feature = "project-build",
 	feature = "finder-write",
 	feature = "hfsplus-read"
 ))]
