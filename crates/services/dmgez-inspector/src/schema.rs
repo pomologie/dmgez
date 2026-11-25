@@ -11,6 +11,9 @@ pub enum ReportOperation {
 	Inspect,
 	Verify,
 	Analyze,
+	Ls,
+	Tree,
+	Stat,
 }
 
 /// Layers supported by this report service. Availability of individual run

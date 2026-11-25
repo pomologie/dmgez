@@ -10,6 +10,7 @@ mod disk;
 mod filesystem;
 mod schema;
 mod verification;
+pub mod volume_queries;
 
 pub use analysis::{AnalysisReport, RunSpace, RunSpaceByEncoding, analyze};
 pub use container::{

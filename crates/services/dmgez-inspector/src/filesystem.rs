@@ -129,7 +129,7 @@ pub enum FilesystemScope {
 	FullVolume,
 }
 
-/// Engine-native object identifier for a volume within the selected window.
+/// Engine-native object identifier scoped to the selected filesystem view.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FilesystemObjectId(pub u64);
 
@@ -176,6 +176,21 @@ impl FilesystemEvidence {
 pub enum SelectedWindowId {
 	WholeDisk,
 	Partition { id: PartitionIdentifier },
+}
+
+impl SelectedWindowId {
+	pub(crate) fn from_volume(volume: VolumeId) -> Option<Self> {
+		match volume {
+			VolumeId::WholeDisk => Some(Self::WholeDisk),
+			VolumeId::Partition(id) => Some(Self::Partition {
+				id: PartitionIdentifier {
+					scheme: id.scheme.into(),
+					slot: id.slot,
+				},
+			}),
+			_ => None,
+		}
+	}
 }
 
 /// Admitted filesystem extent expressed in decoded disk bytes.
@@ -243,16 +258,8 @@ pub(crate) fn verify_window<S: ReadAt>(
 	let mut disk = Disk::discover(image, options.disk_limits).map_err(Failure::disk)?;
 	let selected = disk.select_volume(options.volume).map_err(Failure::disk)?;
 	let sole_window = disk.select_volume(None).is_ok_and(|only| only == selected);
-	let id = match selected {
-		VolumeId::WholeDisk => SelectedWindowId::WholeDisk,
-		VolumeId::Partition(id) => SelectedWindowId::Partition {
-			id: PartitionIdentifier {
-				scheme: id.scheme.into(),
-				slot: id.slot,
-			},
-		},
-		_ => return Err(Failure::category(ErrorCategory::UnsupportedVariant)),
-	};
+	let id = SelectedWindowId::from_volume(selected)
+		.ok_or_else(|| Failure::category(ErrorCategory::UnsupportedVariant))?;
 	let window = disk.data_window(selected).map_err(Failure::disk)?;
 	let selected = SelectedWindow {
 		id,
