@@ -67,6 +67,14 @@ target/hfsplus-cli/debug/dmgez stat volume.dmg /ReadMe.txt
 target/hfsplus-cli/debug/dmgez cat volume.raw /ReadMe.txt --raw --fork data
 ```
 
+Enable `hfsplus-decmpfs` for the qualified zlib-compressed HFS+ file profiles. Enable `hfsplus-extract` to copy an explicit fork or directory's regular-file data to a new host path on macOS or Linux.
+
+```sh
+python3 tools/compose_hfsplus_cli.py --hfsplus ../hfsplus --no-default-features --features hfsplus-extract
+target/hfsplus-cli/debug/dmgez extract volume.dmg /ReadMe.txt --fork data --output ./ReadMe.txt
+target/hfsplus-cli/debug/dmgez extract volume.dmg /Docs --data-only --output ./Docs --dry-run --json
+```
+
 The [native desktop app](apps/dmgez/README.md) opens TOML projects for layout editing and disk images for container and partition inspection. Launch it with `cargo run --locked -p dmgez-gui`.
 
 See the [architecture](ARCHITECTURE.md), [roadmap](ROADMAP.md), and [UDIF evidence](docs/reference/UDIF_EVIDENCE.md) for the implemented profile and its verification limits.
