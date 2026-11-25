@@ -22,7 +22,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CLI_MANIFEST = ROOT / "apps/dmgez-cli/Cargo.toml"
 EXAMPLE = ROOT / "examples/offline-cli"
 SIGNER = ROOT / "third_party/apple-codesign"
-REQUIRED_CAPABILITIES = {"build", "verify-container"}
+REQUIRED_CAPABILITIES = {"build", "project-release", "signing-rust", "verify-container"}
 TARGET_SUFFIXES = {"apple-darwin": "darwin", "unknown-linux-gnu": "linux", "pc-windows-msvc": "win32"}
 ARCHITECTURES = {"aarch64", "x86_64"}
 TARGETS = sorted(f"{architecture}-{suffix}" for architecture in ARCHITECTURES for suffix in TARGET_SUFFIXES)
@@ -65,7 +65,7 @@ def validate_machine(binary, target):
         raise ValueError(f"binary machine or executable format does not match {target}")
 
 
-def query_binary(binary, version):
+def validate_binary(binary, version):
     def run(argument):
         result = subprocess.run(
             [binary, argument], cwd=binary.parent, capture_output=True, encoding="utf-8",
@@ -79,10 +79,9 @@ def query_binary(binary, version):
     missing = sorted(capability for capability in REQUIRED_CAPABILITIES if values.get(capability) != "compiled")
     if missing:
         raise ValueError(f"composed CLI is missing required capabilities: {', '.join(missing)}")
-    return values
 
 
-def release_members(binary_name, binary, notices, capabilities):
+def release_members(binary_name, binary, notices):
     files = {
         binary_name: (binary, EXECUTABLE_MODE),
         "LICENSE": (ROOT / "LICENSE", REGULAR_MODE),
@@ -92,15 +91,14 @@ def release_members(binary_name, binary, notices, capabilities):
     }
     if binary_name == "dmgez":
         files["install.sh"] = (ROOT / "tools/install.sh", EXECUTABLE_MODE)
-    if capabilities.get("signing-rust") == "compiled":
-        covered = (
-            ".cargo_vcs_info.json", ".gitattributes", "Cargo.toml", "LICENSE", "README.md",
-            "dmgez-profile.patch", "rustfmt.toml", "verify-source.py",
-        )
-        sources = (SIGNER / "src").glob("**/*.rs")
-        for source in (*map(SIGNER.joinpath, covered), *sources):
-            name = f"licenses/apple-codesign/{source.relative_to(SIGNER).as_posix()}"
-            files[name] = (source, REGULAR_MODE)
+    covered = (
+        ".cargo_vcs_info.json", ".gitattributes", "Cargo.toml", "LICENSE", "README.md",
+        "dmgez-profile.patch", "rustfmt.toml", "verify-source.py",
+    )
+    sources = (SIGNER / "src").glob("**/*.rs")
+    for source in (*map(SIGNER.joinpath, covered), *sources):
+        name = f"licenses/apple-codesign/{source.relative_to(SIGNER).as_posix()}"
+        files[name] = (source, REGULAR_MODE)
     return files
 
 
@@ -178,11 +176,11 @@ def package(binary, target, notices, output):
         shutil.copyfile(binary, executable)
         executable.chmod(EXECUTABLE_MODE)
         validate_machine(executable, target)
-        capabilities = query_binary(executable, version)
+        validate_binary(executable, version)
         notice_path = stage / "notices"
         notice_path.write_bytes(notice)
 
-        files = release_members(binary_name, executable, notice_path, capabilities)
+        files = release_members(binary_name, executable, notice_path)
         archive_path = stage / "archive"
         archive_writer = write_zip if suffix == ".zip" else write_tar
         with archive_path.open("w+b") as archive:

@@ -2,6 +2,14 @@
 
 The default CLI includes a pinned `apple-codesign` backend for offline ad hoc DMG signing on macOS, Linux, and Windows. `auto` selects that backend for ad hoc DMG signing. The optional native macOS backend performs Developer ID signing, notarization, stapling, and platform assessment. A release fixes its selection before signing. Signing keys and Apple service credentials are supplied through authorized providers and stay out of `dmg.toml`. [Upstream signer source](https://github.com/indygreg/apple-platform-rs/tree/apple-codesign%2F0.29.0/apple-codesign)
 
+## v0.1.0 release profile
+
+Qualify the standalone CLI for `dmg.toml` dry runs, partitionless HFS+ builds in UDRO and UDZO, offline ad hoc DMG signing, and container and signature verification. Package that CLI with the example, its dependency notices, and `install.sh` on macOS and Linux. The archive test builds and signs the example using the extracted executable. [CLI composition](../../README.md#build-from-a-toml-project) · [Offline archives](OFFLINE_CLI.md)
+
+The manual cross-platform workflow builds and signs both formats on each host, verifies the HFS+ payload with 7-Zip, and compares the four artifacts across hosts. macOS also verifies the containers and signatures with Apple tools, compares Apple's raw exports with the independent decoder, and checks the signed volumes with read-only `fsck_hfs` and a native mount. [Project build workflow](../../.github/workflows/project-build.yml) · [Roadmap gates](../architecture/ROADMAP.md#milestone-acceptance-procedure)
+
+The optimized CLI passed this project smoke for UDRO and UDZO on arm64 macOS 14.7.2 (23H311). Both signed volumes passed the read-only filesystem check and returned the expected payload and `/Applications` link when mounted. The same CLI passed deterministic archive creation, installation, and build, signing, and verification from the extracted archive. Native Linux and Windows runs and cross-host byte equality remain open. [Repeat the project smoke](../../tests/compatibility/project-build/README.md) · [Offline archive test](../../tools/test_package_cli.py)
+
 ## Pipeline
 
 1. Plan inputs, validate credentials/capabilities without exposing secrets. Stage source apps if sign requested; default `[signing].apps="verify"` checks existing signatures and does not re-sign. `preserve` packages without claiming validity; `sign` explicit and stage only. Inspect nested Mach-O, frameworks, plugins, helpers, dylibs, bundles; per-path signing policy/entitlements, sign inside-out; no blind `codesign --deep` for signing. Preserve symlinks and resources. Validate Developer ID Application identity, secure timestamps, hardened runtime for eligible executables, and entitlement policy; signing alone does not satisfy Apple requirements.

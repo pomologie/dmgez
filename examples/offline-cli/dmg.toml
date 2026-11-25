@@ -22,3 +22,9 @@ preserve_hard_links = false
 [build]
 reproducible = true
 source_date_epoch = 1700000000
+
+[signing]
+enabled = true
+mode = "ad-hoc"
+dmg = true
+identifier = "com.pomologie.dmgez.example"

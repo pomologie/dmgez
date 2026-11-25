@@ -3,6 +3,7 @@
 
 import argparse
 import hashlib
+import json
 import os
 from pathlib import Path, PurePosixPath
 import subprocess
@@ -77,10 +78,8 @@ def verify_archive(root, binary, notices, *, windows):
     if not windows:
         assert os.access(executable, os.X_OK)
         assert os.access(root / "install.sh", os.X_OK)
-    capabilities = expect_success(run(executable, "capabilities"))
-    if "signing-rust = compiled" in capabilities:
-        assert (root / "licenses/apple-codesign/LICENSE").is_file()
-        assert (root / "licenses/apple-codesign/src/lib.rs").is_file()
+    assert (root / "licenses/apple-codesign/LICENSE").is_file()
+    assert (root / "licenses/apple-codesign/src/lib.rs").is_file()
     if not windows:
         install_directory = root.parent / "installed"
         expect_success(run(root / "install.sh", "--bin-dir", install_directory))
@@ -94,6 +93,21 @@ def verify_archive(root, binary, notices, *, windows):
     expect_success(run(executable, "build", manifest))
     assert image.is_file()
     expect_success(run(executable, "verify", image, "--container"))
+    unsigned = digest(image)
+    signed = manifest.with_name("example-adhoc.dmg")
+    report = json.loads(expect_success(run(
+        executable, "build", manifest, "--release", "--json", "--set", f"image.output={signed.name}",
+        cwd=manifest.parent,
+    )))
+    stages = {step["stage"]: step for step in report["steps"]}
+    assert stages["sign_image"]["backend"] == "rust"
+    assert stages["sign_image"]["status"] == "passed"
+    assert report["unsigned"]["sha256"] == unsigned == digest(image)
+    assert report["artifact"]["sha256"] == digest(signed)
+    assert report["artifact"]["sha256"] != unsigned
+    expect_success(run(executable, "verify", signed, "--container"))
+    signature = json.loads(expect_success(run(executable, "sign", "verify", signed, "--backend", "rust", "--json")))
+    assert signature["status"] == "verified"
 
 
 def main():
@@ -126,7 +140,7 @@ def main():
         version = expect_success(run(binary, "--version")).split()[1]
         assert extracted.name == f"dmgez-{version}-{args.target}"
         verify_archive(extracted, binary, notices, windows=windows)
-    print("Deterministic packaging, extracted checksums, installation and example DMG verification passed")
+    print("Packaging, extracted checksums, installation, and example build, signing, and verification passed")
 
 
 if __name__ == "__main__":
