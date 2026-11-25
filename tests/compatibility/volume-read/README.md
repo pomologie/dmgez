@@ -71,7 +71,7 @@ python3 -B tests/compatibility/volume-read/check_xattr_diff.py --cli target/apfs
 
 [Native extended-attribute results](native-xattr-diff.json)
 
-The native per-object FinderInfo check uses `diff` and both readers. Use APFS sources with the dedicated `VolumeView::finder_info` API, or unpack the four APFS 0.1.0 archives built from `52768a7`. The HFS+ 0.1.0 archives from `fb11b35` provide the catalog APIs for current reader composition.
+The native per-object FinderInfo check uses `diff` and both readers. Unpack the four APFS 0.1.0 archives built from `78f8586` and the HFS+ 0.1.0 archives built from `fb11b35` for the reader APIs used by current composition. The sibling source checkouts support the same recipe.
 
 ```sh
 python3 tools/compose_filesystem_cli.py --apfs ../apfs --hfsplus ../hfsplus --no-default-features --features diff,hfsplus-read
@@ -99,6 +99,15 @@ python3 -B tests/compatibility/volume-read/check_native_paths_diff.py --cli targ
 ```
 
 The oracle checks both stored spellings, exact mode, the native profile's path pairings, and unchanged image digests. Use `--native-only` to run the independent image checks. [Native path reports](native-paths-diff.json)
+
+For APFS, compose against `78f8586` or compatible sources with `VolumeView::name_profile`. The macOS oracle checks both Unicode 9 profiles, verifies that two distinct file inodes share a real 22-bit directory hash, and checks the explicit rejection of a filename containing a scalar introduced after Unicode 9. Exact stored-name comparison remains available for that image.
+
+```sh
+python3 tools/compose_filesystem_cli.py --apfs ../apfs --no-default-features --features diff
+python3 -B tests/compatibility/volume-read/check_apfs_native_paths_diff.py --cli target/apfs-cli/debug/dmgez
+```
+
+The `--native-only` flag runs the read-only mount and image checks without the CLI. [Native APFS name reports](apfs/native-unicode-paths-diff.json)
 
 ## Extraction name preflight
 
