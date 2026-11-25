@@ -85,7 +85,7 @@ impl<F: FnMut() -> bool> Payloads<F> {
 		Ok(right_result.is_none())
 	}
 
-	fn compare_forks<L: StdError + 'static, R: StdError + 'static>(
+	pub(super) fn compare_forks<L: StdError + 'static, R: StdError + 'static>(
 		&mut self,
 		left: &mut Fork<'_, L>,
 		right: &mut Fork<'_, R>,

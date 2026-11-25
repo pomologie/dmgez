@@ -11,6 +11,7 @@ mod catalog;
 mod links;
 mod payloads;
 mod report;
+mod xattrs;
 
 #[cfg(test)]
 mod tests;
@@ -18,12 +19,14 @@ mod tests;
 pub use catalog::CatalogError;
 pub use report::{
 	Change, ChangeKind, ContentComparison, Field, Limits, Outcome, PathMatching, Policy, Report,
-	Uncompared,
+	Uncompared, XattrChange, XattrPolicy,
 };
+pub use xattrs::XattrError;
 
 use catalog::{Entry, collect};
 use links::Topology;
 use payloads::Payloads;
+use xattrs::Xattrs;
 
 /// A stopped comparison does not produce a supported-scope equality result.
 #[derive(Debug, Error)]
@@ -44,6 +47,18 @@ pub enum Error<L: StdError + 'static, R: StdError + 'static> {
 		path: Vec<String>,
 		#[source]
 		source: ViewError<R>,
+	},
+	#[error("could not compare the left extended attributes at {path:?}")]
+	LeftXattrs {
+		path: Vec<String>,
+		#[source]
+		source: XattrError<L>,
+	},
+	#[error("could not compare the right extended attributes at {path:?}")]
+	RightXattrs {
+		path: Vec<String>,
+		#[source]
+		source: XattrError<R>,
 	},
 	#[error("the {side} filesystem object at {path:?} has an unsupported kind")]
 	UnsupportedKind { side: Side, path: Vec<String> },
@@ -75,6 +90,47 @@ pub fn compare<L, R>(
 	left: &mut VolumeView<L>,
 	right: &mut VolumeView<R>,
 	limits: Limits,
+	cancelled: impl FnMut() -> bool,
+) -> Result<Report, Error<L::Error, R::Error>>
+where
+	L: VolumeBackend,
+	R: VolumeBackend,
+	L::Id: Eq + Hash,
+	R::Id: Eq + Hash,
+{
+	compare_with_scope(left, right, limits, None, cancelled)
+}
+
+/// Compares the visible trees and the supported stored extended attributes.
+///
+/// Attributes are matched by exact stored Unicode spelling on each common
+/// path. The result lists names and change kinds, and excludes internal
+/// records listed in the policy. Matched attribute data shares the byte
+/// budget with file forks and symbolic link targets.
+///
+/// # Errors
+/// Stops on the same failures as [`compare`], or if attribute enumeration or
+/// matched values cannot be verified within the reported bounds.
+pub fn compare_with_xattrs<L, R>(
+	left: &mut VolumeView<L>,
+	right: &mut VolumeView<R>,
+	limits: Limits,
+	cancelled: impl FnMut() -> bool,
+) -> Result<Report, Error<L::Error, R::Error>>
+where
+	L: VolumeBackend,
+	R: VolumeBackend,
+	L::Id: Eq + Hash,
+	R::Id: Eq + Hash,
+{
+	compare_with_scope(left, right, limits, Some(Xattrs::default()), cancelled)
+}
+
+fn compare_with_scope<L, R>(
+	left: &mut VolumeView<L>,
+	right: &mut VolumeView<R>,
+	limits: Limits,
+	mut xattrs: Option<Xattrs>,
 	mut cancelled: impl FnMut() -> bool,
 ) -> Result<Report, Error<L::Error, R::Error>>
 where
@@ -95,15 +151,30 @@ where
 			changes.push(Change::new(path, ChangeKind::Removed, Vec::new()));
 			continue;
 		};
-		let fields = compare_entry(
-			(left, left_entry),
-			(right, right_entry),
+		let mut fields = compare_entry(
+			(&mut *left, left_entry),
+			(&mut *right, right_entry),
 			path,
 			&topology,
 			&mut payloads,
 		)?;
+		let xattr_changes = if let Some(xattrs) = &mut xattrs {
+			xattrs.compare(
+				(left, &left_entry.node),
+				(right, &right_entry.node),
+				path,
+				&mut payloads,
+			)?
+		} else {
+			Vec::new()
+		};
+		if !xattr_changes.is_empty() {
+			fields.push(Field::ExtendedAttributes);
+		}
 		if !fields.is_empty() {
-			changes.push(Change::new(path, ChangeKind::Changed, fields));
+			let mut change = Change::new(path, ChangeKind::Changed, fields);
+			change.xattrs = xattr_changes;
+			changes.push(change);
 		}
 	}
 	for path in right_catalog.keys() {
@@ -122,7 +193,11 @@ where
 		} else {
 			Outcome::Different
 		},
-		policy: Policy::default(),
+		policy: if xattrs.is_some() {
+			Policy::with_xattrs()
+		} else {
+			Policy::default()
+		},
 		limits,
 		left_entries: left_catalog.len(),
 		right_entries: right_catalog.len(),

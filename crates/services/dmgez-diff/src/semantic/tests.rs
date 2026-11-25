@@ -1,4 +1,8 @@
-use std::{collections::BTreeMap, io, num::NonZeroU16};
+use std::{
+	collections::BTreeMap,
+	io,
+	num::{NonZeroU16, NonZeroU32},
+};
 
 use dmgez_vfs::{
 	VolumeId,
@@ -9,6 +13,8 @@ use dmgez_vfs::{
 };
 
 use super::{ChangeKind, Error, Field, Limits, Outcome, compare};
+
+mod xattrs;
 
 const ROOT: u32 = 1;
 const USER_ID: u32 = 501;
@@ -141,6 +147,7 @@ struct TestNode {
 	resource: Option<&'static [u8]>,
 	hard_link: Option<HardLink<u64>>,
 	target: Option<&'static [u8]>,
+	xattrs: Vec<TestXattr>,
 }
 
 impl TestNode {
@@ -153,6 +160,7 @@ impl TestNode {
 			resource: None,
 			hard_link: None,
 			target: None,
+			xattrs: Vec::new(),
 		}
 	}
 
@@ -176,6 +184,13 @@ impl TestNode {
 }
 
 fn view<const N: usize>(children: [(&str, TestNode); N]) -> VolumeView<TestTree> {
+	view_with_attributes(children, true)
+}
+
+fn view_with_attributes<const N: usize>(
+	children: [(&str, TestNode); N],
+	attributes_available: bool,
+) -> VolumeView<TestTree> {
 	let mut entries = Vec::new();
 	let mut nodes = BTreeMap::new();
 	for (name, node) in children {
@@ -186,12 +201,25 @@ fn view<const N: usize>(children: [(&str, TestNode); N]) -> VolumeView<TestTree>
 		});
 		nodes.insert(node.id, node);
 	}
-	VolumeView::new(VolumeId::WholeDisk, TestTree { entries, nodes })
+	VolumeView::new(
+		VolumeId::WholeDisk,
+		TestTree {
+			entries,
+			nodes,
+			attributes_available,
+		},
+	)
+}
+
+struct TestXattr {
+	name: RawName,
+	value: Option<&'static [u8]>,
 }
 
 struct TestTree {
 	entries: Vec<DirectoryEntry<u32>>,
 	nodes: BTreeMap<u32, TestNode>,
+	attributes_available: bool,
 }
 
 impl VolumeBackend for TestTree {
@@ -252,6 +280,31 @@ impl VolumeBackend for TestTree {
 
 	fn read_link(&mut self, node: u32) -> io::Result<Option<Vec<u8>>> {
 		Ok(self.nodes[&node].target.map(<[u8]>::to_vec))
+	}
+
+	fn list_xattrs(&mut self, node: u32, _limit: NonZeroU32) -> io::Result<Option<Vec<RawName>>> {
+		Ok(self.attributes_available.then(|| {
+			self.nodes
+				.get(&node)
+				.into_iter()
+				.flat_map(|node| &node.xattrs)
+				.map(|xattr| xattr.name.clone())
+				.collect()
+		}))
+	}
+
+	fn with_xattr<T>(
+		&mut self,
+		node: u32,
+		name: LookupName<'_>,
+		read: impl FnOnce(&mut dyn ForkReader<Error = Self::Error>) -> T,
+	) -> io::Result<Option<T>> {
+		Ok(self.nodes[&node]
+			.xattrs
+			.iter()
+			.find(|xattr| xattr.name.as_lookup() == name)
+			.and_then(|xattr| xattr.value)
+			.map(|bytes| read(&mut Fork(bytes))))
 	}
 }
 

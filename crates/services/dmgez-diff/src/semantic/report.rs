@@ -1,6 +1,10 @@
+use std::num::NonZeroU32;
+
 use serde::Serialize;
 
 use crate::{DEFAULT_COMPARE_BYTES, bytes::decimal};
+
+use super::xattrs::POLICY as XATTR_POLICY;
 
 const DEFAULT_MAX_ENTRIES: usize = 16_384;
 const DEFAULT_MAX_DEPTH: usize = 128;
@@ -79,6 +83,7 @@ pub enum Field {
 	DataFork,
 	ResourceFork,
 	SymlinkTarget,
+	ExtendedAttributes,
 }
 
 impl Field {
@@ -93,6 +98,7 @@ impl Field {
 			Self::DataFork => "data_fork",
 			Self::ResourceFork => "resource_fork",
 			Self::SymlinkTarget => "symlink_target",
+			Self::ExtendedAttributes => "extended_attributes",
 		}
 	}
 }
@@ -107,6 +113,7 @@ pub enum Uncompared {
 	AccessControlLists,
 	FilesystemFlags,
 	Quarantine,
+	QuarantineAssessment,
 	FinderMetadata,
 	NativeObjectIds,
 	FilesystemAllocation,
@@ -115,7 +122,7 @@ pub enum Uncompared {
 	RenameInference,
 }
 
-const COMPARED_FIELDS: &[Field] = &[
+const COMPARED_FIELDS: [Field; 8] = [
 	Field::Kind,
 	Field::Mode,
 	Field::Uid,
@@ -125,6 +132,15 @@ const COMPARED_FIELDS: &[Field] = &[
 	Field::ResourceFork,
 	Field::SymlinkTarget,
 ];
+
+const COMPARED_FIELDS_WITH_XATTRS: [Field; COMPARED_FIELDS.len() + 1] = {
+	let mut fields = [Field::ExtendedAttributes; COMPARED_FIELDS.len() + 1];
+	fields
+		.split_at_mut(COMPARED_FIELDS.len())
+		.0
+		.copy_from_slice(&COMPARED_FIELDS);
+	fields
+};
 
 const UNCOMPARED_FIELDS: &[Uncompared] = &[
 	Uncompared::Timestamps,
@@ -140,6 +156,29 @@ const UNCOMPARED_FIELDS: &[Uncompared] = &[
 	Uncompared::RenameInference,
 ];
 
+const UNCOMPARED_FIELDS_WITH_XATTRS: &[Uncompared] = &[
+	Uncompared::Timestamps,
+	Uncompared::AccessControlLists,
+	Uncompared::FilesystemFlags,
+	Uncompared::QuarantineAssessment,
+	Uncompared::FinderMetadata,
+	Uncompared::NativeObjectIds,
+	Uncompared::FilesystemAllocation,
+	Uncompared::PhysicalContainerLayout,
+	Uncompared::Signatures,
+	Uncompared::RenameInference,
+];
+
+/// Scope and metadata limits for stored attribute comparison.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[non_exhaustive]
+pub struct XattrPolicy {
+	pub excluded_names: &'static [&'static str],
+	pub max_attributes_per_object: NonZeroU32,
+	pub max_attributes_per_side: usize,
+	pub max_name_bytes_per_side: usize,
+}
+
 /// Scope declared by the semantic comparison.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[non_exhaustive]
@@ -148,6 +187,19 @@ pub struct Policy {
 	pub contents: ContentComparison,
 	pub compared: &'static [Field],
 	pub excluded: &'static [Uncompared],
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub xattrs: Option<XattrPolicy>,
+}
+
+impl Policy {
+	pub(super) fn with_xattrs() -> Self {
+		Self {
+			compared: &COMPARED_FIELDS_WITH_XATTRS,
+			excluded: UNCOMPARED_FIELDS_WITH_XATTRS,
+			xattrs: Some(XATTR_POLICY),
+			..Self::default()
+		}
+	}
 }
 
 impl Default for Policy {
@@ -155,8 +207,9 @@ impl Default for Policy {
 		Self {
 			paths: PathMatching::ExactStoredText,
 			contents: ContentComparison::ExactBytes,
-			compared: COMPARED_FIELDS,
+			compared: &COMPARED_FIELDS,
 			excluded: UNCOMPARED_FIELDS,
+			xattrs: None,
 		}
 	}
 }
@@ -182,6 +235,14 @@ impl ChangeKind {
 	}
 }
 
+/// One attribute change at a common stored path.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[non_exhaustive]
+pub struct XattrChange {
+	pub name: String,
+	pub kind: ChangeKind,
+}
+
 /// A difference at one exact stored path.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[non_exhaustive]
@@ -191,6 +252,9 @@ pub struct Change {
 	pub kind: ChangeKind,
 	/// Changed fields of a path common to both volumes.
 	pub fields: Vec<Field>,
+	/// Stored attribute changes in lexicographic name order.
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub xattrs: Vec<XattrChange>,
 }
 
 impl Change {
@@ -199,6 +263,7 @@ impl Change {
 			path: path.to_vec(),
 			kind,
 			fields,
+			xattrs: Vec::new(),
 		}
 	}
 }
@@ -215,7 +280,7 @@ pub struct Report {
 	pub left_entries: usize,
 	/// Number of paths scanned, including the root.
 	pub right_entries: usize,
-	/// Paired fork chunks counted once, with the larger length charged for links.
+	/// Paired fork and attribute chunks counted once, with the larger length charged for links.
 	#[serde(serialize_with = "decimal")]
 	pub compared_bytes: u64,
 	/// Differences in lexicographic component order.
