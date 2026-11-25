@@ -1,6 +1,7 @@
 mod app;
 mod canvas;
 mod document;
+mod image;
 mod import;
 mod inspector;
 mod layout_lint;

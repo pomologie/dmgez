@@ -8,9 +8,11 @@ Enable **Show layout findings** to check the current folder's declared icon layo
 
 Use **Add files…** to add up to 256 selected files to the current folder layout. Files below the project directory keep project-relative source paths. Files outside it use absolute source paths. A successful selection is one undoable edit.
 
-The image workspace shows the inspector's observed UDIF metadata, partition discovery and first run page. Verification statuses come directly from the report. Mounted images, filesystem browsing, native Finder visualization, and build actions remain separate milestones.
+The image workspace shows the inspector's observed UDIF metadata and partition discovery. Run details show logical and stored offsets in pages of 64. Use **Previous page**, **Next page**, or enter a page number in the page control. Paging uses the index from the opened file handle.
 
-The desktop tests cover bounded project input, native GPT fixture inspection, copy publication and no-clobber behavior, cancelled or failed opens, and grouped position edits with undo and redo.
+Choose **Verify container** to scan stored runs and declared container checksums in the background. The sidebar reports structure, payload, filesystem, and security coverage independently. Filesystem and security stay “Not checked” for a container scan. **Cancel check** stops at the next verification boundary and keeps the last completed result. If the open file changes, reopen the image before relying on its observed metadata.
+
+The desktop tests cover bounded project input, native GPT fixture inspection, copy publication and no-clobber behavior, cancelled or failed opens, and grouped position edits with undo and redo. Tests for the run navigation portion of D-GUI-03 cover bounded pages, preservation of the open source, simulated accessibility activation, and cancellation. Verification tests use the native UDZO fixture and a copy with a changed payload byte.
 
 A live smoke test on macOS 14.7.2 (23H311, arm64) opened the [native GPT fixture](../../crates/foundation/dmgez-vfs/tests/fixtures/native-gpt.dmg) through the standard file picker. The window reported GPT and a logical partition start of 20,480 bytes. Verification status stayed “Not checked”.
 

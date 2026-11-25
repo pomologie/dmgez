@@ -1,13 +1,21 @@
 use dmgez_inspector::{
-	CheckStatus, ChecksumDeclaration, ContainerFormat, DiskReport, InspectionReport,
-	PartitionDetails, PartitionReport, RecognizedFilesystem,
+	CheckStatus, ChecksumDeclaration, ContainerFormat, DiskReport, PartitionDetails,
+	PartitionReport, RecognizedFilesystem, RunPage,
 };
 use eframe::egui::{self, Grid, Panel, RichText, ScrollArea, Ui};
 
+use crate::image::{ImageTab, RUN_PAGE_SIZE};
+
 const SUMMARY_WIDTH: f32 = 264.0;
 
-pub(crate) fn show(ui: &mut Ui, report: &InspectionReport) {
-	Panel::left("image_summary")
+pub(crate) enum Action {
+	Page(usize),
+	Verify,
+}
+
+pub(crate) fn show(ui: &mut Ui, image: &ImageTab, idle: bool) -> Option<Action> {
+	let report = &image.report;
+	let verify = Panel::left("image_summary")
 		.default_size(SUMMARY_WIDTH)
 		.show(ui, |ui| {
 			let container = &report.container;
@@ -31,54 +39,123 @@ pub(crate) fn show(ui: &mut Ui, report: &InspectionReport) {
 			}
 			ui.separator();
 			ui.strong("Verification");
-			field(ui, "Structure", status(report.coverage.structure));
-			field(ui, "Payload", status(report.coverage.payload));
-			field(ui, "Filesystem", status(report.coverage.filesystem));
-			field(ui, "Security", status(report.coverage.security));
-		});
-	egui::CentralPanel::default().show(ui, |ui| {
-		ScrollArea::vertical().show(ui, |ui| {
-			show_disk(ui, report.disk.as_ref());
-			ui.separator();
-			ui.heading("Container");
-			field(ui, "Segment ID", report.container.segment_id.to_string());
-			field(
-				ui,
-				"Declared data checksum",
-				checksum(report.container.data_fork_checksum),
-			);
-			field(
-				ui,
-				"Declared master checksum",
-				checksum(report.container.master_checksum),
-			);
-			if let Some(page) = &report.run_page {
-				ui.separator();
-				ui.heading("Runs");
-				Grid::new("run_rows").striped(true).show(ui, |ui| {
-					for heading in ["Run", "Codec", "Logical start", "Length", "Stored bytes"] {
-						ui.strong(heading);
-					}
-					ui.end_row();
-					for (index, run) in (page.offset..).zip(&page.runs) {
-						ui.label(index.to_string());
-						ui.label(format!("{:?}", run.encoding));
-						ui.label(run.logical.offset_bytes.to_string());
-						ui.label(run.logical.length_bytes.to_string());
-						ui.label(run.physical.length_bytes.to_string());
-						ui.end_row();
-					}
-				});
-				if page.next_offset.is_some() {
-					ui.small(format!(
-						"Showing {} of {} runs",
-						page.runs.len(),
-						report.container.runs.total
-					));
-				}
+			let coverage = image
+				.verification
+				.as_ref()
+				.map_or(report.coverage, |check| check.coverage);
+			field(ui, "Structure", status(coverage.structure));
+			field(ui, "Payload", status(coverage.payload));
+			field(ui, "Filesystem", status(coverage.filesystem));
+			field(ui, "Security", status(coverage.security));
+			if let Some(cause) = image.verification.as_ref().and_then(|check| check.cause()) {
+				ui.label(cause.to_string());
 			}
-		});
+			ui.add_enabled(idle, egui::Button::new("Verify container"))
+				.clicked()
+				.then_some(Action::Verify)
+		})
+		.inner;
+	let page = egui::CentralPanel::default()
+		.show(ui, |ui| {
+			ScrollArea::both()
+				.show(ui, |ui| {
+					show_disk(ui, report.disk.as_ref());
+					ui.separator();
+					ui.heading("Container");
+					field(ui, "Segment ID", report.container.segment_id.to_string());
+					field(
+						ui,
+						"Declared data checksum",
+						checksum(report.container.data_fork_checksum),
+					);
+					field(
+						ui,
+						"Declared master checksum",
+						checksum(report.container.master_checksum),
+					);
+					report
+						.run_page
+						.as_ref()
+						.and_then(|page| show_runs(ui, page, report.container.runs.total, idle))
+				})
+				.inner
+		})
+		.inner;
+	verify.or(page)
+}
+
+fn show_runs(ui: &mut Ui, page: &RunPage, total: usize, idle: bool) -> Option<Action> {
+	ui.separator();
+	ui.heading("Runs");
+	if page.runs.is_empty() {
+		ui.label("No runs in this page");
+		return None;
+	}
+	let first = page.offset + 1;
+	let last = page.offset + page.runs.len() as u64;
+	let offset = usize::try_from(page.offset).ok()?;
+	let current_page = offset / RUN_PAGE_SIZE + 1;
+	let page_count = total.div_ceil(RUN_PAGE_SIZE);
+	let action = ui
+		.horizontal_wrapped(|ui| {
+			ui.label(format!("{first}–{last} of {total}"));
+			let mut requested_page = current_page;
+			let previous = ui
+				.add_enabled(idle && page.offset > 0, egui::Button::new("Previous page"))
+				.clicked();
+			let next = ui
+				.add_enabled(
+					idle && page.next_offset.is_some(),
+					egui::Button::new("Next page"),
+				)
+				.clicked();
+			if page_count > 1 {
+				ui.add_enabled(
+					idle,
+					egui::DragValue::new(&mut requested_page)
+						.range(1..=page_count)
+						.prefix("Page ")
+						.update_while_editing(false),
+				);
+			}
+			if previous {
+				Some(Action::Page(offset.saturating_sub(RUN_PAGE_SIZE)))
+			} else if next {
+				page.next_offset.map(Action::Page)
+			} else if requested_page != current_page {
+				Some(Action::Page((requested_page - 1) * RUN_PAGE_SIZE))
+			} else {
+				None
+			}
+		})
+		.inner;
+	Grid::new("run_rows").striped(true).show(ui, |ui| {
+		for heading in [
+			"Run",
+			"Codec",
+			"Logical start",
+			"Logical bytes",
+			"Stored start",
+			"Stored bytes",
+		] {
+			ui.strong(heading);
+		}
+		ui.end_row();
+		for (index, run) in (first..).zip(&page.runs) {
+			ui.label(index.to_string());
+			ui.label(format!("{:?}", run.encoding));
+			ui.label(run.logical.offset_bytes.to_string());
+			ui.label(run.logical.length_bytes.to_string());
+			if run.physical.length_bytes == 0 {
+				ui.label("—");
+			} else {
+				ui.label(run.physical.offset_bytes.to_string());
+			}
+			ui.label(run.physical.length_bytes.to_string());
+			ui.end_row();
+		}
 	});
+	action
 }
 
 fn show_disk(ui: &mut Ui, disk: Option<&DiskReport>) {
@@ -183,6 +260,7 @@ fn status(value: CheckStatus) -> &'static str {
 	match value {
 		CheckStatus::NotChecked => "Not checked",
 		CheckStatus::Passed => "Passed",
+		CheckStatus::Partial => "Partial",
 		CheckStatus::Failed => "Failed",
 		CheckStatus::NotPresent => "Absent",
 		CheckStatus::Unsupported => "Unsupported",

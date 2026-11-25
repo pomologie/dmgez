@@ -1,21 +1,27 @@
 use std::{
 	path::{Path, PathBuf},
-	sync::mpsc::{self, Receiver, TryRecvError},
-	thread,
+	sync::mpsc::TryRecvError,
 };
 
 use dmgez_config::project_edit::{ProjectEdit, RevisionId};
+use dmgez_inspector::{RunPage, VerificationReport};
+use dmgez_udif::Cancellation;
 use eframe::egui::{
 	self, Color32, Context, Id, Key, Modifiers, Panel, RichText, TextEdit, Ui, ViewportCommand,
 };
 
 use crate::document::{self, Document, IMAGE_EXTENSION, Opened, PROJECT_EXTENSION};
-use crate::import;
+use crate::{
+	import,
+	inspector::{self, Action},
+};
 
 #[cfg(test)]
 mod import_tests;
+mod worker;
 
-const WORKER_NAME: &str = "dmgez document";
+use worker::Worker;
+
 const PROJECT_COPY: &str = "project-copy.toml";
 const INK: Color32 = Color32::from_rgb(26, 42, 48);
 const WORKSPACE: Color32 = Color32::from_rgb(250, 252, 252);
@@ -26,7 +32,7 @@ const FILE_OPEN_KEY: Key = Key::O;
 
 pub(crate) struct App {
 	opened: Option<Opened>,
-	worker: Option<Receiver<Completion>>,
+	worker: Option<Worker>,
 	confirm: Option<Pending>,
 	save_copy: bool,
 	copy_name: String,
@@ -49,6 +55,8 @@ enum Completion {
 		revision: RevisionId,
 		edits: Result<Vec<ProjectEdit>, import::Error>,
 	},
+	ImagePage(Result<RunPage, dmgez_udif::Error>),
+	ImageChecked(Box<VerificationReport>),
 	Cancelled,
 	Failed(document::Error),
 }
@@ -77,29 +85,37 @@ impl App {
 	}
 
 	fn start(&mut self, ctx: &Context, work: impl FnOnce() -> Completion + Send + 'static) {
+		self.start_worker(ctx, None, work);
+	}
+
+	fn start_worker(
+		&mut self,
+		ctx: &Context,
+		cancellation: Option<Cancellation>,
+		work: impl FnOnce() -> Completion + Send + 'static,
+	) {
 		if self.worker.is_some() {
 			return;
 		}
 		self.error = None;
-		let (send, receive) = mpsc::sync_channel(1);
-		let repaint = ctx.clone();
-		match thread::Builder::new()
-			.name(WORKER_NAME.into())
-			.spawn(move || {
-				let _ = send.send(work());
-				repaint.request_repaint();
-			}) {
-			Ok(_) => self.worker = Some(receive),
+		match Worker::start(ctx, cancellation, work) {
+			Ok(worker) => self.worker = Some(worker),
 			Err(error) => self.error = Some(format!("Could not start the document task. {error}")),
 		}
 	}
 
 	fn poll(&mut self) {
 		if let Some(worker) = &self.worker {
-			match worker.try_recv() {
+			match worker.receiver.try_recv() {
 				Ok(result) => {
+					let cancelled = worker
+						.cancellation
+						.as_ref()
+						.is_some_and(Cancellation::is_cancelled);
 					self.worker = None;
-					self.finish(result);
+					if !cancelled {
+						self.finish(result);
+					}
 				}
 				Err(TryRecvError::Empty) => {}
 				Err(TryRecvError::Disconnected) => {
@@ -115,6 +131,32 @@ impl App {
 			Completion::Opened(opened) => self.opened = Some(opened),
 			Completion::Cancelled => {}
 			Completion::Failed(error) => self.error = Some(error.to_string()),
+			Completion::ImagePage(result) => {
+				if let Some(Opened {
+					document: Document::Image(image),
+					..
+				}) = &mut self.opened
+				{
+					match result {
+						Ok(page) => image.report.run_page = Some(page),
+						Err(error) => {
+							if matches!(error, dmgez_udif::Error::SourceChanged) {
+								image.verification = None;
+							}
+							self.error = Some(format!("Could not load the run page. {error}"));
+						}
+					}
+				}
+			}
+			Completion::ImageChecked(report) => {
+				if let Some(Opened {
+					document: Document::Image(image),
+					..
+				}) = &mut self.opened
+				{
+					image.verification = Some(report);
+				}
+			}
 			Completion::Saved { path, revision } => {
 				if let Some(Opened {
 					document: Document::Project(project),
@@ -137,6 +179,28 @@ impl App {
 						Err(error) => self.error = Some(error.to_string()),
 					}
 				}
+			}
+		}
+	}
+
+	fn image_action(&mut self, ctx: &Context, action: Action) {
+		let Some(Opened {
+			document: Document::Image(image),
+			..
+		}) = &self.opened
+		else {
+			return;
+		};
+		let snapshot = image.snapshot.clone();
+		match action {
+			Action::Page(offset) => self.start(ctx, move || {
+				Completion::ImagePage(snapshot.run_page(offset))
+			}),
+			Action::Verify => {
+				let cancellation = Cancellation::default();
+				self.start_worker(ctx, Some(cancellation.clone()), move || {
+					Completion::ImageChecked(Box::new(snapshot.verify(&cancellation)))
+				});
 			}
 		}
 	}
@@ -258,9 +322,22 @@ impl App {
 						ui.weak("Unsaved changes");
 					}
 				}
-				if self.worker.is_some() {
+				if let Some(worker) = &self.worker {
 					ui.spinner();
-					ui.label("Working…");
+					match &worker.cancellation {
+						Some(cancellation) if cancellation.is_cancelled() => {
+							ui.label("Cancelling…");
+						}
+						Some(cancellation) => {
+							ui.label("Checking container…");
+							if ui.button("Cancel check").clicked() {
+								cancellation.cancel();
+							}
+						}
+						None => {
+							ui.label("Working…");
+						}
+					}
 				}
 			});
 			if let Some(error) = &self.error {
@@ -357,27 +434,38 @@ impl eframe::App for App {
 		}
 		self.shortcuts(&ctx);
 		self.toolbar(ui);
-		ui.add_enabled_ui(self.worker.is_none(), |ui| match &mut self.opened {
+		let idle = self.worker.is_none();
+		let image_action = match &mut self.opened {
 			Some(Opened {
 				document: Document::Project(project),
 				..
-			}) => project.ui(ui),
+			}) => {
+				ui.add_enabled_ui(idle, |ui| project.ui(ui));
+				None
+			}
 			Some(Opened {
-				document: Document::Image(report),
+				document: Document::Image(image),
 				..
-			}) => crate::inspector::show(ui, report),
+			}) => inspector::show(ui, image, idle),
 			None => {
 				egui::CentralPanel::default().show(ui, |ui| {
 					ui.vertical_centered(|ui| {
 						ui.add_space(ui.available_height() / 3.0);
 						ui.heading("Open a project or disk image");
-						if ui.button("Choose file…").clicked() {
+						if ui
+							.add_enabled(idle, egui::Button::new("Choose file…"))
+							.clicked()
+						{
 							self.choose(&ctx);
 						}
 					});
 				});
+				None
 			}
-		});
+		};
+		if let Some(action) = image_action {
+			self.image_action(&ctx, action);
+		}
 		self.modal(&ctx);
 	}
 }
@@ -397,26 +485,4 @@ fn display_name(path: &Path) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-	use super::*;
-
-	#[test]
-	fn asynchronous_failure_and_cancel_leave_previous_document_available() {
-		let mut app = App::new(&Context::default(), None);
-		let scratch = tempfile::tempdir().unwrap();
-		let file = scratch.path().join("retained.toml");
-		std::fs::write(
-			&file,
-			"schema_version=1\n[image]\nname='Original'\noutput='build.dmg'",
-		)
-		.unwrap();
-		app.finish(open_outcome(file.clone()));
-		app.finish(Completion::Cancelled);
-		app.finish(open_outcome(file.with_extension("exe")));
-		assert_eq!(
-			app.opened.as_ref().unwrap().path,
-			file.canonicalize().unwrap()
-		);
-		assert!(app.error.is_some());
-	}
-}
+mod document_tests;

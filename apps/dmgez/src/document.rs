@@ -9,17 +9,12 @@ use dmgez_config::{
 	project_edit::{ProjectDocument, ProjectEditError},
 };
 use dmgez_core::output::{PublishError, publish_new};
-use dmgez_inspector::{DiskLimits, InspectionReport, RunWindow, inspect_disk};
-use dmgez_udif::reader::{FileSource, Image, Limits};
 use thiserror::Error;
 
-use crate::project::ProjectTab;
+use crate::{image::ImageTab, project::ProjectTab};
 
 pub(crate) const PROJECT_EXTENSION: &str = "toml";
 pub(crate) const IMAGE_EXTENSION: &str = "dmg";
-const FIRST_RUN: usize = 0;
-const RUN_PAGE_SIZE: usize = 64;
-
 pub(crate) struct Opened {
 	pub path: PathBuf,
 	pub document: Document,
@@ -27,7 +22,7 @@ pub(crate) struct Opened {
 
 pub(crate) enum Document {
 	Project(Box<ProjectTab>),
-	Image(Box<InspectionReport>),
+	Image(Box<ImageTab>),
 }
 
 #[derive(Debug, Error)]
@@ -71,13 +66,7 @@ pub(crate) fn open(path: PathBuf) -> Result<Opened, Error> {
 		let document = read_project(input)?;
 		Document::Project(Box::new(ProjectTab::new(document)))
 	} else {
-		let mut image = Image::open(FileSource::new(input)?, Limits::default())?;
-		let report = inspect_disk(
-			&mut image,
-			RunWindow::new(FIRST_RUN, RUN_PAGE_SIZE),
-			DiskLimits::default(),
-		);
-		Document::Image(Box::new(report))
+		Document::Image(Box::new(ImageTab::open(input)?))
 	};
 	Ok(Opened {
 		path: canonical_path,
@@ -171,14 +160,14 @@ mod tests {
 		let path = directory.path().join("example.dmg");
 		fs::write(&path, FIXTURE).unwrap();
 		let opened = open(path).unwrap();
-		let Document::Image(report) = opened.document else {
+		let Document::Image(image) = opened.document else {
 			panic!("expected an image inspection report");
 		};
 		assert!(matches!(
-			report.disk,
+			image.report.disk,
 			Some(DiskReport::Partitioned { scheme: DiskScheme::Gpt, ref partitions, .. })
 				if !partitions.is_empty()
 		));
-		assert!(report.run_page.is_some());
+		assert!(image.report.run_page.is_some());
 	}
 }

@@ -20,6 +20,7 @@ rfd.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+dmgez-udif = { workspace = true, features = ["write"] }
 tempfile.workspace = true
 
 [lints]

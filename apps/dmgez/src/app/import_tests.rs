@@ -25,6 +25,7 @@ fn project(app: &mut App) -> &mut ProjectTab {
 fn receive(app: &mut App) {
 	let receiver = app.worker.take().expect("expected one active worker");
 	let reply = receiver
+		.receiver
 		.recv_timeout(WORKER_TIMEOUT)
 		.expect("expected worker response");
 	app.finish(reply);
