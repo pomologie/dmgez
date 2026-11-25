@@ -65,6 +65,22 @@ class ReleaseCompositionTests(unittest.TestCase):
                     if reader and build:
                         self.assertIn("dmgez-operations/image-edit", features[compose.IMAGE_EDIT_FEATURE])
 
+    def test_reader_only_composition_resolves_without_a_builder(self):
+        root = Path("local")
+        args = ["compose_filesystem_cli.py", "--hfsplus", str(root),
+                "--no-default-features", "--features", compose.READ_FEATURE]
+        packages = {compose.HFSPLUS_READER: root}
+        with (
+            patch.object(sys, "argv", args),
+            patch.object(sys, "platform", "linux"),
+            patch.object(compose, "resolve_hfsplus", return_value=packages) as resolve,
+            patch.object(compose, "prepare_workspace"),
+            patch.object(compose, "resolve_lock"),
+            patch.object(compose, "run_cli"),
+        ):
+            self.assertEqual(compose.main(), 0)
+        resolve.assert_called_once_with(root, None, reader=True, build=False)
+
 
 class WindowsCompositionTests(unittest.TestCase):
     def test_windows_composes_the_hfsplus_builder_for_local_project_tests(self):

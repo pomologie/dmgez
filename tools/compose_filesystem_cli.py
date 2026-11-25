@@ -401,7 +401,7 @@ def main():
         image_edit = has_cli_feature(options, IMAGE_EDIT_FEATURE)
         reader = explicit_read or image_edit
         build = image_edit or not reader or not options.no_default_features or any(
-            has_cli_feature(options, name) for name in ("build", *FEATURE_ADDITIONS)
+            has_cli_feature(options, name) for name in ("build", *PROJECT_FEATURES, *FINDER_FEATURES)
         )
         packages = {}
         if use_hfsplus:
