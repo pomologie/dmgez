@@ -4,7 +4,10 @@ use dmgez_inspector::{
 };
 use eframe::egui::{self, Align, Grid, Key, Panel, RichText, ScrollArea, TextEdit, Ui};
 
-use crate::image::{ImageTab, RUN_PAGE_SIZE, RunNavigation};
+use crate::image::{
+	ImageTab, RUN_PAGE_SIZE, RunNavigation,
+	exports::{Kind as Export, selected_run},
+};
 
 #[cfg(feature = "hfsplus-read")]
 mod browse;
@@ -17,6 +20,7 @@ pub(crate) enum Action {
 	Page(usize),
 	LocateRun(u64),
 	Verify,
+	Export(Export),
 	#[cfg(feature = "hfsplus-read")]
 	ShowContainer,
 	#[cfg(feature = "hfsplus-read")]
@@ -75,7 +79,25 @@ pub(crate) fn show(ui: &mut Ui, image: &mut ImageTab, idle: bool) -> Option<Acti
 				.add_enabled(idle, egui::Button::new("Verify container"))
 				.clicked()
 				.then_some(Action::Verify);
-			navigation.or(verify)
+			let inspection = ui
+				.add_enabled(idle, egui::Button::new("Export inspection JSON…"))
+				.clicked()
+				.then_some(Action::Export(Export::Inspection));
+			let verification = ui
+				.add_enabled(
+					idle && image.verification.is_some(),
+					egui::Button::new("Export verification JSON…"),
+				)
+				.clicked()
+				.then_some(Action::Export(Export::Verification));
+			if let Some(path) = &image.exported {
+				field(
+					ui,
+					"Exported",
+					path.to_string_lossy().escape_debug().to_string(),
+				);
+			}
+			navigation.or(verify).or(inspection).or(verification)
 		})
 		.inner;
 	#[cfg(feature = "hfsplus-read")]
@@ -136,8 +158,21 @@ fn show_runs(
 		return None;
 	}
 	let locate = show_run_lookup(ui, navigation, idle);
+	let mut export = None;
 	if let Some(selected) = navigation.selected {
-		ui.label(format!("Selected run {}", selected + 1));
+		ui.horizontal_wrapped(|ui| {
+			ui.label(format!("Selected run {}", selected + 1));
+			let exportable = selected_run(page, Some(selected));
+			if ui
+				.add_enabled(
+					idle && exportable.is_some(),
+					egui::Button::new("Export selected run…"),
+				)
+				.clicked()
+			{
+				export = exportable.map(|ordinal| Action::Export(Export::Run(ordinal)));
+			}
+		});
 	}
 	let reveal_selected = std::mem::take(&mut navigation.reveal_selected);
 	let first = page.offset + 1;
@@ -212,7 +247,7 @@ fn show_runs(
 			ui.end_row();
 		}
 	});
-	locate.or(action)
+	locate.or(action).or(export)
 }
 
 fn show_run_lookup(ui: &mut Ui, navigation: &mut RunNavigation, idle: bool) -> Option<Action> {

@@ -13,6 +13,7 @@ pub(super) enum ImageCompletion {
 	Checked(Box<VerificationReport>),
 	#[cfg(feature = "hfsplus-read")]
 	Browsed(Result<Observation, browse::Error>),
+	Exported(Result<std::path::PathBuf, dmgez_runtime::image::InspectionExportError>),
 }
 
 impl App {
@@ -46,6 +47,7 @@ impl App {
 					)))
 				});
 			}
+			Action::Export(kind) => self.start_image_export(ctx, kind),
 			#[cfg(feature = "hfsplus-read")]
 			Action::ShowContainer => {
 				image.browser.showing = false;
@@ -102,7 +104,10 @@ impl App {
 					#[cfg(feature = "hfsplus-read")]
 					image.browser.invalidate();
 				}
-				image.verification = Some(report);
+				image.verification = Some(report.into());
+			}
+			ImageCompletion::Exported(result) => {
+				Self::finish_image_export(image, &mut self.error, result);
 			}
 			#[cfg(feature = "hfsplus-read")]
 			ImageCompletion::Browsed(result) => match result {

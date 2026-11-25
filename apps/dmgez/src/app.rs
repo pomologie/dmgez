@@ -12,6 +12,7 @@ use eframe::egui::{
 use crate::document::{self, Document, IMAGE_EXTENSION, Opened, PROJECT_EXTENSION};
 use crate::{import, inspector};
 
+mod image_exports;
 mod image_tasks;
 #[cfg(test)]
 mod import_tests;
@@ -64,6 +65,17 @@ enum Completion {
 	Build(project_tasks::BuildCompletion),
 	Cancelled,
 	Failed(document::Error),
+}
+
+impl Completion {
+	fn publication_outcome(&self) -> bool {
+		match self {
+			Self::Image(ImageCompletion::Exported(_)) => true,
+			#[cfg(feature = "project-build")]
+			Self::Build(_) => true,
+			_ => false,
+		}
+	}
 }
 
 impl App {
@@ -120,10 +132,8 @@ impl App {
 						.as_ref()
 						.is_some_and(Cancellation::is_cancelled);
 					self.worker = None;
-					#[cfg(feature = "project-build")]
 					// Publication may have completed before the cancellation reached the worker.
-					let cancelled = cancelled && !matches!(result, Completion::Build(_));
-					if !cancelled {
+					if !cancelled || result.publication_outcome() {
 						self.finish(ctx, result);
 					}
 				}
@@ -408,11 +418,12 @@ impl eframe::App for App {
 	fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
 		let ctx = ui.ctx().clone();
 		if !self.closing && ctx.input(|input| input.viewport().close_requested()) {
-			#[cfg(feature = "project-build")]
-			let waiting_for_build = self.cancel_build_for_close(&ctx);
-			#[cfg(not(feature = "project-build"))]
-			let waiting_for_build = false;
-			if !waiting_for_build && self.is_dirty() {
+			if let Some(worker) = &self.worker {
+				ctx.send_viewport_cmd(ViewportCommand::CancelClose);
+				if let Some(cancellation) = &worker.cancellation {
+					cancellation.cancel();
+				}
+			} else if self.is_dirty() {
 				ctx.send_viewport_cmd(ViewportCommand::CancelClose);
 				self.confirm = Some(Pending::Close);
 				self.save_copy = false;

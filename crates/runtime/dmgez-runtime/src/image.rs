@@ -13,10 +13,16 @@ use dmgez_udif::{
 
 #[cfg(feature = "raw-export")]
 mod export;
+#[cfg(feature = "report-export")]
+mod inspection_export;
 #[cfg(test)]
 mod tests;
 #[cfg(feature = "raw-export")]
 pub use export::{ExportError, export_raw};
+#[cfg(feature = "report-export")]
+pub use inspection_export::{
+	ExportDataError, InspectionExportError, MAX_RUN_EXPORT_BYTES, ReportExport, export_run,
+};
 
 /// How much of the logical disk to inspect.
 #[derive(Debug, Clone, Copy)]

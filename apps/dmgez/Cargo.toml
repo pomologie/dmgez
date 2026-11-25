@@ -25,7 +25,7 @@ dmgez-core = { workspace = true, features = ["staging"] }
 dmgez-preview.workspace = true
 
 # Workspace runtime
-dmgez-runtime = { workspace = true, features = ["image"] }
+dmgez-runtime = { workspace = true, features = ["report-export"] }
 
 # Workspace inspection
 dmgez-inspector = { workspace = true, features = ["zlib"] }
@@ -41,6 +41,9 @@ thiserror.workspace = true
 [dev-dependencies]
 # Workspace formats
 dmgez-udif = { workspace = true, features = ["write"] }
+
+# Serialization and configuration
+serde_json.workspace = true
 
 # Filesystem access and staging
 tempfile.workspace = true

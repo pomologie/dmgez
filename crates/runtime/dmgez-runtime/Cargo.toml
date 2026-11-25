@@ -13,6 +13,7 @@ encoding = ["dep:dmgez-udif", "dmgez-udif/write"]
 image = ["dep:dmgez-inspector", "dep:dmgez-udif", "dmgez-udif/read", "dep:dmgez-vfs", "dep:thiserror"]
 parallel = ["dmgez-udif?/parallel"]
 raw-export = ["image", "dep:dmgez-core", "dmgez-core/staging"]
+report-export = ["image", "dep:dmgez-core", "dmgez-core/staging", "dep:serde_json"]
 raw-wrap = [
 	"dep:dmgez-core",
 	"dmgez-core/source",
@@ -116,6 +117,7 @@ dmgez-signing = { workspace = true, optional = true }
 
 # Hashes, staging and serialization
 serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
 

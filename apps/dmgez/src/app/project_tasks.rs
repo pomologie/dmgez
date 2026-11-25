@@ -8,7 +8,7 @@ use dmgez_runtime::project_build::{
 	BuildError, BuildEvent, BuildMode, BuildOutcome, BuildProgress, BuildProject,
 };
 use dmgez_udif::Cancellation;
-use eframe::egui::{Context, ProgressBar, Ui, ViewportCommand};
+use eframe::egui::{Context, ProgressBar, Ui};
 
 use super::{App, Completion, Document, ERROR, IMAGE_EXTENSION, Opened, Pending, document};
 
@@ -117,21 +117,6 @@ impl App {
 				completed: None,
 			};
 		}
-	}
-
-	pub(super) fn cancel_build_for_close(&self, ctx: &Context) -> bool {
-		let cancellation = self
-			.worker
-			.as_ref()
-			.and_then(|worker| worker.cancellation.as_ref());
-		if let Some(cancellation) = cancellation
-			&& self.build.progress.is_some()
-		{
-			ctx.send_viewport_cmd(ViewportCommand::CancelClose);
-			cancellation.cancel();
-			return true;
-		}
-		false
 	}
 
 	pub(super) fn show_build(&mut self, ui: &mut Ui) {

@@ -1,4 +1,4 @@
-use std::{fs::File, sync::Arc};
+use std::{fs::File, path::PathBuf, sync::Arc};
 
 use dmgez_inspector::{
 	DiskLimits, InspectionReport, RunPage, RunWindow, VerificationMode, VerificationReport,
@@ -15,7 +15,8 @@ pub(crate) const RUN_PAGE_SIZE: usize = 64;
 pub(crate) struct ImageTab {
 	pub snapshot: Arc<ImageSnapshot>,
 	pub report: InspectionReport,
-	pub verification: Option<Box<VerificationReport>>,
+	pub verification: Option<Arc<VerificationReport>>,
+	pub exported: Option<PathBuf>,
 	pub run_navigation: RunNavigation,
 	#[cfg(feature = "hfsplus-read")]
 	pub browser: browse::Browser,
@@ -38,6 +39,7 @@ impl RunNavigation {
 
 #[cfg(feature = "hfsplus-read")]
 pub(crate) mod browse;
+pub(crate) mod exports;
 
 impl ImageTab {
 	pub(crate) fn open(file: File) -> Result<Self, Error> {
@@ -55,6 +57,7 @@ impl ImageTab {
 			snapshot: Arc::new(ImageSnapshot { source, image }),
 			report,
 			verification: None,
+			exported: None,
 			run_navigation: RunNavigation::default(),
 			#[cfg(feature = "hfsplus-read")]
 			browser: browse::Browser::default(),
