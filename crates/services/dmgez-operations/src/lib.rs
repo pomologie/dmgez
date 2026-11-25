@@ -2,6 +2,8 @@
 
 #[cfg(feature = "convert")]
 pub mod convert;
+#[cfg(feature = "edit")]
+pub mod edit;
 #[cfg(feature = "extract")]
 pub mod extract;
 #[cfg(feature = "convert")]

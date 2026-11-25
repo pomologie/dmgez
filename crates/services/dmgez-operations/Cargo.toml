@@ -10,10 +10,13 @@ repository.workspace = true
 [features]
 default = []
 convert = ["dep:dmgez-core", "dep:dmgez-udif", "dep:thiserror"]
+edit = ["dep:dmgez-builder", "dep:dmgez-config", "dmgez-builder/zlib", "dmgez-config/project-edit", "dep:thiserror"]
 extract = ["dep:dmgez-vfs", "dep:rustix", "dep:serde", "dep:tempfile", "dep:thiserror"]
 parallel = ["dmgez-udif?/parallel"]
 
 [dependencies]
+dmgez-builder = { workspace = true, optional = true }
+dmgez-config = { workspace = true, optional = true }
 dmgez-core = { workspace = true, features = ["staging"], optional = true }
 dmgez-udif = { workspace = true, features = ["read", "write", "zlib"], optional = true }
 dmgez-vfs = { workspace = true, optional = true }
