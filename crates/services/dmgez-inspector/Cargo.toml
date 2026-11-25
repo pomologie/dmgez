@@ -12,6 +12,7 @@ default = ["zlib"]
 zlib = ["dmgez-udif/zlib"]
 lzfse = ["dmgez-udif/lzfse"]
 lzma = ["dmgez-udif/lzma"]
+remote = []
 
 [dependencies]
 dmgez-udif = { workspace = true, features = ["read"] }

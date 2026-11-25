@@ -8,6 +8,8 @@ mod container;
 mod diagnostic;
 mod disk;
 mod filesystem;
+#[cfg(feature = "remote")]
+pub mod remote;
 mod schema;
 mod verification;
 pub mod volume_queries;
