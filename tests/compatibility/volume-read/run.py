@@ -32,7 +32,6 @@ ENGINE_PACKAGES = {
 }
 PACKAGE_PATCHES = {
     "hfsplus": ("hfsplus-core", "hfsplus-format"),
-    "apfs": ("apfs-core", "apfs-format", "apfs-container"),
 }
 
 
@@ -98,10 +97,11 @@ def main():
         if not (RUNNER / engine / "Cargo.lock").is_file():
             continue
         choices[engine] = (engine, False)
-        choices[f"{engine}_packages"] = (engine, True)
         sources.add_argument(f"--{engine}", type=Path, help=f"{engine} source checkout")
-        sources.add_argument(f"--{engine}-packages", type=Path,
-                             help=f"directory containing unpacked {engine} {ENGINE_VERSION} packages")
+        if engine in PACKAGE_PATCHES:
+            choices[f"{engine}_packages"] = (engine, True)
+            sources.add_argument(f"--{engine}-packages", type=Path,
+                                 help=f"directory containing unpacked {engine} {ENGINE_VERSION} packages")
     options = vars(parser.parse_args())
     for option, (engine, packaged) in choices.items():
         source = options[option]

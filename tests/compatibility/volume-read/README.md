@@ -5,6 +5,7 @@ Run the development adapter with Python 3, the dmgez toolchain, and a populated 
 ```sh
 python3 tests/compatibility/volume-read/run.py --dmgez . --hfsplus /path/to/hfsplus
 python3 tests/compatibility/volume-read/run.py --dmgez . --hfsplus-packages /path/to/unpacked
+python3 tests/compatibility/volume-read/run.py --dmgez . --apfs /path/to/apfs
 ```
 
 The package mode uses unpacked `hfsplus-core`, `hfsplus-format`, `hfsplus-reader`, and `hfsplus-builder` archives at version 0.1.0. Use a set that includes clean-journal support and the [pinned test fixtures](hfsplus/fixtures.json). Cargo path overrides apply inside the temporary project. The adapter stays outside the application workspace until the filesystem dependency is ready for production registration.
@@ -18,3 +19,9 @@ The symbolic-link profile admits canonical HFS+ records with the BSD symlink typ
 Four tests passed against HFS+ revision `2571ebb3d47c0ebc056dc5f28fe7325eef61d0d0` and unpacked 0.1.0 archives generated from that revision, using dmgez revision `c7ea7a9e07d1e0ac7696483b34a023926f54ca60`. The tests use decoded UDZO over partitionless HFS+ volumes. They check the effective identity, metadata, and exact forks of three visible aliases, private hard-link catalog exclusion, and the exact file bytes and visible catalog on a clean journaled volume. Clearing the clean flag in a fixture copy must refuse the session before the callback. A separate constructed fixture checks exact non-UTF-8 symlink bytes. The reader package includes the independent macOS and 7-Zip evidence in `tests/fixtures/native-hardlink-resolution.json` and `tests/fixtures/native-journal.json`.
 
 The fixture bytes cover selected recorded ranges. The tests reconstruct the disk with those bytes at their captured offsets and zeroes elsewhere. This evidence covers the D-READ-03 filesystem adapter operations exercised by the tests. The D-READ-03 large-image I/O budget and frontend workflows require separate qualification.
+
+## APFS
+
+The adapter opens the selected APFS partition, then a volume and checkpoint through the APFS reader. It uses exact stored UTF-8 names. It keeps each hard-link entry distinct from its shared inode and lends data and resource streams independently. Symbolic links expose their exact target bytes.
+
+The tests passed against dmgez `1edf143` and APFS `a210ad5`. They stream a synthetic MBR and [pinned blocks](apfs/fixtures.json) from native APFS fixtures through UDZO. They exercise directory page recovery, separate hard-link and storage identities, both forks, absent and empty streams, foreign handle refusal, and an inline symlink. The fixture source refuses reads outside the captured APFS blocks. APFS qualification currently uses the sibling source checkout.

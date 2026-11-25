@@ -1,0 +1,18 @@
+[package]
+name = "dmgez-apfs-volume-read-compatibility"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+
+[dependencies]
+apfs-container = { version = "=0.1.0", path = @apfs-container@, default-features = false }
+apfs-core = { version = "=0.1.0", path = @apfs-core@, default-features = false }
+apfs-format = { version = "=0.1.0", path = @apfs-format@, default-features = false }
+apfs-reader = { version = "=0.1.0", path = @apfs-reader@, default-features = false }
+dmgez-udif = { version = "=0.1.0", path = @dmgez-udif@, default-features = false, features = ["read", "write", "zlib"] }
+dmgez-vfs = { version = "=0.1.0", path = @dmgez-vfs@, default-features = false, features = ["zlib"] }
+thiserror = "=2.0.21"
+
+[lints.rust]
+unsafe_code = "forbid"
