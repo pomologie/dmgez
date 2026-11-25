@@ -19,7 +19,7 @@ pub(super) fn show(ui: &mut Ui, details: &Details, idle: bool) -> Option<Action>
 	if let Some(preview) = &details.text {
 		show_text_preview(ui, preview);
 	}
-	if let Some(preview) = &details.png {
+	if let Some(preview) = details.png.as_deref() {
 		show_png(ui, preview);
 	}
 	action

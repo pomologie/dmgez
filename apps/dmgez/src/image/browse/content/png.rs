@@ -54,7 +54,7 @@ pub(crate) struct Prepared {
 impl Prepared {
 	pub(crate) fn present(self, context: &Context) -> Details {
 		let mut details = self.details;
-		details.png = Some(self.image.and_then(|image| {
+		let result = self.image.and_then(|image| {
 			let max_side = context.input(|input| input.max_texture_side);
 			let size = image.size;
 			if size.iter().any(|&side| side > max_side) {
@@ -62,7 +62,8 @@ impl Prepared {
 			}
 			let texture = context.load_texture(TEXTURE_NAME, image, TextureOptions::LINEAR);
 			Ok(Presented { texture, size })
-		}));
+		});
+		details.png = Some(Box::new(result));
 		details
 	}
 }

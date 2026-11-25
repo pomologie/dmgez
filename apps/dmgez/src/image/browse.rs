@@ -205,7 +205,7 @@ pub(crate) struct Details {
 	pub link_target: Option<Vec<u8>>,
 	pub storage: Box<Storage>,
 	pub text: Option<content::Preview>,
-	pub png: Option<content::png::Preview>,
+	pub png: Option<Box<content::png::Preview>>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

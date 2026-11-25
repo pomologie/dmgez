@@ -57,7 +57,7 @@ fn accessible_png_preview_shows_the_selected_embedded_file() {
 	let context = egui::Context::default();
 	context.enable_accesskit();
 	let displayed = prepared.present(&context);
-	let texture = &displayed.png.as_ref().unwrap().as_ref().unwrap().texture;
+	let texture = &displayed.png.as_deref().unwrap().as_ref().unwrap().texture;
 	assert_eq!(texture.size(), EXPECTED_SIZE);
 	tab.browser.details = Some(displayed);
 	let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, crate::INITIAL_SIZE.into());
