@@ -1,0 +1,322 @@
+{
+  "dmgez_revision": "d47c79537c5c224f0c52aa598716284e3bf3e291",
+  "apfs_revision": "a8a0348cde041c875d20981c65a96a47fc38df78",
+  "macos_version": "14.7.2",
+  "macos_build": "23H311",
+  "architecture": "arm64",
+  "image_digests": {
+    "initial.raw.cdr": "809c2d7b6f4371e58cbe88a006073db6caf84e99c5f19bebed3e0c7ca505879d",
+    "initial-udro.dmg": "46285fa8180682f0420195083151a1b7f862b07a07eb6b05d2f4947580c14149",
+    "initial-udzo.dmg": "fb604aeb09029b2333c33832efd51d58af25300cf17c1dec62085fd4304959a1",
+    "revised-udzo.dmg": "280a2b600f475a7e690ff380a10c50eb78df4125502f192bb66169d01e4ad653"
+  },
+  "fsck_stdout": [
+    "** Checking the container superblock.",
+    "   Checking the checkpoint with transaction ID 4.",
+    "** Checking the space manager.",
+    "** Checking the space manager free queue trees.",
+    "** Checking the object map.",
+    "** Checking volume <temporary directory>/initial.raw.cdrs1.",
+    "** Checking the APFS volume superblock.",
+    "   The volume Pomologie Semantic Diff was formatted by newfs_apfs (2236.141.1) and last modified by apfs_kext (2236.141.1).",
+    "** Checking the object map.",
+    "** Checking the snapshot metadata tree.",
+    "** Checking the snapshot metadata.",
+    "** Checking the fsroot tree.",
+    "** Checking the extent ref tree.",
+    "** Verifying volume object map space.",
+    "** The volume <temporary directory>/initial.raw.cdrs1 with UUID 124D3B2E-8F52-40C7-8F65-CADCFD818C9C appears to be OK.",
+    "** Verifying allocated space.",
+    "** The container <temporary directory>/initial.raw.cdr appears to be OK."
+  ],
+  "fsck_stderr": [
+    "warning: <temporary directory>/initial.raw.cdr: not a valid disk name/path"
+  ],
+  "initial_udro_verify": [
+    "Checksumming whole disk (Apple_APFS : 0)…",
+    "         whole disk (Apple_APFS : 0): verified   CRC32 $1788FFA8",
+    "verified   CRC32 $48852CAA"
+  ],
+  "initial_udzo_verify": [
+    "Checksumming whole disk (Apple_APFS : 0)…",
+    "         whole disk (Apple_APFS : 0): verified   CRC32 $1788FFA8",
+    "verified   CRC32 $48852CAA"
+  ],
+  "revised_udzo_verify": [
+    "Checksumming whole disk (Apple_APFS : 0)…",
+    "         whole disk (Apple_APFS : 0): verified   CRC32 $0D913A10",
+    "verified   CRC32 $17E11B1B"
+  ],
+  "raw_equal": {
+    "address_space": "filesystem",
+    "filesystem": "apfs",
+    "left": {
+      "input": "raw",
+      "window": {
+        "kind": "whole_disk"
+      },
+      "apfs_volume": {
+        "uuid": "124d3b2e-8f52-40c7-8f65-cadcfd818c9c",
+        "object_id": "1026",
+        "checkpoint_xid": "4"
+      }
+    },
+    "right": {
+      "input": "udif",
+      "window": {
+        "kind": "whole_disk"
+      },
+      "apfs_volume": {
+        "uuid": "124d3b2e-8f52-40c7-8f65-cadcfd818c9c",
+        "object_id": "1026",
+        "checkpoint_xid": "4"
+      }
+    },
+    "schema_version": 1,
+    "outcome": "equal",
+    "policy": {
+      "paths": "exact_stored_text",
+      "contents": "exact_bytes",
+      "compared": [
+        "kind",
+        "mode",
+        "uid",
+        "gid",
+        "hard_link_topology",
+        "data_fork",
+        "resource_fork",
+        "symlink_target"
+      ],
+      "excluded": [
+        "timestamps",
+        "extended_attributes_except_resource_fork",
+        "access_control_lists",
+        "filesystem_flags",
+        "quarantine",
+        "finder_metadata",
+        "native_object_ids",
+        "filesystem_allocation",
+        "physical_container_layout",
+        "signatures",
+        "rename_inference"
+      ]
+    },
+    "limits": {
+      "max_entries": 16384,
+      "max_depth": 128,
+      "max_path_bytes": 4194304,
+      "max_bytes": "34359738368"
+    },
+    "left_entries": 9,
+    "right_entries": 9,
+    "compared_bytes": "155",
+    "changes": []
+  },
+  "wrapped_equal": {
+    "address_space": "filesystem",
+    "filesystem": "apfs",
+    "left": {
+      "input": "udif",
+      "window": {
+        "kind": "whole_disk"
+      },
+      "apfs_volume": {
+        "uuid": "124d3b2e-8f52-40c7-8f65-cadcfd818c9c",
+        "object_id": "1026",
+        "checkpoint_xid": "4"
+      }
+    },
+    "right": {
+      "input": "udif",
+      "window": {
+        "kind": "whole_disk"
+      },
+      "apfs_volume": {
+        "uuid": "124d3b2e-8f52-40c7-8f65-cadcfd818c9c",
+        "object_id": "1026",
+        "checkpoint_xid": "4"
+      }
+    },
+    "schema_version": 1,
+    "outcome": "equal",
+    "policy": {
+      "paths": "exact_stored_text",
+      "contents": "exact_bytes",
+      "compared": [
+        "kind",
+        "mode",
+        "uid",
+        "gid",
+        "hard_link_topology",
+        "data_fork",
+        "resource_fork",
+        "symlink_target"
+      ],
+      "excluded": [
+        "timestamps",
+        "extended_attributes_except_resource_fork",
+        "access_control_lists",
+        "filesystem_flags",
+        "quarantine",
+        "finder_metadata",
+        "native_object_ids",
+        "filesystem_allocation",
+        "physical_container_layout",
+        "signatures",
+        "rename_inference"
+      ]
+    },
+    "limits": {
+      "max_entries": 16384,
+      "max_depth": 128,
+      "max_path_bytes": 4194304,
+      "max_bytes": "34359738368"
+    },
+    "left_entries": 9,
+    "right_entries": 9,
+    "compared_bytes": "155",
+    "changes": []
+  },
+  "different": {
+    "address_space": "filesystem",
+    "filesystem": "apfs",
+    "left": {
+      "input": "raw",
+      "window": {
+        "kind": "whole_disk"
+      },
+      "apfs_volume": {
+        "uuid": "124d3b2e-8f52-40c7-8f65-cadcfd818c9c",
+        "object_id": "1026",
+        "checkpoint_xid": "4"
+      }
+    },
+    "right": {
+      "input": "udif",
+      "window": {
+        "kind": "whole_disk"
+      },
+      "apfs_volume": {
+        "uuid": "124d3b2e-8f52-40c7-8f65-cadcfd818c9c",
+        "object_id": "1026",
+        "checkpoint_xid": "6"
+      }
+    },
+    "schema_version": 1,
+    "outcome": "different",
+    "policy": {
+      "paths": "exact_stored_text",
+      "contents": "exact_bytes",
+      "compared": [
+        "kind",
+        "mode",
+        "uid",
+        "gid",
+        "hard_link_topology",
+        "data_fork",
+        "resource_fork",
+        "symlink_target"
+      ],
+      "excluded": [
+        "timestamps",
+        "extended_attributes_except_resource_fork",
+        "access_control_lists",
+        "filesystem_flags",
+        "quarantine",
+        "finder_metadata",
+        "native_object_ids",
+        "filesystem_allocation",
+        "physical_container_layout",
+        "signatures",
+        "rename_inference"
+      ]
+    },
+    "limits": {
+      "max_entries": 16384,
+      "max_depth": 128,
+      "max_path_bytes": 4194304,
+      "max_bytes": "34359738368"
+    },
+    "left_entries": 9,
+    "right_entries": 9,
+    "compared_bytes": "131",
+    "changes": [
+      {
+        "path": [
+          "Payload",
+          "Alias.txt"
+        ],
+        "kind": "changed",
+        "fields": [
+          "hard_link_topology"
+        ]
+      },
+      {
+        "path": [
+          "Payload",
+          "Data.txt"
+        ],
+        "kind": "changed",
+        "fields": [
+          "data_fork"
+        ]
+      },
+      {
+        "path": [
+          "Payload",
+          "Link"
+        ],
+        "kind": "changed",
+        "fields": [
+          "symlink_target"
+        ]
+      },
+      {
+        "path": [
+          "Payload",
+          "Mode.txt"
+        ],
+        "kind": "changed",
+        "fields": [
+          "mode"
+        ]
+      },
+      {
+        "path": [
+          "Payload",
+          "New.txt"
+        ],
+        "kind": "added",
+        "fields": []
+      },
+      {
+        "path": [
+          "Payload",
+          "Old.txt"
+        ],
+        "kind": "removed",
+        "fields": []
+      },
+      {
+        "path": [
+          "Payload",
+          "Resource.txt"
+        ],
+        "kind": "changed",
+        "fields": [
+          "resource_fork"
+        ]
+      },
+      {
+        "path": [
+          "Payload",
+          "Shared.txt"
+        ],
+        "kind": "changed",
+        "fields": [
+          "hard_link_topology"
+        ]
+      }
+    ]
+  }
+}
