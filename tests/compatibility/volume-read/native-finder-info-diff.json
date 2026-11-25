@@ -1,0 +1,892 @@
+{
+  "dmgez_revision": "d460291a95c921a95f2b9ba07fa0c60d8073811e",
+  "apfs_revision": "52768a7d93a984ab151e4bc0bad96f5654f881ba",
+  "hfsplus_revision": "11740d3c3468273db9f63cff6924fd2ca4c9b7d1",
+  "macos_version": "14.7.2",
+  "macos_build": "23H311",
+  "architecture": "arm64",
+  "filesystems": {
+    "apfs": {
+      "image_digests": {
+        "initial.dmg": "2ae638b47b17bcbc718d865934650b04145ff8cc80c043f5048d3ff9e71faa2f",
+        "revised.dmg": "dba4a791818e1f69a74f9a16251f724f60b7f996a9156c348011c7afba550f1c"
+      },
+      "native_udzo_verification": {
+        "initial.dmg": [
+          "Checksumming whole disk (Apple_APFS : 0)…",
+          "         whole disk (Apple_APFS : 0): verified   CRC32 $DAA63C06",
+          "verified   CRC32 $2FC87BF9"
+        ],
+        "revised.dmg": [
+          "Checksumming whole disk (Apple_APFS : 0)…",
+          "         whole disk (Apple_APFS : 0): verified   CRC32 $AF88C6E4",
+          "verified   CRC32 $E1ADCADE"
+        ]
+      },
+      "native_finder_info": {
+        "initial.dmg": {
+          "Payload": "0000000000000000000200000000000000000000000000000000000000000000",
+          "Payload/Item.bin": "5445585474747874000200000000000000000000000000000000000000000000",
+          "Payload/Alias.bin": "5445585474747874000200000000000000000000000000000000000000000000",
+          "Payload/Plain.bin": null,
+          "Payload/Added.bin": null,
+          "Payload/Removed.bin": "5445585474747874000200000000000000000000000000000000000000000000",
+          "Payload/Link": "0000000000000000000200000000000000000000000000000000000000000000"
+        },
+        "revised.dmg": {
+          "Payload": "0000000000000000000400000000000000000000000000000000000000000000",
+          "Payload/Item.bin": "42494e4164696666000400000000000000000000000000000000000000000000",
+          "Payload/Alias.bin": "42494e4164696666000400000000000000000000000000000000000000000000",
+          "Payload/Plain.bin": null,
+          "Payload/Added.bin": "42494e4164696666000400000000000000000000000000000000000000000000",
+          "Payload/Removed.bin": null,
+          "Payload/Link": "0000000000000000000400000000000000000000000000000000000000000000"
+        }
+      },
+      "comparisons": {
+        "baseline": {
+          "address_space": "filesystem",
+          "filesystem": "apfs",
+          "left": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "apfs_volume": {
+              "uuid": "c2d10ff8-1391-4cea-b894-b90c1874ba25",
+              "object_id": "1026",
+              "checkpoint_xid": "4"
+            }
+          },
+          "right": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "apfs_volume": {
+              "uuid": "c2d10ff8-1391-4cea-b894-b90c1874ba25",
+              "object_id": "1026",
+              "checkpoint_xid": "6"
+            }
+          },
+          "schema_version": 1,
+          "outcome": "equal",
+          "policy": {
+            "paths": "exact_stored_text",
+            "contents": "exact_bytes",
+            "compared": [
+              "kind",
+              "mode",
+              "uid",
+              "gid",
+              "hard_link_topology",
+              "data_fork",
+              "resource_fork",
+              "symlink_target"
+            ],
+            "excluded": [
+              "timestamps",
+              "extended_attributes_except_resource_fork",
+              "access_control_lists",
+              "filesystem_flags",
+              "quarantine",
+              "finder_metadata",
+              "native_object_ids",
+              "filesystem_allocation",
+              "physical_container_layout",
+              "signatures",
+              "rename_inference"
+            ]
+          },
+          "limits": {
+            "max_entries": 16384,
+            "max_depth": 128,
+            "max_path_bytes": 4194304,
+            "max_bytes": "34359738368"
+          },
+          "left_entries": 8,
+          "right_entries": 8,
+          "compared_bytes": "162",
+          "changes": []
+        },
+        "xattrs": {
+          "address_space": "filesystem",
+          "filesystem": "apfs",
+          "left": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "apfs_volume": {
+              "uuid": "c2d10ff8-1391-4cea-b894-b90c1874ba25",
+              "object_id": "1026",
+              "checkpoint_xid": "4"
+            }
+          },
+          "right": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "apfs_volume": {
+              "uuid": "c2d10ff8-1391-4cea-b894-b90c1874ba25",
+              "object_id": "1026",
+              "checkpoint_xid": "6"
+            }
+          },
+          "schema_version": 1,
+          "outcome": "equal",
+          "policy": {
+            "paths": "exact_stored_text",
+            "contents": "exact_bytes",
+            "compared": [
+              "kind",
+              "mode",
+              "uid",
+              "gid",
+              "hard_link_topology",
+              "data_fork",
+              "resource_fork",
+              "symlink_target",
+              "extended_attributes"
+            ],
+            "excluded": [
+              "timestamps",
+              "access_control_lists",
+              "filesystem_flags",
+              "quarantine_assessment",
+              "finder_metadata",
+              "native_object_ids",
+              "filesystem_allocation",
+              "physical_container_layout",
+              "signatures",
+              "rename_inference"
+            ],
+            "xattrs": {
+              "excluded_names": [
+                "com.apple.ResourceFork",
+                "com.apple.FinderInfo",
+                "com.apple.decmpfs",
+                "com.apple.fs.symlink",
+                "com.apple.system.Security"
+              ],
+              "max_attributes_per_object": 256,
+              "max_attributes_per_side": 65536,
+              "max_name_bytes_per_side": 8388608
+            }
+          },
+          "limits": {
+            "max_entries": 16384,
+            "max_depth": 128,
+            "max_path_bytes": 4194304,
+            "max_bytes": "34359738368"
+          },
+          "left_entries": 8,
+          "right_entries": 8,
+          "compared_bytes": "239",
+          "changes": []
+        },
+        "finder_info": {
+          "address_space": "filesystem",
+          "filesystem": "apfs",
+          "left": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "apfs_volume": {
+              "uuid": "c2d10ff8-1391-4cea-b894-b90c1874ba25",
+              "object_id": "1026",
+              "checkpoint_xid": "4"
+            }
+          },
+          "right": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "apfs_volume": {
+              "uuid": "c2d10ff8-1391-4cea-b894-b90c1874ba25",
+              "object_id": "1026",
+              "checkpoint_xid": "6"
+            }
+          },
+          "schema_version": 1,
+          "outcome": "different",
+          "policy": {
+            "paths": "exact_stored_text",
+            "contents": "exact_bytes",
+            "compared": [
+              "kind",
+              "mode",
+              "uid",
+              "gid",
+              "hard_link_topology",
+              "data_fork",
+              "resource_fork",
+              "symlink_target",
+              "finder_info"
+            ],
+            "excluded": [
+              "timestamps",
+              "extended_attributes_except_resource_fork",
+              "access_control_lists",
+              "filesystem_flags",
+              "quarantine",
+              "finder_layout",
+              "native_object_ids",
+              "filesystem_allocation",
+              "physical_container_layout",
+              "signatures",
+              "rename_inference"
+            ],
+            "finder_info": {
+              "comparison": "exact_effective_bytes",
+              "record_bytes": 32,
+              "same_kind_only": true
+            }
+          },
+          "limits": {
+            "max_entries": 16384,
+            "max_depth": 128,
+            "max_path_bytes": 4194304,
+            "max_bytes": "34359738368"
+          },
+          "left_entries": 8,
+          "right_entries": 8,
+          "compared_bytes": "354",
+          "changes": [
+            {
+              "path": [
+                "Payload"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Added.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Alias.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Item.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Link"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Removed.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            }
+          ]
+        },
+        "finder_info_and_xattrs": {
+          "address_space": "filesystem",
+          "filesystem": "apfs",
+          "left": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "apfs_volume": {
+              "uuid": "c2d10ff8-1391-4cea-b894-b90c1874ba25",
+              "object_id": "1026",
+              "checkpoint_xid": "4"
+            }
+          },
+          "right": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "apfs_volume": {
+              "uuid": "c2d10ff8-1391-4cea-b894-b90c1874ba25",
+              "object_id": "1026",
+              "checkpoint_xid": "6"
+            }
+          },
+          "schema_version": 1,
+          "outcome": "different",
+          "policy": {
+            "paths": "exact_stored_text",
+            "contents": "exact_bytes",
+            "compared": [
+              "kind",
+              "mode",
+              "uid",
+              "gid",
+              "hard_link_topology",
+              "data_fork",
+              "resource_fork",
+              "symlink_target",
+              "extended_attributes",
+              "finder_info"
+            ],
+            "excluded": [
+              "timestamps",
+              "access_control_lists",
+              "filesystem_flags",
+              "quarantine_assessment",
+              "finder_layout",
+              "native_object_ids",
+              "filesystem_allocation",
+              "physical_container_layout",
+              "signatures",
+              "rename_inference"
+            ],
+            "xattrs": {
+              "excluded_names": [
+                "com.apple.ResourceFork",
+                "com.apple.FinderInfo",
+                "com.apple.decmpfs",
+                "com.apple.fs.symlink",
+                "com.apple.system.Security"
+              ],
+              "max_attributes_per_object": 256,
+              "max_attributes_per_side": 65536,
+              "max_name_bytes_per_side": 8388608
+            },
+            "finder_info": {
+              "comparison": "exact_effective_bytes",
+              "record_bytes": 32,
+              "same_kind_only": true
+            }
+          },
+          "limits": {
+            "max_entries": 16384,
+            "max_depth": 128,
+            "max_path_bytes": 4194304,
+            "max_bytes": "34359738368"
+          },
+          "left_entries": 8,
+          "right_entries": 8,
+          "compared_bytes": "431",
+          "changes": [
+            {
+              "path": [
+                "Payload"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Added.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Alias.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Item.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Link"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Removed.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            }
+          ]
+        }
+      },
+      "input_images_unchanged": true
+    },
+    "hfsplus": {
+      "image_digests": {
+        "initial.dmg": "7af0f7ba387daf68634460385305ba782cc85b7884464a099a72dd276b3ea2a2",
+        "revised.dmg": "9533ba5257994959c5e21789d0ffec48f0c31ff7a576beb8ee7610510b0ed08b"
+      },
+      "native_udzo_verification": {
+        "initial.dmg": [
+          "Checksumming whole disk (Apple_HFS : 0)…",
+          "          whole disk (Apple_HFS : 0): verified   CRC32 $F422F25C",
+          "verified   CRC32 $57DE5282"
+        ],
+        "revised.dmg": [
+          "Checksumming whole disk (Apple_HFS : 0)…",
+          "          whole disk (Apple_HFS : 0): verified   CRC32 $B214C161",
+          "verified   CRC32 $6544E560"
+        ]
+      },
+      "native_finder_info": {
+        "initial.dmg": {
+          "Payload": "0000000000000000000200000000000000000000000000000000000000000000",
+          "Payload/Item.bin": "5445585474747874000200000000000000000000000000000000000000000000",
+          "Payload/Alias.bin": "5445585474747874000200000000000000000000000000000000000000000000",
+          "Payload/Plain.bin": null,
+          "Payload/Added.bin": null,
+          "Payload/Removed.bin": "5445585474747874000200000000000000000000000000000000000000000000",
+          "Payload/Link": "0000000000000000000200000000000000000000000000000000000000000000"
+        },
+        "revised.dmg": {
+          "Payload": "0000000000000000000400000000000000000000000000000000000000000000",
+          "Payload/Item.bin": "42494e4164696666000400000000000000000000000000000000000000000000",
+          "Payload/Alias.bin": "42494e4164696666000400000000000000000000000000000000000000000000",
+          "Payload/Plain.bin": null,
+          "Payload/Added.bin": "42494e4164696666000400000000000000000000000000000000000000000000",
+          "Payload/Removed.bin": null,
+          "Payload/Link": "0000000000000000000400000000000000000000000000000000000000000000"
+        }
+      },
+      "comparisons": {
+        "baseline": {
+          "address_space": "filesystem",
+          "filesystem": "hfsplus",
+          "left": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "hfs_signature": "hfsplus"
+          },
+          "right": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "hfs_signature": "hfsplus"
+          },
+          "schema_version": 1,
+          "outcome": "equal",
+          "policy": {
+            "paths": "exact_stored_text",
+            "contents": "exact_bytes",
+            "compared": [
+              "kind",
+              "mode",
+              "uid",
+              "gid",
+              "hard_link_topology",
+              "data_fork",
+              "resource_fork",
+              "symlink_target"
+            ],
+            "excluded": [
+              "timestamps",
+              "extended_attributes_except_resource_fork",
+              "access_control_lists",
+              "filesystem_flags",
+              "quarantine",
+              "finder_metadata",
+              "native_object_ids",
+              "filesystem_allocation",
+              "physical_container_layout",
+              "signatures",
+              "rename_inference"
+            ]
+          },
+          "limits": {
+            "max_entries": 16384,
+            "max_depth": 128,
+            "max_path_bytes": 4194304,
+            "max_bytes": "34359738368"
+          },
+          "left_entries": 8,
+          "right_entries": 8,
+          "compared_bytes": "162",
+          "changes": []
+        },
+        "xattrs": {
+          "address_space": "filesystem",
+          "filesystem": "hfsplus",
+          "left": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "hfs_signature": "hfsplus"
+          },
+          "right": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "hfs_signature": "hfsplus"
+          },
+          "schema_version": 1,
+          "outcome": "equal",
+          "policy": {
+            "paths": "exact_stored_text",
+            "contents": "exact_bytes",
+            "compared": [
+              "kind",
+              "mode",
+              "uid",
+              "gid",
+              "hard_link_topology",
+              "data_fork",
+              "resource_fork",
+              "symlink_target",
+              "extended_attributes"
+            ],
+            "excluded": [
+              "timestamps",
+              "access_control_lists",
+              "filesystem_flags",
+              "quarantine_assessment",
+              "finder_metadata",
+              "native_object_ids",
+              "filesystem_allocation",
+              "physical_container_layout",
+              "signatures",
+              "rename_inference"
+            ],
+            "xattrs": {
+              "excluded_names": [
+                "com.apple.ResourceFork",
+                "com.apple.FinderInfo",
+                "com.apple.decmpfs",
+                "com.apple.fs.symlink",
+                "com.apple.system.Security"
+              ],
+              "max_attributes_per_object": 256,
+              "max_attributes_per_side": 65536,
+              "max_name_bytes_per_side": 8388608
+            }
+          },
+          "limits": {
+            "max_entries": 16384,
+            "max_depth": 128,
+            "max_path_bytes": 4194304,
+            "max_bytes": "34359738368"
+          },
+          "left_entries": 8,
+          "right_entries": 8,
+          "compared_bytes": "239",
+          "changes": []
+        },
+        "finder_info": {
+          "address_space": "filesystem",
+          "filesystem": "hfsplus",
+          "left": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "hfs_signature": "hfsplus"
+          },
+          "right": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "hfs_signature": "hfsplus"
+          },
+          "schema_version": 1,
+          "outcome": "different",
+          "policy": {
+            "paths": "exact_stored_text",
+            "contents": "exact_bytes",
+            "compared": [
+              "kind",
+              "mode",
+              "uid",
+              "gid",
+              "hard_link_topology",
+              "data_fork",
+              "resource_fork",
+              "symlink_target",
+              "finder_info"
+            ],
+            "excluded": [
+              "timestamps",
+              "extended_attributes_except_resource_fork",
+              "access_control_lists",
+              "filesystem_flags",
+              "quarantine",
+              "finder_layout",
+              "native_object_ids",
+              "filesystem_allocation",
+              "physical_container_layout",
+              "signatures",
+              "rename_inference"
+            ],
+            "finder_info": {
+              "comparison": "exact_effective_bytes",
+              "record_bytes": 32,
+              "same_kind_only": true
+            }
+          },
+          "limits": {
+            "max_entries": 16384,
+            "max_depth": 128,
+            "max_path_bytes": 4194304,
+            "max_bytes": "34359738368"
+          },
+          "left_entries": 8,
+          "right_entries": 8,
+          "compared_bytes": "354",
+          "changes": [
+            {
+              "path": [
+                "Payload"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Added.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Alias.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Item.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Link"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Removed.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            }
+          ]
+        },
+        "finder_info_and_xattrs": {
+          "address_space": "filesystem",
+          "filesystem": "hfsplus",
+          "left": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "hfs_signature": "hfsplus"
+          },
+          "right": {
+            "input": "udif",
+            "window": {
+              "kind": "whole_disk"
+            },
+            "hfs_signature": "hfsplus"
+          },
+          "schema_version": 1,
+          "outcome": "different",
+          "policy": {
+            "paths": "exact_stored_text",
+            "contents": "exact_bytes",
+            "compared": [
+              "kind",
+              "mode",
+              "uid",
+              "gid",
+              "hard_link_topology",
+              "data_fork",
+              "resource_fork",
+              "symlink_target",
+              "extended_attributes",
+              "finder_info"
+            ],
+            "excluded": [
+              "timestamps",
+              "access_control_lists",
+              "filesystem_flags",
+              "quarantine_assessment",
+              "finder_layout",
+              "native_object_ids",
+              "filesystem_allocation",
+              "physical_container_layout",
+              "signatures",
+              "rename_inference"
+            ],
+            "xattrs": {
+              "excluded_names": [
+                "com.apple.ResourceFork",
+                "com.apple.FinderInfo",
+                "com.apple.decmpfs",
+                "com.apple.fs.symlink",
+                "com.apple.system.Security"
+              ],
+              "max_attributes_per_object": 256,
+              "max_attributes_per_side": 65536,
+              "max_name_bytes_per_side": 8388608
+            },
+            "finder_info": {
+              "comparison": "exact_effective_bytes",
+              "record_bytes": 32,
+              "same_kind_only": true
+            }
+          },
+          "limits": {
+            "max_entries": 16384,
+            "max_depth": 128,
+            "max_path_bytes": 4194304,
+            "max_bytes": "34359738368"
+          },
+          "left_entries": 8,
+          "right_entries": 8,
+          "compared_bytes": "431",
+          "changes": [
+            {
+              "path": [
+                "Payload"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Added.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Alias.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Item.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Link"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            },
+            {
+              "path": [
+                "Payload",
+                "Removed.bin"
+              ],
+              "kind": "changed",
+              "fields": [
+                "finder_info"
+              ]
+            }
+          ]
+        }
+      },
+      "input_images_unchanged": true
+    }
+  }
+}
