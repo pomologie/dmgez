@@ -24,6 +24,7 @@ members = [
 
 	# Services
 	"crates/services/dmgez-builder",
+	"crates/services/dmgez-cache",
 	"crates/services/dmgez-diff",
 	"crates/services/dmgez-inspector",
 	"crates/services/dmgez-lint",
@@ -62,6 +63,7 @@ dmgez-signing = { path = "crates/security/dmgez-signing", default-features = fal
 
 # Workspace services
 dmgez-builder = { path = "crates/services/dmgez-builder", default-features = false }
+dmgez-cache = { path = "crates/services/dmgez-cache" }
 dmgez-diff = { path = "crates/services/dmgez-diff" }
 dmgez-inspector = { path = "crates/services/dmgez-inspector", default-features = false }
 dmgez-lint = { path = "crates/services/dmgez-lint" }
@@ -120,4 +122,4 @@ proptest = { version = "1.12.0", default-features = false, features = ["std"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(feature, values("project-build", "project-release", "project-edit", "image-edit", "finder-write", "hfsplus-read", "hfsplus-verify", "hfsplus-extract", "hfsplus-decmpfs", "hfsplus-install", "apfs-read", "apfs-extract", "apfs-install"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(feature, values("project-build", "project-release", "project-edit", "image-edit", "finder-write", "compression-cache", "hfsplus-read", "hfsplus-analysis", "hfsplus-verify", "hfsplus-extract", "hfsplus-decmpfs", "hfsplus-install", "apfs-read", "apfs-extract", "apfs-install"))'] }

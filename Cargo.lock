@@ -1064,6 +1064,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dmgez-cache"
+version = "0.1.0"
+dependencies = [
+ "dmgez-udif",
+ "rustix 1.1.6",
+ "tempfile",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "dmgez-cli"
 version = "0.1.0"
 dependencies = [
