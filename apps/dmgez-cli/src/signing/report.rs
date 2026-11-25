@@ -1,6 +1,8 @@
 use std::io::{self, Write};
 
-use dmgez_signing::{AppSigningReport, DiskSigningReport, Report};
+#[cfg(feature = "signing-native")]
+use dmgez_signing::AppSigningReport;
+use dmgez_signing::{DiskSigningReport, Report};
 
 use crate::{
 	CliResult,
@@ -15,10 +17,13 @@ pub(super) fn write_disk_signing(report: &DiskSigningReport, json: bool) -> CliR
 	write_report(json, report, |output| {
 		writeln!(output, "schema_version = {}", report.schema_version)?;
 		writeln!(output, "backend = {}", report.backend.as_str())?;
+		writeln!(output, "mode = {}", report.mode.as_str())?;
 		writeln!(output, "assessment = {}", report.assessment.as_str())?;
 		writeln!(output, "source = \"{}\"", EscapedText(&report.source))?;
 		writeln!(output, "output = \"{}\"", EscapedText(&report.output))?;
-		writeln!(output, "identity = \"{}\"", EscapedText(&report.identity))?;
+		if let Some(identity) = &report.identity {
+			writeln!(output, "identity = \"{}\"", EscapedText(identity))?;
+		}
 		writeln!(
 			output,
 			"identifier = \"{}\"",
@@ -29,6 +34,7 @@ pub(super) fn write_disk_signing(report: &DiskSigningReport, json: bool) -> CliR
 	})
 }
 
+#[cfg(feature = "signing-native")]
 pub(super) fn write_app_signing(report: &AppSigningReport, json: bool) -> CliResult {
 	write_report(json, report, |output| {
 		writeln!(output, "schema_version = {}", report.schema_version)?;

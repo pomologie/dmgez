@@ -43,14 +43,17 @@ pub enum Error {
 	},
 	#[error("native signature tool exited unexpectedly ({status})")]
 	ToolExit { status: std::process::ExitStatus },
+	#[error("could not check the disk image with the Rust backend: {0}")]
+	Rust(#[source] Box<crate::SignError>),
 }
 
 /// Inspect or verify an app bundle or a UDIF image using an available backend.
 ///
-/// Backend selection occurs before any artifact access. Native verification is
-/// a signature check against the artifact as observed by the operating system.
-/// It does not run a platform policy assessment, open the image as a filesystem,
-/// change the artifact, or invoke it.
+/// Backend selection occurs before artifact access. The Rust profile checks
+/// the CodeDirectory integrity of an admitted ad hoc disk image. With the native
+/// feature on macOS, `Auto` uses the operating system's signature checker.
+/// Otherwise, `Auto` can use the compiled Rust profile. Platform policy and
+/// filesystem checks are separate operations.
 ///
 /// # Errors
 ///
@@ -62,6 +65,15 @@ pub fn check_signature(
 	backend: Backend,
 ) -> Result<Report, Error> {
 	if backend == Backend::Rust {
+		#[cfg(all(
+			feature = "rust",
+			any(target_os = "linux", target_os = "macos", windows)
+		))]
+		return crate::signing::apple::check(path, operation, backend);
+		#[cfg(not(all(
+			feature = "rust",
+			any(target_os = "linux", target_os = "macos", windows)
+		)))]
 		return Ok(unavailable(
 			path,
 			operation,
@@ -75,6 +87,13 @@ pub fn check_signature(
 	}
 	#[cfg(not(all(feature = "native", target_os = "macos")))]
 	{
+		#[cfg(all(
+			feature = "rust",
+			any(target_os = "linux", target_os = "macos", windows)
+		))]
+		if backend == Backend::Auto {
+			return crate::signing::apple::check(path, operation, backend);
+		}
 		Ok(unavailable(
 			path,
 			operation,
@@ -98,6 +117,7 @@ pub(super) fn report_base(path: &Path, operation: Operation, backend: Backend) -
 	}
 }
 
+#[cfg(not(all(feature = "native", target_os = "macos", feature = "rust")))]
 fn unavailable(path: &Path, operation: Operation, backend: Backend, reason: &str) -> Report {
 	let mut report = report_base(path, operation, backend);
 	report.diagnostics = Some(reason.to_owned());

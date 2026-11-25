@@ -5,6 +5,14 @@ use thiserror::Error;
 
 use crate::{Backend, Error, PolicyAssessment, ResolvedBackend};
 
+#[cfg(all(
+	feature = "rust",
+	any(target_os = "linux", target_os = "macos", windows)
+))]
+pub(super) mod apple;
+
+pub(super) const SIGNING_REPORT_VERSION: u16 = 1;
+
 /// An entitlements plist scoped to one exact app-relative code path.
 #[derive(Clone, Copy, Debug)]
 pub struct AppEntitlements<'a> {
@@ -43,14 +51,34 @@ pub struct AppSigningReport {
 pub struct DiskSigningReport {
 	pub schema_version: u16,
 	pub backend: ResolvedBackend,
+	pub mode: DiskSigningMode,
 	pub source: String,
 	pub output: String,
-	/// Public SHA-1 fingerprint used to select the certificate in Keychain.
-	pub identity: String,
+	/// Public SHA-1 fingerprint used to select a Developer ID certificate, when present.
+	pub identity: Option<String>,
 	pub identifier: String,
 	pub unsigned_sha256: String,
 	pub signed_sha256: String,
 	pub assessment: PolicyAssessment,
+}
+
+/// Signature profile used for the staged disk image.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum DiskSigningMode {
+	AdHoc,
+	DeveloperId,
+}
+
+impl DiskSigningMode {
+	/// Stable report name.
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::AdHoc => "ad_hoc",
+			Self::DeveloperId => "developer_id",
+		}
+	}
 }
 
 /// A signing or signed-artifact verification operation failed.
@@ -71,6 +99,14 @@ pub enum SignError {
 	IdentityLookup(#[source] Box<dyn std::error::Error + Send + Sync>),
 	#[error("the source image must have an unsigned signature state")]
 	ExpectedUnsigned,
+	#[error("the disk image is unsigned")]
+	Unsigned,
+	#[error("the disk image lacks an admitted ad hoc signature")]
+	AdHocProfile,
+	#[error("the ad hoc disk image identifier does not match the requested identifier")]
+	AdHocIdentifier,
+	#[error("apple-codesign could not write the ad hoc disk image signature")]
+	AppleCodesign,
 	#[error("disk image is outside the signing size limit")]
 	ImageSize,
 	#[error("could not prepare or publish the private stage")]
@@ -81,7 +117,7 @@ pub enum SignError {
 	Quarantine(#[source] io::Error),
 	#[error("native image checksum verification failed")]
 	ImageChecksum,
-	#[error("the staged disk image did not pass CodeDirectory integrity checks")]
+	#[error("the disk image did not pass integrity checks")]
 	ImageIntegrity(#[source] Box<dyn std::error::Error + Send + Sync>),
 	#[error("the native signing tool failed ({status})")]
 	SigningFailed { status: std::process::ExitStatus },
@@ -103,6 +139,56 @@ pub enum SignError {
 	ImageChanged,
 	#[error(transparent)]
 	Signature(#[from] Error),
+}
+
+/// Signs an unsigned UDIF image without a certificate and publishes a verified copy.
+///
+/// `Auto` selects the portable Rust signer. The source and any existing destination
+/// are preserved. Use a stable local source and a trusted destination directory.
+/// The output carries a verified ad hoc CodeDirectory and no publisher identity.
+///
+/// # Errors
+/// Returns an error for an unavailable backend, invalid identifier or artifact,
+/// failed staging, signing or verification, or a publication conflict.
+pub fn sign_ad_hoc_disk_image(
+	source: &Path,
+	destination: &Path,
+	identifier: &str,
+	backend: Backend,
+) -> Result<DiskSigningReport, SignError> {
+	#[cfg(all(
+		feature = "rust",
+		any(target_os = "linux", target_os = "macos", windows)
+	))]
+	if matches!(backend, Backend::Auto | Backend::Rust) {
+		return apple::sign(source, destination, identifier);
+	}
+	let _ = (source, destination, identifier);
+	Err(SignError::BackendUnavailable { backend })
+}
+
+/// Verifies a staged or existing ad hoc image and its exact signing identifier.
+///
+/// `Auto` selects the portable Rust profile. This checks signature integrity and
+/// the ad hoc mode, while platform policy assessment remains a separate action.
+///
+/// # Errors
+/// Returns an error for an unavailable backend, invalid identifier or artifact,
+/// an unexpected signature profile, or failed integrity checks.
+pub fn verify_ad_hoc_disk_image(
+	path: &Path,
+	identifier: &str,
+	backend: Backend,
+) -> Result<(), SignError> {
+	#[cfg(all(
+		feature = "rust",
+		any(target_os = "linux", target_os = "macos", windows)
+	))]
+	if matches!(backend, Backend::Auto | Backend::Rust) {
+		return apple::verify(path, identifier);
+	}
+	let _ = (path, identifier);
+	Err(SignError::BackendUnavailable { backend })
 }
 
 /// Signs an unsigned disk image and publishes it to a new output path.

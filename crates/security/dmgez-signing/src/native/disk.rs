@@ -1,7 +1,8 @@
 use std::path::Path;
 
 use crate::{
-	ArtifactKind, ArtifactProblem, Backend, DiskSigningReport, Operation, SignError, Status,
+	ArtifactKind, ArtifactProblem, Backend, DiskSigningMode, DiskSigningReport, Operation,
+	SignError, Status, signing::SIGNING_REPORT_VERSION,
 };
 
 use super::{artifact::Artifact, identity, run, stage::Stage};
@@ -13,8 +14,6 @@ mod policy;
 mod tests;
 
 use policy::DeveloperId;
-
-const SIGNING_REPORT_VERSION: u16 = 1;
 
 pub(crate) fn sign(
 	source: &Path,
@@ -39,9 +38,10 @@ pub(crate) fn sign(
 	Ok(DiskSigningReport {
 		schema_version: SIGNING_REPORT_VERSION,
 		backend: crate::ResolvedBackend::Native,
+		mode: DiskSigningMode::DeveloperId,
 		source: source.path().to_string_lossy().into_owned(),
 		output: published.path.to_string_lossy().into_owned(),
-		identity: developer.fingerprint().to_owned(),
+		identity: Some(developer.fingerprint().to_owned()),
 		identifier: identifier.to_owned(),
 		unsigned_sha256: published.unsigned_sha256,
 		signed_sha256: published.signed_sha256,

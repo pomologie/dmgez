@@ -46,6 +46,7 @@ impl Backend {
 #[non_exhaustive]
 pub enum ResolvedBackend {
 	Native,
+	Rust,
 }
 
 impl ResolvedBackend {
@@ -53,6 +54,7 @@ impl ResolvedBackend {
 	pub const fn as_str(self) -> &'static str {
 		match self {
 			Self::Native => "native",
+			Self::Rust => "rust",
 		}
 	}
 }

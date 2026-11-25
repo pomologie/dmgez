@@ -8,6 +8,18 @@ repository.workspace = true
 description = "Explicit code signing and signature checks for dmgez"
 
 [features]
+# Portable ad hoc disk image signing
+rust = [
+	"dep:apple-codesign",
+	"dmgez-core/source",
+	"dmgez-udif/read",
+	"dmgez-udif/zlib",
+	"dep:rustix",
+	"dep:same-file",
+	"dep:sha2",
+	"dep:tempfile",
+]
+
 # Native signing and trust checks
 native = [
 	"dmgez-core/native-process",
@@ -24,15 +36,7 @@ native = [
 notarization-native = ["native", "dmgez-core/staging", "dep:serde_json", "rustix/process"]
 
 [dependencies]
-# Serialization and configuration
-serde.workspace = true
-
-# Diagnostics
-thiserror.workspace = true
-
-[target.'cfg(target_os = "macos")'.dependencies]
 # Workspace formats
-dmgez-macho = { workspace = true, optional = true }
 dmgez-udif = { workspace = true, optional = true, features = ["signature-integrity"] }
 
 # Workspace foundation
@@ -42,13 +46,31 @@ dmgez-core = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 
 # Serialization and configuration
+serde.workspace = true
+
+# Filesystem access and staging
+same-file = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
+
+# Diagnostics
+thiserror.workspace = true
+
+[target.'cfg(any(target_os = "linux", target_os = "macos", windows))'.dependencies]
+# Apple code signing
+apple-codesign = { workspace = true, optional = true }
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+# Filesystem access and staging
+rustix = { workspace = true, optional = true }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# Workspace formats
+dmgez-macho = { workspace = true, optional = true }
+
+# Serialization and configuration
 plist = { workspace = true, optional = true, features = ["serde", "enable_unstable_features_that_may_break_with_minor_version_bumps"] }
 quick-xml = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
-
-# Filesystem access and staging
-rustix = { workspace = true, optional = true }
-tempfile = { workspace = true, optional = true }
 
 [lints]
 workspace = true
