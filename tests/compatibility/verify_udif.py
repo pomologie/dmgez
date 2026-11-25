@@ -68,7 +68,7 @@ def exercise_hfs(cli, work):
     verify_attachment(output, mounted)
 
 
-def verify_attachment(image, mount_point):
+def verify_attachment(image, mount_point, check_mounted=None):
     options = ["-nomount"] if mount_point is None else ["-mountpoint", str(mount_point), "-mount", "required"]
     result = subprocess.check_output([HDIUTIL, "attach", "-readonly", "-nobrowse", "-noautoopen",
                                       "-plist", *options, str(image)])
@@ -85,7 +85,10 @@ def verify_attachment(image, mount_point):
                              for entry in entities if "mount-point" in entry}
             if mount_point.resolve() not in mounted_paths:
                 raise RuntimeError("Apple did not mount the disposable volume at the requested path")
-            run("/usr/sbin/diskutil", "info", str(mount_point))
+            if check_mounted is None:
+                run("/usr/sbin/diskutil", "info", str(mount_point))
+            else:
+                check_mounted(mount_point)
     finally:
         for device in devices:
             run(HDIUTIL, "detach", device)

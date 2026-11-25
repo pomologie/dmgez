@@ -84,23 +84,22 @@ jobs:
               "--target-dir", work / "target", "--release", "--features", "inspect",
           ]
           executable = subprocess.check_output([*compose, "--fetch"], text=True).strip()
-          image = work / "image"
-          subprocess.run([
-              sys.executable, "-B", "tests/compatibility/project-build/check_ci_project.py",
-              executable, image, "--seven-zip", seven_zip,
-          ], check=True)
+          images = work / "images"
+          native = ["--native-filesystem"] if sys.platform == "darwin" else []
+          for mode in ("udro", "udzo"):
+              subprocess.run([
+                  sys.executable, "-B", "tests/compatibility/project-build/check_ci_project.py",
+                  executable, images / mode, "--format", mode, "--seven-zip", seven_zip, *native,
+              ], check=True)
           if sys.platform == "win32":
               subprocess.run([*compose, "--test"], check=True)
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
-              print(f"dmg={image / 'installer.dmg'}", file=output)
-              print(f"signed_dmg={image / 'installer-adhoc.dmg'}", file=output)
+              print(f"images={images}", file=output)
       - name: Upload the verified DMGs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: project-image-${{ matrix.os }}
-          path: |
-            ${{ steps.project.outputs.dmg }}
-            ${{ steps.project.outputs.signed_dmg }}
+          path: ${{ steps.project.outputs.images }}
           if-no-files-found: error
           compression-level: 0
 
@@ -116,7 +115,7 @@ jobs:
       - name: Verify byte-for-byte equality
         shell: bash
         run: |
-          for image in installer.dmg installer-adhoc.dmg; do
+          for image in {udro,udzo}/{installer,installer-adhoc}.dmg; do
             files=(
               "images/project-image-ubuntu-24.04/$image"
               "images/project-image-macos-15/$image"

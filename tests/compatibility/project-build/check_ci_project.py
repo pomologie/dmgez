@@ -27,6 +27,7 @@ APPLICATIONS_TARGET = b"/Applications"
 BUILD_REPORT_SCHEMA_VERSION = 1
 UDRO = "udro"
 UDZO = "udzo"
+HDIUTIL = "/usr/bin/hdiutil"
 
 
 def build(cli, directory, preview, image_format):
@@ -151,6 +152,33 @@ def verify_files(seven_zip, raw):
         raise RuntimeError("7-Zip read back a different target for the Applications symlink")
 
 
+def verify_with_apple(image, signed_image, raw):
+    for candidate in (image, signed_image):
+        subprocess.run([HDIUTIL, "verify", "-nocache", "-quiet", candidate], check=True)
+        native_raw = raw.with_name(f"apple-{candidate.name}")
+        subprocess.run([HDIUTIL, "convert", candidate, "-format", "UDRW", "-o", native_raw, "-quiet"], check=True)
+        if not filecmp.cmp(native_raw, raw, shallow=False):
+            raise RuntimeError(f"Apple decoded a different HFS+ image from {candidate.name}")
+    subprocess.run(["/usr/bin/codesign", "--verify", "--strict", signed_image], check=True)
+
+
+def verify_native_filesystem(image, mount_point):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from verify_udif import verify_attachment
+
+    def check_mounted(root):
+        if (root / "Documentation" / "Release Nôtes.bin").read_bytes() != PAYLOAD:
+            raise RuntimeError("the mounted HFS+ volume returned different payload bytes")
+        if os.readlink(os.fsencode(root / "Applications")) != APPLICATIONS_TARGET:
+            raise RuntimeError("the mounted HFS+ volume has the wrong Applications link")
+        if not (root / ".DS_Store").is_file():
+            raise RuntimeError("the mounted HFS+ volume has no Finder store")
+
+    verify_attachment(image, None)
+    mount_point.mkdir()
+    verify_attachment(image, mount_point, check_mounted)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("cli", type=Path, help="composed dmgez executable with build, inspect, and signing")
@@ -158,7 +186,11 @@ def main():
     parser.add_argument("--seven-zip", default="7z", help="7-Zip executable")
     parser.add_argument("--format", choices=(UDRO, UDZO), default=UDZO,
                         help="image format to build and verify (default: udzo)")
+    parser.add_argument("--native-filesystem", action="store_true",
+                        help="also run read-only fsck and a native mounted payload check on macOS")
     args = parser.parse_args()
+    if args.native_filesystem and sys.platform != "darwin":
+        parser.error("--native-filesystem requires macOS")
     cli = args.cli.resolve(strict=True)
     seven_zip = shutil.which(args.seven_zip)
     if seven_zip is None:
@@ -192,9 +224,9 @@ def main():
         if image.read_bytes() != data:
             raise RuntimeError("the signing release changed the existing unsigned DMG")
         if sys.platform == "darwin":
-            subprocess.run(["/usr/bin/hdiutil", "verify", "-quiet", image], check=True)
-            subprocess.run(["/usr/bin/hdiutil", "verify", "-quiet", signed_image], check=True)
-            subprocess.run(["/usr/bin/codesign", "--verify", "--strict", signed_image], check=True)
+            verify_with_apple(image, signed_image, raw)
+        if args.native_filesystem:
+            verify_native_filesystem(signed_image, workspace / "mount")
         os.link(image, output / IMAGE_NAME)
         os.link(signed_image, output / SIGNED_IMAGE_NAME)
     print(f"Verified {output / IMAGE_NAME} (SHA-256 {unsigned['sha256']})")
