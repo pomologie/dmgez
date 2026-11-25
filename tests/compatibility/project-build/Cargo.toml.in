@@ -7,13 +7,19 @@ publish = false
 
 [features]
 default = ["finder-write", "parallel"]
-badge-icons = ["volume-icon", "dmgez-hfsplus/badge-icons"]
-compression-cache = ["dmgez-builder/compression-cache", "dmgez-hfsplus/compression-cache"]
+
+# HFS+ project build
+project-build = []
+
+# Finder metadata
 finder-write = ["dmgez-hfsplus/finder-write"]
+volume-icon = ["finder-write", "dmgez-hfsplus/volume-icon"]
+badge-icons = ["volume-icon", "dmgez-hfsplus/badge-icons"]
+
+# Parallel execution and compression
+compression-cache = ["dmgez-builder/compression-cache", "dmgez-hfsplus/compression-cache"]
 lzma = ["dmgez-hfsplus/lzma", "dmgez-udif/lzma"]
 parallel = ["dmgez-hfsplus/parallel"]
-project-build = []
-volume-icon = ["finder-write", "dmgez-hfsplus/volume-icon"]
 
 [dependencies]
 # Workspace foundation

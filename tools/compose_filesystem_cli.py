@@ -5,6 +5,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -72,15 +73,17 @@ PROJECT_EDIT_TEST = "project_edit_cli"
 IMAGE_EDIT_FEATURE = "image-edit"
 IMAGE_EDIT_TEST = "image_edit_cli"
 SOURCE_DIRS = ("apps", "crates", "tests")
-FEATURE_ADDITIONS = {
+PROJECT_FEATURES = {
     "project-build": ["dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config"],
     PROJECT_RELEASE_FEATURE: ["project-build", "inspect", "dep:dmgez-signing", "dep:sha2", "dep:tempfile"],
     PROJECT_EDIT_FEATURE: [
         "project-build", "dep:dmgez-core", "dep:dmgez-operations", "dmgez-operations/edit",
         "dep:dmgez-udif", "dmgez-udif/read", "dep:serde", "dep:serde_json", "dep:sha2",
     ],
-    "finder-write": ["dmgez-builder?/finder-write", f"{ADAPTER}?/finder-write"],
     "compression-cache": ["project-build", "dmgez-builder/compression-cache", f"{ADAPTER}/compression-cache"],
+}
+FINDER_FEATURES = {
+    "finder-write": ["dmgez-builder?/finder-write", f"{ADAPTER}?/finder-write"],
     "volume-icon": ["finder-write", f"{ADAPTER}?/volume-icon"],
     "badge-icons": ["volume-icon", f"{ADAPTER}?/badge-icons"],
 }
@@ -124,29 +127,40 @@ def resolve_hfsplus(source, packages, reader, build):
     return resolve_packages(source, packages, package_dirs)
 
 
+def render_feature(name, values):
+    inline = f"{name} = {json.dumps(values)}"
+    if len(inline) <= 100:
+        return inline
+    entries = "".join(f"\t{json.dumps(value)},\n" for value in values)
+    return f"{name} = [\n{entries}]"
+
+
 def compose_cli_manifest(manifest, reader, build, apfs):
-    sections = tomllib.loads(manifest)
-    features = sections["features"]
-    additions = {}
+    features = tomllib.loads(manifest)["features"]
+    forwarding = FEATURE_FORWARDING.copy() if build else {}
+    project_features = PROJECT_FEATURES.copy() if build else {}
+    hfsplus_features = {}
+    apfs_features = {}
     dependencies_to_add = []
     if build:
-        for name, forwarding in FEATURE_FORWARDING.items():
-            features[name] += forwarding
-        additions.update(FEATURE_ADDITIONS)
         dependencies_to_add.extend(("dmgez-builder", ADAPTER))
     if reader:
-        additions[READ_FEATURE] = ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse"]
-        additions[HFS_ANALYSIS_FEATURE] = [READ_FEATURE, f"{READ_ADAPTER}/analysis"]
-        features[INSTALLER_TEST_FEATURE].append(READ_FEATURE)
-        additions[VERIFY_FEATURE] = ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/verify"]
-        additions[EXTRACT_FEATURE] = [READ_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract"]
-        additions[DECMPFS_FEATURE] = [READ_FEATURE, f"{READ_ADAPTER}/decmpfs-zlib"]
-        additions[INSTALL_FEATURE] = [
-            READ_FEATURE, "dep:dmgez-config", "dep:dmgez-operations", "dmgez-operations/install",
-        ]
+        hfsplus_features = {
+            READ_FEATURE: ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse"],
+            HFS_ANALYSIS_FEATURE: [READ_FEATURE, f"{READ_ADAPTER}/analysis"],
+            VERIFY_FEATURE: ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/verify"],
+            EXTRACT_FEATURE: [READ_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract"],
+            DECMPFS_FEATURE: [READ_FEATURE, f"{READ_ADAPTER}/decmpfs-zlib"],
+            INSTALL_FEATURE: [
+                READ_FEATURE, "dep:dmgez-config", "dep:dmgez-operations", "dmgez-operations/install",
+            ],
+        }
+        forwarding[INSTALLER_TEST_FEATURE] = [READ_FEATURE]
         if build:
-            additions[PROJECT_RELEASE_FEATURE] = [*additions[PROJECT_RELEASE_FEATURE], INSTALL_FEATURE]
-            additions[IMAGE_EDIT_FEATURE] = [
+            project_features[PROJECT_RELEASE_FEATURE] = [
+                *project_features[PROJECT_RELEASE_FEATURE], INSTALL_FEATURE,
+            ]
+            project_features[IMAGE_EDIT_FEATURE] = [
                 "project-build", f"{ADAPTER}/image-edit", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse",
                 f"{READ_ADAPTER}/verify",
                 "dep:dmgez-core", "dep:dmgez-operations", "dmgez-operations/image-edit", "dep:dmgez-udif",
@@ -154,43 +168,60 @@ def compose_cli_manifest(manifest, reader, build, apfs):
             ]
         dependencies_to_add.append(READ_ADAPTER)
     if apfs:
-        additions[APFS_FEATURE] = ["inspect", f"dep:{APFS_ADAPTER}"]
-        features[INSTALLER_TEST_FEATURE].append(APFS_FEATURE)
-        additions[APFS_EXTRACT_FEATURE] = [
-            APFS_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract",
-        ]
-        additions[APFS_INSTALL_FEATURE] = [
-            APFS_FEATURE, "dep:dmgez-config", "dep:dmgez-operations", "dmgez-operations/install",
-        ]
+        apfs_features = {
+            APFS_FEATURE: ["inspect", f"dep:{APFS_ADAPTER}"],
+            APFS_EXTRACT_FEATURE: [APFS_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract"],
+            APFS_INSTALL_FEATURE: [
+                APFS_FEATURE, "dep:dmgez-config", "dep:dmgez-operations", "dmgez-operations/install",
+            ],
+        }
+        forwarding.setdefault(INSTALLER_TEST_FEATURE, []).append(APFS_FEATURE)
         dependencies_to_add.append(APFS_ADAPTER)
-    if features.keys() & additions.keys():
-        raise ValueError("CLI manifest already has filesystem composition features")
-    features.update(additions)
 
     feature_section = "[features]\n"
     dependency_section = "\n[dependencies]\n"
     before_features, _, rest = manifest.partition(feature_section)
-    _, boundary, dependencies = rest.partition(dependency_section)
+    feature_text, boundary, dependencies = rest.partition(dependency_section)
     if not boundary:
         raise ValueError("could not find the CLI features and dependencies sections")
-    if reader and build:
+    for name, extra in forwarding.items():
+        assignment = rf"(?m)^{re.escape(name)} = \[(?:[^\n]*?\]|[\s\S]*?^\])"
+        replacement = render_feature(name, [*features[name], *extra])
+        feature_text, matches = re.subn(assignment, lambda _: replacement, feature_text)
+        if matches != 1:
+            raise ValueError(f"could not find a single CLI feature assignment for {name}")
+
+    feature_groups = (
+        ("HFS+ project build, edit and release", project_features),
+        ("HFS+ Finder metadata", FINDER_FEATURES if build else {}),
+        ("HFS+ volume access", hfsplus_features),
+        ("APFS volume access", apfs_features),
+    )
+    declared_features = set(features)
+    for title, group in feature_groups:
+        if declared_features.intersection(group):
+            raise ValueError("CLI manifest already has filesystem composition features")
+        if group:
+            entries = "\n".join(render_feature(name, values) for name, values in group.items())
+            feature_text += f"\n# {title}\n{entries}\n"
+            declared_features.update(group)
+
+    if dependencies_to_add:
         normal, dev_boundary, development = dependencies.partition("\n[dev-dependencies]\n")
         if not dev_boundary:
             raise ValueError("could not find the CLI dev-dependencies section")
-        dependencies = normal + dev_boundary + "dmgez-finder.workspace = true\n" + development
-    lines = "".join(f"{name} = {json.dumps(values)}\n" for name, values in features.items())
-    added_dependencies = "".join(
-        f'{name} = {{ path = "../../crates/services/{name}", '
-        "optional = true, default-features = false }\n"
-        for name in dependencies_to_add
-    )
-    if build:
-        added_dependencies += "sha2 = { workspace = true, optional = true }\n"
-        added_dependencies += "tempfile = { workspace = true, optional = true }\n"
-    return (
-        before_features + feature_section + lines + dependency_section
-        + added_dependencies + dependencies
-    )
+        normal += "\n# Composed filesystem services\n" + "".join(
+            f'{name} = {{ path = "../../crates/services/{name}", '
+            "optional = true, default-features = false }\n"
+            for name in sorted(dependencies_to_add)
+        )
+        if build:
+            normal += "\n# Hashes and checksums\nsha2 = { workspace = true, optional = true }\n"
+            normal += "\n# Filesystem access and staging\ntempfile = { workspace = true, optional = true }\n"
+        if reader and build:
+            development = "# Workspace presentation\ndmgez-finder.workspace = true\n\n" + development
+        dependencies = normal + dev_boundary + development
+    return before_features + feature_section + feature_text + dependency_section + dependencies
 
 
 def prepare_workspace(directory, packages):

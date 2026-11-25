@@ -15,6 +15,24 @@ import compose_filesystem_cli as compose
 
 
 class ReleaseCompositionTests(unittest.TestCase):
+    def test_composition_preserves_the_manifest_groups(self):
+        path = compose.ROOT / compose.CLI / compose.MANIFEST
+        original = path.read_text(encoding="utf-8")
+        self.assertEqual(compose.compose_cli_manifest(original, False, False, False), original)
+
+        text = compose.compose_cli_manifest(original, reader=True, build=True, apfs=True)
+        for line in original.splitlines():
+            if line.startswith("# "):
+                self.assertIn(line, text.splitlines())
+        for group in (
+            "HFS+ project build, edit and release", "HFS+ Finder metadata", "HFS+ volume access",
+            "APFS volume access", "Composed filesystem services", "Hashes and checksums",
+        ):
+            self.assertIn(f"\n# {group}\n", text)
+        self.assertIn('image-edit = [\n\t"project-build",\n', text)
+        self.assertIn('[dev-dependencies]\n# Workspace presentation\ndmgez-finder.workspace = true\n', text)
+        tomllib.loads(text)
+
     def test_installer_test_uses_only_the_composed_filesystem_readers(self):
         manifest = (compose.ROOT / compose.CLI / compose.MANIFEST).read_text(encoding="utf-8")
         for reader in (False, True):
