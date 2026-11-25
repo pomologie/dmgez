@@ -15,6 +15,7 @@ volume-icon = [
 ]
 
 [dependencies]
+alias_record = "=0.3.0"
 crc32fast = { workspace = true, optional = true }
 dmgez-config.workspace = true
 ds_parser.workspace = true

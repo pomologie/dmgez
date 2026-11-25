@@ -1,7 +1,11 @@
-use dmgez_config::{Arrangement, Column, Coordinate, FinderOptions, View};
+use dmg_layout::{AliasKind, AliasRecord, DiskImageError};
+use dmgez_config::{Arrangement, Background, Column, Coordinate, FinderOptions, View};
 use thiserror::Error;
 
-use crate::{layout::Layout, records::Store};
+use crate::{
+	layout::{ImageBackground, Layout},
+	records::Store,
+};
 
 /// The generated Finder metadata filename, reserved before catalog admission.
 pub const STORE_NAME: &str = ".DS_Store";
@@ -45,6 +49,15 @@ pub enum Error {
 	/// Image backgrounds need a generated alias targeting sealed volume identities.
 	#[error("Finder image background aliases are unavailable")]
 	ImageBackground,
+	/// An image-background operation requires an image setting in this folder.
+	#[error("Finder layout does not specify an image background")]
+	ImageBackgroundNotSelected,
+	/// A background image alias must resolve to a file.
+	#[error("Finder background image alias targets a folder")]
+	ImageBackgroundTarget,
+	/// The supplied alias record could not be serialized.
+	#[error("could not encode Finder background image alias")]
+	ImageBackgroundAlias(#[source] DiskImageError),
 	/// Built-in template backgrounds are outside the initial profile.
 	#[error("Finder template backgrounds are unavailable")]
 	TemplateBackground,
@@ -91,7 +104,21 @@ pub enum Error {
 /// outside the qualified icon and list profile. Use [`write_store`] to check
 /// item positions against the resolved folder children.
 pub fn validate_options(options: Option<&FinderOptions>) -> Result<(), Error> {
-	Layout::resolve(options).map(|_| ())
+	Layout::resolve(options, ImageBackground::Unavailable).map(|_| ())
+}
+
+/// Checks a layout whose image background will be bound after assigning catalog IDs.
+///
+/// This check neither opens the configured image nor constructs an alias. Use
+/// [`write_store_with_background_alias`] when the final file identity is known.
+///
+/// # Errors
+///
+/// Returns an error if options select a different background or the remaining
+/// layout options fall outside the writer's supported profile.
+pub fn validate_options_for_image_background(options: &FinderOptions) -> Result<(), Error> {
+	validate_image_background(options)?;
+	Layout::resolve(Some(options), ImageBackground::Preflight).map(|_| ())
 }
 
 /// Creates a new `.DS_Store` for the root or another image folder.
@@ -108,7 +135,44 @@ pub fn write_store(
 	options: Option<&FinderOptions>,
 	items: &[LayoutItem<'_>],
 ) -> Result<Vec<u8>, Error> {
-	let layout = Layout::resolve(options)?;
+	let layout = Layout::resolve(options, ImageBackground::Unavailable)?;
+	write_layout(layout, items)
+}
+
+/// Creates a Finder store with an image background bound to a final volume file.
+///
+/// The alias must describe the on-volume image file, with its final volume and
+/// catalog identities. The caller supplies that alias after reserving the
+/// image file and store. The writer never resolves the configured source or
+/// the alias to a host path.
+///
+/// # Errors
+///
+/// Returns an error for a missing image setting, a folder target, an invalid
+/// alias, or any layout, item-position, or store limit described by [`write_store`].
+pub fn write_store_with_background_alias(
+	options: &FinderOptions,
+	items: &[LayoutItem<'_>],
+	alias: &AliasRecord,
+) -> Result<Vec<u8>, Error> {
+	validate_image_background(options)?;
+	if alias.header.kind != AliasKind::File {
+		return Err(Error::ImageBackgroundTarget);
+	}
+	let bytes = alias.to_bytes().map_err(Error::ImageBackgroundAlias)?;
+	let layout = Layout::resolve(Some(options), ImageBackground::Alias(bytes))?;
+	write_layout(layout, items)
+}
+
+fn validate_image_background(options: &FinderOptions) -> Result<(), Error> {
+	if matches!(options.background, Some(Background::Image { .. })) {
+		Ok(())
+	} else {
+		Err(Error::ImageBackgroundNotSelected)
+	}
+}
+
+fn write_layout(layout: Layout<'_>, items: &[LayoutItem<'_>]) -> Result<Vec<u8>, Error> {
 	let positions = layout.positions;
 	let mut store = Store::for_layout(layout)?;
 	store.position_items(items, positions)?;

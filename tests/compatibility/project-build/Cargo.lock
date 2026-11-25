@@ -314,6 +314,7 @@ dependencies = [
 name = "dmgez-finder"
 version = "0.1.0"
 dependencies = [
+ "alias_record",
  "crc32fast",
  "dmgez-config",
  "ds_parser",

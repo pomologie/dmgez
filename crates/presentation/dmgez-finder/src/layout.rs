@@ -22,6 +22,8 @@ const DEFAULT_TEXT_SIZE: f64 = 16.0;
 const DEFAULT_BACKGROUND_RGB: (f64, f64, f64) = (1.0, 1.0, 1.0);
 const DEFAULT_BACKGROUND_TYPE: i64 = 0;
 const SOLID_BACKGROUND_TYPE: i64 = 1;
+const IMAGE_BACKGROUND_TYPE: i64 = 2;
+const BACKGROUND_IMAGE_ALIAS: &str = "backgroundImageAlias";
 const VIEW_OPTIONS_VERSION: i64 = 1;
 const PREVIEW_PANE_VISIBILITY: &str = "PreviewPaneVisibility";
 const SCROLL_POSITION_X: &str = "scrollPositionX";
@@ -47,8 +49,17 @@ pub(super) struct Layout<'a> {
 	pub positions: Option<&'a BTreeMap<String, [Coordinate; 2]>>,
 }
 
+pub(super) enum ImageBackground {
+	Unavailable,
+	Preflight,
+	Alias(Vec<u8>),
+}
+
 impl<'a> Layout<'a> {
-	pub fn resolve(options: Option<&'a FinderOptions>) -> Result<Self, Error> {
+	pub fn resolve(
+		options: Option<&'a FinderOptions>,
+		image: ImageBackground,
+	) -> Result<Self, Error> {
 		let view = match options.and_then(|options| options.default_view) {
 			None | Some(View::IconView) => FinderViewStyle::Icon,
 			Some(View::ListView) => FinderViewStyle::List,
@@ -71,7 +82,7 @@ impl<'a> Layout<'a> {
 			return Err(Error::ListViewExcluded);
 		}
 		let icons = (icon_requested || icon_switch == Some(AutoFlag::Enabled))
-			.then(|| resolve_icons(options))
+			.then(|| resolve_icons(options, image))
 			.transpose()?;
 		let list = (list_requested || list_switch == Some(AutoFlag::Enabled))
 			.then(|| list::resolve(options))
@@ -88,14 +99,26 @@ impl<'a> Layout<'a> {
 	}
 }
 
-fn resolve_icons(options: Option<&FinderOptions>) -> Result<IconViewProperties, Error> {
-	let (background_type, background_color) =
-		resolve_background(options.and_then(|settings| settings.background.as_ref()))?;
+fn resolve_icons(
+	options: Option<&FinderOptions>,
+	image: ImageBackground,
+) -> Result<IconViewProperties, Error> {
+	let (background_type, background_color) = resolve_background(
+		options.and_then(|settings| settings.background.as_ref()),
+		&image,
+	)?;
 	let icon_view = options.and_then(|settings| settings.icon_view.as_ref());
 	let arrange_by = resolve_arrangement(icon_view.and_then(|view| view.arrange_by))?;
 	let (scroll_x, scroll_y) = icon_view
 		.and_then(|view| view.scroll_position)
 		.map_or(DEFAULT_SCROLL_POSITION, point);
+	let mut unknown = BTreeMap::from([
+		(SCROLL_POSITION_X.to_owned(), PropertyList::Real(scroll_x)),
+		(SCROLL_POSITION_Y.to_owned(), PropertyList::Real(scroll_y)),
+	]);
+	if let ImageBackground::Alias(bytes) = image {
+		unknown.insert(BACKGROUND_IMAGE_ALIAS.to_owned(), PropertyList::Data(bytes));
+	}
 	Ok(IconViewProperties {
 		arrange_by: Some(arrange_by.to_owned()),
 		background_type: Some(background_type),
@@ -134,10 +157,7 @@ fn resolve_icons(options: Option<&FinderOptions>) -> Result<IconViewProperties, 
 				.unwrap_or_default(),
 		),
 		view_options_version: Some(VIEW_OPTIONS_VERSION),
-		unknown: BTreeMap::from([
-			(SCROLL_POSITION_X.to_owned(), PropertyList::Real(scroll_x)),
-			(SCROLL_POSITION_Y.to_owned(), PropertyList::Real(scroll_y)),
-		]),
+		unknown,
 		..IconViewProperties::default()
 	})
 }
@@ -219,11 +239,19 @@ fn resolve_arrangement(arrangement: Option<Arrangement>) -> Result<&'static str,
 	Ok(value)
 }
 
-fn resolve_background(background: Option<&Background>) -> Result<(i64, (f64, f64, f64)), Error> {
+fn resolve_background(
+	background: Option<&Background>,
+	image: &ImageBackground,
+) -> Result<(i64, (f64, f64, f64)), Error> {
 	match background {
 		None | Some(Background::None {}) => Ok((DEFAULT_BACKGROUND_TYPE, DEFAULT_BACKGROUND_RGB)),
 		Some(Background::Color { value }) => Ok((SOLID_BACKGROUND_TYPE, rgb_hex(value.as_str())?)),
-		Some(Background::Image { .. }) => Err(Error::ImageBackground),
+		Some(Background::Image { .. }) => match image {
+			ImageBackground::Unavailable => Err(Error::ImageBackground),
+			ImageBackground::Preflight | ImageBackground::Alias(_) => {
+				Ok((IMAGE_BACKGROUND_TYPE, DEFAULT_BACKGROUND_RGB))
+			}
+		},
 		Some(Background::Template { .. }) => Err(Error::TemplateBackground),
 		Some(_) => Err(Error::Background),
 	}
