@@ -7,8 +7,8 @@ use dmgez_config::{CopySource, LocalPath, Text, VirtualPath};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 
 use super::{
-	Body, Budget, Catalog, EntryKind, Error, FinderOverrides, Origin, OutputProbe, PATH_SEPARATOR,
-	PatternList, SourceKind, SourceSnapshot,
+	Body, Budget, Catalog, EntryKind, Error, FinderOverrides, Limits, Manifest, Origin,
+	OutputProbe, PATH_SEPARATOR, PatternList, SourceKind, SourceSnapshot,
 	host::{self, Anchor, Directory},
 };
 
@@ -25,6 +25,44 @@ pub(super) struct Walker<'a> {
 struct Host {
 	anchor: Anchor,
 	output: OutputProbe,
+}
+
+pub(super) fn inspect_tree(
+	source: &SourceSnapshot,
+	destination: &VirtualPath,
+	limits: Limits,
+	mut cancelled: impl FnMut() -> bool,
+) -> Result<Manifest, Error> {
+	let mut catalog = Catalog::new(limits);
+	catalog.validate_destination(destination)?;
+	let mut visited = 0;
+	record_visit(&mut visited, &catalog)?;
+	if cancelled() {
+		return Err(Error::Cancelled);
+	}
+	let host = Host {
+		anchor: Anchor::new()?,
+		output: OutputProbe::default(),
+	};
+	let leaf = host.anchor.locate(source.path())?;
+	let directory = host::open_directory(&leaf.directory, leaf.name, source)?;
+	let root = Frame {
+		directory,
+		source: source.clone(),
+		relative: PathBuf::new(),
+		included: true,
+		finder: FinderOverrides::default(),
+	};
+	walk_tree(
+		&host,
+		destination,
+		&Filters::empty(),
+		root,
+		&mut catalog,
+		&mut visited,
+		&mut cancelled,
+	)?;
+	catalog.finish()
 }
 
 impl<'a> Walker<'a> {
@@ -264,6 +302,13 @@ struct Filters {
 }
 
 impl Filters {
+	const fn empty() -> Self {
+		Self {
+			include: GlobSet::empty(),
+			exclude: GlobSet::empty(),
+		}
+	}
+
 	fn new(copy: &CopySource) -> Result<Self, Error> {
 		let mut bytes = copy.include.iter().chain(&copy.exclude);
 		let count = copy.include.len().saturating_add(copy.exclude.len());

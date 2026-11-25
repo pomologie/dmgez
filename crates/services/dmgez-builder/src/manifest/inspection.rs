@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use dmgez_config::{LocalPath, Project};
+use dmgez_config::{LocalPath, Project, VirtualPath};
 
 use super::{Error, Limits, Manifest, SourceSnapshot, discover_for_output};
 #[cfg(any(unix, windows))]
@@ -18,6 +18,37 @@ pub fn discover_for_inspection(
 	cancelled: impl FnMut() -> bool,
 ) -> Result<Manifest, Error> {
 	discover_for_output(project, config_dir, limits, None, cancelled)
+}
+
+/// Captures the complete, unfiltered tree rooted at an observed host directory.
+///
+/// Uses the same descriptor-relative, no-follow directory traversal as project
+/// discovery. The supplied root must still match its original observation. The
+/// returned manifest includes the ancestors needed for the virtual destination.
+///
+/// # Errors
+/// Returns an error for an unavailable or changed source, unsupported kinds or
+/// paths, budget exhaustion, or cancellation.
+pub fn inspect_tree(
+	source: &SourceSnapshot,
+	destination: &VirtualPath,
+	limits: Limits,
+	cancelled: impl FnMut() -> bool,
+) -> Result<Manifest, Error> {
+	#[cfg(any(unix, windows))]
+	{
+		if source.kind != SourceKind::Directory {
+			return Err(Error::DirectorySourceRequired {
+				path: source.path.clone(),
+			});
+		}
+		super::walk::inspect_tree(source, destination, limits, cancelled)
+	}
+	#[cfg(not(any(unix, windows)))]
+	{
+		let _ = (source, destination, limits, cancelled);
+		Err(Error::UnsupportedHost)
+	}
 }
 
 /// Captures regular assets against one project directory and shared source anchor.

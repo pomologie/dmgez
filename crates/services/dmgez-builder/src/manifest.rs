@@ -22,7 +22,7 @@ mod signed_bundle;
 mod walk;
 
 use catalog::{Body, Catalog, Origin};
-pub use inspection::{AssetInspector, discover_for_inspection};
+pub use inspection::{AssetInspector, discover_for_inspection, inspect_tree};
 
 const PATH_SEPARATOR: char = '/';
 const MAX_SYMLINK_BYTES: usize = 4096;
@@ -320,6 +320,8 @@ pub enum Error {
 	RootDestination,
 	#[error("regular source required at {path:?}")]
 	RegularSourceRequired { path: PathBuf },
+	#[error("directory source required at {path:?}")]
+	DirectorySourceRequired { path: PathBuf },
 	#[error("source changed since discovery: {path:?}")]
 	SourceChanged { path: PathBuf },
 	#[error("output aliases a captured source or is inside a copied directory: {path:?}")]
