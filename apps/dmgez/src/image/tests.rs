@@ -14,6 +14,8 @@ use super::*;
 use crate::inspector::{self, Action};
 
 const NATIVE_UDZO: &[u8] = include_bytes!("../../../../tests/fixtures/images/tiny-UDZO.dmg");
+const NATIVE_SIGNED: &[u8] =
+	include_bytes!("../../../../tests/fixtures/images/tiny-UDZO-adhoc-sha256.dmg");
 const IMAGE_NAME: &str = "snapshot.dmg";
 
 const LAST_PAGE_ROWS: usize = 3;
@@ -122,6 +124,19 @@ fn verification_uses_container_scope_and_reports_a_corrupt_payload() {
 		assert_eq!(result.coverage.security, CheckStatus::NotChecked);
 		data[0] ^= 1;
 	}
+}
+
+#[test]
+fn opens_a_signed_snapshot_and_keeps_security_coverage_independent() {
+	let scratch = tempfile::tempdir().unwrap();
+	let path = scratch.path().join(IMAGE_NAME);
+	fs::write(&path, NATIVE_SIGNED).unwrap();
+	let tab = ImageTab::open(File::open(path).unwrap()).unwrap();
+	assert!(tab.report.container.embedded_signature.is_some());
+	let check = tab.snapshot.verify(&Cancellation::default());
+	assert!(check.passed());
+	assert_eq!(check.coverage.payload, CheckStatus::Passed);
+	assert_eq!(check.coverage.security, CheckStatus::NotChecked);
 }
 
 #[test]

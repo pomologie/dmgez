@@ -29,6 +29,9 @@ pub(crate) fn show(ui: &mut Ui, image: &ImageTab, idle: bool) -> Option<Action> 
 			field(ui, "Logical disk", bytes(container.logical_bytes));
 			field(ui, "Sector size", bytes(container.sector_bytes));
 			field(ui, "Block maps", container.block_map_count.to_string());
+			if let Some(signature) = container.embedded_signature {
+				field(ui, "Embedded signature", bytes(signature.length_bytes));
+			}
 			field(ui, "Runs", container.runs.total.to_string());
 			if container.runs.decode_unavailable != 0 {
 				field(

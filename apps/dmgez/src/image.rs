@@ -20,7 +20,7 @@ pub(crate) struct ImageTab {
 impl ImageTab {
 	pub(crate) fn open(file: File) -> Result<Self, Error> {
 		let source = ImageSource(Arc::new(FileSource::new(file)?));
-		let mut image = Image::open(source.clone(), Limits::default())?;
+		let mut image = Image::open_release(source.clone(), Limits::default())?;
 		let report = inspect_disk(
 			&mut image,
 			RunWindow::new(0, RUN_PAGE_SIZE),
