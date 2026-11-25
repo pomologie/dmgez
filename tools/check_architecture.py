@@ -13,12 +13,13 @@ PROFILES = {
     "inspection": (["--no-default-features", "--features", "inspect"], {"dmgez-core", "dmgez-inspector", "dmgez-udif", "dmgez-vfs", "flate2", "serde_json"}),
     "conversion": (["--no-default-features", "--features", "convert"], {"dmgez-core", "dmgez-operations", "dmgez-udif", "flate2"}),
     "parallel_conversion": (["--no-default-features", "--features", "convert,parallel"], {"dmgez-core", "dmgez-operations", "dmgez-udif", "flate2", "rayon"}),
+    "comparison": (["--no-default-features", "--features", "diff"], {"dmgez-core", "dmgez-diff", "dmgez-udif", "dmgez-vfs", "flate2", "serde_json"}),
 }
 OUTSIDE_DEFAULT = {
     "apple-dmg", "apfs", "bzip2", "eframe", "egui", "fstool", "fuser", "lzfse_rust", "lzma-rust2", "notify",
     "reqwest", "rmcp", "tokio", "udif", "winfsp",
 }
-PROFILE_DEPS = {"dmgez-core", "dmgez-inspector", "dmgez-operations", "dmgez-udif", "dmgez-vfs", "flate2", "rayon", "serde_json"}
+PROFILE_DEPS = {"dmgez-core", "dmgez-diff", "dmgez-inspector", "dmgez-operations", "dmgez-udif", "dmgez-vfs", "flate2", "rayon", "serde_json"}
 
 
 def main():
@@ -44,8 +45,8 @@ def main():
             for feature in ("read", "write", "parallel", "zlib", "lzfse", "lzma"):
                 active = f'dmgez-udif feature "{feature}"' in features
                 expected_active = {
-                    "read": profile in ("inspection", "conversion", "parallel_conversion"),
-                    "write": profile != "inspection",
+                    "read": profile in ("inspection", "conversion", "parallel_conversion", "comparison"),
+                    "write": profile in ("serial", "default", "conversion", "parallel_conversion"),
                     "parallel": profile in ("default", "parallel_conversion"),
                     "zlib": True, "lzfse": False, "lzma": False,
                 }[feature]

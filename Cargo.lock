@@ -961,6 +961,7 @@ version = "0.1.0"
 dependencies = [
  "clap",
  "dmgez-core",
+ "dmgez-diff",
  "dmgez-inspector",
  "dmgez-operations",
  "dmgez-udif",

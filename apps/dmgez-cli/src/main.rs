@@ -4,6 +4,8 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 #[cfg(feature = "convert")]
 mod convert;
+#[cfg(feature = "diff")]
+mod diff;
 #[cfg(feature = "inspect")]
 mod inspect;
 #[cfg(feature = "build")]
@@ -13,6 +15,8 @@ const WRAP_RAW_COMMAND: &str = "wrap-raw";
 const INSPECT_COMMAND: &str = "inspect";
 const ANALYZE_COMMAND: &str = "analyze";
 const CONVERT_COMMAND: &str = "convert";
+const DIFF_COMMAND: &str = "diff";
+const DIFF_ERROR_EXIT_CODE: u8 = 2;
 const UNWRAP_RAW_COMMAND: &str = "unwrap-raw";
 const THREADS_ARG_ID: &str = "threads";
 const THREADS_VALUE_NAME: &str = "THREADS";
@@ -57,6 +61,19 @@ enum Command {
 		format: ConversionFormat,
 		#[command(flatten)]
 		encoding: EncodingFlags,
+	},
+	/// Compare decoded disk bytes or stored container bytes.
+	#[command(name = DIFF_COMMAND)]
+	Diff {
+		left: PathBuf,
+		right: PathBuf,
+		#[arg(long, value_enum, default_value_t)]
+		mode: DiffMode,
+		/// Maximum paired bytes compared from each input.
+		#[arg(long)]
+		max_bytes: Option<u64>,
+		#[arg(long)]
+		json: bool,
 	},
 	/// Show UDIF metadata and optionally probe the decoded partition map.
 	#[command(name = INSPECT_COMMAND)]
@@ -130,6 +147,13 @@ enum ConversionFormat {
 	Udzo,
 }
 
+#[derive(Debug, Default, Clone, Copy, ValueEnum)]
+enum DiffMode {
+	#[default]
+	Logical,
+	Physical,
+}
+
 #[derive(Args)]
 struct EncodingFlags {
 	/// Encode on the calling thread even when parallel support is available.
@@ -159,11 +183,17 @@ impl EncodingFlags {
 	}
 }
 
-type CliResult = Result<(), Box<dyn Error>>;
+type CliResult<T = ()> = Result<T, Box<dyn Error>>;
 
 fn main() -> ExitCode {
-	match run(Cli::parse().command) {
-		Ok(()) => ExitCode::SUCCESS,
+	let command = Cli::parse().command;
+	let error_status = if matches!(command, Command::Diff { .. }) {
+		ExitCode::from(DIFF_ERROR_EXIT_CODE)
+	} else {
+		ExitCode::FAILURE
+	};
+	match run(command) {
+		Ok(status) => status,
 		Err(error) => {
 			eprintln!("error: {error}");
 			let mut cause = error.source();
@@ -171,13 +201,13 @@ fn main() -> ExitCode {
 				eprintln!("  caused by: {inner}");
 				cause = inner.source();
 			}
-			ExitCode::FAILURE
+			error_status
 		}
 	}
 }
 
-fn run(command: Command) -> CliResult {
-	match command {
+fn run(command: Command) -> CliResult<ExitCode> {
+	let result = match command {
 		Command::Capabilities => {
 			for (name, compiled) in [
 				(WRAP_RAW_COMMAND, cfg!(feature = "build")),
@@ -192,19 +222,20 @@ fn run(command: Command) -> CliResult {
 					LZFSE_FEATURE,
 					cfg!(all(
 						feature = "lzfse",
-						any(feature = "build", feature = "inspect")
+						any(feature = "build", feature = "inspect", feature = "diff")
 					)),
 				),
 				(
 					LZMA_FEATURE,
 					cfg!(all(
 						feature = "lzma",
-						any(feature = "build", feature = "inspect")
+						any(feature = "build", feature = "inspect", feature = "diff")
 					)),
 				),
 				(INSPECT_COMMAND, cfg!(feature = "inspect")),
 				(ANALYZE_COMMAND, cfg!(feature = "inspect")),
 				(CONVERT_COMMAND, cfg!(feature = "convert")),
+				(DIFF_COMMAND, cfg!(feature = "diff")),
 				(VERIFY_CONTAINER_CAPABILITY, cfg!(feature = "inspect")),
 				(UNWRAP_RAW_COMMAND, cfg!(feature = "inspect")),
 			] {
@@ -230,6 +261,16 @@ fn run(command: Command) -> CliResult {
 		} => convert::run(&image, &output, format, &encoding),
 		#[cfg(not(feature = "convert"))]
 		Command::Convert { .. } => Err(format!("feature not compiled: {CONVERT_COMMAND}").into()),
+		#[cfg(feature = "diff")]
+		Command::Diff {
+			left,
+			right,
+			mode,
+			max_bytes,
+			json,
+		} => return diff::run(&left, &right, mode, max_bytes, json),
+		#[cfg(not(feature = "diff"))]
+		Command::Diff { .. } => Err(format!("feature not compiled: {DIFF_COMMAND}").into()),
 		#[cfg(feature = "inspect")]
 		Command::Inspect {
 			image,
@@ -253,7 +294,8 @@ fn run(command: Command) -> CliResult {
 		| Command::Analyze { .. }
 		| Command::Verify { .. }
 		| Command::UnwrapRaw { .. } => Err("feature not compiled: inspect".into()),
-	}
+	};
+	result.map(|()| ExitCode::SUCCESS)
 }
 
 fn report_field(key: impl Display, value: impl Display) {
