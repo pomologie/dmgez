@@ -58,10 +58,22 @@ For the Finder layout portion of D-REL-03-T02, macOS 14.7.2 verified three UDZO 
 
 ### Lint project layout
 
-The implemented `layout` profile evaluates one declared project folder at a time. The CLI and desktop editor use the same declared entries, implied directories, and preview geometry. It reports clipped or overlapping configured icon rectangles, icons outside the viewport, positioned hidden entries, automatic arrangement, and tight grid spacing. `--folder` selects a virtual folder and `--suppress RULE=REASON` retains the diagnostic with its suppression reason. `--json` includes the selected folder, viewport, stable rule IDs, and evidence. Linked source trees, mounted Finder behavior, labels, installer policy, and release trust have separate qualification requirements.
+The implemented `layout` profile evaluates one declared project folder at a time. The CLI and desktop editor use the same declared entries, implied directories, and preview geometry. It reports clipped or overlapping configured icon rectangles, icons outside the viewport, positioned hidden entries, automatic arrangement, and tight grid spacing. `--folder` selects a virtual folder and `--suppress RULE=REASON` retains the diagnostic with its suppression reason. `--json` includes the selected folder, viewport, stable rule IDs, and evidence. Linked source trees, mounted Finder behavior, labels, and release trust have separate qualification requirements.
 
 The [layout service fixtures](../../crates/services/dmgez-lint/tests/layout.rs) and [CLI integration tests](../../apps/dmgez-cli/tests/lint_cli.rs) exercise the icon geometry and suppression portion of `D-REL-04-T01`. The full acceptance case also requires installer rules and native release checks.
+
+### Lint installer inputs
+
+Build with `installer-lint` and run `lint PROJECT --profile installer` to check the whole project. Discovery follows the builder's copy filters, bounds, and source identity checks. It inspects the planned image paths and can run before the output directory exists.
+
+- A top-level `.app` calls for the `/Applications` shortcut. When present, the shortcut must be a symlink with exact target `/Applications`. Other symlinks with absolute targets or relative targets that lexically escape the image root produce findings. The analysis reads link text and checks its components without traversing chains of links.
+- For each `.app` directory, the profile reads a bounded XML or binary `Contents/Info.plist` and checks the `CFBundleExecutable` entry. The value must be a single component naming a regular file under `Contents/MacOS`. It checks the captured POSIX execute bits and reports when they are unavailable or the project disables permission preservation. [Apple bundle executable key](https://developer.apple.com/library/archive/documentation/General/Reference/InfoPlistKeyReference/Articles/CoreFoundationKeys.html)
+- Explicitly referenced Finder backgrounds and Retina variants are checked for presence and regular-source identity. Image decoding and dimension checks run in build preflight.
+
+`--json` reports stable rule IDs, warning severity, and evidence. `--suppress RULE=REASON` keeps the finding and reason in the report. Exit 0 means there are no unsuppressed warnings, exit 1 means warnings remain, and exit 2 means the inspection could not finish. The [installer CLI fixtures](../../apps/dmgez-cli/tests/installer_lint_cli.rs) check the link, background, executable-mode, and suppression portions of D-REL-04-T01. Signature, notarization, and native assessment require their own evidence.
 
 ## Native qualification
 
 Use synthetic ad hoc bundles for noncredentialed CI, and properly signed Developer ID fixture owned by project for protected end-to-end notarization. Compare app signature and exact bytes before/after build/extract, DMG signatures across backends, native attach/staple validation, failed/expired credentials, rejection, interrupted/resumed submissions, changed artifact after acceptance, native tool missing, partial report and no publication. Document backend versions/OS. Unit test mock service without claiming real Apple acceptance. No network, signing or notarization dependencies in default builder. No redistribution of Apple binaries, signing keys or actual private notary logs.
+
+On macOS 14.7.2, `plutil` and installer lint agreed on the executable name in synthetic XML and binary plists, including XML with mixed text, CDATA, and a UTF-8 BOM. Removing the executable bits produced the expected warning while leaving the configured output path absent.

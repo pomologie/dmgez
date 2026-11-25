@@ -53,6 +53,9 @@
       "finder-read"
     ],
     "lint": [],
+    "installer-lint": [
+      "lint"
+    ],
     "appdmg-import": [],
     "convert": [
       "udif-read",

@@ -78,7 +78,7 @@ Read arrows as `consumer -> dependency`.
 | `dmgez-operations` | core, vfs, writer/reader and builder when a requested operation needs them |
 | `dmgez-preview` | core, finder, config; VFS adapter for actual images optional; no GUI framework required in headless mode |
 | `dmgez-diff` | vfs for semantic comparison, optional Finder store reader and BLAKE3 hashing |
-| `dmgez-lint` | typed manifest/report interfaces and preview geometry, signing checks only via optional integration |
+| `dmgez-lint` | preview geometry for layout, optional builder manifest discovery for installer inputs, signing checks only via optional integration |
 | `dmgez-cache` | core and codec-profile contracts; builder can consume it; never import builder |
 | `dmgez-install` | core, operations extraction, platform adapters; no GUI |
 | `dmgez-mount` | core, vfs, optional install-monitoring policy; no GUI |

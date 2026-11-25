@@ -21,6 +21,7 @@ cargo run --locked --no-default-features --features convert -- convert volume.dm
 cargo run --locked --no-default-features --features convert -- optimize volume.dmg -o optimized.dmg
 cargo run --locked --no-default-features --features diff -- diff volume.dmg uncompressed.dmg --json
 cargo run --locked --no-default-features --features lint -- lint project.toml --profile layout --folder /Docs --json
+cargo run --locked --no-default-features --features installer-lint -- lint project.toml --profile installer --json
 cargo run --locked --no-default-features --features appdmg-import -- import-appdmg settings.json -o project.toml --image-output installer.dmg
 ```
 
@@ -57,6 +58,8 @@ target/apfs-cli/debug/dmgez diff left.dmg right.dmg --mode semantic --filesystem
 ```
 
 The optional `lint` command checks configured Finder icon geometry in one declared project folder, starting at `/` unless `--folder` selects another. It reads the TOML manifest only. Use `--suppress RULE=REASON` to keep a finding in the report without failing on it. Exit codes are 0 when there are no unsuppressed warnings, 1 when warnings remain, and 2 when the requested layout cannot be evaluated.
+
+With `installer-lint`, `lint project.toml --profile installer --json` inspects the resolved source tree for the Applications shortcut, external symlink targets, referenced Finder backgrounds, and app bundle executables.
 
 `import-appdmg` translates documented appdmg JSON settings into a new version-one TOML manifest. Relative asset paths keep their original settings directory. A relative `--image-output` is interpreted from the new manifest's directory. The command reports unmapped behavior and refuses to replace an existing manifest.
 
