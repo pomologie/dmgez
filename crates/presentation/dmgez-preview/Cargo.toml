@@ -9,7 +9,8 @@ description = "Headless preview geometry and design rendering for dmgez"
 
 [features]
 actual = ["png-render", "dep:dmgez-finder"]
-png-render = ["dep:dmgez-core", "dep:epaint", "dep:png"]
+png-decode = ["dep:png"]
+png-render = ["png-decode", "dep:dmgez-core", "dep:epaint"]
 
 [dependencies]
 # Workspace foundation

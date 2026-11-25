@@ -5,6 +5,7 @@ use crate::{
 	actual::{
 		Background, BackgroundAsset, BackgroundStatus, Coverage, Entry, EntryKind, Scene, Store,
 	},
+	png_image::SIGNATURE,
 };
 
 use super::{
@@ -15,7 +16,6 @@ use super::{
 };
 
 const PNG_DESCRIPTION: &str = "dmgez actual-image preview";
-const PNG_MAGIC: [u8; 8] = *b"\x89PNG\r\n\x1a\n";
 
 /// One actual-image preview viewport in one-pixel-per-point RGB.
 #[derive(Debug)]
@@ -151,8 +151,8 @@ fn paint_background(
 }
 
 fn paint_image(canvas: &mut Canvas, bytes: &[u8]) -> Result<BackgroundStatus, Error> {
-	if !bytes.starts_with(&PNG_MAGIC) {
-		return Ok(if PNG_MAGIC.starts_with(bytes) {
+	if !bytes.starts_with(&SIGNATURE) {
+		return Ok(if SIGNATURE.starts_with(bytes) {
 			BackgroundStatus::MalformedImage
 		} else {
 			BackgroundStatus::UnsupportedImage

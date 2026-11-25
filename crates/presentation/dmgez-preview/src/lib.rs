@@ -7,6 +7,8 @@
 pub mod actual;
 mod declared;
 mod geometry;
+#[cfg(feature = "png-decode")]
+pub mod png_image;
 mod project;
 #[cfg(feature = "png-render")]
 pub mod raster;

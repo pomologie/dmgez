@@ -1,8 +1,8 @@
-use std::{fs::File, io, io::Cursor, path::Path};
+use std::{fs::File, io, path::Path};
 
+use crate::png_image::{self, BACKGROUND_INPUT_BYTES};
 use dmgez_config::{Background, parse_solid_background_color};
 use dmgez_core::source::CapturedFile;
-use png::{BitDepth, ColorType, Decoder, Limits, Transformations};
 
 use super::{
 	Error,
@@ -10,9 +10,6 @@ use super::{
 };
 
 pub(super) const DEFAULT_BACKGROUND: Rgb = [245, 249, 248];
-const MAX_ASSET_BYTES: usize = 16 << 20;
-const MAX_DECODE_BYTES: usize = 16 << 20;
-const FULL_OPACITY: u8 = u8::MAX;
 
 pub(super) fn render(
 	dimensions: Dimensions,
@@ -50,7 +47,7 @@ fn paint_file(canvas: &mut Canvas, path: &Path) -> Result<(), Error> {
 	let source = CapturedFile::new(File::open(path).map_err(Error::BackgroundOpen)?)?;
 	let input_bytes = usize::try_from(source.len())
 		.ok()
-		.filter(|bytes| *bytes <= MAX_ASSET_BYTES)
+		.filter(|bytes| *bytes <= BACKGROUND_INPUT_BYTES)
 		.ok_or(Error::BackgroundBytes)?;
 	let mut input = zeroed(input_bytes)?;
 	source.read_exact_at(0, &mut input)?;
@@ -58,55 +55,19 @@ fn paint_file(canvas: &mut Canvas, path: &Path) -> Result<(), Error> {
 }
 
 pub(super) fn paint_png(canvas: &mut Canvas, input: &[u8]) -> Result<(), Error> {
-	if input.len() > MAX_ASSET_BYTES {
-		return Err(Error::BackgroundBytes);
-	}
-	let mut decoder = Decoder::new_with_limits(
-		Cursor::new(input),
-		Limits {
-			bytes: MAX_DECODE_BYTES,
-		},
-	);
-	decoder.set_ignore_text_chunk(true);
-	decoder.set_transformations(Transformations::EXPAND);
-	let mut reader = decoder.read_info()?;
-	let info = reader.info();
-	if info.animation_control().is_some()
-		|| info.icc_profile.is_some()
-		|| info.coding_independent_code_points.is_some()
-		|| info.mastering_display_color_volume.is_some()
-		|| info.content_light_level.is_some()
-		|| (info.srgb.is_none() && (info.gama_chunk.is_some() || info.chrm_chunk.is_some()))
-		|| info.bit_depth != BitDepth::Eight
-	{
-		return Err(Error::BackgroundProfile);
-	}
-	let size = Dimensions::new(info.width, info.height)?;
-	let channels = match reader.output_color_type() {
-		(ColorType::Rgb, BitDepth::Eight) => 3,
-		(ColorType::Rgba, BitDepth::Eight) => 4,
-		_ => return Err(Error::BackgroundProfile),
-	};
-	let output_bytes = reader.output_buffer_size().ok_or(Error::Dimensions)?;
-	if output_bytes > MAX_DECODE_BYTES {
-		return Err(Error::Dimensions);
-	}
-	let mut output = zeroed(output_bytes)?;
-	let frame = reader.next_frame(&mut output)?;
-	reader.finish()?;
-	let (width, height) = size.size();
-	if (frame.width, frame.height) != (width, height) {
-		return Err(Error::BackgroundProfile);
-	}
-	canvas.composite([0.0, 0.0], [width, height], |x, y| {
-		let offset = y * frame.line_size + x * channels;
-		let color = [output[offset], output[offset + 1], output[offset + 2]];
-		let alpha = if channels == 4 {
-			output[offset + 3]
-		} else {
-			FULL_OPACITY
-		};
-		(color, alpha)
+	let image = png_image::decode_background(input).map_err(|error| match error {
+		png_image::Error::InputBytes => Error::BackgroundBytes,
+		png_image::Error::Dimensions => Error::Dimensions,
+		png_image::Error::DecoderBudget => {
+			Error::BackgroundDecode(png::DecodingError::LimitsExceeded)
+		}
+		png_image::Error::Allocation(error) => Error::Allocation(error),
+		png_image::Error::Decode(error) => Error::BackgroundDecode(error),
+		_ => Error::BackgroundProfile,
+	})?;
+	canvas.composite([0.0, 0.0], image.size().map(|side| side as u32), |x, y| {
+		let [red, green, blue, alpha] = image.rgba_at(x, y);
+		([red, green, blue], alpha)
 	})
 }
 
