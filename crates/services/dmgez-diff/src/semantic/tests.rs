@@ -10,7 +10,8 @@ use dmgez_vfs::{
 	VolumeId,
 	volume::{
 		DirectoryEntry, DirectoryPage, DirectoryReader, FinderInfo, ForkKind, ForkReader, HardLink,
-		LookupName, Metadata, NodeKind, RawName, VolumeBackend, VolumeView,
+		LookupName, Metadata, NativeNameKey, NativeNameProfile, NodeKind, RawName, VolumeBackend,
+		VolumeView,
 	},
 };
 
@@ -21,6 +22,7 @@ mod content_hash;
 mod finder_info;
 #[cfg(feature = "finder-layout")]
 mod finder_layout;
+mod native_paths;
 #[cfg(feature = "content-hash")]
 mod renames;
 mod xattrs;
@@ -153,6 +155,7 @@ struct TestNode<'data> {
 	kind: NodeKind,
 	mode: u16,
 	data: Option<&'data [u8]>,
+	fork_read_failure: bool,
 	#[cfg(feature = "content-hash")]
 	bytes_read: Option<&'data Cell<u64>>,
 	resource: Option<&'static [u8]>,
@@ -169,6 +172,7 @@ impl TestNode<'_> {
 			kind: NodeKind::RegularFile,
 			mode: FILE_MODE,
 			data: Some(SHARED_BYTE_CONTENT),
+			fork_read_failure: false,
 			#[cfg(feature = "content-hash")]
 			bytes_read: None,
 			resource: None,
@@ -185,6 +189,15 @@ impl TestNode<'_> {
 			mode: LINK_MODE,
 			data: None,
 			target: Some(target),
+			..Self::file(id)
+		}
+	}
+
+	fn directory(id: u32) -> Self {
+		Self {
+			kind: NodeKind::Directory,
+			mode: ROOT_MODE,
+			data: None,
 			..Self::file(id)
 		}
 	}
@@ -216,10 +229,24 @@ fn view_with_metadata<'data, const N: usize>(
 	attributes_available: bool,
 	root_finder_info: FinderInfo,
 ) -> VolumeView<TestTree<'data>> {
-	let mut entries = Vec::new();
+	view_with_profile(
+		children.map(|(name, node)| (ROOT, name, node)),
+		attributes_available,
+		root_finder_info,
+		None,
+	)
+}
+
+fn view_with_profile<'data, 'name>(
+	children: impl IntoIterator<Item = (u32, &'name str, TestNode<'data>)>,
+	attributes_available: bool,
+	root_finder_info: FinderInfo,
+	native_profile: Option<NativeNameProfile>,
+) -> VolumeView<TestTree<'data>> {
+	let mut entries = BTreeMap::<_, Vec<_>>::new();
 	let mut nodes = BTreeMap::new();
-	for (name, node) in children {
-		entries.push(DirectoryEntry {
+	for (parent, name, node) in children {
+		entries.entry(parent).or_default().push(DirectoryEntry {
 			name: RawName::Utf8(name.to_owned()),
 			node: node.id,
 			kind: node.kind,
@@ -233,6 +260,7 @@ fn view_with_metadata<'data, const N: usize>(
 			nodes,
 			attributes_available,
 			root_finder_info,
+			native_profile,
 		},
 	)
 }
@@ -243,10 +271,11 @@ struct TestXattr {
 }
 
 struct TestTree<'data> {
-	entries: Vec<DirectoryEntry<u32>>,
+	entries: BTreeMap<u32, Vec<DirectoryEntry<u32>>>,
 	nodes: BTreeMap<u32, TestNode<'data>>,
 	attributes_available: bool,
 	root_finder_info: FinderInfo,
+	native_profile: Option<NativeNameProfile>,
 }
 
 impl VolumeBackend for TestTree<'_> {
@@ -289,8 +318,20 @@ impl VolumeBackend for TestTree<'_> {
 	}
 
 	fn read_dir(&mut self, directory: u32) -> io::Result<Page<'_>> {
-		assert_eq!(directory, ROOT);
-		Ok(Page(&self.entries))
+		assert!(directory == ROOT || self.nodes[&directory].kind == NodeKind::Directory);
+		Ok(Page(
+			self.entries.get(&directory).map_or(&[], Vec::as_slice),
+		))
+	}
+
+	fn native_name_profile(&self) -> Option<NativeNameProfile> {
+		self.native_profile
+	}
+
+	fn native_name_key(&self, name: LookupName<'_>) -> io::Result<Option<NativeNameKey>> {
+		Ok(self
+			.native_profile
+			.and_then(|profile| native_paths::test_key(profile, name)))
 	}
 
 	fn finder_info(&mut self, node: u32) -> io::Result<FinderInfo> {
@@ -316,6 +357,7 @@ impl VolumeBackend for TestTree<'_> {
 		Ok(fork.map(|bytes| {
 			read(&mut Fork {
 				bytes,
+				read_failure: node.fork_read_failure,
 				#[cfg(feature = "content-hash")]
 				bytes_read: node.bytes_read,
 			})
@@ -351,6 +393,7 @@ impl VolumeBackend for TestTree<'_> {
 			.map(|bytes| {
 				read(&mut Fork {
 					bytes,
+					read_failure: false,
 					#[cfg(feature = "content-hash")]
 					bytes_read: None,
 				})
@@ -377,6 +420,7 @@ impl DirectoryReader for Page<'_> {
 
 struct Fork<'data> {
 	bytes: &'data [u8],
+	read_failure: bool,
 	#[cfg(feature = "content-hash")]
 	bytes_read: Option<&'data Cell<u64>>,
 }
@@ -389,6 +433,9 @@ impl ForkReader for Fork<'_> {
 	}
 
 	fn read_exact_at(&mut self, offset: u64, output: &mut [u8]) -> io::Result<()> {
+		if self.read_failure {
+			return Err(io::ErrorKind::UnexpectedEof.into());
+		}
 		let start = offset as usize;
 		output.copy_from_slice(&self.bytes[start..start + output.len()]);
 		#[cfg(feature = "content-hash")]
