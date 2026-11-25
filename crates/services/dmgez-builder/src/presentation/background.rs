@@ -23,6 +23,7 @@ use super::{
 };
 
 mod icc;
+mod prebuilt;
 mod retina;
 
 const DIRECTORY_NAME: &str = ".background";
@@ -309,8 +310,14 @@ impl BackgroundSource {
 			(encoded, TIFF_EXTENSION)
 		} else {
 			budget.charge(bytes.capacity())?;
-			validate_png(&bytes, available)?;
-			(bytes, PNG_EXTENSION)
+			let extension = if prebuilt::is_tiff(&bytes) {
+				prebuilt::validate(&bytes, available, profile)?;
+				TIFF_EXTENSION
+			} else {
+				validate_png(&bytes, available)?;
+				PNG_EXTENSION
+			};
+			(bytes, extension)
 		};
 		check_cancelled(profile)?;
 		base.validate().map_err(Error::BackgroundSource)?;

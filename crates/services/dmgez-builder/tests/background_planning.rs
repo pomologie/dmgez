@@ -212,6 +212,19 @@ background = { kind = "image", source = "root.png" }
 		assert_eq!(store.background_path(), &asset.path);
 	}
 	assert_eq!(stores.len(), 4);
+
+	// A prebuilt TIFF need not carry a TIFF extension on the host.
+	fs::write(base.path().join("root.png"), &assets[0].bytes).unwrap();
+	let prebuilt = prepare(
+		&format!("{PROJECT}output = 'output.dmg'\n{ROOT_IMAGE}"),
+		base.path(),
+	)
+	.unwrap();
+	assert_eq!(prebuilt.finder_assets(), &assets[..1]);
+	assert_eq!(
+		prebuilt.deferred_finder_stores()[0].background_path(),
+		&assets[0].path,
+	);
 }
 
 #[test]

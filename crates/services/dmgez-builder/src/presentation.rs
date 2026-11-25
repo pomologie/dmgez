@@ -88,8 +88,12 @@ pub enum Error {
 	BackgroundRetinaDimensions,
 	#[error("Retina Finder background PNG representation is unsupported")]
 	BackgroundRetinaPngFormat,
-	#[error("Finder background TIFF could not be encoded")]
+	#[error("Finder background TIFF could not be encoded or decoded")]
 	BackgroundTiff(#[source] tiff::TiffError),
+	#[error(
+		"Finder background TIFF must contain compatible 1x and 2x representations with matching logical sizes"
+	)]
+	BackgroundTiffRepresentation,
 	#[error("Finder background alias names a different path than the captured image")]
 	BackgroundTargetMismatch,
 	#[cfg(feature = "volume-icon")]
