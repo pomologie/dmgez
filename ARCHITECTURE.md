@@ -84,7 +84,7 @@ Read arrows as `consumer -> dependency`.
 | `dmgez-cache` | core and codec-profile contracts; builder can consume it; never import builder |
 | `dmgez-install` | core, operations extraction, platform adapters; no GUI |
 | `dmgez-mount` | core, vfs, optional install-monitoring policy; no GUI |
-| `dmgez-signing` | optional signing integrations, Mach-O inspection, UDIF trailer admission and signature append validation; no builder import |
+| `dmgez-signing` | optional signing integrations, Mach-O inspection, UDIF trailer admission and signature append validation, core publication for notarization records; no builder import |
 | `dmgez-encryption` | core, generic crypto primitives; exposed as a bounded storage adapter |
 | apps | compose selected services, not one another |
 

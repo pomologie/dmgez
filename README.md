@@ -68,6 +68,8 @@ On macOS, `signing-native` enables `sign inspect` and `sign verify` for app bund
 
 `sign app` signs a private bundle copy from the inside out and verifies the finished app before publishing to a new path. Use `--entitlements CODE_PATH=PLIST` to supply the distribution entitlements for a particular code item. [Stage and sign an application](docs/features/RELEASE.md#stage-and-sign-an-application)
 
+With `notarization-native` on macOS, `notarize` submits a signed DMG with a private local record. `notarize status` resumes by Apple's submission ID. [Submit and resume notarization](docs/features/RELEASE.md#submit-and-resume-notarization)
+
 `import-appdmg` translates documented appdmg JSON settings into a new version-one TOML manifest. Relative asset paths keep their original settings directory. A relative `--image-output` is interpreted from the new manifest's directory. The command reports unmapped behavior and refuses to replace an existing manifest.
 
 ## Build from a TOML project
