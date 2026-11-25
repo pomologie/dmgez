@@ -17,6 +17,9 @@ mod optimize;
 mod project_build;
 #[cfg(any(feature = "appdmg-import", feature = "lint", feature = "project-build"))]
 mod project_input;
+mod volume_commands;
+#[cfg(feature = "hfsplus-read")]
+mod volume_input;
 #[cfg(feature = "build")]
 mod wrap;
 
@@ -164,6 +167,14 @@ enum Command {
 		#[command(flatten)]
 		scope: VerificationFlags,
 	},
+	/// List a page of visible directory entries in a disk image.
+	Ls(volume_commands::ListArguments),
+	/// Browse a directory tree in a disk image.
+	Tree(volume_commands::TreeArguments),
+	/// Report metadata for one path in a disk image.
+	Stat(volume_commands::StatArguments),
+	/// Write the selected file fork to standard output.
+	Cat(volume_commands::CatArguments),
 	/// Export the decoded disk or one partition to a regular file.
 	#[command(name = UNWRAP_RAW_COMMAND)]
 	UnwrapRaw {
@@ -309,6 +320,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 				),
 				(INSPECT_COMMAND, cfg!(feature = "inspect")),
 				(VERIFY_HFSPLUS_CAPABILITY, cfg!(feature = "hfsplus-verify")),
+				(volume_commands::FEATURE, cfg!(feature = "hfsplus-read")),
 				(ANALYZE_COMMAND, cfg!(feature = "inspect")),
 				(CONVERT_COMMAND, cfg!(feature = "convert")),
 				(OPTIMIZE_COMMAND, cfg!(feature = "convert")),
@@ -395,6 +407,18 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		Command::Analyze { image, json } => inspect::analyze(&image, json),
 		#[cfg(feature = "inspect")]
 		Command::Verify { image, json, scope } => inspect::verify(&image, json, scope),
+		#[cfg(feature = "hfsplus-read")]
+		Command::Ls(arguments) => volume_commands::list(&arguments),
+		#[cfg(feature = "hfsplus-read")]
+		Command::Tree(arguments) => volume_commands::tree(&arguments),
+		#[cfg(feature = "hfsplus-read")]
+		Command::Stat(arguments) => volume_commands::stat(&arguments),
+		#[cfg(feature = "hfsplus-read")]
+		Command::Cat(arguments) => volume_commands::cat(&arguments),
+		#[cfg(not(feature = "hfsplus-read"))]
+		Command::Ls(_) | Command::Tree(_) | Command::Stat(_) | Command::Cat(_) => {
+			Err(format!("feature not compiled: {}", volume_commands::FEATURE).into())
+		}
 		#[cfg(feature = "inspect")]
 		Command::UnwrapRaw {
 			image,

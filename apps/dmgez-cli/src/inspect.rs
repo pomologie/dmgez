@@ -61,7 +61,7 @@ const LZMA2_ENCODING: &str = "lzma2";
 const OTHER_ENCODING: &str = "other";
 const PARTITION_COPY_BUFFER_BYTES: usize = 64 * 1024;
 
-fn open_source(path: &Path) -> Result<FileSource, dmgez_udif::Error> {
+pub(super) fn open_source(path: &Path) -> Result<FileSource, dmgez_udif::Error> {
 	FileSource::new(File::open(path)?)
 }
 
