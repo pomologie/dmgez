@@ -1,17 +1,7 @@
-use std::{
-	hash::Hash,
-	io,
-	os::unix::ffi::OsStrExt,
-	path::{Path, absolute},
-};
+use std::io;
 
-use dmgez_inspector::volume_queries;
-use dmgez_operations::extract::{
-	ExtractionLimits, HostName, Selection, execute,
-	host::{DestinationDirectory, StableDestination},
-	prepare,
-};
-use dmgez_vfs::volume::{ForkKind, VolumeBackend, VolumeView};
+use dmgez_runtime::extraction::{DestinationError, Evidence, OutputPath, Selection};
+use dmgez_vfs::volume::ForkKind;
 
 use crate::CliResult;
 #[cfg(feature = "hfsplus-extract")]
@@ -27,10 +17,6 @@ use super::{Arguments, Fork, MAX_BYTES_OPTION};
 mod report;
 
 use report::Report;
-
-const PATH_SEPARATOR: u8 = b'/';
-const CURRENT_COMPONENT: &[u8] = b".";
-const PARENT_COMPONENT: &[u8] = b"..";
 
 enum Backend {
 	#[cfg(feature = "hfsplus-extract")]
@@ -64,9 +50,9 @@ fn run(arguments: &Arguments, backend: Backend) -> CliResult {
 		Some(Fork::Resource) => Selection::Fork(ForkKind::Resource),
 		None => Selection::DataTree,
 	};
-	let output = absolute(&arguments.output)?;
-	let mut report = Report::new(&arguments.path, &output);
-	let result = prepare_and_run(arguments, &output, selection, backend, &mut report);
+	let output = OutputPath::new(&arguments.output)?;
+	let mut report = Report::new(&arguments.path, output.path());
+	let result = project(arguments, &output, selection, backend, &mut report);
 	match &result {
 		Ok(()) => report.finish(arguments.dry_run),
 		Err(error) => report.fail(error.as_ref()),
@@ -75,39 +61,34 @@ fn run(arguments: &Arguments, backend: Backend) -> CliResult {
 	result.and(rendered)
 }
 
-fn prepare_and_run(
+fn project(
 	arguments: &Arguments,
-	output: &Path,
+	output: &OutputPath<'_>,
 	selection: Selection,
 	backend: Backend,
 	report: &mut Report<'_>,
 ) -> CliResult {
-	check_destination(&arguments.output, selection)?;
-	let parent = output.parent().ok_or_else(invalid_destination)?;
-	let name = output
-		.file_name()
-		.and_then(|name| name.to_str())
-		.ok_or_else(invalid_destination)?;
-	let limits = extraction_limits(arguments.max_bytes)?;
-	let name = HostName::new(name, limits.profile, limits.names.max_component_bytes)?;
-	let root = StableDestination::open(parent)?;
-	let directory = root.directory();
-	directory.require_absent(&name)?;
-	let request = Request {
-		source_path: &arguments.path,
-		selection,
-		limits,
-		dry_run: arguments.dry_run,
-	};
+	let destination = output
+		.admit(selection, arguments.max_bytes)
+		.map_err(output_error)?;
 	let input = &arguments.input;
-	match backend {
+	let mut evidence = Evidence::default();
+	let result = match backend {
 		#[cfg(feature = "hfsplus-extract")]
 		Backend::Hfsplus => with_hfs_view_verified(
 			&input.image,
 			input.raw,
 			input.partition,
 			|view, verify_source| {
-				execute_plan(view, verify_source, &request, &directory, &name, report)
+				destination.project(
+					view,
+					&arguments.path,
+					arguments.dry_run,
+					verify_source,
+					|| false,
+					&mut evidence,
+				)?;
+				Ok(())
 			},
 		),
 		#[cfg(feature = "apfs-extract")]
@@ -119,86 +100,31 @@ fn prepare_and_run(
 			xid,
 			|view, info, verify_source| {
 				report.apfs_volume = Some(VolumeIdentity::from(info));
-				execute_plan(view, verify_source, &request, &directory, &name, report)
+				destination.project(
+					view,
+					&arguments.path,
+					arguments.dry_run,
+					verify_source,
+					|| false,
+					&mut evidence,
+				)?;
+				Ok(())
 			},
 		)
 		.map_err(with_selector_guidance),
-	}
-}
-
-struct Request<'a> {
-	source_path: &'a str,
-	selection: Selection,
-	limits: ExtractionLimits,
-	dry_run: bool,
-}
-
-fn execute_plan<B: VolumeBackend>(
-	view: &mut VolumeView<B>,
-	verify_source: &dyn Fn() -> io::Result<()>,
-	request: &Request<'_>,
-	directory: &DestinationDirectory<'_>,
-	name: &HostName,
-	report: &mut Report<'_>,
-) -> CliResult
-where
-	B::Id: Eq + Hash,
-{
-	let node = volume_queries::resolve_node(view, request.source_path)?;
-	let plan = prepare(view, &node, request.selection, request.limits, || false)?;
-	report.plan = Some(*plan.report());
-	if request.dry_run {
-		verify_source()?;
-		directory.require_absent(name)?;
-		return Ok(());
-	}
-	match execute(view, &plan, directory, name, verify_source, || false) {
-		Ok(progress) => {
-			report.progress = Some(progress);
-			Ok(())
-		}
-		Err(error) => {
-			report.progress = Some(error.progress());
-			Err(error.into())
-		}
-	}
-}
-
-fn check_destination(path: &Path, selection: Selection) -> io::Result<()> {
-	let mut components = path
-		.as_os_str()
-		.as_bytes()
-		.rsplit(|&byte| byte == PATH_SEPARATOR);
-	let last = match selection {
-		Selection::DataTree => components.find(|component| !component.is_empty()),
-		_ => components.next().filter(|component| !component.is_empty()),
 	};
-	match last {
-		Some(component) if !matches!(component, CURRENT_COMPONENT | PARENT_COMPONENT) => Ok(()),
-		_ => Err(invalid_destination()),
-	}
+	report.plan = evidence.plan;
+	report.progress = evidence.progress;
+	result
 }
 
-fn invalid_destination() -> io::Error {
-	io::Error::new(
-		io::ErrorKind::InvalidInput,
-		"extraction output must name an absent entry under an existing parent",
-	)
-}
-
-fn extraction_limits(max_bytes: Option<u64>) -> io::Result<ExtractionLimits> {
-	let mut limits = ExtractionLimits::default();
-	if let Some(max_bytes) = max_bytes {
-		if max_bytes > limits.max_total_bytes {
-			return Err(io::Error::new(
-				io::ErrorKind::InvalidInput,
-				format!(
-					"--{MAX_BYTES_OPTION} cannot exceed {} bytes",
-					limits.max_total_bytes
-				),
-			));
-		}
-		limits.max_total_bytes = max_bytes;
+fn output_error(error: DestinationError) -> Box<dyn std::error::Error> {
+	match error {
+		DestinationError::PayloadLimit { maximum, .. } => io::Error::new(
+			io::ErrorKind::InvalidInput,
+			format!("--{MAX_BYTES_OPTION} cannot exceed {maximum} bytes"),
+		)
+		.into(),
+		_ => error.into(),
 	}
-	Ok(limits)
 }

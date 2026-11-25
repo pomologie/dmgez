@@ -1,7 +1,7 @@
 use std::{borrow::Cow, error::Error, io::Write, os::unix::ffi::OsStrExt, path::Path};
 
 use dmgez_inspector::SCHEMA_VERSION;
-use dmgez_operations::extract::{PlanReport, Progress};
+use dmgez_runtime::extraction::{PlanReport, Progress};
 use serde::Serialize;
 
 #[cfg(feature = "apfs-extract")]
@@ -97,11 +97,7 @@ impl<'a> Report<'a> {
 	}
 
 	pub(super) fn fail(&mut self, error: &dyn Error) {
-		let partial = self.progress.is_some_and(|progress| {
-			progress.directories_created != 0
-				|| progress.files_published != 0
-				|| progress.directory_creation_unconfirmed
-		});
+		let partial = self.progress.is_some_and(Progress::has_destination_effects);
 		self.status = if partial {
 			Status::Partial
 		} else {

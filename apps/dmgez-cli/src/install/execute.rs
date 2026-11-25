@@ -6,14 +6,9 @@ use std::{
 	path::{Path, absolute},
 };
 
-use dmgez_config::VirtualPath;
 use dmgez_inspector::SCHEMA_VERSION;
-use dmgez_operations::{
-	extract::{NameLimits, NameProfile, host::StableDestination},
-	install::{
-		CopyLimits, CopySummary, execute_copy, execute_copy_with_check, prepare_application,
-		prepare_copy,
-	},
+use dmgez_runtime::installation::{
+	self, CheckStatus, CopySummary, Evidence, Request, SecurityChecks,
 };
 use dmgez_vfs::volume::{VolumeBackend, VolumeView};
 use serde::Serialize;
@@ -32,26 +27,22 @@ use crate::{
 
 use super::{Arguments, COMMAND, MAX_BYTES_OPTION};
 
-mod policy;
-
-const STAGING_DEPTH: usize = 2;
-
 #[cfg(feature = "hfsplus-install")]
 pub(super) fn hfsplus(arguments: &Arguments) -> CliResult {
-	run(arguments, |report| {
+	run(arguments, |report, checks| {
 		let input = &arguments.input;
 		with_hfs_view_verified(
 			&input.image,
 			input.raw,
 			input.partition,
-			|view, verify_source| copy(view, verify_source, arguments, report),
+			|view, verify_source| copy(view, verify_source, arguments, report, checks),
 		)
 	})
 }
 
 #[cfg(feature = "apfs-install")]
 pub(super) fn apfs(arguments: &Arguments) -> CliResult {
-	run(arguments, |report| {
+	run(arguments, |report, checks| {
 		let input = &arguments.input;
 		with_apfs_view_verified(
 			&input.image,
@@ -61,17 +52,22 @@ pub(super) fn apfs(arguments: &Arguments) -> CliResult {
 			arguments.filesystem.apfs_checkpoint(),
 			|view, info, verify_source| {
 				report.apfs_volume = Some(VolumeIdentity::from(info));
-				copy(view, verify_source, arguments, report)
+				copy(view, verify_source, arguments, report, checks)
 			},
 		)
 		.map_err(with_selector_guidance)
 	})
 }
 
-fn run(arguments: &Arguments, perform: impl FnOnce(&mut Report<'_>) -> CliResult) -> CliResult {
+fn run(
+	arguments: &Arguments,
+	perform: impl FnOnce(&mut Report<'_>, &mut SecurityChecks) -> CliResult,
+) -> CliResult {
 	let directory = absolute(&arguments.destination)?;
 	let mut report = Report::new(arguments, &directory);
-	let result = perform(&mut report);
+	let mut checks = SecurityChecks::new(arguments.verify_app_signature, arguments.assess);
+	let result = perform(&mut report, &mut checks);
+	report.checks = CheckReport::from(&checks);
 	report.status = match (&result, arguments.dry_run, report.published) {
 		(Ok(()), true, _) => Status::Planned,
 		(Ok(()), false, _) => Status::Complete,
@@ -90,57 +86,38 @@ fn copy<B: VolumeBackend>(
 	verify_source: &dyn Fn() -> io::Result<()>,
 	arguments: &Arguments,
 	report: &mut Report<'_>,
+	checks: &mut SecurityChecks,
 ) -> CliResult
 where
 	B::Id: Eq + Hash,
 {
-	let source = arguments.app.parse::<VirtualPath>()?;
-	let mut names = NameLimits::default();
-	names.max_depth -= STAGING_DEPTH;
-	let application =
-		prepare_application(view, &source, NameProfile::PortableAscii, names, || false)?;
-	report.bundle_name = Some(application.destination_name().as_str().to_owned());
-	let mut limits = CopyLimits::default();
-	if let Some(bytes) = arguments.max_bytes {
-		if bytes > limits.max_payload_bytes {
-			return Err(
-				format!("--{MAX_BYTES_OPTION} exceeds {}", limits.max_payload_bytes).into(),
-			);
-		}
-		limits.max_payload_bytes = bytes;
-	}
-	let plan = prepare_copy(view, application, limits, || false)?;
-	report.plan = Some(Plan::from(plan.summary()));
-	plan.require_host_metadata()?;
-	let directory = StableDestination::open(report.destination)?;
-	plan.application().require_fresh_destination(&directory)?;
-	if arguments.dry_run {
-		verify_source()?;
-		return Ok(());
-	}
-	let destination = directory.directory();
-	let result = if report.checks.requested() {
-		execute_copy_with_check(
-			view,
-			&plan,
-			&destination,
-			verify_source,
-			|| false,
-			|path| report.checks.verify(path),
-		)
-	} else {
-		execute_copy(view, &plan, &destination, verify_source, || false)
+	let request = Request {
+		source: &arguments.app,
+		destination: report.destination,
+		dry_run: arguments.dry_run,
+		max_bytes: arguments.max_bytes,
 	};
+	let mut evidence = Evidence::default();
+	let result = installation::copy(
+		view,
+		&request,
+		verify_source,
+		|| false,
+		checks,
+		&mut evidence,
+	);
+	report.bundle_name = evidence.bundle_name.map(|name| name.as_str().to_owned());
+	report.plan = evidence.plan.map(Plan::from);
+	report.published = evidence.published;
+	report.residual_stage_name = evidence
+		.residual_stage_name
+		.map(|name| name.as_str().to_owned());
 	match result {
-		Ok(_) => {
-			report.published = true;
-			Ok(())
+		Ok(()) => Ok(()),
+		Err(installation::Error::PayloadLimit { maximum, .. }) => {
+			Err(format!("--{MAX_BYTES_OPTION} exceeds {maximum}").into())
 		}
-		Err(error) => {
-			report.published = error.published();
-			report.residual_stage_name = error.residual_name().map(|name| name.as_str().to_owned());
-			Err(error.into())
-		}
+		Err(error) => Err(error.into()),
 	}
 }
 
@@ -179,6 +156,45 @@ impl From<CopySummary> for Plan {
 	}
 }
 
+#[derive(Default, Serialize)]
+struct CheckReport {
+	#[serde(skip_serializing_if = "Option::is_none")]
+	signature_check: Option<&'static str>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	gatekeeper_assessment: Option<&'static str>,
+}
+
+impl From<&SecurityChecks> for CheckReport {
+	fn from(checks: &SecurityChecks) -> Self {
+		Self {
+			signature_check: checks.signature().map(status_label),
+			gatekeeper_assessment: checks.assessment().map(status_label),
+		}
+	}
+}
+
+impl CheckReport {
+	fn write(&self, output: &mut impl io::Write) -> io::Result<()> {
+		if let Some(status) = self.signature_check {
+			writeln!(output, "signature_check = {status}")?;
+		}
+		if let Some(status) = self.gatekeeper_assessment {
+			writeln!(output, "gatekeeper_assessment = {status}")?;
+		}
+		Ok(())
+	}
+}
+
+const fn status_label(status: CheckStatus) -> &'static str {
+	match status {
+		CheckStatus::Pending => "pending",
+		CheckStatus::Passed => "passed",
+		CheckStatus::Failed => "failed",
+		CheckStatus::Unavailable => "unavailable",
+		_ => "unknown",
+	}
+}
+
 #[derive(Serialize)]
 struct Report<'input> {
 	schema_version: u32,
@@ -196,7 +212,7 @@ struct Report<'input> {
 	apfs_volume: Option<VolumeIdentity>,
 	plan: Option<Plan>,
 	#[serde(flatten)]
-	checks: policy::Checks,
+	checks: CheckReport,
 	published: bool,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	residual_stage_name: Option<String>,
@@ -221,7 +237,7 @@ impl<'input> Report<'input> {
 			#[cfg(feature = "apfs-install")]
 			apfs_volume: None,
 			plan: None,
-			checks: policy::Checks::new(arguments),
+			checks: CheckReport::default(),
 			published: false,
 			residual_stage_name: None,
 			error: None,

@@ -1,6 +1,6 @@
 use std::{ffi::OsStr, io, os::unix::ffi::OsStrExt, path::Path};
 
-use dmgez_operations::extract::Progress;
+use dmgez_runtime::extraction::Progress;
 use serde_json::json;
 
 use super::Report;

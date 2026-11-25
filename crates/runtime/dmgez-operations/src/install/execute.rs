@@ -1,14 +1,15 @@
-use std::{collections::TryReserveError, error::Error as StdError, io, path::Path};
+use std::{collections::TryReserveError, error::Error as StdError, hash::Hash, io, path::Path};
 
+use dmgez_config::VirtualPath;
 use dmgez_vfs::volume::{NodeHandle, ViewError, VolumeBackend, VolumeView};
 use thiserror::Error;
 
 use crate::extract::{
-	HostName,
+	HostName, NameLimits, NameProfile,
 	host::{DestinationDirectory, DirectoryStage, HostError},
 };
 
-use super::{CopyContent, CopyPlan, CopySummary};
+use super::{CopyContent, CopyPlan, CopySummary, PlannedApplication, prepare_application};
 
 mod native;
 
@@ -17,6 +18,29 @@ pub use native::existing::{
 	BundleIdentity, BundleStamp, ExistingBundleError, VerifiedBundle, observe_existing_bundle,
 	verify_existing_bundle, verify_existing_bundle_observed,
 };
+
+// The private wrapper and application root occupy these host directory slots.
+const STAGING_DEPTH: usize = 2;
+
+/// Admit an application for the portable host staging profile.
+///
+/// Reserve space for the private wrapper and application root in the host's
+/// directory chain when planning the admitted source names.
+///
+/// # Errors
+/// Reports the admission failures of [`prepare_application`].
+pub fn prepare_staged_application<B: VolumeBackend>(
+	view: &mut VolumeView<B>,
+	source: &VirtualPath,
+	cancelled: impl FnMut() -> bool,
+) -> Result<PlannedApplication<B::Id>, super::Error<B::Error>>
+where
+	B::Id: Eq + Hash,
+{
+	let mut names = NameLimits::default();
+	names.max_depth -= STAGING_DEPTH;
+	prepare_application(view, source, NameProfile::PortableAscii, names, cancelled)
+}
 
 /// Application metadata that the host copy profile cannot reproduce.
 #[derive(Debug, Error)]

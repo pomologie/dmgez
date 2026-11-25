@@ -23,6 +23,7 @@ pub use execute::{
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use execute::{
 	HostMetadataError, InstallError, InstallFailure, execute_copy, execute_copy_with_check,
+	prepare_staged_application,
 };
 
 use std::{collections::TryReserveError, error::Error as StdError, hash::Hash};

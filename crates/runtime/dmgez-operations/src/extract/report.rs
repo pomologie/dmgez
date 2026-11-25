@@ -76,3 +76,13 @@ pub struct Progress {
 	/// A directory was created but its attachment could not be confirmed.
 	pub directory_creation_unconfirmed: bool,
 }
+
+impl Progress {
+	/// Whether any destination entry was published or may have been created.
+	#[must_use]
+	pub const fn has_destination_effects(self) -> bool {
+		self.directories_created != 0
+			|| self.files_published != 0
+			|| self.directory_creation_unconfirmed
+	}
+}

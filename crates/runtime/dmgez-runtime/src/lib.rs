@@ -8,10 +8,17 @@ pub mod compare;
 pub mod disk;
 #[cfg(feature = "encoding")]
 pub mod encoding;
+#[cfg(all(feature = "extraction", any(target_os = "linux", target_os = "macos")))]
+pub mod extraction;
 #[cfg(feature = "image")]
 pub mod image;
 #[cfg(feature = "image")]
 pub mod inspection;
+#[cfg(all(
+	feature = "installation",
+	any(target_os = "linux", target_os = "macos")
+))]
+pub mod installation;
 #[cfg(feature = "lint")]
 pub mod lint;
 #[cfg(feature = "preview")]
