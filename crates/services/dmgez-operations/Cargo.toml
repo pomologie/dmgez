@@ -1,0 +1,25 @@
+[package]
+name = "dmgez-operations"
+version = "0.1.0"
+description = "Bounded extraction, conversion and editing operations for dmgez"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+default = []
+convert = ["dep:dmgez-core", "dep:dmgez-udif", "dep:thiserror"]
+parallel = ["dmgez-udif?/parallel"]
+
+[dependencies]
+dmgez-core = { workspace = true, features = ["staging"], optional = true }
+dmgez-udif = { workspace = true, features = ["read", "write", "zlib"], optional = true }
+thiserror = { workspace = true, optional = true }
+
+[dev-dependencies]
+plist.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true
