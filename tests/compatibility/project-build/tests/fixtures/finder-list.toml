@@ -1,0 +1,61 @@
+schema_version = 1
+
+[image]
+name = "Finder List Project"
+output = "list-layout.dmg"
+format = "udro"
+size = "1MiB"
+
+[build]
+reproducible = true
+source_date_epoch = 946684800
+
+[[contents]]
+type = "directory"
+destination = "/Documentation"
+
+[[contents]]
+type = "directory"
+destination = "/Documentation/Reference"
+
+[[contents]]
+type = "directory"
+destination = "/Icon Anchor"
+position = [55, 70]
+
+[finder]
+default_view = "list-view"
+show_icon_preview = true
+
+[finder.list_view]
+columns = ["name", "date-added", "size"]
+sort_by = "size"
+icon_size = 32
+text_size = 13
+scroll_position = [2.5, 3.5]
+use_relative_dates = false
+calculate_all_sizes = true
+
+[finder.list_view.column_widths]
+name = 245
+size = 140
+date-last-opened = 211
+
+[finder.list_view.sort_directions]
+size = "ascending"
+date-last-opened = "ascending"
+
+[[finder.folders]]
+path = "/Documentation"
+include_icon_view_settings = false
+
+[finder.folders.list_view]
+columns = ["name", "size"]
+text_size = 14
+
+[finder.folders.list_view.column_widths]
+size = 200
+date-last-opened = 212
+
+[finder.folders.list_view.sort_directions]
+size = "descending"

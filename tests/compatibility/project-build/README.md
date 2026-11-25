@@ -23,11 +23,23 @@ python3 run.py --dmgez /path/to/dmgez --hfsplus-packages /path/to/unpacked \
 
 `--define NAME=VALUE` supplies a literal project substitution. `--set section.field=value` overrides one allowlisted scalar with normal config type and semantic validation. The last value for a repeated name or key wins. Relative TOML paths, including paths built from substitutions, use the config file's directory. The `--project` path and relative path values supplied directly with `--set` use the caller's working directory.
 
-`--dry-run` reports the exact planned virtual size, requested encoding, enabled layout profile, publication and release intent, source counts and metadata-loss count. The physical UDIF size is unknown until encoding. The planner checks source identity, capacity and catalog collisions during dry-run. It leaves the output path and its directory untouched. Progress and up to twenty metadata-loss details go to stderr, with a count of further losses.
+`--dry-run` reports the exact planned virtual size, requested encoding, publication and release intent, source counts and metadata-loss count. The `finder` field reports the root default as `IconView`, `ListView`, or `NoStore`. The physical UDIF size is unknown until encoding. The planner checks source identity, capacity and catalog collisions during dry-run. It leaves the output path and its directory untouched. Progress and up to twenty metadata-loss details go to stderr, with a count of further losses.
 
 The default publication policy preserves an existing destination. Authorize replacement with `--overwrite`, `--set build.overwrite=true`, or `[build] overwrite = true` in the project. Choose a single CLI form for this setting. Use replacement only in a trusted local directory where publishers cooperate with the advisory lock. The builder checks source and destination identity, syncs the completed stage, and atomically replaces the destination. The stdout build summary follows successful publication.
 
 The adapter uses dmgez preflight, source discovery and identity checks, Finder store generation, and staged publication. It binds generated payloads after HFS+ assigns catalog IDs, selects capacity with the same HFS+ planner used for placement, and streams the resulting image through UDIF. The manifest and sealed plan carry borrowed regular-source identities. Each bounded file read acquires an identity-checked handle and releases it before proceeding.
+
+Select the root list layout with `[finder] default_view = "list-view"` and put its settings under `[finder.list_view]`. A folder inherits the root default view and list settings. Local scalar settings and individual width or sort-direction overrides replace inherited values. A local `columns` array sets visibility and order for that folder. The [list project fixture](tests/fixtures/finder-list.toml) demonstrates a nested override. The serial build without Finder store generation rejects a layout request during preflight.
+
+Run the native list check on macOS with `ds_store` 1.3.4 and `mac_alias` 2.2.3 available in the Python environment.
+
+```sh
+python3 check_finder_list.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplus
+```
+
+The check runs the project in dry-run and build modes, verifies the UDIF with Apple tools, mounts it read-only and decodes both root and nested list stores. It checks exact view, sort, encoded column data and inherited settings in the keyed and ordered records, plus the independent icon anchor. It detaches its own test image.
+
+On macOS 14.7.2 (23H311), the fixture produced a 1 MiB logical disk with two Finder assets and zero metadata losses. Apple verified the UDIF and both mounted stores matched the expected binary-plist types and values.
 
 Use `--volume-icon` with a prebuilt ICNS configured relative to the project.
 

@@ -22,6 +22,10 @@ const SOURCE_NAME: &str = "payload=literal.txt";
 const SOURCE_DEFINE: &str = "CONTENTS=payload=literal.txt";
 const CONTENTS: &[u8] = b"literal input payload";
 const PREVIOUS: &[u8] = b"preexisting output";
+const LIST_CONFIG: &str = "finder-list.toml";
+const LIST_OUTPUT: &str = "list-layout.dmg";
+const LIST_LOGICAL_BYTES: u64 = 1 << 20;
+const LIST_MANIFEST: &str = include_str!("fixtures/finder-list.toml");
 const MANIFEST: &str = r#"
 schema_version = 1
 
@@ -87,6 +91,12 @@ fn dry_run_reports_exact_capacity_and_resolves_each_path_from_its_origin() {
 	assert!(stdout.contains(&format!("logical_bytes={CLI_SIZE_BYTES}\n")));
 	assert!(stdout.contains("physical_bytes=unknown\n"));
 	assert!(stdout.contains("format=Udro\n"));
+	let view = if cfg!(feature = "finder-write") {
+		"IconView"
+	} else {
+		"NoStore"
+	};
+	assert!(stdout.contains(&format!("finder={view}\n")));
 	assert!(stdout.contains("resolved_entries=1\n"));
 	assert!(stdout.contains(&format!("source_payload_bytes={}\n", CONTENTS.len())));
 	assert!(stdout.contains(&format!("{:?}", root.join(CLI_OUTPUT))));
@@ -110,6 +120,52 @@ fn dry_run_reports_exact_capacity_and_resolves_each_path_from_its_origin() {
 	assert_eq!(image.descriptor().logical_bytes, CLI_SIZE_BYTES);
 	image.verify().unwrap();
 	assert!(!root.join(CONFIG_DIRECTORY).join(TOML_OUTPUT).exists());
+}
+
+#[test]
+fn reports_list_view_and_builds_the_root_and_nested_finder_assets() {
+	let caller = tempfile::tempdir().unwrap();
+	let root = caller.path().canonicalize().unwrap();
+	let isolated = tempfile::tempdir().unwrap();
+	fs::write(root.join(LIST_CONFIG), LIST_MANIFEST).unwrap();
+	let command = |extra: &[&str]| {
+		Command::new(BINARY)
+			.current_dir(isolated.path())
+			.arg("--working-directory")
+			.arg(&root)
+			.arg(LIST_CONFIG)
+			.args(extra)
+			.output()
+			.unwrap()
+	};
+	let preview = command(&["--dry-run"]);
+	let destination = root.join(LIST_OUTPUT);
+	assert!(!destination.exists());
+	assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+
+	if !cfg!(feature = "finder-write") {
+		for output in [preview, command(&[])] {
+			assert!(!output.status.success());
+			let stderr = String::from_utf8(output.stderr).unwrap();
+			assert!(
+				stderr.contains("feature not compiled: Finder layout"),
+				"{stderr}"
+			);
+			assert!(!stderr.contains("Discovering source paths"));
+		}
+		assert!(!destination.exists());
+		return;
+	}
+
+	let (summary, _) = successful(preview);
+	assert!(summary.contains("finder=ListView\n"));
+	assert!(summary.contains("finder_assets=2\n"));
+	assert!(summary.contains(&format!("logical_bytes={LIST_LOGICAL_BYTES}\n")));
+	successful(command(&[]));
+	let source = FileSource::new(fs::File::open(destination).unwrap()).unwrap();
+	let mut image = Image::open(source, Limits::default()).unwrap();
+	assert_eq!(image.descriptor().logical_bytes, LIST_LOGICAL_BYTES);
+	image.verify().unwrap();
 }
 
 #[test]
