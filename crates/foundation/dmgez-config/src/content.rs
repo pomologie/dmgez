@@ -208,10 +208,10 @@ pub(crate) fn validate_destinations(contents: &[Content]) -> Result<(), (usize, 
 			continue;
 		}
 		let prefix = format!("{}{PATH_SEPARATOR}", symlink.destination);
-		if let Some((path, &index)) = declared
+		if let Some((_, &index)) = declared
 			.range::<str, _>((Included(prefix.as_str()), Unbounded))
 			.next()
-			&& path.starts_with(&prefix)
+			.filter(|(path, _)| path.starts_with(&prefix))
 		{
 			return Err((index, ContentError::SymlinkAncestor { other }));
 		}

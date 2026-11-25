@@ -199,11 +199,10 @@ impl ProjectTab {
 		ui.heading("Contents");
 		let mut action = None;
 		ui.horizontal(|ui| {
-			if ui
+			let go_up = ui
 				.add_enabled(!self.folder.is_root(), Button::new("Up"))
-				.clicked()
-				&& let Ok(folder) = parent(self.folder.as_str()).parse()
-			{
+				.clicked();
+			if go_up && let Ok(folder) = parent(self.folder.as_str()).parse() {
 				action = Some(Action::Navigate(folder));
 			}
 			ui.label(self.folder.as_str());

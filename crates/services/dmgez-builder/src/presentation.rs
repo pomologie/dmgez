@@ -223,10 +223,10 @@ fn layout_folders<'a>(
 				options: &folder.options,
 				matched: false,
 			};
-			if requests
+			let duplicate = requests
 				.insert(path.to_ascii_lowercase(), request)
-				.is_some() || folder.path.is_root()
-			{
+				.is_some();
+			if duplicate || folder.path.is_root() {
 				return Err(Error::AmbiguousFolder {
 					folder: path.to_owned(),
 				});
