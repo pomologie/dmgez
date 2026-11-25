@@ -1,4 +1,4 @@
-use dmgez_config::{LocalPath, Project, VolumeIcon};
+use dmgez_config::{Project, VolumeIcon};
 
 #[cfg(feature = "finder-write")]
 use crate::presentation::settings::{resolve_options, without_positions};
@@ -43,13 +43,13 @@ pub(super) fn finder_plan(
 	admit_layout(project, capabilities.finder_image_background)
 }
 
-pub(super) fn volume_icon_source(
+pub(super) fn admit_volume_icon(
 	project: &Project,
 	capabilities: BuildCapabilities,
-) -> Result<Option<LocalPath>, PreflightError> {
+) -> Result<Option<VolumeIcon>, PreflightError> {
 	match &project.volume_icon {
 		None => Ok(None),
-		Some(VolumeIcon::Source(source)) => {
+		Some(icon @ (VolumeIcon::Source(_) | VolumeIcon::Images(_))) => {
 			if !cfg!(feature = "volume-icon") {
 				return Err(PreflightError::FeatureNotCompiled(
 					BuildFeature::FinderVolumeIcon,
@@ -58,7 +58,7 @@ pub(super) fn volume_icon_source(
 			capabilities
 				.finder_volume_icon
 				.require(BuildFeature::FinderVolumeIcon)?;
-			Ok(Some(source.clone()))
+			Ok(Some(icon.clone()))
 		}
 		Some(_) => Err(PreflightError::UnsupportedFinder(FinderSetting::VolumeIcon)),
 	}

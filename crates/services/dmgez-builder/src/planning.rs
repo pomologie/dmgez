@@ -184,17 +184,8 @@ pub fn prepare_with_progress(
 	let (manifest, finder_assets) = {
 		let mut manifest = manifest;
 		#[cfg(feature = "volume-icon")]
-		let volume_icon = profile
-			.volume_icon_source()
-			.map(|input| {
-				manifest.capture_auxiliary_regular(
-					input,
-					&config_dir,
-					path,
-					limits.max_metadata_bytes as u64,
-				)
-			})
-			.transpose()?;
+		let volume_icon =
+			presentation::volume_icon::capture_sources(&mut manifest, &profile, &config_dir, path)?;
 		let assets = presentation::prepare(
 			project,
 			&mut manifest,

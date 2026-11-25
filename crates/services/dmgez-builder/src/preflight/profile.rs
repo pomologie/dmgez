@@ -1,4 +1,6 @@
-use dmgez_config::{Capacity, LocalPath};
+use std::collections::BTreeMap;
+
+use dmgez_config::{Capacity, IconSlot, LocalPath, VolumeIcon};
 use dmgez_udif::writer::{Cancellation, WriteOptions};
 
 use super::{FilesystemProfile, FinderPlan, OutputPlan, PreflightError, ReleasePlan, Resource};
@@ -25,7 +27,7 @@ pub struct ExecutionProfile {
 	pub(super) verify_output: bool,
 	pub(super) release: ReleasePlan,
 	pub(super) finder: FinderPlan,
-	pub(super) volume_icon_source: Option<LocalPath>,
+	pub(super) volume_icon: Option<VolumeIcon>,
 	pub(super) limits: ResourceLimits,
 	pub(super) reproducible: bool,
 	pub(super) source_date_epoch: Option<u64>,
@@ -72,7 +74,19 @@ impl ExecutionProfile {
 	/// Returns the admitted prebuilt icon asset path, relative to the project if applicable.
 	#[must_use]
 	pub fn volume_icon_source(&self) -> Option<&LocalPath> {
-		self.volume_icon_source.as_ref()
+		match self.volume_icon.as_ref() {
+			Some(VolumeIcon::Source(source)) => Some(source),
+			_ => None,
+		}
+	}
+
+	/// Returns admitted PNG paths by point-size and scale slot.
+	#[must_use]
+	pub fn volume_icon_images(&self) -> Option<&BTreeMap<IconSlot, LocalPath>> {
+		match self.volume_icon.as_ref() {
+			Some(VolumeIcon::Images(images)) => Some(images),
+			_ => None,
+		}
 	}
 
 	#[must_use]

@@ -109,7 +109,7 @@ pub enum Error {
 	#[error("could not read the captured volume icon")]
 	VolumeIconRead(#[from] dmgez_core::source::SourceError),
 	#[cfg(feature = "volume-icon")]
-	#[error("could not admit the prebuilt volume icon")]
+	#[error("could not prepare the Finder volume icon")]
 	VolumeIcon(#[from] dmgez_finder::volume_icon::Error),
 }
 
@@ -162,7 +162,7 @@ pub(crate) fn prepare(
 	profile: &ExecutionProfile,
 	config_dir: &Path,
 	output: Option<&LocalPath>,
-	#[cfg(feature = "volume-icon")] volume_icon: Option<usize>,
+	#[cfg(feature = "volume-icon")] volume_icon: Option<volume_icon::IconSources>,
 ) -> Result<PreparedAssets, Error> {
 	let mut budget = AssetBudget::new(manifest, profile)?;
 	let PlannedStores {
@@ -196,8 +196,7 @@ pub(crate) fn prepare(
 		assets.deferred.push(bound);
 	}
 	#[cfg(feature = "volume-icon")]
-	if let Some(index) = volume_icon {
-		let icon = manifest.auxiliary_source(index);
+	if let Some(icon) = volume_icon {
 		let (asset, flags) = volume_icon::prepare_asset(icon, manifest, profile, &mut budget)?;
 		assets.ready.try_reserve_exact(1)?;
 		assets.ready.push(asset);

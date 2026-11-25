@@ -330,10 +330,11 @@ fn finder_admits_list_folders_against_their_inherited_view() {
 }
 
 #[test]
-fn preflights_only_the_opt_in_prebuilt_volume_icon_profile_without_reading_sources() {
+fn preflights_opt_in_volume_icon_representations_without_reading_sources() {
 	let mut options = options();
 	options.capabilities.finder_volume_icon = Availability::Available;
 	let source = project("[volume_icon]\nsource = 'absent.icns'\n");
+	let images = project("[volume_icon.images]\n'16@2x' = 'absent.png'\n");
 	if cfg!(feature = "volume-icon") {
 		let admitted = preflight(&source, options).unwrap();
 		assert_eq!(
@@ -341,28 +342,36 @@ fn preflights_only_the_opt_in_prebuilt_volume_icon_profile_without_reading_sourc
 			std::path::Path::new("absent.icns")
 		);
 		assert_eq!(admitted.finder(), FinderPlan::NoStore);
+		assert!(admitted.volume_icon_images().is_none());
+		let admitted = preflight(&images, options).unwrap();
+		assert_eq!(
+			admitted.volume_icon_images().unwrap()[&dmgez_config::IconSlot::SmallRetina].as_path(),
+			std::path::Path::new("absent.png")
+		);
+		assert!(admitted.volume_icon_source().is_none());
+		assert_eq!(admitted.finder(), FinderPlan::NoStore);
 		options.capabilities.finder_volume_icon = Availability::Unavailable;
-		assert!(matches!(
-			preflight(&source, options),
-			Err(PreflightError::BackendUnavailable(
-				BuildFeature::FinderVolumeIcon
-			))
-		));
+		for requested in [&source, &images] {
+			assert!(matches!(
+				preflight(requested, options),
+				Err(PreflightError::BackendUnavailable(
+					BuildFeature::FinderVolumeIcon
+				))
+			));
+		}
 	} else {
-		assert!(matches!(
-			preflight(&source, options),
-			Err(PreflightError::FeatureNotCompiled(
-				BuildFeature::FinderVolumeIcon
-			))
-		));
+		for requested in [&source, &images] {
+			assert!(matches!(
+				preflight(requested, options),
+				Err(PreflightError::FeatureNotCompiled(
+					BuildFeature::FinderVolumeIcon
+				))
+			));
+		}
 	}
-	for unsupported in [
-		"[volume_icon]\nbadge = 'badge.png'\n",
-		"[volume_icon.images]\n'16' = 'icon.png'\n",
-	] {
-		assert!(matches!(
-			preflight(&project(unsupported), options),
-			Err(PreflightError::UnsupportedFinder(FinderSetting::VolumeIcon))
-		));
-	}
+	let badge = project("[volume_icon]\nbadge = 'badge.png'\n");
+	assert!(matches!(
+		preflight(&badge, options),
+		Err(PreflightError::UnsupportedFinder(FinderSetting::VolumeIcon))
+	));
 }
