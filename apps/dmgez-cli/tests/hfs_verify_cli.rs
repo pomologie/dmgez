@@ -69,6 +69,10 @@ fn full_verification_reports_native_apm_scope_or_unavailable_backend() {
 		let report = verify(&image, mode, true);
 		assert_eq!(report["outcome"], "passed");
 		assert_eq!(report["coverage"]["filesystem"], "not_checked");
+		assert_eq!(
+			report["capabilities"]["filesystem"],
+			cfg!(feature = "hfsplus-verify")
+		);
 		assert!(report.get("filesystem_check").is_none());
 	}
 	assert_eq!(fs::read(&image).unwrap(), NATIVE_APM);

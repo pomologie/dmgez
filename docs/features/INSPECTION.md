@@ -18,6 +18,8 @@ The composed CLI's optional `hfsplus-verify` feature connects `verify --full` to
 
 A completed structural check reports `filesystem_scope = reachable_structure` and a partial outcome. The command exits nonzero because checking all file payloads and global ownership remains open. Unsupported profiles, exhausted budgets, corrupt metadata, and read failures have separate report categories. Container verification and quick checks keep their existing scope.
 
+With defaults disabled and only `hfsplus-verify` selected, package composition needs the reader, format, and core archives. The builder archive is required when composing project-build support.
+
 The CLI tests cover the HFS+ filesystem in a native APM image, partitionless native HFS+ and HFSX, and a catalog count corruption wrapped with valid UDIF checksums. The corrupted case keeps container payload status passed and reports filesystem corruption. These checks cover the reachable filesystem portion of D-READ-04-T01. [CLI verification tests](../../apps/dmgez-cli/tests/hfs_verify_cli.rs)
 
 ## Extraction and installation primitives

@@ -254,7 +254,9 @@ fn verification_report(source: FileSource, mode: VerificationMode) -> Verificati
 	if mode == VerificationMode::Full {
 		return hfsplus::verify(source);
 	}
-	dmgez_inspector::verify(source, Limits::default(), mode)
+	let mut report = dmgez_inspector::verify(source, Limits::default(), mode);
+	report.capabilities.filesystem = cfg!(feature = "hfsplus-verify");
+	report
 }
 
 pub(crate) fn unwrap(path: &Path, destination: &Path, partition: Option<NonZeroU32>) -> CliResult {

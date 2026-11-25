@@ -22,11 +22,12 @@ TOOLCHAIN = "rust-toolchain.toml"
 MANIFEST = "Cargo.toml"
 LOCK = "Cargo.lock"
 HFSPLUS_VERSION = "0.1.0"
+HFSPLUS_BUILDER = "hfsplus-builder"
+HFSPLUS_BUILDER_SOURCE = "crates/filesystem/hfsplus-builder"
 HFSPLUS_READER = "hfsplus-reader"
 HFSPLUS_READER_SOURCE = "crates/filesystem/hfsplus-reader"
 HFSPLUS_FIXTURES_ENV = "DMGEZ_HFSPLUS_FIXTURES"
 HFSPLUS_PACKAGES = {
-    "hfsplus-builder": "crates/filesystem/hfsplus-builder",
     "hfsplus-format": "crates/formats/hfsplus-format",
     "hfsplus-pomologie-core": "crates/foundation/hfsplus-pomologie-core",
 }
@@ -58,10 +59,12 @@ def has_cli_feature(options, name):
     return any(names.intersection(argument.replace(",", " ").split()) for argument in options.features)
 
 
-def resolve_hfsplus(source, packages, verify):
+def resolve_hfsplus(source, packages, verify, build=True):
     root = (source if source is not None else packages).resolve(strict=True)
     paths = {}
     package_dirs = dict(HFSPLUS_PACKAGES)
+    if build:
+        package_dirs[HFSPLUS_BUILDER] = HFSPLUS_BUILDER_SOURCE
     if verify:
         package_dirs[HFSPLUS_READER] = HFSPLUS_READER_SOURCE
     for name, source_dir in package_dirs.items():
@@ -74,13 +77,16 @@ def resolve_hfsplus(source, packages, verify):
     return paths
 
 
-def compose_cli_manifest(manifest, verify):
+def compose_cli_manifest(manifest, verify, build):
     sections = tomllib.loads(manifest)
     features = sections["features"]
-    for name, forwarding in FEATURE_FORWARDING.items():
-        features[name] += forwarding
-    additions = dict(FEATURE_ADDITIONS)
-    dependencies_to_add = ["dmgez-builder", ADAPTER]
+    additions = {}
+    dependencies_to_add = []
+    if build:
+        for name, forwarding in FEATURE_FORWARDING.items():
+            features[name] += forwarding
+        additions.update(FEATURE_ADDITIONS)
+        dependencies_to_add.extend(("dmgez-builder", ADAPTER))
     if verify:
         additions[VERIFY_FEATURE] = ["inspect", f"dep:{VERIFY_ADAPTER}"]
         dependencies_to_add.append(VERIFY_ADAPTER)
@@ -132,7 +138,11 @@ def prepare_workspace(directory, hfsplus):
     cli_manifest = directory / CLI / MANIFEST
     if not cli_manifest.parent.resolve().is_relative_to(directory.resolve()):
         raise ValueError("copied CLI directory points outside the temporary workspace")
-    text = compose_cli_manifest(cli_manifest.read_text(encoding="utf-8"), HFSPLUS_READER in hfsplus)
+    text = compose_cli_manifest(
+        cli_manifest.read_text(encoding="utf-8"),
+        verify=HFSPLUS_READER in hfsplus,
+        build=HFSPLUS_BUILDER in hfsplus,
+    )
     cli_manifest.unlink()
     cli_manifest.write_text(text, encoding="utf-8")
 
@@ -179,7 +189,7 @@ def run_cli(cargo, directory, options, hfsplus):
             fixtures = hfsplus[HFSPLUS_READER] / "tests" / "fixtures"
             environment.setdefault(HFSPLUS_FIXTURES_ENV, str(fixtures))
             command.extend(("--test", VERIFY_TEST))
-        if HFSPLUS_READER not in hfsplus or not options.no_default_features or has_cli_feature(options, "build"):
+        if HFSPLUS_BUILDER in hfsplus:
             command.extend(("--test", CLI_TEST))
         subprocess.run(command, cwd=directory, env=environment, check=True)
         return
@@ -219,8 +229,12 @@ def main():
         parser.error("HFS+ CLI composition requires a macOS or Linux host")
 
     try:
+        verify = has_cli_feature(options, VERIFY_FEATURE)
+        build = not verify or not options.no_default_features or any(
+            has_cli_feature(options, name) for name in ("build", *FEATURE_ADDITIONS)
+        )
         hfsplus = resolve_hfsplus(
-            options.hfsplus, options.hfsplus_packages, has_cli_feature(options, VERIFY_FEATURE),
+            options.hfsplus, options.hfsplus_packages, verify=verify, build=build,
         )
         cargo = ["rustup", "run", load_toml(ROOT / TOOLCHAIN)["toolchain"]["channel"], "cargo"]
         with TemporaryDirectory(prefix="dmgez-hfsplus-cli.") as temporary:
