@@ -19,7 +19,7 @@ Omit `--show-hidden` to use the project’s normal visibility. The command print
 
 The PNG profile accepts the default background, solid colors, and static 8-bit RGB or RGBA backgrounds in sRGB or without a color profile. The primary PNG is drawn from the upper-left corner at native pixel size. Other background variants, custom icons, and automatic arrangement return errors. Rendering is capped at 512 entries in the selected folder, 4,096 pixels per side, and 4,194,304 pixels overall. The command creates a new output file.
 
-Distributions of the CLI with `preview` include the embedded font notices. [Font notices](../../../apps/dmgez/THIRD_PARTY_NOTICES.md#embedded-fonts) · [CLI PNG tests](../../../apps/dmgez-cli/tests/preview_cli.rs)
+Distributions of the CLI with `preview` include the embedded font notices. [Font notices](../../../apps/dmgez-desktop/THIRD_PARTY_NOTICES.md#embedded-fonts) · [CLI PNG tests](../../../apps/dmgez-cli/tests/preview_cli.rs)
 
 ## Render an actual disk image
 

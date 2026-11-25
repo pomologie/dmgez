@@ -89,7 +89,7 @@ Run the desktop smoke suite from the workspace root.
 
 ```sh
 cargo build --locked -p dmgez-gui
-python3 apps/dmgez/tests/check_desktop.py --binary target/debug/dmgez-gui
+python3 apps/dmgez-desktop/tests/check_desktop.py --binary target/debug/dmgez-gui
 ```
 
 Use the `.exe` suffix for a Windows executable. The optional binary check verifies the embedded font set without launching the app. See the [third-party notices](THIRD_PARTY_NOTICES.md) for desktop redistribution inputs.

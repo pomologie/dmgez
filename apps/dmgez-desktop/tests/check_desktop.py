@@ -9,7 +9,7 @@ import subprocess
 import sys
 
 REPO = Path(__file__).resolve().parents[3]
-NOTICES = REPO / "apps/dmgez/licenses"
+NOTICES = REPO / "apps/dmgez-desktop/licenses"
 GUI = "dmgez-gui"
 CLI = "dmgez-cli"
 FONT = ("epaint_default_fonts", "0.37.0")

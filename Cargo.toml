@@ -2,7 +2,7 @@
 resolver = "3"
 members = [
 	# Applications
-	"apps/dmgez",
+	"apps/dmgez-desktop",
 	"apps/dmgez-cli",
 	"apps/dmgez-mcp",
 
