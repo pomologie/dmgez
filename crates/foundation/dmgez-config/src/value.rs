@@ -19,7 +19,7 @@ const AUTO: &str = "auto";
 pub(crate) const PATH_SEPARATOR: char = '/';
 const CURRENT_DIRECTORY: &str = ".";
 const PARENT_DIRECTORY: &str = "..";
-const URI_AUTHORITY: &str = "://";
+pub(crate) const URI_AUTHORITY: &str = "://";
 const FORBIDDEN_COMPONENT_CHARACTERS: [char; 3] = ['\0', '\\', ':'];
 
 /// A count of bytes expressed in configuration as an integer or an IEC size.

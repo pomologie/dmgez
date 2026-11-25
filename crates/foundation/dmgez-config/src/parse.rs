@@ -17,8 +17,8 @@ const MAX_EXPANDED_BYTES: usize = 64 << 20;
 const MAX_VALUE_DEPTH: usize = 128;
 const VERSION_KEY: &str = "schema_version";
 const DEFINES_KEY: &str = "defines";
-const VARIABLE_START: &str = "${";
-const VARIABLE_END: char = '}';
+pub(crate) const VARIABLE_START: &str = "${";
+pub(crate) const VARIABLE_END: char = '}';
 const IDENTIFIER_SEPARATOR: u8 = b'_';
 
 /// Errors that prevent admission of a project manifest.

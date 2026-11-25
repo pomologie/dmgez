@@ -1,5 +1,7 @@
 //! Strict parsing and semantic admission for versioned dmgez project manifests.
 
+#[cfg(feature = "appdmg-import")]
+mod appdmg;
 mod content;
 mod finder;
 mod model;
@@ -10,6 +12,8 @@ pub mod project_edit;
 mod release;
 mod value;
 
+#[cfg(feature = "appdmg-import")]
+pub use appdmg::{AppDmgDiagnostic, AppDmgImport, AppDmgImportError, import_appdmg};
 pub use content::{Content, ContentError, CopySource, Payload};
 pub use finder::{
 	Arrangement, Background, Column, Direction, Finder, FinderOptions, Folder, IconSlot, IconView,
