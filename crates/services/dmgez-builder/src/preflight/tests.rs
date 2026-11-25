@@ -6,6 +6,8 @@ const MIB: u64 = 1 << 20;
 const HOST_THREADS: NonZeroUsize = NonZeroUsize::new(8).unwrap();
 const IMAGE: &str =
 	"schema_version = 1\n[image]\nname = 'Example'\noutput = 'example.dmg'\nformat = 'udro'\n";
+const CACHE: &str =
+	"[performance.cache]\ndirectory = 'deliberately-absent-cache'\nmax_bytes = '1MiB'\n";
 
 fn project(settings: &str) -> Project {
 	Project::parse(&format!("{IMAGE}{settings}")).unwrap()
@@ -262,6 +264,50 @@ fn zlib_availability_is_checked_before_source_resolution() {
 			Err(PreflightError::FeatureNotCompiled(BuildFeature::Zlib))
 		));
 	}
+}
+
+#[test]
+fn compression_cache_requires_an_unsigned_udzo_build_with_a_qualified_backend() {
+	let mut project = project(CACHE);
+	assert!(matches!(
+		preflight(&project, options()),
+		Err(PreflightError::CacheFormat)
+	));
+
+	project.image.format = ImageFormat::Udzo;
+	let result = preflight(&project, options());
+	if !cfg!(feature = "zlib") {
+		assert!(matches!(
+			result,
+			Err(PreflightError::FeatureNotCompiled(BuildFeature::Zlib))
+		));
+	} else if !cfg!(feature = "compression-cache") {
+		assert!(matches!(
+			result,
+			Err(PreflightError::FeatureNotCompiled(
+				BuildFeature::CompressionCache
+			))
+		));
+	} else if !cfg!(any(target_os = "linux", target_os = "macos")) {
+		assert!(matches!(
+			result,
+			Err(PreflightError::BackendUnavailable(
+				BuildFeature::CompressionCache
+			))
+		));
+	} else {
+		assert_eq!(result.unwrap().cache(), project.performance.cache.as_ref());
+	}
+}
+
+#[test]
+fn release_admission_bypasses_the_configured_cache() {
+	let mut release = options();
+	release.capabilities.release = Availability::Available;
+	release.release = ReleaseIntent::Release;
+	let profile = preflight(&project(CACHE), release).unwrap();
+	assert_eq!(profile.release(), ReleasePlan::Requested);
+	assert!(profile.cache().is_none());
 }
 
 #[test]

@@ -322,6 +322,7 @@ dependencies = [
 name = "dmgez-builder"
 version = "0.1.0"
 dependencies = [
+ "dmgez-cache",
  "dmgez-config",
  "dmgez-core",
  "dmgez-finder",
@@ -336,6 +337,15 @@ dependencies = [
  "tiff",
  "windows-namespace-request-sys",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "dmgez-cache"
+version = "0.1.0"
+dependencies = [
+ "dmgez-udif",
+ "rustix",
+ "thiserror",
 ]
 
 [[package]]
@@ -415,7 +425,9 @@ dependencies = [
  "plist",
  "quick-xml",
  "rayon",
+ "sha2",
  "thiserror",
+ "zlib-rs",
 ]
 
 [[package]]

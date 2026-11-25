@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-use dmgez_config::{Capacity, IconSlot, LocalPath, VolumeIcon};
+use dmgez_config::{Capacity, CompressionCache, IconSlot, LocalPath, VolumeIcon};
 use dmgez_udif::writer::{Cancellation, WriteOptions};
 
 use super::{FilesystemProfile, FinderPlan, OutputPlan, PreflightError, ReleasePlan, Resource};
@@ -26,6 +26,7 @@ pub struct ExecutionProfile {
 	pub(super) output: OutputPlan,
 	pub(super) verify_output: bool,
 	pub(super) release: ReleasePlan,
+	pub(super) cache: Option<CompressionCache>,
 	pub(super) finder: FinderPlan,
 	pub(super) volume_icon: Option<VolumeIcon>,
 	pub(super) limits: ResourceLimits,
@@ -64,6 +65,12 @@ impl ExecutionProfile {
 	#[must_use]
 	pub const fn release(&self) -> ReleasePlan {
 		self.release
+	}
+
+	/// Returns the cache settings admitted for an unsigned UDZO build.
+	#[must_use]
+	pub const fn cache(&self) -> Option<&CompressionCache> {
+		self.cache.as_ref()
 	}
 
 	#[must_use]

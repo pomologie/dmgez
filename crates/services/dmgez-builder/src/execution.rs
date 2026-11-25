@@ -10,10 +10,13 @@ use std::{
 use dmgez_core::output::replace::{EntryIdentity, ReplaceError, TargetIdentity, publish_replace};
 use dmgez_core::output::{PublishError, StagedReader, publish_new};
 use dmgez_udif::writer::{WriteOptions, WriteReport, write_image};
+#[cfg(feature = "compression-cache")]
+use dmgez_udif::writer::{cache::CacheStats, write_image_with_cache};
 use thiserror::Error;
 
 use crate::{
 	manifest::{self, Manifest},
+	planning::PreparedBuild,
 	preflight::{ExecutionProfile, OutputPlan, PreflightError, ReleasePlan},
 	progress::BuildProgress,
 };
@@ -29,6 +32,8 @@ pub struct BuildPlan<'plan, R> {
 	manifest: &'plan Manifest,
 	reader: R,
 	logical_bytes: u64,
+	#[cfg(feature = "compression-cache")]
+	cache: Option<&'plan dmgez_cache::DiskCache>,
 }
 
 /// Successful publication or stream completion.
@@ -41,6 +46,9 @@ pub struct BuildReport {
 	pub release: ReleasePlan,
 	/// Whether prepublication verification was requested and completed.
 	pub verified: bool,
+	/// Compression cache decisions when this build used a configured cache.
+	#[cfg(feature = "compression-cache")]
+	pub cache: Option<CacheStats>,
 }
 
 /// Independent verifier supplied by the composer for a synced staged image.
@@ -71,6 +79,9 @@ pub enum ExecuteError {
 	Release,
 	#[error("prepublication verification was requested without an independent verifier")]
 	VerifierRequired,
+	#[cfg(feature = "compression-cache")]
+	#[error(transparent)]
+	CompressionCache(#[from] crate::planning::CompressionCacheError),
 	#[error(transparent)]
 	BeforeOutput(#[from] ImageError),
 	#[error(transparent)]
@@ -88,11 +99,51 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 	///
 	/// # Errors
 	/// Rejects a logical size outside the configured capacity or writer budgets.
+	/// Cache-enabled profiles require [`Self::from_prepared`].
 	pub fn new(
 		profile: &'plan ExecutionProfile,
 		manifest: &'plan Manifest,
 		reader: R,
 		logical_bytes: u64,
+	) -> Result<Self, PreflightError> {
+		if profile.cache().is_some() {
+			return Err(PreflightError::CacheRequiresPreparedBuild);
+		}
+		Self::admit(
+			profile,
+			manifest,
+			reader,
+			logical_bytes,
+			#[cfg(feature = "compression-cache")]
+			None,
+		)
+	}
+
+	/// Admits a sealed image with the source and execution settings from preparation.
+	///
+	/// # Errors
+	/// Rejects a logical size outside the configured capacity or writer budgets.
+	pub fn from_prepared(
+		prepared: &'plan PreparedBuild,
+		reader: R,
+		logical_bytes: u64,
+	) -> Result<Self, PreflightError> {
+		Self::admit(
+			prepared.profile(),
+			prepared.manifest(),
+			reader,
+			logical_bytes,
+			#[cfg(feature = "compression-cache")]
+			prepared.compression_cache(),
+		)
+	}
+
+	fn admit(
+		profile: &'plan ExecutionProfile,
+		manifest: &'plan Manifest,
+		reader: R,
+		logical_bytes: u64,
+		#[cfg(feature = "compression-cache")] cache: Option<&'plan dmgez_cache::DiskCache>,
 	) -> Result<Self, PreflightError> {
 		profile.validate_logical_bytes(logical_bytes)?;
 		Ok(Self {
@@ -100,6 +151,8 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 			manifest,
 			reader,
 			logical_bytes,
+			#[cfg(feature = "compression-cache")]
+			cache,
 		})
 	}
 
@@ -148,6 +201,10 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 			return Err(ExecuteError::Release);
 		}
 		validate_sources(self.manifest, self.profile)?;
+		#[cfg(feature = "compression-cache")]
+		if let Some(cache) = self.cache {
+			crate::planning::cache::check_output(cache, destination)?;
+		}
 		let write = |stage: &mut dyn Write| {
 			write_with_progress(
 				self.reader,
@@ -155,20 +212,22 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 				stage,
 				self.profile.write_options(),
 				&progress,
+				#[cfg(feature = "compression-cache")]
+				self.cache,
 			)
 			.map_err(ImageError::from)
 		};
-		let validate = |stage: StagedReader<'_>, report: &WriteReport| {
+		let validate = |stage: StagedReader<'_>, output: &Emission| {
 			if let Some(verify) = verify {
 				progress(BuildProgress::VerifyingOutput);
 				check_cancellation(self.profile)?;
-				verify(stage, report).map_err(ImageError::Verification)?;
+				verify(stage, &output.image).map_err(ImageError::Verification)?;
 			}
 			progress(BuildProgress::Publishing);
 			validate_sources(self.manifest, self.profile)
 		};
 		#[cfg(any(target_os = "linux", target_os = "macos"))]
-		let image = if overwrite {
+		let output = if overwrite {
 			publish_replace(
 				destination,
 				|target| authorize_replacement(self.manifest, self.profile, target),
@@ -179,14 +238,16 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 			publish_new(destination, write, validate)?
 		};
 		#[cfg(not(any(target_os = "linux", target_os = "macos")))]
-		let image = publish_new(destination, write, validate)?;
+		let output = publish_new(destination, write, validate)?;
 		progress(BuildProgress::Completed {
-			physical_bytes: image.physical_bytes,
+			physical_bytes: output.image.physical_bytes,
 		});
 		Ok(BuildReport {
-			image,
+			image: output.image,
 			release,
 			verified,
+			#[cfg(feature = "compression-cache")]
+			cache: output.cache,
 		})
 	}
 
@@ -213,24 +274,28 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 			return Err(ExecuteError::Target);
 		}
 		validate_sources(self.manifest, self.profile)?;
-		let image = write_with_progress(
+		let output = write_with_progress(
 			self.reader,
 			self.logical_bytes,
 			&mut sink,
 			self.profile.write_options(),
 			&progress,
+			#[cfg(feature = "compression-cache")]
+			self.cache,
 		)
 		.map_err(|error| ExecuteError::Stream(error.into()))?;
 		validate_sources(self.manifest, self.profile).map_err(ExecuteError::Stream)?;
 		sink.flush()
 			.map_err(|error| ExecuteError::Stream(ImageError::Writer(error.into())))?;
 		progress(BuildProgress::Completed {
-			physical_bytes: image.physical_bytes,
+			physical_bytes: output.image.physical_bytes,
 		});
 		Ok(BuildReport {
-			image,
+			image: output.image,
 			release: self.profile.release(),
 			verified: false,
+			#[cfg(feature = "compression-cache")]
+			cache: output.cache,
 		})
 	}
 }
@@ -275,13 +340,20 @@ fn check_cancellation(profile: &ExecutionProfile) -> Result<(), ImageError> {
 	Ok(())
 }
 
+struct Emission {
+	image: WriteReport,
+	#[cfg(feature = "compression-cache")]
+	cache: Option<CacheStats>,
+}
+
 fn write_with_progress(
 	reader: impl Read,
 	logical_bytes: u64,
 	sink: impl Write,
 	options: &WriteOptions,
 	progress: &dyn Fn(BuildProgress),
-) -> Result<WriteReport, dmgez_udif::Error> {
+	#[cfg(feature = "compression-cache")] cache: Option<&dmgez_cache::DiskCache>,
+) -> Result<Emission, dmgez_udif::Error> {
 	progress(BuildProgress::WritingImage { logical_bytes });
 	let source = ObservedReader {
 		reader,
@@ -290,7 +362,20 @@ fn write_with_progress(
 		chunk_bytes: options.chunk_bytes as u64,
 		progress,
 	};
-	write_image(source, logical_bytes, sink, options)
+	#[cfg(feature = "compression-cache")]
+	if let Some(cache) = cache {
+		let (image, stats) = write_image_with_cache(source, logical_bytes, sink, options, cache)?;
+		return Ok(Emission {
+			image,
+			cache: Some(stats),
+		});
+	}
+	let image = write_image(source, logical_bytes, sink, options)?;
+	Ok(Emission {
+		image,
+		#[cfg(feature = "compression-cache")]
+		cache: None,
+	})
 }
 
 struct ObservedReader<'observer, R> {

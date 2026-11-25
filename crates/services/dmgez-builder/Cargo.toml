@@ -10,6 +10,7 @@ description = "Plan and execute dmgez image builds"
 [features]
 default = ["finder-write", "parallel", "zlib"]
 badge-icons = ["volume-icon", "dmgez-finder/badge-icons"]
+compression-cache = ["zlib", "dep:dmgez-cache", "dmgez-udif/write-cache"]
 finder-write = ["dep:dmgez-finder", "dep:dmgez-macho", "dep:flate2", "dep:png", "dep:tiff"]
 lzfse = ["dmgez-udif/lzfse"]
 lzma = ["dmgez-udif/lzma"]
@@ -28,6 +29,9 @@ dmgez-core = { workspace = true, features = ["source", "staging"] }
 
 # Workspace presentation
 dmgez-finder = { workspace = true, optional = true }
+
+# Workspace services
+dmgez-cache = { workspace = true, optional = true }
 
 # Compression
 flate2 = { workspace = true, optional = true }

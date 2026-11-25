@@ -10,6 +10,7 @@ description = "Compose the versioned HFS+ builder with dmgez image planning"
 [features]
 default = ["finder-write", "parallel"]
 badge-icons = ["volume-icon", "dmgez-builder/badge-icons"]
+compression-cache = ["dmgez-builder/compression-cache"]
 finder-write = ["dep:dmgez-finder", "dep:dmgez-macho", "dmgez-builder/finder-write"]
 image-edit = ["dmgez-config/project-edit", "dep:dmgez-finder", "dep:dmgez-macho", "dep:hfsplus-reader"]
 lzfse = ["dmgez-builder/lzfse"]

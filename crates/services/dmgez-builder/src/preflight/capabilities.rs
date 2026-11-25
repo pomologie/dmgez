@@ -60,6 +60,8 @@ pub enum BuildFeature {
 	Lzma,
 	#[error("parallel encoding")]
 	Parallel,
+	#[error("compression cache (compression-cache)")]
+	CompressionCache,
 	#[error("Finder layout")]
 	FinderLayout,
 	#[error("Finder image background binding")]

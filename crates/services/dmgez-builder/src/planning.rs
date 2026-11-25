@@ -18,6 +18,11 @@ use crate::{
 	progress::BuildProgress,
 };
 
+#[cfg(feature = "compression-cache")]
+pub(crate) mod cache;
+#[cfg(feature = "compression-cache")]
+pub use cache::Error as CompressionCacheError;
+
 #[cfg(feature = "finder-write")]
 use crate::presentation::{self, DeferredFinderStore, GeneratedAsset, PreparedAssets};
 
@@ -32,6 +37,8 @@ pub struct PreparedBuild {
 	manifest: Manifest,
 	output_path: Option<PathBuf>,
 	sidecar: Option<Binding>,
+	#[cfg(feature = "compression-cache")]
+	cache: Option<dmgez_cache::DiskCache>,
 	#[cfg(feature = "finder-write")]
 	finder_assets: PreparedAssets,
 }
@@ -51,6 +58,11 @@ impl PreparedBuild {
 	#[must_use]
 	pub fn output_path(&self) -> Option<&Path> {
 		self.output_path.as_deref()
+	}
+
+	#[cfg(feature = "compression-cache")]
+	pub(crate) fn compression_cache(&self) -> Option<&dmgez_cache::DiskCache> {
+		self.cache.as_ref()
 	}
 
 	/// Captured AppleDouble source for a matching regular data source, if declared.
@@ -142,6 +154,9 @@ pub enum Error {
 	Manifest(#[from] manifest::Error),
 	#[error(transparent)]
 	MetadataSidecar(#[from] sidecar::Error),
+	#[cfg(feature = "compression-cache")]
+	#[error(transparent)]
+	CompressionCache(#[from] CompressionCacheError),
 	#[cfg(feature = "finder-write")]
 	#[error(transparent)]
 	Presentation(#[from] presentation::Error),
@@ -249,11 +264,16 @@ pub fn prepare_with_progress(
 			return Err(Error::Cancelled);
 		}
 	}
+	let output_path = path.map(|path| path.resolve(&config_dir));
+	#[cfg(feature = "compression-cache")]
+	let cache = cache::prepare(&profile, &config_dir, &manifest, output_path.as_deref())?;
 	Ok(PreparedBuild {
 		profile,
 		manifest,
-		output_path: path.map(|path| path.resolve(&config_dir)),
+		output_path,
 		sidecar,
+		#[cfg(feature = "compression-cache")]
+		cache,
 		#[cfg(feature = "finder-write")]
 		finder_assets,
 	})

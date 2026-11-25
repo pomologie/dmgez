@@ -88,7 +88,10 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 					stage,
 					self.profile.write_options(),
 					&progress,
+					#[cfg(feature = "compression-cache")]
+					None,
 				)
+				.map(|output| output.image)
 				.map_err(ImageError::from)
 			},
 			|stage, report| {

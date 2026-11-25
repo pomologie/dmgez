@@ -181,12 +181,8 @@ impl<'build> HfsImage<'build> {
 		progress: impl Fn(BuildProgress),
 	) -> Result<HfsBuildReport<'build>, Error> {
 		let output = self.prepared.output_path().ok_or(Error::OutputPath)?;
-		let build = BuildPlan::new(
-			self.prepared.profile(),
-			self.prepared.manifest(),
-			self.image.reader(),
-			self.logical_bytes(),
-		)?;
+		let build =
+			BuildPlan::from_prepared(self.prepared, self.image.reader(), self.logical_bytes())?;
 		let report = build.publish_with_progress(output, verifier, progress)?;
 		Ok(HfsBuildReport {
 			report,
@@ -199,12 +195,8 @@ impl<'build> HfsImage<'build> {
 	/// # Errors
 	/// Fails on invalid output intent, source mutation, cancellation, or I/O.
 	pub fn write_to(self, sink: impl Write) -> Result<HfsBuildReport<'build>, Error> {
-		let build = BuildPlan::new(
-			self.prepared.profile(),
-			self.prepared.manifest(),
-			self.image.reader(),
-			self.logical_bytes(),
-		)?;
+		let build =
+			BuildPlan::from_prepared(self.prepared, self.image.reader(), self.logical_bytes())?;
 		let report = build.write_to(sink)?;
 		Ok(HfsBuildReport {
 			report,

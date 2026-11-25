@@ -73,6 +73,8 @@ def main():
                         help="enable volume icons and per-item ICNS icons")
     parser.add_argument("--badge-icons", action="store_true",
                         help="enable volume icons rendered from a PNG badge")
+    parser.add_argument("--compression-cache", action="store_true",
+                        help="enable project opt-in compression caching")
     options = parser.parse_args()
     if not (sys.platform == "darwin" or sys.platform.startswith("linux")):
         parser.error("the development adapter requires a macOS or Linux host metadata adapter")
@@ -95,6 +97,8 @@ def main():
         command.append("--no-default-features")
     if options.lzma:
         command.extend(["--features", "lzma"])
+    if options.compression_cache:
+        command.extend(["--features", "compression-cache"])
     if options.badge_icons:
         command.extend(["--features", "badge-icons"])
     elif options.volume_icon:

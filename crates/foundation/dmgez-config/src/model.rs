@@ -1,6 +1,6 @@
 use std::num::NonZeroU64;
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer, de};
 use thiserror::Error;
 
 use crate::{
@@ -234,6 +234,7 @@ pub struct Performance {
 	pub max_entries: Option<NonZeroU64>,
 	pub max_metadata_bytes: Option<Bytes>,
 	pub max_runs: Option<NonZeroU64>,
+	pub cache: Option<CompressionCache>,
 }
 
 impl Performance {
@@ -249,6 +250,24 @@ impl Performance {
 		}
 		Ok(())
 	}
+}
+
+/// A private directory and byte limit for optional compressed-block caching.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[non_exhaustive]
+#[serde(deny_unknown_fields)]
+pub struct CompressionCache {
+	/// Directory resolved relative to the project manifest.
+	pub directory: LocalPath,
+	/// Maximum retained cache payload bytes.
+	#[serde(deserialize_with = "nonzero_bytes")]
+	pub max_bytes: NonZeroU64,
+}
+
+fn nonzero_bytes<'de, D: Deserializer<'de>>(deserializer: D) -> Result<NonZeroU64, D::Error> {
+	let bytes = Bytes::deserialize(deserializer)?;
+	NonZeroU64::new(bytes.get())
+		.ok_or_else(|| de::Error::custom("cache byte limit must be positive"))
 }
 
 /// Invalid resource budgets.

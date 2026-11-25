@@ -2,7 +2,9 @@
 
 use std::{num::NonZeroUsize, ops::RangeInclusive};
 
-use dmgez_config::{AutoFlag, Capacity, Filesystem, ImageFormat, Partition, Project};
+use dmgez_config::{
+	AutoFlag, Capacity, CompressionCache, Filesystem, ImageFormat, Partition, Project,
+};
 use dmgez_udif::writer::{Execution, Profile, WriteOptions};
 use thiserror::Error;
 
@@ -138,6 +140,10 @@ pub enum PreflightError {
 	Destination { index: usize },
 	#[error("compression settings require the UDZO profile")]
 	Compression,
+	#[error("compression cache requires the UDZO profile")]
+	CacheFormat,
+	#[error("compression cache requires a prepared build with a resolved cache directory")]
+	CacheRequiresPreparedBuild,
 	#[error("more than one thread conflicts with explicitly disabled parallelism")]
 	SerialWorkers,
 	#[error("a stream has no destination file to overwrite")]
@@ -215,6 +221,7 @@ pub fn preflight(
 	}
 	let output = output_plan(project, options)?;
 	let release = release_plan(project, options)?;
+	let cache = cache_plan(project, profile, release)?;
 	let finder = finder_plan(project, capabilities)?;
 	let volume_icon = admit_volume_icon(project, capabilities)?;
 	if project.license.is_some() {
@@ -239,7 +246,7 @@ pub fn preflight(
 	}
 
 	let limits = limits(project)?;
-	let writer = writer_options(project, profile, limits, options.host_threads)?;
+	let writer = writer_options(project, profile, limits, options.host_threads, cache)?;
 	let result = ExecutionProfile {
 		filesystem,
 		capacity: project.image.capacity(),
@@ -247,6 +254,7 @@ pub fn preflight(
 		output,
 		verify_output: project.build.verify_output,
 		release,
+		cache: cache.cloned(),
 		finder,
 		volume_icon,
 		limits,
@@ -351,6 +359,34 @@ fn release_plan(
 	})
 }
 
+fn cache_plan(
+	project: &Project,
+	profile: Profile,
+	release: ReleasePlan,
+) -> Result<Option<&CompressionCache>, PreflightError> {
+	let Some(cache) = &project.performance.cache else {
+		return Ok(None);
+	};
+	// Release stages must encode the original filesystem bytes independently.
+	if release == ReleasePlan::Requested {
+		return Ok(None);
+	}
+	if profile != Profile::Udzo {
+		return Err(PreflightError::CacheFormat);
+	}
+	if !cfg!(feature = "compression-cache") {
+		return Err(PreflightError::FeatureNotCompiled(
+			BuildFeature::CompressionCache,
+		));
+	}
+	if !cfg!(any(target_os = "linux", target_os = "macos")) {
+		return Err(PreflightError::BackendUnavailable(
+			BuildFeature::CompressionCache,
+		));
+	}
+	Ok(Some(cache))
+}
+
 fn limits(project: &Project) -> Result<ResourceLimits, PreflightError> {
 	let performance = &project.performance;
 	let bound = |value: u64, resource| {
@@ -400,6 +436,7 @@ fn writer_options(
 	profile: Profile,
 	limits: ResourceLimits,
 	host_threads: NonZeroUsize,
+	cache: Option<&CompressionCache>,
 ) -> Result<WriteOptions, PreflightError> {
 	let threads = usize::try_from(project.performance.threads)
 		.map_err(|_| PreflightError::ResourceLimit(Resource::Workers))?;
@@ -429,6 +466,17 @@ fn writer_options(
 	if let Some(level) = project.compression.level {
 		writer.zlib_level = level;
 	}
-	writer.execution = writer.admit(host_threads)?.execution();
+	let admission = match cache {
+		None => writer.admit(host_threads)?,
+		#[cfg(feature = "compression-cache")]
+		Some(_) => writer.admit_with_cache(host_threads)?,
+		#[cfg(not(feature = "compression-cache"))]
+		Some(_) => {
+			return Err(PreflightError::FeatureNotCompiled(
+				BuildFeature::CompressionCache,
+			));
+		}
+	};
+	writer.execution = admission.execution();
 	Ok(writer)
 }

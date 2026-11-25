@@ -14,6 +14,31 @@ const RELEASE: &str = include_str!("../../../../examples/release.toml");
 const HEADER: &str = "schema_version = 1\n[image]\nname = 'Example'\noutput='a.dmg'\n";
 
 #[test]
+fn admits_only_complete_positive_compression_cache_settings() {
+	assert!(Project::parse(HEADER).unwrap().performance.cache.is_none());
+	let cache = "[performance.cache]\ndirectory = 'build-cache'\n";
+	for limit in ["1048576", "'1MiB'"] {
+		let project = Project::parse(&format!("{HEADER}{cache}max_bytes = {limit}\n")).unwrap();
+		let cache = project.performance.cache.unwrap();
+		assert_eq!(cache.max_bytes.get(), 1 << 20);
+		assert_eq!(cache.directory.as_path(), Path::new("build-cache"));
+	}
+	for settings in [
+		"[performance.cache]\nmax_bytes = '1MiB'\n",
+		cache,
+		"[performance.cache]\ndirectory = 'https://example.org'\nmax_bytes = '1MiB'\n",
+		"[performance.cache]\ndirectory = 'build-cache'\nmax_bytes = '1MiB'\nunknown = true\n",
+		"[performance.cache]\ndirectory = 'build-cache'\nmax_bytes = 0\n",
+		"[performance.cache]\ndirectory = 'build-cache'\nmax_bytes = '0MiB'\n",
+	] {
+		assert_eq!(
+			Project::parse(&format!("{HEADER}{settings}")).unwrap_err(),
+			ConfigError::Schema,
+		);
+	}
+}
+
+#[test]
 fn admits_checked_in_examples_without_opening_their_paths() {
 	let minimal = Project::parse(MINIMAL).unwrap();
 	assert_eq!(minimal.image.format, ImageFormat::Udzo);

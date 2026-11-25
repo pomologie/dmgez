@@ -8,6 +8,7 @@ publish = false
 [features]
 default = ["finder-write", "parallel"]
 badge-icons = ["volume-icon", "dmgez-hfsplus/badge-icons"]
+compression-cache = ["dmgez-builder/compression-cache", "dmgez-hfsplus/compression-cache"]
 finder-write = ["dmgez-hfsplus/finder-write"]
 lzma = ["dmgez-hfsplus/lzma", "dmgez-udif/lzma"]
 parallel = ["dmgez-hfsplus/parallel"]

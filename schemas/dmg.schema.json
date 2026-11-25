@@ -385,6 +385,32 @@
         "max_runs": {
           "type": "integer",
           "minimum": 1
+        },
+        "cache": {
+          "type": "object",
+          "properties": {
+            "directory": {
+              "type": "string",
+              "minLength": 1
+            },
+            "max_bytes": {
+              "oneOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^[1-9][0-9]*(B|KiB|MiB|GiB|TiB)$"
+                }
+              ]
+            }
+          },
+          "required": [
+            "directory",
+            "max_bytes"
+          ],
+          "additionalProperties": false
         }
       },
       "additionalProperties": false

@@ -21,8 +21,9 @@ pub use finder::{
 	View, VolumeIcon, VolumeIconError, parse_solid_background_color,
 };
 pub use model::{
-	Build, Capacity, Compression, CompressionError, Filesystem, Image, ImageError, ImageFormat,
-	Metadata, MetadataPolicy, Partition, Performance, PerformanceError, Project,
+	Build, Capacity, Compression, CompressionCache, CompressionError, Filesystem, Image,
+	ImageError, ImageFormat, Metadata, MetadataPolicy, Partition, Performance, PerformanceError,
+	Project,
 };
 pub use overrides::{ConfigOverride, OverrideError};
 pub use parse::{ConfigError, DefineError, MAX_MANIFEST_BYTES, SCHEMA_VERSION};
