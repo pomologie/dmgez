@@ -78,11 +78,32 @@ impl PreparedBuild {
 		self.finder_assets.deferred_metadata_bytes
 	}
 
-	/// Count of ready and deferred Finder files.
+	/// Count of ready and deferred Finder assets, including item icons.
 	#[cfg(feature = "finder-write")]
 	#[must_use]
 	pub fn finder_asset_count(&self) -> usize {
-		self.finder_assets.ready.len() + self.finder_assets.deferred.len()
+		self.finder_assets.count()
+	}
+
+	/// The encoded resource fork for a resolved item with a custom icon.
+	#[cfg(feature = "volume-icon")]
+	#[must_use]
+	pub fn item_icon(&self, destination: &VirtualPath) -> Option<&[u8]> {
+		self.finder_assets.item_icons.resource_fork(destination)
+	}
+
+	/// The hidden icon-file path required by a folder's custom icon.
+	#[cfg(feature = "volume-icon")]
+	#[must_use]
+	pub fn item_icon_child(&self, destination: &VirtualPath) -> Option<&VirtualPath> {
+		self.finder_assets.item_icons.folder_child(destination)
+	}
+
+	/// Accounted metadata retained for item icons, excluding the source manifest.
+	#[cfg(feature = "volume-icon")]
+	#[must_use]
+	pub const fn item_icon_metadata_bytes(&self) -> usize {
+		self.finder_assets.item_icons.metadata_bytes()
 	}
 
 	/// Merges the admitted volume icon's flag into the root catalog folder metadata.
@@ -198,9 +219,9 @@ pub fn prepare_with_progress(
 		(manifest, assets)
 	};
 	#[cfg(feature = "finder-write")]
-	if !finder_assets.ready.is_empty() || !finder_assets.deferred.is_empty() {
+	if finder_assets.count() != 0 {
 		progress(BuildProgress::FinderAssetsPrepared {
-			assets: finder_assets.ready.len() + finder_assets.deferred.len(),
+			assets: finder_assets.count(),
 		});
 		if profile.write_options().cancellation.is_cancelled() {
 			return Err(Error::Cancelled);

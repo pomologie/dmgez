@@ -16,7 +16,14 @@ pub(super) fn finder_plan(
 		.iter()
 		.any(|entry| entry.custom_icon.is_some())
 	{
-		return Err(PreflightError::UnsupportedFinder(FinderSetting::CustomIcon));
+		if !cfg!(feature = "volume-icon") {
+			return Err(PreflightError::FeatureNotCompiled(
+				BuildFeature::FinderCustomIcon,
+			));
+		}
+		capabilities
+			.finder_custom_icon
+			.require(BuildFeature::FinderCustomIcon)?;
 	}
 	if project
 		.contents

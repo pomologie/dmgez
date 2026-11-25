@@ -7,9 +7,8 @@ use std::{
 	path::Path,
 };
 
-use dmgez_config::{FinderOptions, LocalPath, Project, VirtualPath, VirtualPathError};
+use dmgez_config::{FinderOptions, LocalPath, Project, VirtualPath};
 use dmgez_finder::{LayoutItem, STORE_NAME, write_store};
-use thiserror::Error;
 
 use crate::{
 	manifest::{EntryKind, Manifest},
@@ -17,6 +16,9 @@ use crate::{
 };
 
 mod background;
+mod error;
+#[cfg(feature = "volume-icon")]
+mod item_icons;
 pub(crate) mod settings;
 #[cfg(feature = "volume-icon")]
 pub(crate) mod volume_icon;
@@ -24,6 +26,9 @@ pub(crate) mod volume_icon;
 pub use background::DeferredFinderStore;
 use background::{BackgroundSource, PendingFinderStore};
 pub use dmgez_finder::ImageBackgroundIdentity;
+#[cfg(feature = "volume-icon")]
+pub use dmgez_finder::item_icon;
+pub use error::Error;
 use settings::{resolve_options, without_positions};
 
 const IMAGE_ROOT: &str = "/";
@@ -36,81 +41,6 @@ pub struct GeneratedAsset {
 	pub path: VirtualPath,
 	/// Exact data to bind to the reserved file.
 	pub bytes: Vec<u8>,
-}
-
-/// Finder assets could not be prepared for the resolved image tree.
-#[derive(Debug, Error)]
-#[non_exhaustive]
-pub enum Error {
-	#[error("Finder layout folder is absent: {folder:?}")]
-	MissingFolder { folder: String },
-	#[error("Finder layout target is not a folder: {folder:?}")]
-	NotDirectory { folder: String },
-	#[error("Finder layout folder is ambiguous under HFS+ comparison: {folder:?}")]
-	AmbiguousFolder { folder: String },
-	#[error("content conflicts with the reserved Finder store: {path:?}")]
-	StoreCollision { path: VirtualPath },
-	#[error("Finder metadata would exceed the build's entry limit")]
-	EntryBudget,
-	#[error("Finder metadata would exceed the build's metadata byte limit")]
-	MetadataBudget,
-	#[error("cannot reserve Finder planning memory")]
-	Reserve(#[from] std::collections::TryReserveError),
-	#[error("cannot represent a Finder store path in {folder:?}")]
-	StorePath {
-		folder: String,
-		#[source]
-		source: VirtualPathError,
-	},
-	#[error("cannot generate Finder layout for {folder:?}")]
-	Layout {
-		folder: String,
-		#[source]
-		source: dmgez_finder::Error,
-	},
-	#[error("Finder metadata generation was cancelled")]
-	Cancelled,
-	#[error("content conflicts with the reserved Finder background directory: {path:?}")]
-	BackgroundCollision { path: VirtualPath },
-	#[error("Finder background must contain 1 to {max} encoded bytes", max = background::MAX_FILE_BYTES)]
-	BackgroundFileSize,
-	#[error("Finder background exceeds the admitted working memory or dimensions")]
-	BackgroundMemory,
-	#[error("animated PNG images are unsupported as Finder backgrounds")]
-	BackgroundAnimated,
-	#[error("Finder background source failed its identity checks")]
-	BackgroundSource(#[source] crate::manifest::Error),
-	#[error("could not read the captured Finder background")]
-	BackgroundRead(#[source] dmgez_core::source::SourceError),
-	#[error("Finder background must be a valid PNG")]
-	BackgroundPng(#[source] png::DecodingError),
-	#[error("Retina Finder background must be twice the base width and height")]
-	BackgroundRetinaDimensions,
-	#[error("Retina Finder background PNG representation is unsupported")]
-	BackgroundRetinaPngFormat,
-	#[error("Finder background TIFF could not be encoded or decoded")]
-	BackgroundTiff(#[source] tiff::TiffError),
-	#[error(
-		"Finder background TIFF must contain compatible 1x and 2x representations with matching logical sizes"
-	)]
-	BackgroundTiffRepresentation,
-	#[error("Finder background alias names a different path than the captured image")]
-	BackgroundTargetMismatch,
-	#[cfg(feature = "volume-icon")]
-	#[error("content conflicts with the reserved volume icon: {path:?}")]
-	VolumeIconCollision { path: VirtualPath },
-	#[cfg(feature = "volume-icon")]
-	#[error("volume icon validation exceeds the available working memory")]
-	VolumeIconMemory,
-	#[cfg(feature = "volume-icon")]
-	#[error("volume icon source failed its identity checks")]
-	VolumeIconSource(#[from] crate::manifest::Error),
-	#[cfg(feature = "volume-icon")]
-	#[error("could not read the captured volume icon")]
-	VolumeIconRead(#[from] dmgez_core::source::SourceError),
-	#[cfg(feature = "volume-icon")]
-	#[error("could not prepare the Finder volume icon")]
-	VolumeIcon(#[from] dmgez_finder::volume_icon::Error),
 }
 
 /// Generates Finder stores without opening host paths or consulting host identities.
@@ -147,6 +77,17 @@ pub(crate) struct PreparedAssets {
 	pub(crate) deferred_metadata_bytes: usize,
 	#[cfg(feature = "volume-icon")]
 	pub(crate) root_finder_info: volume_icon::RootFinderInfo,
+	#[cfg(feature = "volume-icon")]
+	pub(crate) item_icons: item_icons::ItemIcons,
+}
+
+impl PreparedAssets {
+	pub(crate) fn count(&self) -> usize {
+		let count = self.ready.len() + self.deferred.len();
+		#[cfg(feature = "volume-icon")]
+		let count = count + self.item_icons.len();
+		count
+	}
 }
 
 #[derive(Default)]
@@ -201,6 +142,11 @@ pub(crate) fn prepare(
 		assets.ready.try_reserve_exact(1)?;
 		assets.ready.push(asset);
 		assets.root_finder_info = flags;
+	}
+	#[cfg(feature = "volume-icon")]
+	{
+		assets.item_icons =
+			item_icons::prepare(manifest, profile, config_dir, output, &mut budget)?;
 	}
 	if sort_files {
 		assets

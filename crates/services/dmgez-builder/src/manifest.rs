@@ -15,6 +15,8 @@ mod host;
 #[cfg(windows)]
 #[path = "manifest/host_windows.rs"]
 mod host;
+#[cfg(feature = "volume-icon")]
+mod signed_bundle;
 #[cfg(any(unix, windows))]
 mod walk;
 

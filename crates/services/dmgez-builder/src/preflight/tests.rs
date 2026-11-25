@@ -50,6 +50,31 @@ fn admits_limits_and_geometry_without_opening_sources() {
 }
 
 #[test]
+fn qualifies_item_icon_capability_before_source_access() {
+	let project = project("\n[[contents]]\nsource = 'absent'\ncustom_icon = 'also-absent.icns'\n");
+	let mut options = options();
+	options.capabilities.finder_custom_icon = Availability::Unavailable;
+	let rejected = preflight(&project, options);
+	if cfg!(feature = "volume-icon") {
+		assert!(matches!(
+			rejected,
+			Err(PreflightError::BackendUnavailable(
+				BuildFeature::FinderCustomIcon
+			))
+		));
+		options.capabilities.finder_custom_icon = Availability::Available;
+		preflight(&project, options).unwrap();
+	} else {
+		assert!(matches!(
+			rejected,
+			Err(PreflightError::FeatureNotCompiled(
+				BuildFeature::FinderCustomIcon
+			))
+		));
+	}
+}
+
+#[test]
 fn rejects_declared_and_final_sizes_outside_admitted_run_budget() {
 	assert!(matches!(
 		preflight(

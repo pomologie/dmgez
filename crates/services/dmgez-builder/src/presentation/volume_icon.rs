@@ -210,7 +210,7 @@ fn encode_error(error: volume_icon::Error) -> Error {
 	}
 }
 
-fn read_bytes(
+pub(super) fn read_bytes(
 	source: &SourceSnapshot,
 	profile: &ExecutionProfile,
 	size: usize,
