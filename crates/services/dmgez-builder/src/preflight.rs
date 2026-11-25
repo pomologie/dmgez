@@ -42,8 +42,8 @@ pub struct BuildCapabilities {
 	pub hfsplus_ascii: Availability,
 	/// Clean HFS+ construction with historical Unicode name admission and collation.
 	pub hfsplus_unicode: Availability,
-	/// Finder metadata store writing for the icon-view profile.
-	pub finder_icon_view: Availability,
+	/// Finder metadata store writing for icon and list layouts.
+	pub finder_layout: Availability,
 	/// Preservation of a prebuilt ICNS and its root catalog custom-icon flag.
 	pub finder_volume_icon: Availability,
 	/// Application of explicit hidden and hide-extension filesystem flags.
@@ -70,7 +70,7 @@ pub enum BuildFeature {
 	Lzma,
 	#[error("parallel encoding")]
 	Parallel,
-	#[error("Finder icon layout")]
+	#[error("Finder layout")]
 	FinderLayout,
 	#[error("prebuilt Finder volume icon")]
 	FinderVolumeIcon,
@@ -152,11 +152,15 @@ pub enum ReleasePlan {
 	Requested,
 }
 
-/// Which Finder store profile the manifest planner should generate.
+/// The default view of the image root's planned Finder store.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum FinderPlan {
+	/// The build will not generate Finder stores.
 	NoStore,
+	/// Open the root in icon view.
 	IconView,
+	/// Open the root in list view.
+	ListView,
 }
 
 /// A resource constrained by configuration or host representation.

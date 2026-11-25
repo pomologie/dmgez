@@ -15,8 +15,11 @@ use crate::{
 	preflight::{ExecutionProfile, FinderPlan},
 };
 
+pub(crate) mod settings;
 #[cfg(feature = "volume-icon")]
 pub(crate) mod volume_icon;
+
+use settings::{resolve_options, without_positions};
 
 const IMAGE_ROOT: &str = "/";
 const PATH_SEPARATOR: char = '/';
@@ -339,56 +342,4 @@ fn check_cancelled(profile: &ExecutionProfile) -> Result<(), Error> {
 		return Err(Error::Cancelled);
 	}
 	Ok(())
-}
-
-fn without_positions(options: &FinderOptions) -> FinderOptions {
-	let mut style = options.clone();
-	if let Some(icons) = &mut style.icon_view {
-		icons.positions.clear();
-	}
-	style
-}
-
-fn resolve_options<'a>(
-	inherited: Option<&'a FinderOptions>,
-	overrides: Option<&'a FinderOptions>,
-) -> Option<Cow<'a, FinderOptions>> {
-	let (base, local) = match (inherited, overrides) {
-		(Some(base), Some(local)) => (base, local),
-		(base, local) => return local.or(base).map(Cow::Borrowed),
-	};
-	let mut options = base.clone();
-	options.background = local.background.clone().or(options.background);
-	options.window_position = local.window_position.or(options.window_position);
-	options.window_size = local.window_size.or(options.window_size);
-	options.default_view = local.default_view.or(options.default_view);
-	options.sidebar_width = local.sidebar_width.or(options.sidebar_width);
-	options.include_icon_view_settings = local
-		.include_icon_view_settings
-		.or(options.include_icon_view_settings);
-	options.include_list_view_settings = local
-		.include_list_view_settings
-		.or(options.include_list_view_settings);
-	options.list_view = local.list_view.clone().or(options.list_view);
-	options.show_status_bar = local.show_status_bar.or(options.show_status_bar);
-	options.show_tab_view = local.show_tab_view.or(options.show_tab_view);
-	options.show_toolbar = local.show_toolbar.or(options.show_toolbar);
-	options.show_pathbar = local.show_pathbar.or(options.show_pathbar);
-	options.show_sidebar = local.show_sidebar.or(options.show_sidebar);
-	options.show_icon_preview = local.show_icon_preview.or(options.show_icon_preview);
-	options.show_item_info = local.show_item_info.or(options.show_item_info);
-	if let Some(local_icons) = &local.icon_view {
-		let mut icons = local_icons.clone();
-		if let Some(base_icons) = &base.icon_view {
-			icons.arrange_by = icons.arrange_by.or(base_icons.arrange_by);
-			icons.grid_offset = icons.grid_offset.or(base_icons.grid_offset);
-			icons.grid_spacing = icons.grid_spacing.or(base_icons.grid_spacing);
-			icons.scroll_position = icons.scroll_position.or(base_icons.scroll_position);
-			icons.label_position = icons.label_position.or(base_icons.label_position);
-			icons.text_size = icons.text_size.or(base_icons.text_size);
-			icons.icon_size = icons.icon_size.or(base_icons.icon_size);
-		}
-		options.icon_view = Some(icons);
-	}
-	Some(Cow::Owned(options))
 }

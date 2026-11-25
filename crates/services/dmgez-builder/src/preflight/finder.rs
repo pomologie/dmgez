@@ -1,5 +1,8 @@
 use dmgez_config::{LocalPath, Project, VolumeIcon};
 
+#[cfg(feature = "finder-write")]
+use crate::presentation::settings::{resolve_options, without_positions};
+
 use super::{
 	Availability, BuildCapabilities, BuildFeature, FinderPlan, FinderSetting, PreflightError,
 };
@@ -30,12 +33,12 @@ pub(super) fn finder_plan(
 			.iter()
 			.any(|entry| entry.position.is_some());
 	let default_store =
-		cfg!(feature = "finder-write") && capabilities.finder_icon_view == Availability::Available;
+		cfg!(feature = "finder-write") && capabilities.finder_layout == Availability::Available;
 	if !explicit && !default_store {
 		return Ok(FinderPlan::NoStore);
 	}
 	capabilities
-		.finder_icon_view
+		.finder_layout
 		.require(BuildFeature::FinderLayout)?;
 	admit_layout(project)
 }
@@ -72,21 +75,30 @@ fn admit_layout(_project: &Project) -> Result<FinderPlan, PreflightError> {
 fn admit_layout(project: &Project) -> Result<FinderPlan, PreflightError> {
 	use std::collections::BTreeSet;
 
-	if let Some(finder) = &project.finder {
-		dmgez_finder::validate_options(Some(&finder.options))?;
-		let mut folders = BTreeSet::new();
-		for (index, folder) in finder.folders.iter().enumerate() {
-			if !folder.path.components().all(super::printable_ascii) {
-				return Err(PreflightError::FinderFolderName { index });
-			}
-			if !folders.insert(folder.path.as_str().to_ascii_lowercase()) {
-				return Err(PreflightError::DuplicateFinderFolder { index });
-			}
-			dmgez_finder::validate_options(Some(&folder.options))?;
+	use dmgez_config::View;
+
+	let Some(finder) = &project.finder else {
+		return Ok(FinderPlan::IconView);
+	};
+	dmgez_finder::validate_options(Some(&finder.options))?;
+	let inherited = (!finder.folders.is_empty()).then(|| without_positions(&finder.options));
+	let mut folders = BTreeSet::new();
+	for (index, folder) in finder.folders.iter().enumerate() {
+		if !folder.path.components().all(super::printable_ascii) {
+			return Err(PreflightError::FinderFolderName { index });
 		}
-		check_duplicate_positions(project, finder)?;
+		if !folders.insert(folder.path.as_str().to_ascii_lowercase()) {
+			return Err(PreflightError::DuplicateFinderFolder { index });
+		}
+		let options = resolve_options(inherited.as_ref(), Some(&folder.options));
+		dmgez_finder::validate_options(options.as_deref())?;
 	}
-	Ok(FinderPlan::IconView)
+	check_duplicate_positions(project, finder)?;
+	match finder.options.default_view {
+		None | Some(View::IconView) => Ok(FinderPlan::IconView),
+		Some(View::ListView) => Ok(FinderPlan::ListView),
+		Some(view) => Err(dmgez_finder::Error::View(view).into()),
+	}
 }
 
 #[cfg(feature = "finder-write")]

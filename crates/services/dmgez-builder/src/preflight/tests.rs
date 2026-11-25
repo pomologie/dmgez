@@ -274,7 +274,7 @@ fn finder_requirements_are_never_silently_dropped() {
 #[test]
 fn finder_validates_explicit_options_and_duplicate_positions_before_resolution() {
 	let mut options = options();
-	options.capabilities.finder_icon_view = Availability::Available;
+	options.capabilities.finder_layout = Availability::Available;
 	let background = project("[finder]\nbackground = { kind = 'color', value = '#CFB' }\n");
 	assert_eq!(
 		preflight(&background, options).unwrap().finder(),
@@ -300,6 +300,32 @@ fn finder_validates_explicit_options_and_duplicate_positions_before_resolution()
 	assert!(matches!(
 		preflight(&duplicate_folder, options),
 		Err(PreflightError::DuplicateFinderFolder { index: 1 })
+	));
+}
+
+#[cfg(feature = "finder-write")]
+#[test]
+fn finder_admits_list_folders_against_their_inherited_view() {
+	let mut options = options();
+	options.capabilities.finder_layout = Availability::Available;
+	let admitted = project(
+		"[finder]\ndefault_view = 'list-view'\n\
+		[[finder.folders]]\npath = '/Documentation'\ninclude_icon_view_settings = false\n",
+	);
+	assert_eq!(
+		preflight(&admitted, options).unwrap().finder(),
+		FinderPlan::ListView
+	);
+
+	let contradicted = project(
+		"[finder]\ndefault_view = 'list-view'\n\
+		[[finder.folders]]\npath = '/Documentation'\ninclude_list_view_settings = false\n",
+	);
+	assert!(matches!(
+		preflight(&contradicted, options),
+		Err(PreflightError::Finder(
+			dmgez_finder::Error::ListViewExcluded
+		))
 	));
 }
 

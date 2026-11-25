@@ -129,7 +129,7 @@ pub fn capabilities() -> BuildCapabilities {
 	capabilities.hfsplus_ascii = Availability::Available;
 	capabilities.atomic_replace = Availability::Available;
 	if cfg!(feature = "finder-write") {
-		capabilities.finder_icon_view = Availability::Available;
+		capabilities.finder_layout = Availability::Available;
 	}
 	if cfg!(feature = "volume-icon") {
 		capabilities.finder_volume_icon = Availability::Available;

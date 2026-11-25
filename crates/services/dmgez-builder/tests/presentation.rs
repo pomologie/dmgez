@@ -66,7 +66,7 @@ fn project(contents: &str) -> Project {
 fn configured_profile(project: &Project, finder: Availability) -> ExecutionProfile {
 	let mut capabilities = BuildCapabilities::default();
 	capabilities.hfsplus_ascii = Availability::Available;
-	capabilities.finder_icon_view = finder;
+	capabilities.finder_layout = finder;
 	preflight(
 		project,
 		PreflightOptions {
@@ -182,6 +182,75 @@ path = "/link"
 		build(&link, base.path()),
 		Err(Error::NotDirectory { folder }) if folder == "/link"
 	));
+}
+
+#[test]
+fn list_folders_inherit_scalars_and_column_overrides() {
+	let base = fixture_base();
+	let config = project(
+		r#"
+[[contents]]
+type = 'directory'
+destination = '/Documentation'
+[[contents]]
+type = 'directory'
+destination = '/Artwork'
+[finder]
+default_view = 'list-view'
+[finder.list_view]
+columns = ['name', 'date-added', 'size']
+sort_by = 'size'
+icon_size = 32
+text_size = 13
+[finder.list_view.column_widths]
+name = 280
+size = 110
+[finder.list_view.sort_directions]
+size = 'ascending'
+date-last-opened = 'ascending'
+[[finder.folders]]
+path = '/Documentation'
+include_icon_view_settings = false
+[finder.folders.list_view]
+text_size = 14
+[finder.folders.list_view.column_widths]
+name = 260
+[finder.folders.list_view.sort_directions]
+size = 'descending'
+[[finder.folders]]
+path = '/Artwork'
+default_view = 'icon-view'
+include_list_view_settings = false
+"#,
+	);
+	let expected_nested = project(
+		r#"
+[finder]
+default_view = 'list-view'
+include_icon_view_settings = false
+[finder.list_view]
+columns = ['name', 'date-added', 'size']
+sort_by = 'size'
+icon_size = 32
+text_size = 14
+[finder.list_view.column_widths]
+name = 260
+size = 110
+[finder.list_view.sort_directions]
+size = 'descending'
+date-last-opened = 'ascending'
+"#,
+	);
+	let generated = build(&config, base.path()).unwrap();
+	assert_eq!(generated.len(), 3);
+	let root = &config.finder.as_ref().unwrap().options;
+	assert_eq!(generated[0].path.as_str(), "/.DS_Store");
+	assert_eq!(generated[0].bytes, write_store(Some(root), &[]).unwrap());
+	assert_eq!(generated[1].path.as_str(), "/Artwork/.DS_Store");
+	assert_eq!(generated[1].bytes, write_store(None, &[]).unwrap());
+	let nested = &expected_nested.finder.as_ref().unwrap().options;
+	assert_eq!(generated[2].path.as_str(), "/Documentation/.DS_Store");
+	assert_eq!(generated[2].bytes, write_store(Some(nested), &[]).unwrap());
 }
 
 #[test]
