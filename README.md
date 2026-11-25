@@ -41,6 +41,8 @@ target/apfs-cli/debug/dmgez diff left.dmg right.dmg --mode semantic --filesystem
 
 [Semantic diff policy and selectors](docs/features/RELEASE.md#compare-filesystem-contents)
 
+Build with `diff-hash` to enable `--contents blake3` or `--contents blake3-exact` and `--infer-renames` in semantic mode. Inferred pairs are listed alongside the added and removed paths.
+
 Add `--xattrs` in semantic mode to compare supported stored extended attributes. The report identifies changed names without exposing their values.
 
 Add `--finder-info` to compare per-object FinderInfo on common paths. It uses the selected filesystem reader and can run alongside `--xattrs` and `--finder-layout`.

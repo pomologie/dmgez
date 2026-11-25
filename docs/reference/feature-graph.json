@@ -45,6 +45,9 @@
     "diff": [
       "inspect"
     ],
+    "diff-hash": [
+      "diff"
+    ],
     "finder-diff": [
       "diff",
       "finder-read"

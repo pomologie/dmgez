@@ -55,6 +55,13 @@ python3 -B tests/compatibility/volume-read/check_semantic_diff.py --cli target/a
 
 The oracle creates one filesystem and compares its raw, UDRO, and UDZO representations. It then edits the disposable source and confirms the test changes on read-only mounts. dmgez identifies separate fork, mode, symlink, hard-link, and path changes. [Native comparison results](apfs/native-semantic-diff.json)
 
+Pass `--hash` with a CLI composed with `diff-hash` and `apfs-read` to check BLAKE3 comparison, exact confirmation, and inference of the native file move. The oracle checks a physical difference between UDRO and UDZO, semantic equality in both hash modes, and a candidate pair alongside the ordinary added and removed paths. [Native hash and rename results](apfs/native-semantic-hash-diff.json)
+
+```sh
+python3 tools/compose_filesystem_cli.py --apfs ../apfs --no-default-features --features diff-hash
+python3 -B tests/compatibility/volume-read/check_semantic_diff.py --hash --cli target/apfs-cli/debug/dmgez
+```
+
 The native extended-attribute oracle uses both APFS and HFS+ readers. It verifies complete attribute values on read-only macOS mounts and checks name-only difference reports.
 
 ```sh
