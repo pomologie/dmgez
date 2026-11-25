@@ -1,12 +1,80 @@
+use std::collections::TryReserveError;
+
 use dmgez_config::Arrangement;
-use dmgez_preview::{CanvasPoint, PlacedItem, PositionSource, ProjectFolder};
+use dmgez_preview::{CanvasPoint, GeometryError, PlacedItem, PositionSource, ProjectFolder};
+use thiserror::Error;
 
-use crate::{
-	Budget, Diagnostic, Error, Evidence, Icon, Limits, Report, SCHEMA_VERSION, Suppression,
-};
+use crate::report::{Diagnostic, Evidence, Icon, Report, RuleId, SCHEMA_VERSION};
 
+const DEFAULT_MAX_ITEMS: usize = 100_000;
+const DEFAULT_MAX_PAIR_CHECKS: usize = 1_000_000;
+const DEFAULT_MAX_DIAGNOSTICS: usize = 10_000;
 // Design guidance for Finder grid placement, in logical points.
 const RECOMMENDED_MINIMUM_GRID_SPACING: f64 = 100.0;
+
+/// A rule-wide suppression supplied by the caller, with an exact reason.
+#[derive(Clone, Copy, Debug)]
+pub struct Suppression<'input> {
+	rule: RuleId,
+	reason: &'input str,
+}
+
+impl<'input> Suppression<'input> {
+	/// Creates a suppression with a caller-supplied reason.
+	/// # Errors
+	/// Returns an error for an empty or whitespace-only reason.
+	pub fn new(rule: RuleId, reason: &'input str) -> Result<Self, Error> {
+		if reason.trim().is_empty() {
+			return Err(Error::SuppressionReason(rule));
+		}
+		Ok(Self { rule, reason })
+	}
+}
+
+/// Bounds for one lint operation over an already resolved folder.
+#[derive(Clone, Copy, Debug)]
+pub struct Limits {
+	pub max_items: usize,
+	/// Maximum candidate pairs checked after pruning disjoint horizontal spans.
+	pub max_pair_checks: usize,
+	/// Maximum findings retained, including suppressed findings.
+	pub max_diagnostics: usize,
+}
+
+impl Default for Limits {
+	fn default() -> Self {
+		Self {
+			max_items: DEFAULT_MAX_ITEMS,
+			max_pair_checks: DEFAULT_MAX_PAIR_CHECKS,
+			max_diagnostics: DEFAULT_MAX_DIAGNOSTICS,
+		}
+	}
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum Budget {
+	Items,
+	PairChecks,
+	Diagnostics,
+}
+
+#[derive(Debug, Error)]
+#[non_exhaustive]
+pub enum Error {
+	#[error(transparent)]
+	Geometry(#[from] GeometryError),
+	#[error("layout lint reached its {budget:?} limit of {limit}")]
+	Limit { budget: Budget, limit: usize },
+	#[error("could not reserve a bounded layout lint buffer")]
+	Allocation(#[from] TryReserveError),
+	#[error("layout lint was cancelled")]
+	Cancelled,
+	#[error("suppression for {0:?} requires a reason")]
+	SuppressionReason(RuleId),
+	#[error("layout lint has multiple suppressions for {0:?}")]
+	DuplicateSuppression(RuleId),
+}
 
 /// Lints the configured positions in the selected preview's initial viewport.
 /// The overlap check is limited to configured, visible icons with positive-area
