@@ -17,7 +17,11 @@ mod optimize;
 mod project_build;
 #[cfg(any(feature = "appdmg-import", feature = "lint", feature = "project-build"))]
 mod project_input;
-#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
+#[cfg(any(
+	feature = "hfsplus-read",
+	feature = "apfs-read",
+	all(feature = "installer-lint", any(unix, windows)),
+))]
 mod report_output;
 mod verify_command;
 mod volume_commands;
@@ -37,6 +41,9 @@ const APPDMG_IMPORT_FEATURE: &str = "appdmg-import";
 const LINT_COMMAND: &str = "lint";
 const SUPPRESSION_VALUE_NAME: &str = "RULE=REASON";
 const LAYOUT_PROFILE_NAME: &str = "layout";
+const INSTALLER_PROFILE_NAME: &str = "installer";
+const INSTALLER_LINT_FEATURE: &str = "installer-lint";
+const INSTALLER_LINT_COMPILED: bool = cfg!(all(feature = "installer-lint", any(unix, windows)));
 const REPORT_ERROR_EXIT_CODE: u8 = 2;
 const OPTIMIZE_COMMAND: &str = "optimize";
 const UNWRAP_RAW_COMMAND: &str = "unwrap-raw";
@@ -104,13 +111,13 @@ enum Command {
 	/// Compare decoded disk bytes, stored container bytes, or filesystem contents.
 	#[command(name = diff::COMMAND)]
 	Diff(diff::Arguments),
-	/// Check configured Finder icon geometry in a project folder.
+	/// Check a project's Finder layout or installer contents.
 	#[command(name = LINT_COMMAND)]
 	Lint {
 		project: PathBuf,
 		#[arg(long, value_enum)]
 		profile: LintProfile,
-		/// Virtual project folder to inspect. The default selects the root.
+		/// Virtual folder for the layout profile. The default selects the root.
 		#[arg(long)]
 		folder: Option<String>,
 		/// Suppress a rule with an explicit reason. May be repeated.
@@ -199,6 +206,8 @@ enum ConversionFormat {
 enum LintProfile {
 	#[value(name = LAYOUT_PROFILE_NAME)]
 	Layout,
+	#[value(name = INSTALLER_PROFILE_NAME)]
+	Installer,
 }
 
 #[derive(Args)]
@@ -324,6 +333,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 				),
 				(IMPORT_APPDMG_COMMAND, cfg!(feature = "appdmg-import")),
 				(LINT_COMMAND, cfg!(feature = "lint")),
+				(INSTALLER_LINT_FEATURE, INSTALLER_LINT_COMPILED),
 				(VERIFY_CONTAINER_CAPABILITY, cfg!(feature = "inspect")),
 				(UNWRAP_RAW_COMMAND, cfg!(feature = "inspect")),
 			] {
@@ -371,8 +381,29 @@ fn run(command: Command) -> CliResult<ExitCode> {
 			suppress,
 			json,
 		} => return lint::run(&project, folder.as_deref(), &suppress, json),
+		#[cfg(all(feature = "installer-lint", any(unix, windows)))]
+		Command::Lint {
+			project,
+			profile: LintProfile::Installer,
+			folder,
+			suppress,
+			json,
+		} => return lint::installer::run(&project, folder.as_deref(), &suppress, json),
+		#[cfg(all(feature = "installer-lint", not(any(unix, windows))))]
+		Command::Lint {
+			profile: LintProfile::Installer,
+			..
+		} => Err("installer lint requires host source discovery".into()),
+		#[cfg(not(feature = "installer-lint"))]
+		Command::Lint {
+			profile: LintProfile::Installer,
+			..
+		} => Err(format!("feature not compiled: {INSTALLER_LINT_FEATURE}").into()),
 		#[cfg(not(feature = "lint"))]
-		Command::Lint { .. } => Err(format!("feature not compiled: {LINT_COMMAND}").into()),
+		Command::Lint {
+			profile: LintProfile::Layout,
+			..
+		} => Err(format!("feature not compiled: {LINT_COMMAND}").into()),
 		#[cfg(feature = "appdmg-import")]
 		Command::ImportAppdmg {
 			settings,

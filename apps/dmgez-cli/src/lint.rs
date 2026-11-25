@@ -13,6 +13,9 @@ use serde::Serialize;
 
 use crate::{CliResult, LAYOUT_PROFILE_NAME, SUPPRESSION_VALUE_NAME, project_input};
 
+#[cfg(all(feature = "installer-lint", any(unix, windows)))]
+pub(super) mod installer;
+
 const ROOT_FOLDER: &str = "/";
 const SUPPRESSION_SEPARATOR: char = '=';
 const LINT_FINDINGS_EXIT_CODE: u8 = 1;
@@ -72,10 +75,14 @@ pub(crate) fn run(
 }
 
 fn parse_suppression(argument: &str) -> CliResult<Suppression<'_>> {
-	let (rule, reason) = argument
-		.split_once(SUPPRESSION_SEPARATOR)
-		.ok_or_else(|| format!("a lint suppression requires {SUPPRESSION_VALUE_NAME}"))?;
+	let (rule, reason) = suppression_parts(argument)?;
 	Ok(Suppression::new(rule.parse::<RuleId>()?, reason)?)
+}
+
+fn suppression_parts(argument: &str) -> CliResult<(&str, &str)> {
+	argument
+		.split_once(SUPPRESSION_SEPARATOR)
+		.ok_or_else(|| format!("a lint suppression requires {SUPPRESSION_VALUE_NAME}").into())
 }
 
 fn write_diagnostic(output: &mut impl Write, diagnostic: &Diagnostic<'_>) -> io::Result<()> {

@@ -39,8 +39,10 @@ impl fmt::Display for EscapedText<'_> {
 	}
 }
 
+#[cfg(any(feature = "hfsplus-read", feature = "apfs-read", test))]
 pub(super) struct EscapedBytes<'a>(pub &'a [u8]);
 
+#[cfg(any(feature = "hfsplus-read", feature = "apfs-read", test))]
 impl fmt::Display for EscapedBytes<'_> {
 	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
 		for chunk in self.0.utf8_chunks() {

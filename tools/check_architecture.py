@@ -17,6 +17,7 @@ PROFILES = {
     "hash_comparison": (["--no-default-features", "--features", "diff-hash"], {"blake3", "dmgez-core", "dmgez-diff", "dmgez-udif", "dmgez-vfs", "flate2", "serde_json"}),
     "finder_comparison": (["--no-default-features", "--features", "finder-diff"], {"dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "serde_json"}),
     "layout_lint": (["--no-default-features", "--features", "lint"], {"dmgez-config", "dmgez-lint", "dmgez-preview", "serde_json"}),
+    "installer_lint": (["--no-default-features", "--features", "installer-lint"], {"dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-lint", "dmgez-preview", "dmgez-udif", "serde_json"}),
     "appdmg_import": (["--no-default-features", "--features", "appdmg-import"], {"dmgez-config", "dmgez-core", "serde_json"}),
 }
 OUTSIDE_DEFAULT = {
@@ -25,7 +26,7 @@ OUTSIDE_DEFAULT = {
     "hfsplus-reader", "lzfse_rust", "lzma-rust2", "notify",
     "reqwest", "rmcp", "tokio", "udif", "winfsp",
 }
-PROFILE_DEPS = {"blake3", "dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-inspector", "dmgez-lint", "dmgez-operations", "dmgez-preview", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "rayon", "serde_json"}
+PROFILE_DEPS = {"blake3", "dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-inspector", "dmgez-lint", "dmgez-operations", "dmgez-preview", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "rayon", "serde_json"}
 
 
 def main():
@@ -52,9 +53,9 @@ def main():
                 active = f'dmgez-udif feature "{feature}"' in features
                 expected_active = {
                     "read": profile in ("inspection", "conversion", "parallel_conversion", "comparison", "hash_comparison", "finder_comparison"),
-                    "write": profile in ("serial", "default", "conversion", "parallel_conversion"),
+                    "write": profile in ("serial", "default", "conversion", "parallel_conversion", "installer_lint"),
                     "parallel": profile in ("default", "parallel_conversion"),
-                    "zlib": True, "lzfse": False, "lzma": False,
+                    "zlib": profile != "installer_lint", "lzfse": False, "lzma": False,
                 }[feature]
                 if active != expected_active:
                     errors.append(f"{profile} profile: unexpected activation state for {feature}")
