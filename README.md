@@ -2,6 +2,8 @@
 
 A pure Rust library and CLI for creating, reading, and manipulating macOS disk images.
 
+See [offline CLI archives](docs/features/OFFLINE_CLI.md) for packaging a composed build and installing the CLI from an unpacked release.
+
 The CLI wraps an existing sector-aligned raw image in single-segment UDRO or UDZO. Enable `lzfse` for ULFO or `lzma` for ULMO. The optional `inspect` feature enables metadata reports, run-space analysis, container verification, and raw export.
 
 ```sh

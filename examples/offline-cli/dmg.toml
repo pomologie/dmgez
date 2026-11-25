@@ -1,0 +1,24 @@
+schema_version = 1
+
+[image]
+name = "dmgez example"
+output = "example.dmg"
+format = "udzo"
+
+[[contents]]
+source = "hello.txt"
+destination = "/Hello.txt"
+
+[metadata]
+policy = "report"
+preserve_permissions = false
+preserve_ownership = false
+preserve_timestamps = false
+preserve_extended_attributes = false
+preserve_resource_forks = false
+preserve_finder_info = false
+preserve_hard_links = false
+
+[build]
+reproducible = true
+source_date_epoch = 1700000000
