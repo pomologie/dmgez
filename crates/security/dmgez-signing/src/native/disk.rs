@@ -6,7 +6,7 @@ use crate::{
 
 use super::{artifact::Artifact, identity, run, stage::Stage};
 
-mod image;
+pub(super) mod image;
 mod policy;
 
 #[cfg(test)]

@@ -16,6 +16,8 @@ use crate::native::runner;
 
 const MAX_UNSIGNED_BYTES: u64 = 1 << 40;
 const MAX_SIGNATURE_BYTES: u64 = 16 << 20;
+#[cfg(feature = "notarization-native")]
+pub(in crate::native) const MAX_SIGNED_BYTES: u64 = MAX_UNSIGNED_BYTES + MAX_SIGNATURE_BYTES;
 const COPY_BUFFER_BYTES: usize = 64 << 10;
 const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
 const QUARANTINE: &str = "com.apple.quarantine";
@@ -164,7 +166,7 @@ fn body_length(size: u64) -> Result<u64, SignError> {
 		.ok_or(SignError::ImageSize)
 }
 
-fn encode_hex(digest: &[u8]) -> String {
+pub(in crate::native) fn encode_hex(digest: &[u8]) -> String {
 	let mut text = String::with_capacity(digest.len() * 2);
 	for byte in digest {
 		text.push(char::from(HEX_DIGITS[usize::from(byte >> 4)]));
@@ -173,7 +175,7 @@ fn encode_hex(digest: &[u8]) -> String {
 	text
 }
 
-fn copy_to(
+pub(in crate::native) fn copy_to(
 	input: &mut impl Read,
 	output: &mut impl Write,
 	mut remaining: u64,
