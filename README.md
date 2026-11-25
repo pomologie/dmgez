@@ -43,6 +43,13 @@ target/apfs-cli/debug/dmgez diff left.dmg right.dmg --mode semantic --filesystem
 
 Add `--xattrs` in semantic mode to compare supported stored extended attributes. The report identifies changed names without exposing their values.
 
+Build with `finder-diff` and add `--finder-layout` in semantic mode to compare decoded layout records in matching `.DS_Store` files. Reports identify the affected records. Combine it with `--xattrs` to compare both policies in one run.
+
+```sh
+python3 tools/compose_filesystem_cli.py --apfs ../apfs --no-default-features --features finder-diff
+target/apfs-cli/debug/dmgez diff left.dmg right.dmg --mode semantic --filesystem apfs --finder-layout --json
+```
+
 The optional `lint` command checks configured Finder icon geometry in one declared project folder, starting at `/` unless `--folder` selects another. It reads the TOML manifest only. Use `--suppress RULE=REASON` to keep a finding in the report without failing on it. Exit codes are 0 when there are no unsuppressed warnings, 1 when warnings remain, and 2 when the requested layout cannot be evaluated.
 
 `import-appdmg` translates documented appdmg JSON settings into a new version-one TOML manifest. Relative asset paths keep their original settings directory. A relative `--image-output` is interpreted from the new manifest's directory. The command reports unmapped behavior and refuses to replace an existing manifest.

@@ -16,6 +16,8 @@ Root `.DS_Store` and optional folder stores built directly. Typical layout uses 
 
 ## Tests and support
 
+The bounded store reader decodes list view from both the keyed `lsvp` and ordered `lsvC` binary plist records. It preserves each record independently because Finder can store different columns in each. Keyed columns follow their stored indices, and ordered columns follow the stored array. Reports include column identifiers, widths, visibility and direction, together with the admitted list settings and the names of unreported settings. The reader bounds nesting and shared-reference expansion before decoding. [Finder-written Sonoma fixture and reader tests](../../crates/presentation/dmgez-finder/tests/list_view.rs)
+
 Root and nested Finder layouts accept `default_view = "column-view"`. The generated `.DS_Store` selects column view with the `icvl/type/clmv` record. A nested folder inherits the selected view and can override it. Icon positions remain available when switching views, and explicit `include_icon_view_settings` and `include_list_view_settings` still control their secondary settings.
 
 The D-FINDER-02 compatibility check verified and mounted an HFS+ image read-only on macOS 14.7.2. The independent `ds_store` reader matched the selected view, nested override, icon position, and secondary records. Actual Finder window selection remains unverified because macOS denied this runner's Apple Event request. The desktop preview still requires icon view. [Mounted column view check](../../tests/compatibility/project-build/check_finder_column.py) [dmgbuild column view mapping](https://github.com/dmgbuild/dmgbuild/blob/v2.0.0/src/dmgbuild/core.py#L450-L464)

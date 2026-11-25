@@ -45,6 +45,10 @@
     "diff": [
       "inspect"
     ],
+    "finder-diff": [
+      "diff",
+      "finder-read"
+    ],
     "lint": [],
     "appdmg-import": [],
     "convert": [

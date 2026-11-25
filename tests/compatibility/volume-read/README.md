@@ -64,6 +64,15 @@ python3 -B tests/compatibility/volume-read/check_xattr_diff.py --cli target/apfs
 
 [Native extended-attribute results](native-xattr-diff.json)
 
+The native Finder layout oracle uses `finder-diff` and the APFS reader. Install `ds_store==1.3.4` and `mac_alias==2.2.3` in the Python environment used for the oracle.
+
+```sh
+python3 tools/compose_filesystem_cli.py --apfs ../apfs --no-default-features --features finder-diff
+python3 -B tests/compatibility/volume-read/check_finder_diff.py --cli target/apfs-cli/debug/dmgez
+```
+
+The oracle verifies and mounts three disposable UDZO images read-only. Its independent decoder checks an icon position and a column width in both list-view representations. It also checks that the default policy detects unused store bytes and that the Finder policy finds the same decoded records. [Native Finder layout results](apfs/native-finder-diff.json)
+
 ## Extraction name preflight
 
 Both recipes call `dmgez_operations::extract::preflight_names` on the real filesystem adapter. The HFS+ fixture constructed with a non-UTF-8 relative symlink target yields a portable name plan containing the link object and its source handle. The native APFS hard-link fixture preserves `Écho.bin` in the exact UTF-8 plan. The portable profile rejects that name with a typed encoding error. The APFS payload fixture provides targeted symlink lookup evidence. A full name scan of that fixture reaches uncaptured catalog block 408.
