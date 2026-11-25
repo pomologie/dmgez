@@ -21,6 +21,9 @@ class ReleaseCompositionTests(unittest.TestCase):
         self.assertEqual(compose.compose_cli_manifest(original, False, False, False), original)
 
         text = compose.compose_cli_manifest(original, reader=True, build=True, apfs=True)
+        features = tomllib.loads(text)["features"]
+        self.assertIn(compose.PROJECT_RELEASE_FEATURE, features["default"])
+        self.assertIn("signing-rust", features["default"])
         for line in original.splitlines():
             if line.startswith("# "):
                 self.assertIn(line, text.splitlines())

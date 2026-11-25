@@ -3,12 +3,10 @@
   "package": "dmgez-cli",
   "default": [
     "build",
-    "parallel"
+    "parallel",
+    "signing-rust"
   ],
-  "target_default_additions": {
-    "linux": ["signing-rust"],
-    "windows": ["signing-rust"]
-  },
+  "target_default_additions": {},
   "features": {
     "build": [
       "udif-write",
@@ -124,7 +122,10 @@
       "install",
       "apfs-read"
     ],
-    "signing-rust": [],
+    "signing-rust": [
+      "udif-read",
+      "zlib"
+    ],
     "signing-native": [],
     "notarization-rust": [
       "signing-rust"
@@ -162,7 +163,9 @@
   "default_allowed_closure": [
     "build",
     "parallel",
+    "signing-rust",
     "udif-write",
+    "udif-read",
     "hfsplus-build",
     "finder-write",
     "zlib"

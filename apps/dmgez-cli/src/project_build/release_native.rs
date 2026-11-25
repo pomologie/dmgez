@@ -1,4 +1,4 @@
-//! Native adapters for the private project release stages.
+//! Signing and native policy adapters for private project release stages.
 
 use std::{error, fmt, path::Path};
 
@@ -7,10 +7,10 @@ use dmgez_signing::{
 	NativeAssessmentTool, NativeAssessmentUnavailable, ResolvedBackend, SignError,
 	assess_native_policy,
 	release_plan::{NotaryEvidence, StageFailure},
-	sign_disk_image, verify_signed_disk_image,
+	sign_ad_hoc_disk_image, sign_disk_image, verify_ad_hoc_disk_image, verify_signed_disk_image,
 };
 
-use super::release_settings::{NativeDiskSigning, NativeNotarization};
+use super::release_settings::{DiskSigning, NativeNotarization};
 
 #[cfg(all(
 	feature = "signing-native",
@@ -70,28 +70,33 @@ mod unavailable {
 pub(super) fn sign_image(
 	source: &Path,
 	destination: &Path,
-	settings: &NativeDiskSigning<'_>,
+	settings: &DiskSigning<'_>,
 ) -> Result<DiskSigningReport, NativeReleaseError> {
-	sign_disk_image(
-		source,
-		destination,
-		settings.identity,
-		settings.identifier,
-		Backend::Native,
-	)
+	match *settings {
+		DiskSigning::DeveloperId {
+			identity,
+			identifier,
+		} => sign_disk_image(source, destination, identity, identifier, Backend::Native),
+		DiskSigning::AdHoc { identifier } => {
+			sign_ad_hoc_disk_image(source, destination, identifier, Backend::Rust)
+		}
+	}
 	.map_err(NativeReleaseError::Signing)
 }
 
 pub(super) fn verify_image(
 	image: &Path,
-	settings: &NativeDiskSigning<'_>,
+	settings: &DiskSigning<'_>,
 ) -> Result<(), NativeReleaseError> {
-	verify_signed_disk_image(
-		image,
-		settings.identity,
-		settings.identifier,
-		Backend::Native,
-	)
+	match *settings {
+		DiskSigning::DeveloperId {
+			identity,
+			identifier,
+		} => verify_signed_disk_image(image, identity, identifier, Backend::Native),
+		DiskSigning::AdHoc { identifier } => {
+			verify_ad_hoc_disk_image(image, identifier, Backend::Rust)
+		}
+	}
 	.map_err(NativeReleaseError::Signing)
 }
 

@@ -88,6 +88,7 @@ FINDER_FEATURES = {
     "badge-icons": ["volume-icon", f"{ADAPTER}?/badge-icons"],
 }
 FEATURE_FORWARDING = {
+    "default": [PROJECT_RELEASE_FEATURE],
     "build": ["project-build", "finder-write"],
     "parallel": [f"{ADAPTER}?/parallel"],
     "lzfse": [f"{ADAPTER}?/lzfse"],

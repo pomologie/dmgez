@@ -63,6 +63,10 @@ impl<'input> ReleaseRequest<'input> {
 			ReleaseCapabilities {
 				application_verification: APPLICATION_VERIFICATION_AVAILABLE,
 				disk_signing: native_signing,
+				ad_hoc_disk_signing: cfg!(all(
+					feature = "signing-rust",
+					any(target_os = "linux", target_os = "macos", windows),
+				)),
 				notarization: cfg!(all(target_os = "macos", feature = "notarization-native")),
 				native_assessment: native_signing,
 			},

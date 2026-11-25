@@ -9,6 +9,7 @@ const DISK_IDENTIFIER: &str = "org.dmgez.release-fixture";
 const NOTARY_PROFILE: &str = "synthetic release profile";
 const APP_AND_DISK: &str = "[signing]\nenabled = true\ndmg = true";
 const PRESERVE_AND_DISK: &str = "[signing]\nenabled = true\napps = 'preserve'\ndmg = true";
+const AD_HOC_DISK: &str = "[signing]\nenabled = true\ndmg = true\nmode = 'ad-hoc'";
 
 fn project(release_sections: &str) -> Project {
 	Project::parse(&format!("{MINIMAL_PROJECT}\n{release_sections}\n")).unwrap()
@@ -18,6 +19,7 @@ fn native_capabilities() -> ReleaseCapabilities {
 	ReleaseCapabilities {
 		application_verification: true,
 		disk_signing: true,
+		ad_hoc_disk_signing: true,
 		notarization: true,
 		native_assessment: true,
 	}
@@ -63,9 +65,13 @@ fn native_signing_and_notarization_admit_exact_selectors_and_all_required_stages
 	assert_eq!(settings.plan.notarize, Some(NATIVE));
 	assert_eq!(settings.plan.staple, Some(NATIVE));
 	assert!(settings.plan.assess_native_policy);
-	let signing = settings.disk_signing.unwrap();
-	assert_eq!(signing.identity, CERTIFICATE_FINGERPRINT);
-	assert_eq!(signing.identifier, DISK_IDENTIFIER);
+	assert_eq!(
+		settings.disk_signing,
+		Some(DiskSigning::DeveloperId {
+			identity: CERTIFICATE_FINGERPRINT,
+			identifier: DISK_IDENTIFIER,
+		})
+	);
 	let notary = settings.notarization.unwrap();
 	assert_eq!(notary.keychain_profile, NOTARY_PROFILE);
 	assert!(notary.wait);
@@ -77,6 +83,66 @@ fn native_signing_and_notarization_admit_exact_selectors_and_all_required_stages
 			.iter()
 			.all(|step| step.status == StageStatus::Waiting)
 	);
+}
+
+#[test]
+fn ad_hoc_projects_choose_rust_and_an_explicit_cli_identifier_overrides_the_manifest() {
+	const OVERRIDE_IDENTIFIER: &str = "org.dmgez.release-override";
+	let source = project(&format!("{AD_HOC_DISK}\nidentifier = '{DISK_IDENTIFIER}'"));
+	for (argument, expected) in [
+		(None, DISK_IDENTIFIER),
+		(Some(OVERRIDE_IDENTIFIER), OVERRIDE_IDENTIFIER),
+	] {
+		let settings = ReleaseSettings::admit(
+			&source,
+			ReleaseIntent::Release,
+			argument,
+			native_capabilities(),
+		)
+		.unwrap()
+		.unwrap();
+		assert_eq!(settings.plan.applications, ReleaseApplications::Preserve);
+		assert_eq!(settings.plan.sign_image, Some(ResolvedBackend::Rust));
+		assert_eq!(
+			settings.disk_signing,
+			Some(DiskSigning::AdHoc {
+				identifier: expected
+			})
+		);
+	}
+}
+
+#[test]
+fn ad_hoc_projects_refuse_native_selection_credentials_and_distribution_policy() {
+	let admit = |extra: &str| {
+		let source = project(&format!(
+			"{AD_HOC_DISK}\nidentifier = '{DISK_IDENTIFIER}'\n{extra}"
+		));
+		ReleaseSettings::admit(&source, ReleaseIntent::Release, None, native_capabilities()).err()
+	};
+	assert!(matches!(
+		admit("backend = 'native'"),
+		Some(AdmissionError::BackendUnavailable {
+			stage: Stage::DiskSigning,
+			requested: Backend::Native
+		})
+	));
+	assert!(matches!(
+		admit("identity = 'identity'"),
+		Some(AdmissionError::AdHocCredentials)
+	));
+	assert!(matches!(
+		admit("credential_ref = 'reference'"),
+		Some(AdmissionError::AdHocCredentials)
+	));
+	assert!(matches!(
+		admit("[notarization]\nenabled = true"),
+		Some(AdmissionError::AdHocDistributionPolicy)
+	));
+	assert!(matches!(
+		admit("[release]\nrequire_native_assessment = true"),
+		Some(AdmissionError::AdHocDistributionPolicy)
+	));
 }
 
 #[test]

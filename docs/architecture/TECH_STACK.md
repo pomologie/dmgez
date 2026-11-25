@@ -24,7 +24,7 @@ Rust edition 2024 with an explicitly pinned stable toolchain selected during boo
 | Hashing | `blake3` | diff, cache, metadata verification; not UDIF checksum replacement |
 | GUI | `egui`, `eframe`, `egui_extras`, `rfd`; native OS bindings for drag/drop | separate app, no embedded browser; own themed layout |
 | Mount | `fuser`, `winfsp`, system tools/macOS APIs, `notify` | opt-in OS adapters; drivers may be external requirements |
-| Signing | `apple-codesign` and Apple command wrappers | Rust signer included in ordinary Linux and Windows CLI builds after qualification. macOS signing remains opt-in. A user must invoke a signing action to use a key or contact a timestamp service. |
+| Signing | Pinned `apple-codesign` DMG profile and Apple command wrappers | Ordinary CLI builds include the offline ad hoc DMG signer on macOS, Linux, and Windows. Developer ID, notarization, and platform assessment use explicit macOS features and release actions. |
 | Remote | `reqwest` or smaller TLS HTTP client with range support | optional; identity/validator and network budget enforcement |
 | MCP | `rmcp` official Rust SDK, minimal async runtime required by transport | separate local stdio server |
 | Encryption | vetted crypto libraries e.g. RustCrypto AES/HMAC/KDF, zeroize | stretch; implement only format envelope, never invent ciphers |

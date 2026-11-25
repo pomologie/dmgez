@@ -66,7 +66,7 @@ With `installer-lint`, `lint project.toml --profile installer --json` inspects t
 
 On macOS, `signing-native` enables `sign inspect` and `sign verify` for app bundles and UDIF images. The report distinguishes readable signatures, successful signature verification, unsigned artifacts, and signature failures. [Release checks](docs/features/RELEASE.md#inspect-and-verify-existing-signatures)
 
-`sign dmg` uses an explicit Developer ID Application certificate in Keychain to sign a private copy of an unsigned image, then verifies and publishes it to a new path. [Stage and sign a disk image](docs/features/RELEASE.md#stage-and-sign-a-disk-image)
+The default CLI uses `apple-codesign` for `sign dmg --ad-hoc` on macOS, Linux, and Windows. Set `[signing]` in `dmg.toml` and run `dmgez build dmg.toml --release` to sign during a project release. Developer ID signing uses the macOS Keychain backend. [Signing configuration](docs/features/RELEASE.md#portable-signing-profile)
 
 `sign app` signs a private bundle copy from the inside out and verifies the finished app before publishing to a new path. Use `--entitlements CODE_PATH=PLIST` to supply the distribution entitlements for a particular code item. [Stage and sign an application](docs/features/RELEASE.md#stage-and-sign-an-application)
 

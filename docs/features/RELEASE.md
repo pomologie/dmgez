@@ -1,6 +1,6 @@
 # Signing, notarization, release validation and lint (D-REL-01 through D-REL-04)
 
-Use shared release stages over existing DMG and application artifacts. The `apple-codesign` Rust backend follows the portable signing profile below. The native macOS backend orchestrates codesign, notarytool, stapler, and native assessment tools. Only sign with user-authorized Developer ID identities and Apple service credentials; no private key embedded in source/config, no Gatekeeper bypass. Apple guidance S09-S10. Distinguish `native` on macOS, `rust` cross-platform, `auto` explicit capability resolution per operation (prefer usable native on macOS; otherwise Rust if compatible). Select backend during plan; log chosen backend and reasons, do not silently change after side effects or failed authorization. Backend-specific support for DMG signing/stapling and bundle signing must be verified against actual pinned library API; do not promise native parity. `apple-codesign` may depend transitively on `apple-dmg`, allowed for signing only. DMG builder itself remains independent. Native tools use trusted paths and argument arrays, fixed environment/timeout; never shell interpolation.
+The default CLI includes a pinned `apple-codesign` backend for offline ad hoc DMG signing on macOS, Linux, and Windows. `auto` selects that backend for ad hoc DMG signing. The optional native macOS backend performs Developer ID signing, notarization, stapling, and platform assessment. A release fixes its selection before signing. Signing keys and Apple service credentials are supplied through authorized providers and stay out of `dmg.toml`. [Upstream signer source](https://github.com/indygreg/apple-platform-rs/tree/apple-codesign%2F0.29.0/apple-codesign)
 
 ## Pipeline
 
@@ -12,27 +12,49 @@ Use shared release stages over existing DMG and application artifacts. The `appl
 
 ## CLI/config
 
-`sign inspect`, `sign app`, `sign dmg`, `sign verify`, `notarize [--wait]`, `notarize status ID`, `staple`, `lint --profile macos-release`, `test --profile installer`, `build --release`. All explicit signing/notary actions behind appropriate features; default `build` ignores no requested behavior: if config sets enabled but command lacks `--release`, report that configured stages were not executed; do not claim release-ready. `[signing] enabled, backend, apps, dmg, identity, credential_ref` and optional `[[signing.rules]]` match path and entitlements file; `[notarization] enabled, backend, wait, staple, credential_ref`; `[release] verify, require_notarization, require_native_assessment`. Secret references are opaque names resolved from Keychain, restricted environment or secure provider; no raw p12 content/password/private key allowed in TOML or CLI history. Use protected local file mode or stdin/secret provider where possible; avoid argv secrets and redact errors. Do not expose secrets to MCP, GUI logs, crash reports or test fixtures. Zeroize where possible. CI credentialed tests restricted to trusted branch and manually approved runner.
+`sign inspect`, `sign app`, `sign dmg`, `sign verify`, `notarize [--wait]`, `notarize status ID`, `staple`, `lint --profile macos-release`, `test --profile installer`, `build --release`. All explicit signing/notary actions behind appropriate features; default `build` ignores no requested behavior: if config sets enabled but command lacks `--release`, report that configured stages were not executed; do not claim release-ready. `[signing] enabled, mode, backend, apps, dmg, identifier, identity, credential_ref` and optional `[[signing.rules]]` match path and entitlements file; `[notarization] enabled, backend, wait, staple, credential_ref`; `[release] verify, require_notarization, require_native_assessment`. Secret references are opaque names resolved from Keychain, restricted environment or secure provider; no raw p12 content/password/private key allowed in TOML or CLI history. Use protected local file mode or stdin/secret provider where possible; avoid argv secrets and redact errors. Do not expose secrets to MCP, GUI logs, crash reports or test fixtures. Zeroize where possible. CI credentialed tests restricted to trusted branch and manually approved runner.
 
 The `dmgez-signing` release state machine fixes the selected backends before admitting work, checks staged image identity by size and SHA-256 at each transition, and admits publication after the required verification receipts. A successful ordinary project build with configured release stages reports their deferral and unsigned publication on stderr. [Release state tests](../../crates/security/dmgez-signing/src/release_plan/tests.rs) · [Build staging tests](../../crates/services/dmgez-builder/tests/execution.rs) · [Bounded D-V12 authorization model](../../crates/security/dmgez-signing/verification/README.md)
 
 ### Build a project release
 
-Compose the HFS+ CLI with `project-release` to run `dmgez build dmg.toml --release --json`. The release writes to a new destination after verifying the staged container, rechecking the captured sources, and matching the final output bytes to the reported SHA-256. A release with no configured signing or notarization publishes a verified unsigned image.
+The default composed HFS+ CLI supports `dmgez build dmg.toml --release --json`. The release writes to a new destination after verifying the staged container, rechecking the captured sources, and matching the final output bytes to the reported SHA-256. A release with no configured signing or notarization publishes a verified unsigned image.
 
-Compose with `project-release,signing-native` on macOS for native app verification and DMG signing. With `[signing].enabled = true`, the default `apps = "verify"` checks each outermost `.app` directory. Each bundle must match one complete captured host tree. A filter, override, or generated asset that changes the bundle stops the release. After assembly, dmgez checks the staged image's app inventory, exact paths, entry kinds, modes, file data, and link targets against the captured manifest. It reconstructs each admitted staged bundle privately using the [mountless copy profile](MOUNT_INSTALL.md#virtual-install-and-external-copy) and runs native Developer ID verification again before signing the image. The JSON report binds the verified app count to the unsigned image's SHA-256. Set `apps = "preserve"` to package app sources as supplied. In-project re-signing remains open. [Staged application tests](../../apps/dmgez-cli/src/project_build/release_applications/tests.rs)
+Compose with `project-release,signing-native` on macOS for native app verification and DMG signing. For Developer ID releases with `[signing].enabled = true`, the default `apps = "verify"` checks each outermost `.app` directory. Each bundle must match one complete captured host tree. A filter, override, or generated asset that changes the bundle stops the release. After assembly, dmgez checks the staged image's app inventory, exact paths, entry kinds, modes, file data, and link targets against the captured manifest. It reconstructs each admitted staged bundle privately using the [mountless copy profile](MOUNT_INSTALL.md#virtual-install-and-external-copy) and runs native Developer ID verification again before signing the image. The JSON report binds the verified app count to the unsigned image's SHA-256. Set `apps = "preserve"` to package app sources as supplied. In-project re-signing remains open. [Staged application tests](../../apps/dmgez-cli/src/project_build/release_applications/tests.rs)
 
-DMG signing uses `[signing].identity` and the explicit `--identifier`. To notarize, compose with `project-release,notarization-native`, set `[notarization].credential_ref` to the Keychain profile, and supply a new `--notary-record` path. Set `[notarization].wait = true` to poll during the release.
+Developer ID DMG signing uses `signing.identity` and the identifier from `signing.identifier` or `--identifier`. To notarize, compose with `project-release,notarization-native`, set `[notarization].credential_ref` to the Keychain profile, and supply a new `--notary-record` path. Set `[notarization].wait = true` to poll during the release.
 
 Pending or unresolved notarization stops publication and retains the submitted signed image. The report includes its location and the record path. Use `notarize status` and `staple` with that signed image and record to continue after the build exits. A new build does not resume the earlier release run. The native signed and notarized project path still needs a credentialed end-to-end run.
 
 ### Portable signing profile
 
-Ordinary Linux and Windows release builds must include the qualified Rust signer. On those hosts `auto` selects Rust for signing. macOS keeps opt-in signing backends, and explicit `--no-default-features` builds omit the platform defaults. Signing and timestamp requests run only for an explicit signing action. D-REL-01-T04 covers backend selection and ordinary builds on each host.
+Ordinary macOS, Linux, and Windows CLI builds include offline DMG signing. Build with `--no-default-features` to omit the default backend. Signing runs through an explicit release or sign command. D-REL-01-T04 covers backend selection and ordinary builds on each host.
 
-The Rust backend is pending dependency qualification. In a disposable copy of the workspace, the release candidate `apple-codesign` 0.29.0 with defaults disabled compiled on Rust 1.98 for macOS and Linux. Its resolved graph failed the project's advisory and license checks. Windows GNU compiled on Rust 1.99.1. Runtime signing and Windows MSVC qualification remain open. Default feature activation requires a dependency graph that passes project checks and portable signing evidence. [Upstream release manifest](https://raw.githubusercontent.com/indygreg/apple-platform-rs/apple-codesign/0.29.0/apple-codesign/Cargo.toml)
+The default offline Rust profile uses a reproducibly vendored subset of `apple-codesign` 0.29.0. Its signer transaction checks the unsigned UDIF, verifies the exact CodeDirectory append, and publishes only after revalidating the source and stage. The profile passed scoped dependency audit and strict Apple verification. [Source provenance and profile scope](../../third_party/apple-codesign/README.md)
 
-A disposable DMG-only patch to 0.29.0 retained the upstream signing code and license. It passed advisory, bans, and source checks. Nine licenses, including `apple-codesign` itself, still fall outside the current allowlist. Strict Apple verification accepted two ad hoc signed images on macOS. A separate staged signing prototype passed its five publication and refusal tests on macOS and Windows GNU under Wine, and compiled for Linux GNU. Developer ID signing, native Windows and Linux runtime, and Apple timestamping still need qualification.
+To configure ad hoc signing in `dmg.toml`, use the following section. `backend` defaults to `auto`, which selects `apple-codesign` for this mode. Ad hoc projects preserve bundled apps by default.
+
+```toml
+[signing]
+enabled = true
+mode = "ad-hoc"
+dmg = true
+identifier = "com.example.installer"
+```
+
+```sh
+dmgez build dmg.toml --release --json
+dmgez sign verify installer.dmg --backend rust --json
+```
+
+For an already built unsigned DMG, sign a verified copy to a new path.
+
+```sh
+dmgez sign dmg installer.dmg --ad-hoc --identifier com.example.installer \
+  --output installer-adhoc.dmg --json
+```
+
+The portable verification reports signature integrity. A public release requiring Developer ID, secure timestamps, notarization or native assessment uses the credentialed macOS profile. `--identifier` overrides `signing.identifier` for a project release.
 
 The 0.29 DMG writer places the signature immediately after the XML plist and uses a 32-bit CodeDirectory length. The UDIF signing guard checks that the plist ends at the original trailer, all declared body ranges stay inside the signed body, and the body length fits that field. [Upstream DMG writer](https://github.com/indygreg/apple-platform-rs/blob/apple-codesign%2F0.29.0/apple-codesign/src/dmg.rs) · [UDIF signing layout tests](../../crates/formats/dmgez-udif/tests/signature_append.rs)
 
