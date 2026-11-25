@@ -15,6 +15,13 @@ const IEC_UNITS: [(&str, u64); 5] = [
 	("TiB", BYTES_PER_KIB.pow(4)),
 	("B", 1),
 ];
+const BYTES_PER_KB: u64 = 1_000;
+const DECIMAL_SIZE_UNITS: [(&str, u64); 4] = [
+	("k", BYTES_PER_KB),
+	("m", BYTES_PER_KB.pow(2)),
+	("g", BYTES_PER_KB.pow(3)),
+	("t", BYTES_PER_KB.pow(4)),
+];
 const AUTO: &str = "auto";
 pub(crate) const PATH_SEPARATOR: char = '/';
 const CURRENT_DIRECTORY: &str = ".";
@@ -32,6 +39,14 @@ impl Bytes {
 	pub const fn get(self) -> u64 {
 		self.0
 	}
+
+	fn scaled(digits: &str, unit: u64) -> Result<Self, SizeError> {
+		if digits.is_empty() || !digits.bytes().all(|digit| digit.is_ascii_digit()) {
+			return Err(SizeError::Invalid);
+		}
+		let count = digits.parse::<u64>().map_err(|_| SizeError::Overflow)?;
+		count.checked_mul(unit).map(Self).ok_or(SizeError::Overflow)
+	}
 }
 
 impl FromStr for Bytes {
@@ -42,24 +57,22 @@ impl FromStr for Bytes {
 			.iter()
 			.find_map(|(suffix, unit)| value.strip_suffix(suffix).map(|digits| (digits, unit)))
 			.ok_or(SizeError::Invalid)?;
-		if digits.is_empty() || !digits.bytes().all(|digit| digit.is_ascii_digit()) {
-			return Err(SizeError::Invalid);
-		}
-		let count = digits.parse::<u64>().map_err(|_| SizeError::Overflow)?;
-		count
-			.checked_mul(*unit)
-			.map(Self)
-			.ok_or(SizeError::Overflow)
+		Self::scaled(digits, *unit)
 	}
 }
 
-/// Invalid or overflowing IEC bytes.
+/// An invalid or overflowing byte quantity.
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 #[non_exhaustive]
 pub enum SizeError {
 	/// A decimal count and a recognized IEC suffix are required.
 	#[error("expected a byte count with an IEC suffix (B, KiB, MiB, GiB, TiB)")]
 	Invalid,
+	/// The text does not specify a supported image capacity.
+	#[error(
+		"expected auto or a byte count with an optional suffix (B, KiB, MiB, GiB, TiB, k, m, g, t)"
+	)]
+	InvalidImage,
 	/// The value does not fit in 64 bits.
 	#[error("byte size exceeds the 64-bit limit")]
 	Overflow,
@@ -99,11 +112,33 @@ pub enum Size {
 	Fixed(Bytes),
 }
 
+impl FromStr for Size {
+	type Err = SizeError;
+
+	fn from_str(value: &str) -> Result<Self, Self::Err> {
+		if value == AUTO {
+			return Ok(Self::Auto);
+		}
+		let decimal = DECIMAL_SIZE_UNITS
+			.iter()
+			.find_map(|(suffix, unit)| value.strip_suffix(suffix).map(|digits| (digits, *unit)));
+		let bytes = match decimal {
+			Some((digits, unit)) => Bytes::scaled(digits, unit),
+			None if value.bytes().all(|digit| digit.is_ascii_digit()) => Bytes::scaled(value, 1),
+			None => value.parse(),
+		};
+		bytes.map(Self::Fixed).map_err(|error| match error {
+			SizeError::Invalid => SizeError::InvalidImage,
+			error => error,
+		})
+	}
+}
+
 impl<'de> Deserialize<'de> for Size {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		match ByteInput::deserialize(deserializer)? {
-			ByteInput::Text(value) if value == AUTO => Ok(Self::Auto),
-			input => input.bytes().map(Self::Fixed).map_err(de::Error::custom),
+			ByteInput::Integer(count) => Ok(Self::Fixed(Bytes(count))),
+			ByteInput::Text(value) => value.parse().map_err(de::Error::custom),
 		}
 	}
 }

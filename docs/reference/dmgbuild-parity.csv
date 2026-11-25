@@ -3,7 +3,7 @@ image,filename,image.output,0.2.0,planned,D-BUILD-01,HFS+/UDRO/UDZO first; forma
 image,volume_name,image.name,0.2.0,planned,D-BUILD-01,HFS+/UDRO/UDZO first; formats and APFS tracked separately; size importer supports decimal and binary suffixes.
 image,format,image.format,0.2.0,planned,D-BUILD-01,HFS+/UDRO/UDZO first; formats and APFS tracked separately; size importer supports decimal and binary suffixes.
 image,filesystem,image.filesystem,0.2.0,planned,D-BUILD-01,HFS+/UDRO/UDZO first; formats and APFS tracked separately; size importer supports decimal and binary suffixes.
-image,size,image.size,0.2.0,planned,D-BUILD-01,HFS+/UDRO/UDZO first; formats and APFS tracked separately; size importer supports decimal and binary suffixes.
+image,size,image.size,0.2.0,partial,D-BUILD-01,HFS+ supports exact positive aligned byte counts and decimal k/m/g/t or IEC suffixes. The portable project fixture independently checks 4096k.
 image,shrink,image.shrink,0.2.0,planned,D-BUILD-01,HFS+/UDRO/UDZO first; formats and APFS tracked separately; size importer supports decimal and binary suffixes.
 content,files,contents[].source/destination,0.2.0,planned,D-BUILD-02,Nested arbitrary paths; explicit root or folder-relative positions.
 content,symlinks,"contents[].type=symlink,target",0.2.0,planned,D-BUILD-02,Nested arbitrary paths; explicit root or folder-relative positions.

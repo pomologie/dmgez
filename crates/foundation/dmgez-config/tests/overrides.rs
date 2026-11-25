@@ -54,6 +54,21 @@ fn definitions_apply_to_manifest_and_scalar_overrides_win_in_order() {
 }
 
 #[test]
+fn accepts_decimal_image_capacity_overrides_only_for_the_image_size() {
+	let project = parse(BASE, &["image.size=2048k", "image.shrink=true"]).unwrap();
+	let Capacity::ShrinkWithin(maximum) = project.image.capacity() else {
+		panic!("expected an explicit shrink limit");
+	};
+	assert_eq!(maximum.get(), 2_048_000);
+	assert_eq!(
+		parse(BASE, &["performance.memory_limit=64m"]).unwrap_err(),
+		ConfigError::Override(OverrideError::Value {
+			key: "performance.memory_limit"
+		})
+	);
+}
+
+#[test]
 fn only_path_overrides_resolve_against_the_explicit_working_directory() {
 	let input = format!("{BASE}[[contents]]\nsource = 'input/fixture.app'\n");
 	let working_directory = std::env::temp_dir().join("dmgez-override-caller");

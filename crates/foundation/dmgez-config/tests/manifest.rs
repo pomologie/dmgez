@@ -5,7 +5,7 @@ use std::{collections::BTreeMap, path::Path};
 use dmgez_config::{
 	AppSigning, Backend, Background, Capacity, Column, CompressionError, ConfigError, ContentError,
 	DefineError, Direction, Filesystem, IconSlot, ImageError, ImageFormat, Payload, Project,
-	SigningMode, VolumeIcon,
+	SigningMode, Size, SizeError, VolumeIcon,
 };
 
 const MINIMAL: &str = include_str!("../../../../examples/minimal.toml");
@@ -223,7 +223,7 @@ fn resolves_capacity_and_rejects_invalid_size_and_compression() {
 	};
 	assert_eq!(maximum.get(), 8 * 1024 * 1024);
 	assert_eq!(raw.image.free_space.get(), 1024);
-	for size in ["0", "513", "'513B'"] {
+	for size in ["0", "513", "'513B'", "'1k'"] {
 		assert_eq!(
 			Project::parse(&format!("{HEADER}size={size}\n")).unwrap_err(),
 			ConfigError::Image(ImageError::SizeAlignment),
@@ -244,6 +244,39 @@ fn resolves_capacity_and_rejects_invalid_size_and_compression() {
 		Project::parse(&format!("{HEADER}[compression]\nblock_size='2MiB'")).unwrap_err(),
 		ConfigError::Compression(CompressionError::BlockSize),
 	);
+}
+
+#[test]
+fn admits_dmgbuild_capacity_units_with_checked_arithmetic() {
+	for (source, expected) in [
+		("2048k", 2_048_000),
+		("64m", 64_000_000),
+		("8g", 8_000_000_000),
+		("1t", 1_000_000_000_000),
+		("2048000", 2_048_000),
+		("4MiB", 4_194_304),
+		("2048000B", 2_048_000),
+	] {
+		let project = Project::parse(&format!("{HEADER}size = '{source}'\n")).unwrap();
+		let Capacity::Exact(bytes) = project.image.capacity() else {
+			panic!("expected exact capacity for {source:?}");
+		};
+		assert_eq!(bytes.get(), expected, "{source}");
+	}
+	for source in [
+		"18446744073709552k",
+		"18446744073709551616",
+		"18446744073709552MiB",
+	] {
+		assert_eq!(source.parse::<Size>(), Err(SizeError::Overflow), "{source}");
+	}
+	for source in ["", "-1k", "1K", "1.25m", "2mb", "1,000k", "2 k"] {
+		assert_eq!(
+			source.parse::<Size>(),
+			Err(SizeError::InvalidImage),
+			"{source}"
+		);
+	}
 }
 
 #[test]

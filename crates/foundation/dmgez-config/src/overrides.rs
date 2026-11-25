@@ -62,6 +62,7 @@ impl ConfigOverride {
 	/// `image`, `compression`, `performance`, `metadata`, and `build`.
 	/// Text and paths are literal, including spaces and additional `=` signs.
 	/// Numeric values use decimal notation or an applicable IEC suffix.
+	/// The image size also accepts dmgbuild's decimal `k`, `m`, `g`, and `t` suffixes.
 	/// Booleans use `true` and `false`. Automatic modes also accept `auto`.
 	///
 	/// # Errors
