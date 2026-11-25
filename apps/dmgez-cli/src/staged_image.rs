@@ -13,7 +13,16 @@ const WRITER_REPORT_MISMATCH: &str = "the staged image does not match the writer
 const CHECKSUMS_MISSING: &str = "the staged image is missing required CRC32 checksums";
 
 /// Independently validate the synced unsigned builder stage before it is used.
+#[cfg(any(feature = "project-edit", feature = "project-release"))]
 pub(crate) fn verify_stage(reader: StagedReader<'_>, report: &WriteReport) -> io::Result<()> {
+	open_verified_stage(reader, report).map(drop)
+}
+
+/// Open the synced stage after its unsigned envelope and CRC fields are verified.
+pub(crate) fn open_verified_stage<'file>(
+	reader: StagedReader<'file>,
+	report: &WriteReport,
+) -> io::Result<Image<StagedImage<'file>>> {
 	let mut image = Image::open(StagedImage::new(reader)?, Limits::default()).map_err(invalid)?;
 	let descriptor = image.descriptor();
 	let [table] = descriptor.tables.as_slice() else {
@@ -27,7 +36,8 @@ pub(crate) fn verify_stage(reader: StagedReader<'_>, report: &WriteReport) -> io
 	{
 		return Err(invalid(WRITER_REPORT_MISMATCH));
 	}
-	verify_payload(&mut image)
+	verify_payload(&mut image)?;
+	Ok(image)
 }
 
 pub(crate) fn verify_payload(image: &mut Image<impl ReadAt>) -> io::Result<()> {

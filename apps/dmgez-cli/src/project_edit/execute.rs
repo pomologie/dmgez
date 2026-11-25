@@ -1,10 +1,4 @@
-use std::{
-	borrow::Cow,
-	fmt::Write as _,
-	io,
-	io::Write,
-	path::{Path, PathBuf},
-};
+use std::{borrow::Cow, io::Write};
 
 use dmgez_builder::preflight::{Availability, ReleasePlan};
 use dmgez_config::{
@@ -17,6 +11,7 @@ use sha2::{Digest, Sha256};
 
 use crate::{
 	CliResult,
+	edit_input::{SHA256_HEX_BYTES, Snapshot, encode_sha256},
 	project_build::{Progress, report_losses},
 	project_input,
 	report_output::{EscapedText, write_report},
@@ -26,14 +21,13 @@ use crate::{
 use super::Arguments;
 
 const SCHEMA_VERSION: u16 = 1;
-const SHA256_HEX_BYTES: usize = 64;
 const EXPECTED_DIGEST_FORMAT: &str = "expected project SHA-256 must contain 64 hexadecimal digits";
 const EXPECTED_DIGEST_MISMATCH: &str = "project SHA-256 does not match the expected revision";
 const UNSIGNED_TRUST: &str = "unsigned";
 
 pub(super) fn run(arguments: &Arguments) -> CliResult {
 	let source = Snapshot::open(&arguments.project, MAX_MANIFEST_BYTES)?;
-	let project_sha256 = digest(&source.text);
+	let project_sha256 = encode_sha256(&Sha256::digest(source.text.as_bytes()).into());
 	check_expected(arguments.expect_project_sha256.as_deref(), &project_sha256)?;
 	let changes = Snapshot::open(&arguments.changes, MAX_EDIT_BATCH_BYTES)?;
 	let mut edits = parse_edit_batch(&changes.text)?;
@@ -99,44 +93,6 @@ pub(super) fn run(arguments: &Arguments) -> CliResult {
 		report.physical_bytes = Some(built.report.image.physical_bytes);
 	}
 	report.write(arguments.json)
-}
-
-struct Snapshot {
-	path: PathBuf,
-	text: String,
-	limit: usize,
-}
-
-impl Snapshot {
-	fn open(path: &Path, limit: usize) -> CliResult<Self> {
-		let path = path.canonicalize()?;
-		let text = project_input::read_limited(&path, limit)?;
-		Ok(Self { path, text, limit })
-	}
-
-	fn validate(&self) -> io::Result<()> {
-		let observed = project_input::read_limited(&self.path, self.limit).map_err(|error| {
-			io::Error::other(format!(
-				"could not recheck edit input {:?}: {error}",
-				self.path
-			))
-		})?;
-		if observed != self.text {
-			return Err(io::Error::other(format!(
-				"edit input changed after it was read: {:?}",
-				self.path
-			)));
-		}
-		Ok(())
-	}
-}
-
-fn digest(project: &str) -> String {
-	let mut encoded = String::with_capacity(SHA256_HEX_BYTES);
-	for byte in Sha256::digest(project.as_bytes()) {
-		write!(encoded, "{byte:02x}").expect("writing to a string is infallible");
-	}
-	encoded
 }
 
 fn check_expected(expected: Option<&str>, actual: &str) -> CliResult {
