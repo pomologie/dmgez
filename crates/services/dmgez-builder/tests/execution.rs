@@ -27,20 +27,114 @@ const OLD_DATA: &[u8] = b"old destination";
 const MANIFEST: &str = "schema_version = 1\n[image]\nname = 'Test'\noutput = 'built.dmg'\nformat = 'udro'\nsize = 512\n";
 
 fn profile(project: &Project, output: OutputIntent) -> ExecutionProfile {
+	profile_with_release(project, output, ReleaseIntent::Unsigned)
+}
+
+fn profile_with_release(
+	project: &Project,
+	output: OutputIntent,
+	release: ReleaseIntent,
+) -> ExecutionProfile {
 	let mut capabilities = BuildCapabilities::default();
 	capabilities.hfsplus_ascii = Availability::Available;
 	capabilities.verify = Availability::Available;
 	capabilities.atomic_replace = Availability::Available;
+	capabilities.release = Availability::Available;
 	preflight(
 		project,
 		PreflightOptions {
 			capabilities,
 			output,
-			release: ReleaseIntent::Unsigned,
+			release,
 			host_threads: NonZeroUsize::MIN,
 		},
 	)
 	.unwrap()
+}
+
+#[test]
+fn verifies_a_release_stage_without_publishing_the_destination() {
+	let temp = tempfile::tempdir().unwrap();
+	let path = temp.path().join(DESTINATION);
+	let project = Project::parse(MANIFEST).unwrap();
+	let manifest = discover(&project, temp.path(), Limits::default()).unwrap();
+	let profile = profile_with_release(&project, OutputIntent::Path, ReleaseIntent::Release);
+	let plan = || BuildPlan::new(&profile, &manifest, RAW.as_slice(), RAW.len() as u64).unwrap();
+	assert!(matches!(
+		plan().publish(&path, None),
+		Err(ExecuteError::Release)
+	));
+	let failed = plan().stage_release(
+		&path,
+		&|_, _| Err(io::ErrorKind::InvalidData.into()),
+		|_| {},
+	);
+	assert!(matches!(
+		failed,
+		Err(ExecuteError::Path(PublishError::Validate(
+			ImageError::Verification(_)
+		)))
+	));
+	assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
+	let events = RefCell::new(Vec::new());
+	let mut stage = plan()
+		.stage_release(
+			&path,
+			&|mut reader, report| {
+				let mut bytes = Vec::new();
+				reader.read_to_end(&mut bytes)?;
+				assert!(bytes.starts_with(&RAW));
+				assert_eq!(bytes.len() as u64, report.physical_bytes);
+				Ok(())
+			},
+			|event| events.borrow_mut().push(event),
+		)
+		.unwrap();
+	let stage_path = stage.path().to_path_buf();
+	assert_eq!(stage_path.parent(), Some(temp.path()));
+	assert_eq!(
+		stage_path.extension().and_then(std::ffi::OsStr::to_str),
+		Some("dmg")
+	);
+	assert!(!path.exists());
+	let mut bytes = [0; LOGICAL_BYTES];
+	stage.reader().unwrap().read_exact(&mut bytes).unwrap();
+	assert_eq!(bytes, RAW);
+	stage.validate_sources().unwrap();
+	profile.write_options().cancellation.cancel();
+	assert!(matches!(
+		stage.validate_sources(),
+		Err(ImageError::Writer(dmgez_udif::Error::Cancelled))
+	));
+	assert_eq!(
+		events.into_inner(),
+		[
+			BuildProgress::WritingImage {
+				logical_bytes: RAW.len() as u64
+			},
+			BuildProgress::VerifyingOutput
+		]
+	);
+	drop(stage);
+	assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
+}
+
+#[test]
+fn rejects_an_ordinary_build_at_the_release_staging_boundary() {
+	let temp = tempfile::tempdir().unwrap();
+	let project = Project::parse(MANIFEST).unwrap();
+	let manifest = discover(&project, temp.path(), Limits::default()).unwrap();
+	let ordinary = profile(&project, OutputIntent::Path);
+	let plan = BuildPlan::new(&ordinary, &manifest, RAW.as_slice(), RAW.len() as u64).unwrap();
+	assert!(matches!(
+		plan.stage_release(
+			&temp.path().join(DESTINATION),
+			&|_, _| panic!("unexpected verifier"),
+			|_| {}
+		),
+		Err(ExecuteError::Release)
+	));
+	assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
 }
 
 #[test]

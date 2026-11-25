@@ -18,6 +18,10 @@ use crate::{
 	progress::BuildProgress,
 };
 
+mod release_stage;
+
+pub use release_stage::StagedRelease;
+
 /// An admitted build backed by a sealed logical filesystem image.
 /// The reader must expose the image from byte zero and end at `logical_bytes`.
 pub struct BuildPlan<'plan, R> {
