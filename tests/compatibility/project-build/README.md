@@ -112,6 +112,23 @@ python3 check_finder_artwork.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplu
 
 The qualified source profile covers ordinary regular file permissions and ownership, timestamp conversion at HFS+ precision, inline attributes, Finder information, a buffered resource fork, and exact symlink target bytes. The Unicode profile gives included regular-file hard links distinct catalog entries that share one chain-free inode, with both forks and attributes captured once. Source checks cover every alias before publication. Shared metadata losses name the representative and its other image paths. The strict policy rejects unavailable required directory and symlink attributes, subsecond date loss, unsupported BSD flags and attribute encodings, and hard-link groups outside the supported regular-file profile. Report policy records those losses, and an explicit hard-link preservation opt-out emits independent files with omission diagnostics. Explicit timestamp omission and an explicit generated epoch suit deterministic synthetic fixtures.
 
+## Windows NTFS composition
+
+Run the standalone HFS+ composition tool with Python 3.11 or newer on local NTFS. Use the checkout or unpacked package form. Add `--test` on a native Windows machine to execute the project build tests, including the NTFS source and metadata fixture.
+
+```powershell
+py -3 tools\compose_hfsplus_cli.py --hfsplus ..\hfsplus --test
+py -3 tools\compose_hfsplus_cli.py --hfsplus ..\hfsplus
+target\hfsplus-cli\debug\dmgez.exe build dmg.toml --dry-run
+target\hfsplus-cli\debug\dmgez.exe build dmg.toml
+```
+
+Windows copies regular file data from the [NTFS source adapter](../../../crates/services/dmgez-builder/WINDOWS_SOURCES.md). Requested attributes that the host cannot observe fail in strict metadata mode. `[metadata] policy = "report"` permits the build and reports omissions. The Windows builder publishes to a new output and refuses `--overwrite`. Finder custom item icons require host metadata conflict checks and are unavailable on this path. APFS and filesystem reader composition continue to require macOS or Linux.
+
+Cross-target Clippy with warnings denied passed on Rust 1.99.1 for `x86_64-pc-windows-msvc`, composed with HFS+ revision `fb11b35`. The Windows-specific fixture covers dry-run, a copied Unicode-named source, strict metadata refusal, report-mode publication, and no-clobber behavior. Native Windows runtime evidence is pending.
+
+## Native interoperability evidence
+
 The smoke tests assert minimum free capacity, byte-exact regular-file, inline attribute and macOS resource-fork read-back, an insufficient shrink bound, and rejection of source changes before publication. Hard-link tests verify a shared inode and single attribute owner, distinct catalog IDs, independent equal-content files, byte-identical output after reordering declarations, and rejection when the nonrepresentative source path is replaced. Native smoke evidence additionally runs Apple's UDIF checksum verifier and UDTO export on a disposable generated image, checks exact file and symlink bytes with 7-Zip, and reads both Finder positions with the Python ds_store oracle.
 
 The ULMO command test checks refusal before source discovery with the codec disabled. With it enabled, the test checks exact dry-run capacity, requires an LZMA2 run, verifies UDIF checksums, and compares the full decoded disk against the same project built as UDRO. On macOS 14.7.2 (23H311), `hdiutil verify` accepted both default and serial ULMO builds. UDTO exports matched the corresponding 1 MiB UDRO baselines byte for byte. Each profile produced the same ULMO bytes with sibling sources and unpacked HFS+ 0.1.0 packages from before the `hfsplus-pomologie-core` package rename.

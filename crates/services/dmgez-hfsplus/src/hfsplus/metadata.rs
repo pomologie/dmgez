@@ -1,8 +1,12 @@
-use std::{borrow::Cow, mem::size_of};
+use std::borrow::Cow;
+#[cfg(not(windows))]
+use std::mem::size_of;
 
+#[cfg(not(windows))]
+use dmgez_builder::metadata::{self, AttributeLimits};
 use dmgez_builder::{
 	manifest,
-	metadata::{self, Attribute, AttributeLimits, policy},
+	metadata::{Attribute, policy},
 };
 use dmgez_config::Project;
 use hfsplus_builder::volume::{self, EntryKind, EntryMetadata, ForkSource, ManifestEntry};
@@ -120,7 +124,7 @@ impl<'build> Capture<'_, '_, 'build> {
 		is_file: bool,
 	) -> Result<policy::AttributeCapture, Error> {
 		let requests = &self.project.metadata;
-		#[cfg(feature = "volume-icon")]
+		#[cfg(all(feature = "volume-icon", not(windows)))]
 		if is_file && entry.finder.custom_icon.is_some() {
 			validate_icon_source(entry, source)?;
 		}
@@ -133,24 +137,32 @@ impl<'build> Capture<'_, '_, 'build> {
 		if !is_file {
 			return Ok(policy::AttributeCapture::Unavailable);
 		}
-		let (_, attributes) = metadata::capture_regular(
-			source,
-			AttributeLimits {
-				bytes: *self.remaining,
-				value_bytes: *self.remaining,
-				attributes: *self.remaining / size_of::<Attribute>(),
-			},
-		)
-		.map_err(|cause| Error::Capture {
-			path: entry.destination.as_str().into(),
-			cause,
-		})?;
-		charge(self.remaining, attributes.accounted_bytes)?;
-		Ok(policy::AttributeCapture::Known(attributes))
+		#[cfg(windows)]
+		{
+			let _ = (entry, source);
+			Ok(policy::AttributeCapture::Unavailable)
+		}
+		#[cfg(not(windows))]
+		{
+			let (_, attributes) = metadata::capture_regular(
+				source,
+				AttributeLimits {
+					bytes: *self.remaining,
+					value_bytes: *self.remaining,
+					attributes: *self.remaining / size_of::<Attribute>(),
+				},
+			)
+			.map_err(|cause| Error::Capture {
+				path: entry.destination.as_str().into(),
+				cause,
+			})?;
+			charge(self.remaining, attributes.accounted_bytes)?;
+			Ok(policy::AttributeCapture::Known(attributes))
+		}
 	}
 }
 
-#[cfg(feature = "volume-icon")]
+#[cfg(all(feature = "volume-icon", not(windows)))]
 fn validate_icon_source(
 	entry: &manifest::Entry,
 	source: &manifest::SourceSnapshot,
@@ -175,7 +187,7 @@ fn validate_icon_source(
 pub(super) fn validate_finder_overrides(entry: &manifest::Entry) -> Result<(), Error> {
 	if entry.finder.hidden.is_some()
 		|| entry.finder.hide_extension.is_some()
-		|| (!cfg!(feature = "volume-icon") && entry.finder.custom_icon.is_some())
+		|| ((!cfg!(feature = "volume-icon") || cfg!(windows)) && entry.finder.custom_icon.is_some())
 	{
 		return Err(Error::FinderFlags {
 			path: entry.destination.as_str().into(),

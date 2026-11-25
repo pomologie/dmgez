@@ -1,10 +1,10 @@
-#![cfg(any(target_os = "macos", target_os = "linux"))]
-
 use std::{collections::TryReserveError, io::Write, mem::size_of, path::Path};
 
+#[cfg(not(windows))]
+use dmgez_builder::metadata as host_metadata;
 use dmgez_builder::{
 	execution::{BuildPlan, BuildReport, ExecuteError, OutputVerifier},
-	metadata::{self as host_metadata, Attribute, policy},
+	metadata::{Attribute, policy},
 	planning::{self, PreparedBuild},
 	preflight::{
 		Availability, BuildCapabilities, ExecutionProfile, FilesystemProfile, PreflightError,
@@ -79,6 +79,7 @@ pub enum Error {
 	LinkSource(#[source] dmgez_builder::manifest::Error),
 	#[error("hard-link aliases have inconsistent source metadata at {path:?}")]
 	LinkMetadata { path: String },
+	#[cfg(not(windows))]
 	#[error("could not capture regular-source metadata for {path:?}")]
 	Capture {
 		path: String,
@@ -98,7 +99,7 @@ pub enum Error {
 	#[cfg(feature = "volume-icon")]
 	#[error("a custom Finder icon would replace an existing resource fork at {path:?}")]
 	CustomIconResourceFork { path: String },
-	#[cfg(feature = "volume-icon")]
+	#[cfg(all(feature = "volume-icon", not(windows)))]
 	#[error("a custom Finder icon would invalidate native code-signing metadata at {path:?}")]
 	CustomIconSigningMetadata { path: String },
 	#[error("HFS+ timestamp exceeds the representable epoch")]
@@ -145,14 +146,22 @@ pub fn capabilities() -> BuildCapabilities {
 	let mut capabilities = BuildCapabilities::default();
 	capabilities.hfsplus_unicode = Availability::Available;
 	capabilities.hfsplus_ascii = Availability::Available;
-	capabilities.atomic_replace = Availability::Available;
+	capabilities.atomic_replace = if cfg!(windows) {
+		Availability::Unavailable
+	} else {
+		Availability::Available
+	};
 	if cfg!(feature = "finder-write") {
 		capabilities.finder_layout = Availability::Available;
 		capabilities.finder_image_background = Availability::Available;
 	}
 	if cfg!(feature = "volume-icon") {
 		capabilities.finder_volume_icon = Availability::Available;
-		capabilities.finder_custom_icon = Availability::Available;
+		capabilities.finder_custom_icon = if cfg!(windows) {
+			Availability::Unavailable
+		} else {
+			Availability::Available
+		};
 	}
 	capabilities
 }

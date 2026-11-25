@@ -78,6 +78,8 @@ With `notarization-native` on macOS, `notarize` submits a signed DMG with a priv
 
 While the versioned HFS+ dependencies are unpublished, compose the standalone CLI locally on macOS or Linux using a sibling checkout or unpacked 0.1.0 packages. The compose tool uses a temporary Cargo workspace and the local Cargo cache. The resulting binary contains the builder and runs directly.
 
+The HFS+ composition tool also accepts Windows hosts for [local NTFS project builds](tests/compatibility/project-build/README.md#windows-ntfs-composition). The Windows path passed cross-target checks and needs native runtime qualification.
+
 ```sh
 python3 tools/compose_hfsplus_cli.py --hfsplus ../hfsplus
 target/hfsplus-cli/debug/dmgez build project.toml --dry-run

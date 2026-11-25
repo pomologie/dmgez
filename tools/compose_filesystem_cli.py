@@ -17,6 +17,7 @@ CLI = Path("apps/dmgez-cli")
 CLI_PACKAGE = "dmgez-cli"
 CLI_BINARY = "dmgez"
 CLI_TEST = "project_build_cli"
+WINDOWS_CLI_TEST = "windows_project_build_cli"
 VERIFY_TEST = "hfs_verify_cli"
 READ_TEST = "volume_cli"
 APFS_VERIFY_TEST = "apfs_verify_cli"
@@ -247,6 +248,8 @@ def run_cli(cargo, directory, options, packages):
                 command.extend(("--test", EXTRACT_TEST))
         if HFSPLUS_BUILDER in packages:
             command.extend(("--test", CLI_TEST))
+            if sys.platform == "win32":
+                command.extend(("--test", WINDOWS_CLI_TEST))
         subprocess.run(command, cwd=directory, env=environment, check=True)
         return
 
@@ -297,11 +300,14 @@ def main():
         options.features.append(APFS_FEATURE)
     if options.target_dir is None:
         options.target_dir = ROOT / "target" / ("apfs-cli" if use_apfs else "hfsplus-cli")
-    if sys.platform != "darwin" and not sys.platform.startswith("linux"):
-        parser.error("filesystem CLI composition requires a macOS or Linux host")
+    reader = any(has_cli_feature(options, name) for name in (*READ_PROFILES, VERIFY_FEATURE))
+    if sys.platform == "win32":
+        if use_apfs or reader:
+            parser.error("Windows composition supports HFS+ project builds only")
+    elif sys.platform != "darwin" and not sys.platform.startswith("linux"):
+        parser.error("filesystem CLI composition requires a macOS, Linux, or Windows host")
 
     try:
-        reader = any(has_cli_feature(options, name) for name in (*READ_PROFILES, VERIFY_FEATURE))
         build = not reader or not options.no_default_features or any(
             has_cli_feature(options, name) for name in ("build", *FEATURE_ADDITIONS)
         )

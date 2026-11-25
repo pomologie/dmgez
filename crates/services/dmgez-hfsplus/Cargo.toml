@@ -16,7 +16,7 @@ lzma = ["dmgez-builder/lzma"]
 parallel = ["dmgez-builder/parallel"]
 volume-icon = ["finder-write", "dmgez-builder/volume-icon"]
 
-[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+[target.'cfg(any(target_os = "linux", target_os = "macos", windows))'.dependencies]
 dmgez-builder = { version = "=0.1.0", path = "../dmgez-builder", default-features = false, features = ["zlib"] }
 dmgez-config = { version = "=0.1.0", path = "../../foundation/dmgez-config" }
 dmgez-core = { version = "=0.1.0", path = "../../foundation/dmgez-core", default-features = false, features = ["source"] }
