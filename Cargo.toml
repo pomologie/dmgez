@@ -3,6 +3,7 @@ resolver = "3"
 members = [
 	"apps/dmgez",
 	"apps/dmgez-cli",
+	"apps/dmgez-mcp",
 	"crates/formats/dmgez-macho",
 	"crates/formats/dmgez-udif",
 	"crates/foundation/dmgez-config",
