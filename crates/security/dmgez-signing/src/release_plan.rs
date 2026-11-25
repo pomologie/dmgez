@@ -208,6 +208,12 @@ impl ReleaseRun {
 		&self.report
 	}
 
+	/// Return the accumulated evidence and end the run.
+	#[must_use]
+	pub fn into_report(self) -> ReleaseReport {
+		self.report
+	}
+
 	/// Admits exactly one required action with the observed artifact identity.
 	///
 	/// Observe the privately staged artifact immediately before admission and

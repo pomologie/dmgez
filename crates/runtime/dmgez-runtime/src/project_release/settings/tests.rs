@@ -26,7 +26,7 @@ fn native_capabilities() -> ReleaseCapabilities {
 }
 
 #[test]
-fn ordinary_build_ignores_even_unavailable_release_settings() {
+fn ordinary_build_ignores_even_unavailable_settings() {
 	let source = project(&format!(
 		"{APP_AND_DISK}\nbackend = 'rust'\n[release]\nrequire_notarization = true"
 	));

@@ -15,7 +15,7 @@ use crate::{CliResult, project_input};
 
 use super::Arguments;
 #[cfg(feature = "project-release")]
-use super::release::ReleaseRequest;
+use super::release;
 
 const MAX_LOSS_DETAILS: usize = 20;
 const READ_PROGRESS_STEPS: u64 = 10;
@@ -47,33 +47,22 @@ pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> CliResult
 		result => result?,
 	};
 	let progress = Progress::default();
-	#[cfg(feature = "project-release")]
-	if let Some(release) = ReleaseRequest::admit(project.project(), &arguments, working_directory)?
-	{
-		let prepared =
-			project.prepare_release(Default::default(), |event| progress.update(event))?;
-		let sealed = prepared.seal()?;
-		report_losses(sealed.metadata_losses());
-		if arguments.dry_run {
-			let summary = PlanSummary::from_sealed(prepared.prepared(), &sealed);
-			write_dry_run(io::stdout().lock(), &summary)?;
-			return Ok(());
-		}
-		return release.run(sealed, prepared.prepared(), arguments.json, |event| {
-			progress.update(event)
-		});
-	}
 	let mode = if arguments.dry_run {
 		BuildMode::Plan
 	} else {
 		BuildMode::Publish
 	};
-	let (report, losses) = match project.run(mode, Default::default(), |event| match event {
+	let observe = |event: BuildEvent<'_>| match event {
 		BuildEvent::Progress(event) => progress.update(event),
 		BuildEvent::MetadataLosses(entries) => {
 			report_losses(entries);
 		}
-	})? {
+	};
+	#[cfg(feature = "project-release")]
+	if arguments.release {
+		return release::run(&project, &arguments, working_directory, mode, observe);
+	}
+	let (report, losses) = match project.run(mode, Default::default(), observe)? {
 		BuildOutcome::Planned(summary) => {
 			write_dry_run(io::stdout().lock(), &summary)?;
 			return Ok(());
@@ -103,7 +92,7 @@ pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> CliResult
 	Ok(())
 }
 
-fn write_dry_run(mut output: impl Write, summary: &PlanSummary) -> io::Result<()> {
+pub(super) fn write_dry_run(mut output: impl Write, summary: &PlanSummary) -> io::Result<()> {
 	writeln!(output, "mode=dry-run")?;
 	writeln!(output, "format={:?}", summary.format)?;
 	writeln!(output, "filesystem={:?}", summary.filesystem)?;

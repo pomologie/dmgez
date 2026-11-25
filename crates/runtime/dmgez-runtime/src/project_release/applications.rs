@@ -6,10 +6,10 @@ use dmgez_builder::{
 };
 use dmgez_config::VirtualPath;
 use dmgez_operations::{
-	extract::{NameLimits, NameProfile, host::StableDestination},
+	extract::host::StableDestination,
 	install::{
-		CopyContent, CopyEntry, CopyLimits, CopyPlan, execute_copy, prepare_application,
-		prepare_copy,
+		CopyContent, CopyEntry, CopyLimits, CopyPlan, execute_copy, prepare_copy,
+		prepare_staged_application,
 	},
 };
 use dmgez_signing::{
@@ -19,9 +19,9 @@ use dmgez_signing::{
 };
 use dmgez_vfs::volume::{ForkKind, LookupName, NodeHandle, RawName, VolumeBackend, VolumeView};
 
-use crate::{CliResult, volume_input::with_hfs_file_verified};
+use crate::{project_release::StageResult, volume::with_hfs_file_verified};
 
-use super::{release_artifact, release_native::NativeReleaseError};
+use super::{artifact, native::NativeReleaseError};
 
 mod inventory;
 mod source;
@@ -33,13 +33,12 @@ const PATH_SEPARATOR: char = '/';
 const PERMISSIONS: u16 = 0o777;
 const BUFFER_BYTES: usize = 64 << 10;
 const PRIVATE_PREFIX: &str = ".dmgez-verify-app-";
-const STAGING_DEPTH: usize = 2;
 const OWNER_DIRECTORY_ACCESS: u32 = 0o700;
 
 pub(super) fn prepare(
 	prepared: &PreparedBuild,
 	backend: ResolvedBackend,
-) -> CliResult<Vec<VirtualPath>> {
+) -> StageResult<Vec<VirtualPath>> {
 	source::prepare(prepared, |path| check_signature(path, backend))
 }
 
@@ -49,13 +48,13 @@ pub(super) fn verify_unsigned(
 	prepared: &PreparedBuild,
 	applications: &[VirtualPath],
 	backend: ResolvedBackend,
-) -> CliResult<usize> {
+) -> StageResult<usize> {
 	verify_staged(path, expected, prepared.manifest(), applications, |path| {
 		check_signature(path, backend)
 	})
 }
 
-fn check_signature(path: &Path, backend: ResolvedBackend) -> CliResult {
+fn check_signature(path: &Path, backend: ResolvedBackend) -> StageResult {
 	let backend = match backend {
 		ResolvedBackend::Native => Backend::Native,
 		_ => {
@@ -75,17 +74,17 @@ fn verify_staged(
 	expected: &ImageIdentity,
 	manifest: &Manifest,
 	applications: &[VirtualPath],
-	mut verify: impl FnMut(&Path) -> CliResult,
-) -> CliResult<usize> {
-	let file = release_artifact::open_regular(path)?;
-	let require_identity = || -> CliResult {
-		if release_artifact::observe_file(file.try_clone()?)? != *expected {
+	mut verify: impl FnMut(&Path) -> StageResult,
+) -> StageResult<usize> {
+	let file = artifact::open_regular(path)?;
+	let require_identity = || -> StageResult {
+		if artifact::observe_file(file.try_clone()?)? != *expected {
 			return Err(ReleaseError::ArtifactChanged.into());
 		}
 		Ok(())
 	};
 	require_identity()?;
-	with_hfs_file_verified(&file, |view, verify_source| {
+	with_hfs_file_verified(&file, |view, verify_source| -> StageResult {
 		inventory::match_applications(view, applications)?;
 		for path in applications {
 			verify_source()?;
@@ -98,22 +97,18 @@ fn verify_staged(
 	Ok(applications.len())
 }
 
-fn verify_bundle<B: VolumeBackend>(
+fn verify_bundle<B: VolumeBackend<Error: Send + Sync>>(
 	view: &mut VolumeView<B>,
 	manifest: &Manifest,
 	path: &VirtualPath,
 	verify_source: &dyn Fn() -> io::Result<()>,
-	verify: &mut impl FnMut(&Path) -> CliResult,
-) -> CliResult
+	verify: &mut impl FnMut(&Path) -> StageResult,
+) -> StageResult
 where
 	B::Id: Eq + std::hash::Hash,
 {
 	let root = exact_path(view, path)?;
-	let names = NameLimits {
-		max_depth: NameLimits::default().max_depth - STAGING_DEPTH,
-		..NameLimits::default()
-	};
-	let application = prepare_application(view, path, NameProfile::PortableAscii, names, || false)?;
+	let application = prepare_staged_application(view, path, || false)?;
 	if *application.source() != root {
 		return Err(bundle_mismatch(path));
 	}
@@ -165,10 +160,10 @@ fn writable_directories(path: &Path) -> io::Result<()> {
 	Ok(())
 }
 
-fn exact_path<B: VolumeBackend>(
+fn exact_path<B: VolumeBackend<Error: Send + Sync>>(
 	view: &mut VolumeView<B>,
 	path: &VirtualPath,
-) -> CliResult<NodeHandle<B::Id>> {
+) -> StageResult<NodeHandle<B::Id>> {
 	let mut node = view.root()?;
 	for name in path.components() {
 		let entry = view
@@ -187,12 +182,12 @@ fn exact_path<B: VolumeBackend>(
 	Ok(node)
 }
 
-fn match_manifest<B: VolumeBackend>(
+fn match_manifest<B: VolumeBackend<Error: Send + Sync>>(
 	view: &mut VolumeView<B>,
 	plan: &CopyPlan<B::Id>,
 	manifest: &Manifest,
 	path: &VirtualPath,
-) -> CliResult {
+) -> StageResult {
 	let entries = manifest.entries();
 	let root = entries
 		.binary_search_by(|entry| entry.destination.cmp(path))
@@ -241,12 +236,12 @@ fn match_manifest<B: VolumeBackend>(
 	Ok(())
 }
 
-fn match_object<B: VolumeBackend>(
+fn match_object<B: VolumeBackend<Error: Send + Sync>>(
 	view: &mut VolumeView<B>,
 	node: &NodeHandle<B::Id>,
 	actual: &CopyEntry,
 	expected: &Entry,
-) -> CliResult {
+) -> StageResult {
 	let snapshot = expected
 		.source
 		.as_ref()
@@ -270,13 +265,13 @@ fn match_object<B: VolumeBackend>(
 	Ok(())
 }
 
-fn match_data<B: VolumeBackend>(
+fn match_data<B: VolumeBackend<Error: Send + Sync>>(
 	view: &mut VolumeView<B>,
 	node: &NodeHandle<B::Id>,
 	snapshot: &SourceSnapshot,
-) -> CliResult<bool> {
+) -> StageResult<bool> {
 	let mut source = snapshot.open_regular()?;
-	let matches = view.with_fork(node, ForkKind::Data, |fork| -> CliResult<bool> {
+	let matches = view.with_fork(node, ForkKind::Data, |fork| -> StageResult<bool> {
 		if fork.len() != snapshot.metadata().size {
 			return Ok(false);
 		}
@@ -298,7 +293,7 @@ fn match_data<B: VolumeBackend>(
 	Ok(matches.transpose()?.unwrap_or(false))
 }
 
-fn bundle_mismatch(path: &VirtualPath) -> Box<dyn std::error::Error> {
+fn bundle_mismatch(path: &VirtualPath) -> Box<dyn std::error::Error + Send + Sync> {
 	io::Error::new(
 		io::ErrorKind::InvalidData,
 		format!(

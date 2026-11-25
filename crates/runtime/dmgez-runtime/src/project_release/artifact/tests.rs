@@ -9,9 +9,9 @@ use super::*;
 const SOURCE_NAME: &str = "source.dmg";
 const OUTPUT_NAME: &str = "release.dmg";
 const STAGED_SUFFIX: &str = ".dmg";
-const UNSIGNED: &[u8] = include_bytes!("../../../../../tests/fixtures/images/tiny-UDZO.dmg");
+const UNSIGNED: &[u8] = include_bytes!("../../../../../../tests/fixtures/images/tiny-UDZO.dmg");
 const SIGNED: &[u8] =
-	include_bytes!("../../../../../tests/fixtures/images/tiny-UDZO-adhoc-sha256.dmg");
+	include_bytes!("../../../../../../tests/fixtures/images/tiny-UDZO-adhoc-sha256.dmg");
 const SIGNED_SHA256: &str = "5b2bd2040ed7234affd8db97f05717a7541f821470d1451d26699f4ec1f8395e";
 
 #[test]

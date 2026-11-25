@@ -4,17 +4,17 @@ use dmgez_config::VirtualPath;
 use dmgez_operations::extract::{EntryId, NameLimits, NamePlan, NameProfile, preflight_names};
 use dmgez_vfs::volume::{NodeKind, VolumeBackend, VolumeView};
 
-use crate::CliResult;
+use crate::project_release::StageResult;
 
 use super::PATH_SEPARATOR;
 
 const APP_EXTENSION: &str = "app";
 const EXTENSION_SEPARATOR: char = '.';
 
-pub(super) fn match_applications<B: VolumeBackend>(
+pub(super) fn match_applications<B: VolumeBackend<Error: Send + Sync>>(
 	view: &mut VolumeView<B>,
 	expected: &[VirtualPath],
-) -> CliResult
+) -> StageResult
 where
 	B::Id: Eq + Hash,
 {
@@ -61,7 +61,7 @@ pub(super) fn is_bundle_name(name: &str) -> bool {
 		})
 }
 
-fn path_to<Id>(names: &NamePlan<Id>, index: usize) -> CliResult<String> {
+fn path_to<Id>(names: &NamePlan<Id>, index: usize) -> StageResult<String> {
 	let mut current = Some(index);
 	let mut components = Vec::new();
 	while let Some(index) = current {

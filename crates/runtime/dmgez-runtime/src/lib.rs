@@ -45,7 +45,13 @@ pub mod project_build;
 pub mod project_edit;
 #[cfg(feature = "project-input")]
 pub mod project_input;
-#[cfg(any(feature = "image-edit", feature = "project-edit"))]
+#[cfg(feature = "project-release")]
+pub mod project_release;
+#[cfg(any(
+	feature = "image-edit",
+	feature = "project-edit",
+	feature = "project-release"
+))]
 mod staged_image;
 #[cfg(any(feature = "hfsplus-volume", feature = "apfs-volume"))]
 pub mod volume;

@@ -91,9 +91,9 @@ fn reconstructs_exact_bundle_and_runs_verifier_on_private_copy_of_unsigned_image
 	let stage = build
 		.seal()
 		.unwrap()
-		.stage_release(&release_artifact::verify_stage, |_| {})
+		.stage_release(&artifact::verify_stage, |_| {})
 		.unwrap();
-	let identity = release_artifact::observe(stage.path()).unwrap();
+	let identity = artifact::observe(stage.path()).unwrap();
 	let mut private = None;
 	let count = verify_staged(
 		stage.path(),
@@ -120,7 +120,7 @@ fn reconstructs_exact_bundle_and_runs_verifier_on_private_copy_of_unsigned_image
 	.unwrap();
 	assert_eq!(count, 1);
 	assert!(!private.unwrap().exists());
-	assert_eq!(release_artifact::observe(stage.path()).unwrap(), identity);
+	assert_eq!(artifact::observe(stage.path()).unwrap(), identity);
 	assert!(!build.prepared().output_path().unwrap().exists());
 }
 
@@ -139,9 +139,9 @@ fn refuses_unexpected_applications_and_same_length_wrong_payload_before_policy_c
 	let stage = with_original
 		.seal()
 		.unwrap()
-		.stage_release(&release_artifact::verify_stage, |_| {})
+		.stage_release(&artifact::verify_stage, |_| {})
 		.unwrap();
-	let identity = release_artifact::observe(stage.path()).unwrap();
+	let identity = artifact::observe(stage.path()).unwrap();
 	let paths = [VIRTUAL_APP.parse().unwrap()];
 	for (manifest, applications, message) in [
 		(

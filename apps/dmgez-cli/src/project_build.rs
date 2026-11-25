@@ -6,19 +6,6 @@ use clap::Args;
 mod execute;
 #[cfg(feature = "project-release")]
 mod release;
-#[cfg(all(
-	feature = "project-release",
-	feature = "signing-native",
-	feature = "hfsplus-install",
-	target_os = "macos"
-))]
-mod release_applications;
-#[cfg(feature = "project-release")]
-mod release_artifact;
-#[cfg(feature = "project-release")]
-mod release_native;
-#[cfg(feature = "project-release")]
-mod release_settings;
 
 #[cfg(feature = "project-build")]
 pub(crate) use execute::build;

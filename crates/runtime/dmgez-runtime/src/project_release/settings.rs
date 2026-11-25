@@ -12,7 +12,7 @@ use dmgez_signing::{
 
 const NATIVE: ResolvedBackend = ResolvedBackend::Native;
 
-/// Release adapters the CLI can supply for this invocation.
+/// Release adapters the runtime can supply for this invocation.
 #[derive(Clone, Copy, Default)]
 pub(super) struct ReleaseCapabilities {
 	pub(super) application_verification: bool,
@@ -234,7 +234,7 @@ fn require_native(requested: Backend, stage: Stage, available: bool) -> Result<(
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) enum Stage {
+pub enum Stage {
 	ApplicationVerification,
 	DiskSigning,
 	Notarization,
@@ -254,7 +254,8 @@ impl fmt::Display for Stage {
 
 /// Release admission errors retain no user-supplied identity or credential text.
 #[derive(Debug)]
-pub(super) enum AdmissionError {
+#[non_exhaustive]
+pub enum AdmissionError {
 	ApplicationSigningUnsupported,
 	BackendUnavailable { stage: Stage, requested: Backend },
 	NotarizationDisabled,
@@ -278,7 +279,7 @@ impl fmt::Display for AdmissionError {
 			Self::BackendUnavailable { stage, requested } => write!(formatter, "{stage} backend {requested:?} is unavailable"),
 			Self::NotarizationDisabled => formatter.write_str("release.require_notarization requires notarization.enabled = true"),
 			Self::UnexpectedIdentifier => formatter.write_str("a release identifier requires signing.enabled and signing.dmg"),
-			Self::MissingIdentifier => formatter.write_str("disk image signing requires signing.identifier or --identifier"),
+			Self::MissingIdentifier => formatter.write_str("disk image signing requires an identifier"),
 			Self::InvalidIdentifier => formatter.write_str("invalid disk image signing identifier"),
 			Self::MissingIdentity => formatter.write_str("disk image signing requires signing.identity"),
 			Self::InvalidIdentity => formatter.write_str("signing.identity must be a 40-hex-digit Developer ID Application certificate fingerprint"),

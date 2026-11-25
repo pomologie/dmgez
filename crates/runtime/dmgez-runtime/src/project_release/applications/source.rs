@@ -6,7 +6,7 @@ use dmgez_builder::{
 };
 use dmgez_config::VirtualPath;
 
-use crate::CliResult;
+use crate::project_release::StageResult;
 
 use super::inventory::is_bundle_name;
 
@@ -21,8 +21,8 @@ mod tests;
 
 pub(super) fn prepare(
 	prepared: &PreparedBuild,
-	mut verify: impl FnMut(&Path) -> CliResult,
-) -> CliResult<Vec<VirtualPath>> {
+	mut verify: impl FnMut(&Path) -> StageResult,
+) -> StageResult<Vec<VirtualPath>> {
 	check_generated_assets(prepared)?;
 	let entries = prepared.manifest().entries();
 	let mut applications = Vec::new();
@@ -61,7 +61,7 @@ impl<'manifest> Bundle<'manifest> {
 		iter::once(self.root).chain(self.descendants)
 	}
 
-	fn bind(&self, prepared: &PreparedBuild) -> CliResult<&'manifest SourceSnapshot> {
+	fn bind(&self, prepared: &PreparedBuild) -> StageResult<&'manifest SourceSnapshot> {
 		let root = self.source(self.root)?;
 		for entry in self.entries() {
 			let source = self.source(entry)?;
@@ -119,7 +119,7 @@ impl<'manifest> Bundle<'manifest> {
 		Ok(root)
 	}
 
-	fn validate_sources(&self) -> CliResult {
+	fn validate_sources(&self) -> StageResult {
 		for entry in self.entries() {
 			self.source(entry)?.validate()?;
 		}

@@ -197,7 +197,8 @@ impl BuildProject {
 	///
 	/// # Errors
 	/// Returns host resource, preflight, or source preparation errors.
-	pub fn prepare_release(
+	#[cfg(feature = "project-release")]
+	pub(super) fn prepare_release(
 		&self,
 		cancellation: Cancellation,
 		progress: impl Fn(BuildProgress),
@@ -234,7 +235,7 @@ impl BuildProject {
 impl PlanSummary {
 	/// Summarize frozen geometry for either an unsigned image or a staged release.
 	#[must_use]
-	pub fn from_sealed(prepared: &PreparedBuild, image: &HfsImage<'_>) -> Self {
+	pub(super) fn from_sealed(prepared: &PreparedBuild, image: &HfsImage<'_>) -> Self {
 		let profile = prepared.profile();
 		let manifest = prepared.manifest();
 		let logical_bytes = image.logical_bytes();

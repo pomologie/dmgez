@@ -118,11 +118,3 @@ fn encoding(raw: bool) -> Encoding {
 		Encoding::Udif(Default::default())
 	}
 }
-
-#[cfg(all(
-	feature = "hfsplus-install",
-	target_os = "macos",
-	feature = "project-release",
-	feature = "signing-native"
-))]
-pub(super) use dmgez_runtime::volume::with_hfs_file_verified;
