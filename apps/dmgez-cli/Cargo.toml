@@ -48,9 +48,11 @@ diff = [
 diff-hash = ["diff", "dmgez-diff/content-hash"]
 finder-diff = ["diff", "dmgez-diff/finder-layout"]
 
-# Project import and installer checks
+# Project configuration and linting
 appdmg-import = ["dep:dmgez-config", "dmgez-config/appdmg-import", "dep:dmgez-core"]
 lint = ["dep:dmgez-config", "dep:dmgez-lint", "dep:dmgez-preview", "dep:serde", "dep:serde_json"]
+
+# Installer checks
 installer-lint = ["lint", "dmgez-lint/installer"]
 installer-test = ["inspect", "dep:dmgez-operations", "dmgez-operations/install"]
 

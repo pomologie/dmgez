@@ -32,9 +32,12 @@ members = [
 ]
 default-members = ["apps/dmgez-cli"]
 exclude = [
+	# Composed filesystem adapters
 	"crates/services/dmgez-apfs-read",
 	"crates/services/dmgez-hfsplus",
 	"crates/services/dmgez-hfsplus-read",
+
+	# Fuzz harness
 	"fuzz",
 ]
 
