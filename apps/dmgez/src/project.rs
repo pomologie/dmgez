@@ -15,6 +15,7 @@ use eframe::egui::{self, Button, DragValue, Panel, ScrollArea, TextEdit, Ui};
 use crate::layout_lint::LayoutLint;
 
 pub(crate) mod arrangement;
+mod create;
 pub(crate) mod input;
 #[cfg(test)]
 mod tests;
@@ -45,6 +46,7 @@ pub(crate) struct ProjectTab {
 	layout_lint: LayoutLint,
 	image_name: String,
 	position_draft: Option<(VirtualPath, [f64; 2])>,
+	entry_draft: Option<create::EntryDraft>,
 	pub(crate) drag: Option<DragEdit>,
 	error: Option<String>,
 }
@@ -71,6 +73,7 @@ impl ProjectTab {
 			layout_lint: LayoutLint::default(),
 			image_name: project.image.name.as_str().to_owned(),
 			position_draft: None,
+			entry_draft: None,
 			drag: None,
 			error: None,
 			document,
@@ -119,23 +122,36 @@ impl ProjectTab {
 		edit: impl FnOnce(&mut ProjectDocument) -> Result<bool, ProjectEditError>,
 	) {
 		match edit(&mut self.document) {
-			Ok(true) => {
-				let project = self.document.project();
-				self.tree = DeclaredTree::from_project(project);
-				self.selected.retain(|path| {
-					self.tree.as_ref().is_ok_and(|tree| {
-						tree.children(&self.folder)
-							.binary_search_by(|entry| entry.path().cmp(path))
-							.is_ok()
-					})
-				});
-				self.image_name = project.image.name.as_str().to_owned();
-				self.position_draft = None;
-				self.error = None;
-			}
+			Ok(true) => self.refresh_document(),
 			Ok(false) => {}
 			Err(error) => self.error = Some(error.to_string()),
 		}
+	}
+
+	fn refresh_document(&mut self) {
+		let project = self.document.project();
+		self.tree = DeclaredTree::from_project(project);
+		self.image_name = project.image.name.as_str().to_owned();
+		if let Ok(tree) = &self.tree {
+			let mut folder = self.folder.clone();
+			while !tree.contains_folder(&folder) {
+				folder = parent(folder.as_str())
+					.parse()
+					.expect("the parent of a validated virtual path is valid");
+			}
+			if folder != self.folder {
+				self.navigate(folder);
+			}
+		}
+		self.selected.retain(|path| {
+			self.tree.as_ref().is_ok_and(|tree| {
+				tree.children(&self.folder)
+					.binary_search_by(|entry| entry.path().cmp(path))
+					.is_ok()
+			})
+		});
+		self.position_draft = None;
+		self.error = None;
 	}
 
 	pub(crate) fn undo(&mut self) {
@@ -150,6 +166,7 @@ impl ProjectTab {
 		self.folder = folder;
 		self.selected.clear();
 		self.position_draft = None;
+		self.entry_draft = None;
 		self.drag = None;
 	}
 
@@ -162,6 +179,7 @@ impl ProjectTab {
 		Panel::left("project_entries")
 			.default_size(LIST_WIDTH)
 			.show(ui, |ui| {
+				ui.heading("Contents");
 				action = self.entries(ui);
 			});
 		if let Some(action) = action {
@@ -177,9 +195,7 @@ impl ProjectTab {
 		});
 	}
 
-	fn entries(&self, ui: &mut Ui) -> Option<Action> {
-		let tree = self.tree.as_ref().ok()?;
-		ui.heading("Contents");
+	fn entries(&mut self, ui: &mut Ui) -> Option<Action> {
 		let mut action = None;
 		ui.horizontal(|ui| {
 			let go_up = ui
@@ -190,6 +206,8 @@ impl ProjectTab {
 			}
 			ui.label(self.folder.as_str());
 		});
+		self.entry_creator(ui);
+		let tree = self.tree.as_ref().ok()?;
 		let entries = tree.children(&self.folder);
 		let row_height = ui.spacing().interact_size.y;
 		ScrollArea::vertical().show_rows(ui, row_height, entries.len(), |ui, rows| {
