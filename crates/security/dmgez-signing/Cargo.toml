@@ -1,0 +1,22 @@
+[package]
+name = "dmgez-signing"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Explicit code signature inspection and validation for dmgez"
+
+[features]
+native = ["dep:dmgez-udif", "dep:rustix"]
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+dmgez-udif = { workspace = true, optional = true }
+rustix = { workspace = true, optional = true }
+
+[lints]
+workspace = true

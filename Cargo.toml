@@ -9,6 +9,7 @@ members = [
 	"crates/foundation/dmgez-vfs",
 	"crates/presentation/dmgez-finder",
 	"crates/presentation/dmgez-preview",
+	"crates/security/dmgez-signing",
 	"crates/services/dmgez-builder",
 	"crates/services/dmgez-diff",
 	"crates/services/dmgez-inspector",
@@ -42,6 +43,7 @@ dmgez-inspector = { path = "crates/services/dmgez-inspector", default-features =
 dmgez-lint = { path = "crates/services/dmgez-lint" }
 dmgez-operations = { path = "crates/services/dmgez-operations", default-features = false }
 dmgez-preview = { path = "crates/presentation/dmgez-preview" }
+dmgez-signing = { path = "crates/security/dmgez-signing", default-features = false }
 dmgez-udif = { path = "crates/formats/dmgez-udif", default-features = false }
 dmgez-vfs = { path = "crates/foundation/dmgez-vfs", default-features = false }
 ds_parser = "=0.4.0"

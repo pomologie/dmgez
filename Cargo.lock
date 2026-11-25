@@ -1139,6 +1139,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "dmgez-signing"
+version = "0.1.0"
+dependencies = [
+ "dmgez-udif",
+ "rustix 1.1.6",
+ "serde",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "dmgez-udif"
 version = "0.1.0"
 dependencies = [
