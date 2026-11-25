@@ -39,6 +39,14 @@ On macOS 14.7.2 (23H311, arm64), the script generated a disposable 1 GiB APFS co
 
 Pass `--verify` to also compare selected-volume verification. The native oracle runs `hdiutil verify` on the UDZO image, checks that both input types require a selector, and expects partial reachable coverage for each selected empty volume at the same checkpoint. It compares image digests before and after the checks. [Native verification reports](apfs/native-cli-verification.json)
 
+Run the native extraction oracle with an `apfs-extract` build.
+
+```sh
+python3 -B tests/compatibility/volume-read/check_apfs_extraction.py --cli target/apfs-cli/debug/dmgez
+```
+
+The macOS oracle populates and detaches a disposable APFS image, then checks raw structure with `fsck_apfs -n` and Apple's UDZO conversion with `hdiutil verify`. A read-only mount checks the two hard-link aliases, fork bytes, mode, and markers. dmgez exports the selected clean paths, refuses marked provenance, and leaves the image bytes intact. [Native extraction results](apfs/native-cli-extraction.json)
+
 ## Extraction name preflight
 
 Both recipes call `dmgez_operations::extract::preflight_names` on the real filesystem adapter. The HFS+ fixture constructed with a non-UTF-8 relative symlink target yields a portable name plan containing the link object and its source handle. The native APFS hard-link fixture preserves `Écho.bin` in the exact UTF-8 plan. The portable profile rejects that name with a typed encoding error. The APFS payload fixture provides targeted symlink lookup evidence. A full name scan of that fixture reaches uncaptured catalog block 408.

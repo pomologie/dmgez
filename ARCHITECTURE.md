@@ -38,7 +38,7 @@ dmgez/
       dmgez-builder/             # manifest and image construction orchestration
       dmgez-hfsplus/             # compose the independent HFS+ builder and DMG publication
       dmgez-hfsplus-read/        # adapter for HFS+ browsing and structural verification
-      dmgez-apfs-read/           # adapter for APFS volume browsing and reachable verification
+      dmgez-apfs-read/           # APFS browsing, reachable verification and quarantine admission
       dmgez-inspector/           # structured read-only reports / verification
       dmgez-operations/          # extraction, conversion, copy-on-write edits
       dmgez-diff/                # semantic and physical comparison, once substantial

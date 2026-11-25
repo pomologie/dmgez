@@ -96,6 +96,16 @@ target/apfs-cli/debug/dmgez verify image.dmg --full --filesystem apfs --volume 1
 
 [APFS verification scope](docs/features/INSPECTION.md#verify-apfs)
 
+Compose `apfs-extract` on macOS or Linux to copy a selected APFS fork or directory's regular-file data to a new host path.
+
+```sh
+python3 tools/compose_filesystem_cli.py --apfs ../apfs --no-default-features --features apfs-extract
+target/apfs-cli/debug/dmgez extract image.dmg /ReadMe.txt --filesystem apfs --fork data --output ./ReadMe.txt
+target/apfs-cli/debug/dmgez extract image.dmg /Docs --filesystem apfs --data-only --output ./Docs --dry-run --json
+```
+
+[APFS extraction scope](docs/features/INSPECTION.md#extract-apfs)
+
 ## Desktop app
 
 The [native desktop app](apps/dmgez/README.md) opens TOML projects for layout editing and disk images for container and partition inspection. Launch it with `cargo run --locked -p dmgez-gui`.
