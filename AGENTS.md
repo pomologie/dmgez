@@ -4,6 +4,7 @@ Read [architecture](docs/architecture/ARCHITECTURE.md), [roadmap](docs/architect
 
 - Use tabs for Rust indentation, name protocol and policy literals, and keep commits small and focused using Conventional Commits.
 - Use Rust, clear domain boundaries, fully prefixed crate names grouped under crates/<domain>/, and executables under apps/. Create crates only for real boundaries. Keep dependencies acyclic and foundational code free from application concerns.
+- Keep application entry points focused on argument and UI input mapping, dispatch, progress, display and exit status. Put shared workflows and publication policy in `dmgez-runtime`, and keep independent filesystem rules and types in the owning HFS+ or APFS repository.
 - Prefer typed APIs, checked arithmetic, bounded I/O and explicit errors. Avoid unnecessary unsafe code; document and audit any unsafe/FFI. Never silently claim support for unknown binary variants or incomplete operations.
 - Add or update requirement/test traceability for new features. Test independently against native fixtures and reference implementations where applicable. Document actual evidence and limitations; never mark an unrun test as passed.
 - Keep default compilation focused; gate optional capabilities at dependency/module boundaries. Run relevant no-default/default/optional builds. Don't introduce unrelated dependencies or unreviewed licenses.

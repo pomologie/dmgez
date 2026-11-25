@@ -25,7 +25,7 @@ parallel = ["dmgez-hfsplus/parallel"]
 # Workspace foundation
 dmgez-config = { path = @dmgez-config@ }
 
-# Workspace services
+# Workspace build
 dmgez-builder = { path = @dmgez-builder@, default-features = false }
 dmgez-hfsplus = { path = @dmgez-hfsplus@, default-features = false }
 

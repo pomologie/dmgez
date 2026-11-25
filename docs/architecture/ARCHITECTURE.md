@@ -48,6 +48,7 @@ dmgez/
       dmgez-lint/                # policy-based diagnostics and release checks
     runtime/
       dmgez-operations/          # extraction, conversion, copy-on-write edits
+      dmgez-runtime/             # application-facing workflows, admission and publication
     platform/
       dmgez-mount/               # OS backends and managed sessions
       dmgez-install/             # explicit bundle copy/install and safe monitoring
@@ -81,6 +82,7 @@ Read arrows as `consumer -> dependency`.
 | `dmgez-vfs` | core, udif reader, independent filesystem readers, partition adapters; no write service |
 | `dmgez-inspector` | core, vfs, udif reader, finder reader; metadata-only mode can avoid traversal |
 | `dmgez-operations` | core, vfs, writer/reader and builder when a requested operation needs them |
+| `dmgez-runtime` | formats, build, inspection, operations, security, platform and filesystem adapters for the selected workflow |
 | `dmgez-preview` | core, finder, config; VFS adapter for actual images optional; no GUI framework required in headless mode |
 | `dmgez-diff` | vfs for semantic comparison, optional Finder store reader and BLAKE3 hashing |
 | `dmgez-lint` | preview geometry for layout, optional builder manifest discovery for installer inputs, signing checks only via optional integration |
@@ -89,15 +91,15 @@ Read arrows as `consumer -> dependency`.
 | `dmgez-mount` | core, vfs, optional install-monitoring policy; no GUI |
 | `dmgez-signing` | optional signing integrations, Mach-O inspection, UDIF trailer admission and signature append validation, core publication for notarization records; no builder import |
 | `dmgez-encryption` | core, generic crypto primitives; exposed as a bounded storage adapter |
-| apps | compose selected services, not one another |
+| apps | runtime workflows and their typed inputs and reports |
 
-For release workflows the app (or a later shared DMG release service) composes `builder -> signing -> notarization -> verification`; the builder does not import signing or network credentials. A lower-level module exposes a typed event/contract rather than invoking a higher service. No dependency cycle through `core`, and no backend detection by trying arbitrary executable paths. Runtime capability reports distinguish compiled vs available. Contract revisions C1-C8 are defined in the ecosystem contracts. A library consumer can use UDIF directly to wrap a known-length raw block source without linking config, HFS+ or Finder.
+The runtime composes `builder -> signing -> notarization -> verification` for release workflows. The builder has no signing or credential dependencies. Lower-level modules expose typed events and reports. No dependency cycle through `core`, and no backend detection by trying arbitrary executable paths. Runtime capability reports distinguish compiled vs available. Contract revisions C1-C8 are defined in the ecosystem contracts. A library consumer can use UDIF directly to wrap a known-length raw block source without linking config, HFS+ or Finder.
 
 ## 4. Build profiles and feature forwarding
 
 Canonical CLI capability graph is in `docs/reference/feature-graph.json`; the graph describes the target release profile. Implement only gates whose functionality actually exists. `[workspace] resolver = "3"`, Rust edition 2024; `default-members = ["apps/dmgez-cli"]`. Each optional service dependency uses `optional = true` and `default-features = false` where appropriate; each CLI feature forwards to the owning package feature. The common default CLI `build,parallel,signing-rust` enables the ordinary builder and offline ad hoc disk image signing on macOS, Linux, and Windows. The composed HFS+ CLI includes the project release workflow. `auto` selects the Rust backend for ad hoc DMG signing. Credentialed Developer ID signing remains available with the native macOS feature. Use `cargo build -p dmgez-cli --release --no-default-features --features build` for serial. Reader and write APIs should gate separately, including separate feature gates on filesystem dependencies. Never expose an option as successfully usable when compiled out. Compile a minimal help/capabilities CLI with no defaults. A library-only build does not include CLI, rayon, GUI or MCP unless selected.
 
-While the exact HFS+ dependencies are unpublished, keep their service outside the normal workspace lock. Use a temporary Cargo workspace with explicit patches to the sibling sources or unpacked packages to compile the same standalone CLI and build command. The release workspace will resolve the versioned dependencies directly.
+While the exact filesystem dependencies are unpublished, keep the composed adapters outside the normal workspace lock. Use a temporary Cargo workspace with explicit patches to the sibling sources or unpacked packages to compile the selected runtime workflows and application entry points. The release workspace will resolve the versioned dependencies directly.
 
 - `parallel` enables bounded worker scheduling; `build` alone works and selects serial. Enabling `parallel` alone can expose compression scheduling primitives without implicitly enabling a high-level builder. TOML `performance.parallel = "auto"` chooses compiled support and actual resources; boolean true explicitly requires compiled parallel support, false always serial. `threads=0` resolves to a bounded host-aware count. Explicit threads >1 in serial-only mode error; no silent fallback for explicit requests.
 - `inspect` enables reader + filesystem + partition detection + Finder reader, `verify` includes reader, filesystem structural verification when supported. `extract`, `diff`, `edit`, `preview`, `convert` depend on only needed readers or writers. `verify_output=true` is explicit and requires verification support; default writer performs internal checks, not full independent read-back. `verify` without supported filesystem reports partial container verification, not whole-image success.

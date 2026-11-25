@@ -37,7 +37,7 @@ dmgez-core = { workspace = true, features = ["source", "staging"] }
 # Workspace presentation
 dmgez-finder = { workspace = true, optional = true }
 
-# Workspace services
+# Workspace build
 dmgez-cache = { workspace = true, optional = true }
 
 # Compression

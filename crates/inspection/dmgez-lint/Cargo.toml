@@ -17,7 +17,7 @@ dmgez-config.workspace = true
 # Workspace presentation
 dmgez-preview.workspace = true
 
-# Workspace services
+# Workspace build
 dmgez-builder = { workspace = true, optional = true }
 
 # Serialization and configuration

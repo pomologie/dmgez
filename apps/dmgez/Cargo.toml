@@ -27,7 +27,7 @@ dmgez-preview.workspace = true
 # Workspace runtime
 dmgez-runtime = { workspace = true, features = ["image"] }
 
-# Workspace services
+# Workspace inspection
 dmgez-inspector = { workspace = true, features = ["zlib"] }
 dmgez-lint.workspace = true
 

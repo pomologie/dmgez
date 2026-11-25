@@ -44,7 +44,7 @@ dmgez-config = { workspace = true, optional = true }
 dmgez-core = { workspace = true, features = ["staging"], optional = true }
 dmgez-vfs = { workspace = true, optional = true }
 
-# Workspace services
+# Workspace build
 dmgez-builder = { workspace = true, optional = true }
 
 # Hashes and checksums

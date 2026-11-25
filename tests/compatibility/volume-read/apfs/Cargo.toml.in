@@ -12,7 +12,7 @@ dmgez-udif = { version = "=0.1.0", path = @dmgez-udif@, default-features = false
 # Workspace foundation
 dmgez-vfs = { version = "=0.1.0", path = @dmgez-vfs@, default-features = false, features = ["zlib"] }
 
-# Workspace services
+# Workspace adapters
 dmgez-apfs-read = { version = "=0.1.0", path = @dmgez-apfs-read@, default-features = false }
 
 # APFS libraries
@@ -25,7 +25,7 @@ apfs-reader = { version = "=0.1.0", path = @apfs-reader@, default-features = fal
 thiserror = "=2.0.21"
 
 [dev-dependencies]
-# Workspace services
+# Workspace runtime
 dmgez-operations = { version = "=0.1.0", path = @dmgez-operations@, default-features = false, features = ["extract"] }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]

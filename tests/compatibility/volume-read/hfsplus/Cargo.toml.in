@@ -9,7 +9,7 @@ publish = false
 hfsx-fixture = []
 
 [dependencies]
-# Workspace services
+# Workspace adapters
 dmgez-hfsplus-read = { path = @dmgez-hfsplus-read@, default-features = false, features = ["browse"] }
 
 [dev-dependencies]
@@ -19,7 +19,7 @@ dmgez-udif = { path = @dmgez-udif@, default-features = false, features = ["read"
 # Workspace foundation
 dmgez-vfs = { path = @dmgez-vfs@, default-features = false }
 
-# Workspace services
+# Workspace runtime
 dmgez-operations = { version = "=0.1.0", path = @dmgez-operations@, default-features = false, features = ["extract"] }
 
 # HFS+ libraries
