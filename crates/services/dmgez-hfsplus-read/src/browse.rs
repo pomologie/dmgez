@@ -1,7 +1,7 @@
 use std::{
 	cell::{BorrowMutError, RefCell},
 	collections::TryReserveError,
-	num::{NonZeroU16, NonZeroUsize},
+	num::{NonZeroU16, NonZeroU32, NonZeroUsize},
 };
 
 use dmgez_vfs::{
@@ -26,6 +26,7 @@ use hfsplus_reader::{
 };
 
 mod quarantine;
+mod xattrs;
 
 const BSD_TYPE_MASK: u16 = 0o170000;
 const BSD_REGULAR_FILE: u16 = 0o100000;
@@ -87,6 +88,10 @@ pub enum Error {
 	LookupEncoding,
 	#[error("unsupported HFS+ fork selection")]
 	ForkSelection,
+	#[error("admitted HFS+ attribute owner is missing")]
+	MissingAttributeOwner,
+	#[error("the visible HFS+ hard link and its inode both own the same attribute name")]
+	AmbiguousAttributeOwner,
 	#[error("admitted regular file is missing")]
 	MissingRegularFile,
 	#[error("symbolic-link record does not match the supported HFS+ profile")]
@@ -295,6 +300,23 @@ impl<'volume, 'disk, S: LogicalDisk> VolumeBackend for HfsBackend<'volume, 'disk
 			_ => return Err(Error::ForkSelection),
 		};
 		Ok(Some(result))
+	}
+
+	fn list_xattrs(
+		&mut self,
+		node: CatalogId,
+		limit: NonZeroU32,
+	) -> Result<Option<Vec<RawName>>, Error> {
+		self.extended_attribute_names(node, limit).map(Some)
+	}
+
+	fn with_xattr<T>(
+		&mut self,
+		node: CatalogId,
+		name: LookupName<'_>,
+		read: impl FnOnce(&mut dyn ForkReader<Error = Error>) -> T,
+	) -> Result<Option<T>, Error> {
+		self.with_extended_attribute(node, name, read)
 	}
 
 	fn read_link(&mut self, node: CatalogId) -> Result<Option<Vec<u8>>, Error> {
