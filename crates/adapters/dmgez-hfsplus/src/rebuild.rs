@@ -1,4 +1,4 @@
-//! Plan and seal a fresh HFS+ volume from an existing catalog and typed edits.
+//! Plan and seal a fresh HFS+ or HFSX volume from an existing catalog and typed edits.
 
 use std::{
 	collections::{BTreeMap, TryReserveError},
@@ -15,7 +15,7 @@ use hfsplus_builder::{
 	SealedPlan,
 	volume::{
 		self, CapacityError, CapacityPolicy, EntryKind, EntryMetadata, ForkSource, HardLinkGroup,
-		ManifestEntry, VolumeError, VolumeOptions,
+		ManifestEntry, VolumeError, VolumeFormat, VolumeOptions,
 	},
 };
 use hfsplus_core::{ByteLen, ByteOffset, RangeError, ReadAt};
@@ -43,6 +43,7 @@ type Attributes = Rc<[Attribute]>;
 
 struct Snapshot<'volume, S> {
 	name: String,
+	format: VolumeFormat,
 	root: EntryMetadata,
 	dates: [u32; VOLUME_DATE_COUNT],
 	finder_info: [u8; FINDER_INFO_BYTES],
@@ -195,7 +196,7 @@ impl<S: ReadAt> RebuiltVolume<'_, S> {
 	}
 }
 
-/// Build a new HFS+ namespace using the original volume as a read-only source.
+/// Rebuild the original HFS+ or HFSX namespace from a read-only source volume.
 /// The caller must hold the source stable and verify its identity before
 /// independent output publication. The source catalog and volume must come
 /// from the same admitted native session.
@@ -236,6 +237,22 @@ where
 	seal_volume(volume, &snapshot, &backgrounds)
 }
 
+/// Verify that a reopened staged volume satisfies the rebuild profile.
+///
+/// # Errors
+/// Rejects a foreign catalog, unsupported format, or incomplete structural coverage.
+pub fn verify_rebuilt_volume<S: ReadAt>(
+	volume: &Volume<S>,
+	catalog: &Catalog<'_, S>,
+) -> Result<(), CaptureError<S::Error>>
+where
+	S::Error: StdError + 'static,
+{
+	let format = capture::volume_format(volume, catalog)?;
+	capture::check_catalog_structure(volume, format, Default::default())?;
+	Ok(())
+}
+
 fn seal_volume<'volume, S: ReadAt>(
 	volume: &Volume<S>,
 	snapshot: &Snapshot<'volume, S>,
@@ -259,6 +276,7 @@ where
 	S::Error: StdError + 'static,
 {
 	let mut options = VolumeOptions::for_capacity(&snapshot.name, snapshot.block_size)?;
+	options.format = snapshot.format;
 	options.root = snapshot.root;
 	options.dates = snapshot.dates;
 	options.finder_info = snapshot.finder_info;

@@ -6,8 +6,11 @@ use dmgez_finder::{
 	inspection::ReadLimits,
 	write_store,
 };
+use hfsplus_builder::volume::VolumeFormat;
 use hfsplus_core::ByteOffset;
 use std::rc::Rc;
+
+mod hfsx;
 
 type TestSnapshot = Snapshot<'static, &'static [u8]>;
 type TestFile = File<'static, &'static [u8]>;
@@ -43,6 +46,7 @@ fn snapshot() -> TestSnapshot {
 		);
 	}
 	TestSnapshot {
+		format: VolumeFormat::HfsPlus,
 		name: "Original".into(),
 		root: EntryMetadata::new(DIRECTORY_MODE),
 		dates: [0; 4],

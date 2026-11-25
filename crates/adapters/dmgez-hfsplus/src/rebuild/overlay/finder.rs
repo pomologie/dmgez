@@ -57,7 +57,7 @@ pub(super) struct LayoutPlan<'volume, S> {
 
 struct Location<'source> {
 	// Retain an original spelling if its file name hasn't changed. The
-	// source store may use a spelling equivalent under the HFS+ comparator.
+	// source store may use a spelling equivalent in the volume catalog.
 	name: Option<&'source str>,
 	record: IconLocationRecord,
 }

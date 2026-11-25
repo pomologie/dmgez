@@ -8,10 +8,9 @@ use super::super::capture::{MAX_CAPTURE_BYTES, MAX_DEPTH, MAX_ENTRIES, MAX_PATH_
 use super::{Change, Kind, Node, OverlayError};
 
 pub(super) const PATH_SEPARATOR: char = '/';
-// Case-folded collation keys contain no zero weights.
+// A catalog component key must exclude this delimiter in either collation.
 const COMPONENT_BOUNDARY: u16 = 0;
 const DOT_WEIGHT: u16 = '.' as u16;
-pub(super) const COLLATION: NameCollation = NameCollation::CaseFolded;
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(super) enum TreeKind {
@@ -110,13 +109,14 @@ pub(super) fn route_entries<S>(
 }
 
 pub(super) fn validate_tree<'a>(
+	collation: NameCollation,
 	entries: impl Iterator<Item = (&'a VirtualPath, TreeKind)>,
 ) -> Result<PathIndex<'a, TreeKind>, OverlayError> {
-	let mut index = PathIndex::default();
+	let mut index = PathIndex::new(collation);
 	for (path, kind) in entries {
 		index.insert(path, kind)?;
 	}
-	let store_name = component_key(STORE_NAME).map_err(|_| OverlayError::VolumeName)?;
+	let store_name = component_key(collation, STORE_NAME).map_err(|_| OverlayError::VolumeName)?;
 	for (key, &(path, kind)) in &index.paths {
 		if key.rsplit(|unit| *unit == COMPONENT_BOUNDARY).next() == Some(store_name.as_slice())
 			&& kind != TreeKind::FinderStore
@@ -136,25 +136,25 @@ pub(super) fn validate_tree<'a>(
 }
 
 pub(super) struct PathIndex<'a, T> {
+	collation: NameCollation,
 	paths: BTreeMap<Vec<u16>, (&'a VirtualPath, T)>,
 	key_bytes: usize,
 }
 
-impl<T> Default for PathIndex<'_, T> {
-	fn default() -> Self {
+impl<'a, T> PathIndex<'a, T> {
+	pub(super) fn new(collation: NameCollation) -> Self {
 		Self {
+			collation,
 			paths: BTreeMap::new(),
 			key_bytes: 0,
 		}
 	}
-}
 
-impl<'a, T> PathIndex<'a, T> {
 	pub(super) fn insert(&mut self, path: &'a VirtualPath, value: T) -> Result<(), OverlayError> {
 		if self.paths.len() == MAX_ENTRIES {
 			return Err(OverlayError::Budget);
 		}
-		let key = path_key(path)?;
+		let key = path_key(self.collation, path)?;
 		charge(&mut self.key_bytes, std::mem::size_of_val(key.as_slice()))?;
 		if let Some((first, _)) = self.paths.insert(key, (path, value)) {
 			return Err(OverlayError::Collision {
@@ -169,7 +169,7 @@ impl<'a, T> PathIndex<'a, T> {
 		&self,
 		path: &VirtualPath,
 	) -> Result<Option<(&'a VirtualPath, &T)>, OverlayError> {
-		let key = path_key(path)?;
+		let key = path_key(self.collation, path)?;
 		Ok(self.paths.get(&key).map(|(path, value)| (*path, value)))
 	}
 
@@ -178,18 +178,20 @@ impl<'a, T> PathIndex<'a, T> {
 	}
 }
 
-fn path_key(path: &VirtualPath) -> Result<Vec<u16>, OverlayError> {
+fn path_key(collation: NameCollation, path: &VirtualPath) -> Result<Vec<u16>, OverlayError> {
 	check_path_bounds(path)?;
 	let mut key = Vec::new();
 	for component in path.components() {
-		let name = component_key(component).map_err(|source| OverlayError::PathName {
-			path: path.clone(),
-			source,
-		})?;
-		if matches!(
-			name.as_slice(),
-			[] | [DOT_WEIGHT] | [DOT_WEIGHT, DOT_WEIGHT]
-		) {
+		let name =
+			component_key(collation, component).map_err(|source| OverlayError::PathName {
+				path: path.clone(),
+				source,
+			})?;
+		if name.contains(&COMPONENT_BOUNDARY)
+			|| matches!(
+				name.as_slice(),
+				[] | [DOT_WEIGHT] | [DOT_WEIGHT, DOT_WEIGHT]
+			) {
 			return Err(OverlayError::PathProfile { path: path.clone() });
 		}
 		let separated = !key.is_empty();
@@ -218,7 +220,7 @@ pub(super) fn charge(total: &mut usize, bytes: usize) -> Result<(), OverlayError
 }
 
 /// Recover the exact stored spelling of each ancestor and the final file name.
-/// Explicit edit destinations can spell existing parents by HFS+ equivalence.
+/// Explicit edit destinations can spell existing parents by catalog equivalence.
 pub(super) fn canonical_file_path(
 	paths: &PathIndex<'_, TreeKind>,
 	path: &VirtualPath,
@@ -268,6 +270,6 @@ pub(super) fn stored_name(path: &VirtualPath, name: &str) -> Result<String, Over
 		.map_err(|_| OverlayError::PathProfile { path: path.clone() })
 }
 
-fn component_key(component: &str) -> Result<Vec<u16>, NameError> {
-	COLLATION.key(normalize(component)?.as_units())
+fn component_key(collation: NameCollation, component: &str) -> Result<Vec<u16>, NameError> {
+	collation.key(normalize(component)?.as_units())
 }

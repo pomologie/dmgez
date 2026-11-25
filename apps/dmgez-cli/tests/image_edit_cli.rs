@@ -64,3 +64,7 @@ mod finder_flags;
 #[cfg(feature = "image-edit")]
 #[path = "image_edit_cli/host_copy.rs"]
 mod host_copy;
+
+#[cfg(feature = "image-edit")]
+#[path = "image_edit_cli/hfsx.rs"]
+mod hfsx;

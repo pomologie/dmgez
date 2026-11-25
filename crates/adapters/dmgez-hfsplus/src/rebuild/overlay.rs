@@ -10,7 +10,7 @@ use dmgez_finder::edit::StoreEditError;
 use hfsplus_builder::volume::EntryMetadata;
 use hfsplus_core::{
 	ReadAt,
-	names::{NameError, normalize},
+	names::{NameCollation, NameError, normalize},
 };
 use hfsplus_format::symlink::validate_target;
 use thiserror::Error;
@@ -25,8 +25,8 @@ mod tests;
 
 use finder_flags::{FlagEdits, FlagPlan};
 use paths::{
-	COLLATION, PATH_SEPARATOR, PathIndex, Route, TreeKind, charge, check_path_bounds,
-	route_entries, validate_tree,
+	PATH_SEPARATOR, PathIndex, Route, TreeKind, charge, check_path_bounds, route_entries,
+	validate_tree,
 };
 
 const DIRECTORY_MODE: u16 = 0o755;
@@ -75,7 +75,7 @@ pub enum OverlayError {
 	SourceHierarchy { path: VirtualPath },
 	#[error("the edited tree is missing a directory parent for {path:?}")]
 	Parent { path: VirtualPath },
-	#[error("edited paths {first:?} and {second:?} collide under HFS+ name matching")]
+	#[error("edited paths {first:?} and {second:?} collide under volume catalog name matching")]
 	Collision {
 		first: VirtualPath,
 		second: VirtualPath,
@@ -217,7 +217,8 @@ where
 	let mut positions = BTreeMap::new();
 	let mut finder_flags = FlagEdits::default();
 	let mut label = None;
-	let mut index = PathIndex::default();
+	let collation = snapshot.format.name_collation();
+	let mut index = PathIndex::new(collation);
 	for (path, entry) in entries {
 		index.insert(path, TreeKind::from_kind(&entry.kind))?;
 	}
@@ -271,7 +272,7 @@ where
 					}
 				}
 				ProjectEdit::SetImageName(name) => {
-					check_label(name)?;
+					check_label(collation, name)?;
 					label = Some(name.as_str());
 				}
 				_ => return Err(OverlayError::UnsupportedEdit { index: edit_index }),
@@ -285,6 +286,7 @@ where
 	let finder_flags = finder_flags.finish(entries, &routes, &additions)?;
 	let layout = {
 		let final_paths = validate_tree(
+			collation,
 			entries
 				.iter()
 				.zip(&routes)
@@ -368,12 +370,12 @@ fn check_destination(index: usize, destination: &VirtualPath) -> Result<(), Over
 	check_path_bounds(destination)
 }
 
-fn check_label(label: &str) -> Result<(), OverlayError> {
+fn check_label(collation: NameCollation, label: &str) -> Result<(), OverlayError> {
 	if label.contains([PATH_SEPARATOR, ':', '\0']) {
 		return Err(OverlayError::VolumeName);
 	}
 	let name = normalize(label).map_err(|_| OverlayError::VolumeName)?;
-	if COLLATION.compare(name.as_units(), &[]).is_eq() {
+	if collation.compare(name.as_units(), &[]).is_eq() {
 		return Err(OverlayError::VolumeName);
 	}
 	Ok(())

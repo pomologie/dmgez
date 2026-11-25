@@ -1,4 +1,4 @@
-//! Rebuild an admitted HFS+ image, with optional verified no-clobber publication.
+//! Rebuild an admitted HFS+ or HFSX image with verified no-clobber publication.
 
 use std::{
 	cell::RefCell,
@@ -12,11 +12,10 @@ use dmgez_config::{
 	project_edit::{EditBatchError, MAX_EDIT_BATCH_BYTES, parse_edit_batch},
 };
 use dmgez_core::output::{PublishError, StagedReader, publish_new};
-use dmgez_hfsplus::AlternateStatus;
 use dmgez_hfsplus::browse::{Limits, with_catalog};
 use dmgez_hfsplus::{
 	HostCopyMetadataLoss,
-	rebuild::{PrepareError, PreparedEdit, seal_prepared},
+	rebuild::{PrepareError, PreparedEdit, seal_prepared, verify_rebuilt_volume},
 };
 use dmgez_operations::edit::image_source::{
 	ImageSource, ImageSourceError, ImageSourceOptions, SourceEnvelope as ObservedEnvelope,
@@ -40,8 +39,7 @@ const OUTPUT_DIRECTORY: &str = "the image edit destination parent is not a direc
 const MISSING_ENCODED_STAGE: &str = "the staged rebuild has no encoding report";
 const METADATA_MISMATCH: &str = "the staged image differs from its admitted container metadata";
 const LOGICAL_MISMATCH: &str = "the staged image does not contain the sealed logical bytes";
-const STAGED_LAYOUT: &str = "the rebuilt HFS+ volume does not cover the whole staged logical disk";
-const STAGED_STRUCTURE: &str = "the rebuilt HFS+ filesystem has incomplete structural coverage";
+const STAGED_LAYOUT: &str = "the rebuilt filesystem differs from the admitted whole-disk layout";
 const HEX_DIGITS_PER_BYTE: usize = 2;
 const HEX_RADIX: u32 = 16;
 
@@ -57,7 +55,7 @@ pub enum EditMode {
 /// Local inputs and publication intent for one copy-on-write image edit.
 #[derive(Debug)]
 pub struct EditRequest<'input> {
-	/// Regular source file containing the qualified HFS+ image.
+	/// Regular source file containing the qualified HFS+ or HFSX image.
 	pub image: &'input Path,
 	/// Bounded TOML edit batch. Host copies resolve relative to its canonical path.
 	pub changes: &'input Path,
@@ -240,6 +238,7 @@ fn check_destination(path: &Path) -> io::Result<()> {
 struct Rebuilt {
 	entries: usize,
 	logical_bytes: u64,
+	filesystem: Filesystem,
 	encoded: Option<Encoded>,
 }
 
@@ -255,6 +254,7 @@ fn rebuild(
 	sink: Option<&mut dyn Write>,
 ) -> io::Result<Rebuilt> {
 	let source_metadata = source.container_metadata();
+	let filesystem = source.filesystem();
 	let mut disk = Disk::discover(source, dmgez_vfs::Limits::default()).map_err(invalid)?;
 	with_catalog(
 		&mut disk,
@@ -288,6 +288,7 @@ fn rebuild(
 			Ok(Rebuilt {
 				entries: plan.entries(),
 				logical_bytes,
+				filesystem,
 				encoded,
 			})
 		},
@@ -316,8 +317,8 @@ fn verify(stage: StagedReader<'_>, rebuilt: &Rebuilt) -> io::Result<()> {
 	let mut disk = Disk::discover(image, dmgez_vfs::Limits::default()).map_err(invalid)?;
 	if !matches!(
 		disk.layout(),
-		Layout::Partitionless { filesystem: Filesystem::HfsPlus, range }
-			if *range == (0..rebuilt.logical_bytes)
+		Layout::Partitionless { filesystem, range }
+			if *filesystem == rebuilt.filesystem && *range == (0..rebuilt.logical_bytes)
 	) {
 		return Err(invalid(STAGED_LAYOUT));
 	}
@@ -325,19 +326,7 @@ fn verify(stage: StagedReader<'_>, rebuilt: &Rebuilt) -> io::Result<()> {
 		&mut disk,
 		VolumeId::WholeDisk,
 		Limits::default(),
-		|volume, _catalog| {
-			let report = volume
-				.check_structure(Default::default())
-				.map_err(invalid)?;
-			if report.alternate != AlternateStatus::MatchesPrimary
-				|| report.unclaimed_allocated_blocks != 0
-				|| report.unexamined_private_files != 0
-				|| report.unsupported_directory_links != 0
-			{
-				return Err(invalid(STAGED_STRUCTURE));
-			}
-			Ok(())
-		},
+		|volume, catalog| verify_rebuilt_volume(volume, &catalog).map_err(invalid),
 	)
 	.map_err(invalid)?
 }

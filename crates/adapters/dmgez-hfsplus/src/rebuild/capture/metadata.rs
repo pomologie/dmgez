@@ -1,9 +1,12 @@
 use std::error::Error;
 
-use hfsplus_builder::volume::EntryMetadata;
+use hfsplus_builder::volume::{EntryMetadata, VolumeFormat};
+use hfsplus_core::names::NameCollation;
 use hfsplus_format::{
 	bsd,
-	catalog::{EncodeValue, FLAG_HAS_ATTRIBUTES, FLAG_THREAD_EXISTS, Metadata},
+	catalog::{
+		EncodeValue, FLAG_HAS_ATTRIBUTES, FLAG_HAS_FOLDER_COUNT, FLAG_THREAD_EXISTS, Metadata,
+	},
 	hard_links::{Neighbors, Stub},
 	volume::{CLEAN_UNMOUNT_ATTRIBUTE, CatalogId, Fork, Header, Signature},
 };
@@ -25,9 +28,16 @@ const DEFAULT_ENCODING_BITMAP: u64 = 1 << MAC_ROMAN_ENCODING;
 const HARD_LINK_CHAIN: u16 = 0x0020;
 const NO_LINK_ID: u32 = 0;
 
-pub(super) fn check_volume<E: Error + 'static>(header: &Header) -> Result<(), CaptureError<E>> {
-	if header.signature != Signature::HfsPlus
-		|| header.attributes != CLEAN_UNMOUNT_ATTRIBUTE
+pub(super) fn volume_format<E: Error + 'static>(
+	header: &Header,
+	collation: NameCollation,
+) -> Result<VolumeFormat, CaptureError<E>> {
+	let format = match (header.signature, collation) {
+		(Signature::HfsPlus, NameCollation::CaseFolded) => VolumeFormat::HfsPlus,
+		(Signature::HfsX, NameCollation::Binary) => VolumeFormat::HfsX,
+		_ => return Err(CaptureError::VolumeProfile),
+	};
+	if header.attributes != CLEAN_UNMOUNT_ATTRIBUTE
 		|| header.journal_info.is_some()
 		|| header.forks.startup != Fork::empty()
 		|| header.encodings & !DEFAULT_ENCODING_BITMAP != 0
@@ -40,7 +50,7 @@ pub(super) fn check_volume<E: Error + 'static>(header: &Header) -> Result<(), Ca
 	{
 		return Err(CaptureError::VolumeFinderReferences);
 	}
-	Ok(())
+	Ok(format)
 }
 
 pub(super) fn check_storage<E: Error + 'static>(
@@ -66,13 +76,22 @@ pub(super) fn check_storage<E: Error + 'static>(
 
 pub(super) fn directory<E: Error + 'static>(
 	entry: &Entry,
+	format: VolumeFormat,
 ) -> Result<EntryMetadata, CaptureError<E>> {
-	if !matches!(entry.kind, EntryKind::Directory { tail_word: 0, .. })
-		|| entry.metadata.permissions.mode & bsd::TYPE_MASK != bsd::DIRECTORY
-	{
+	let EntryKind::Directory { tail_word, .. } = entry.kind else {
+		return Err(CaptureError::EntryMetadata(entry.metadata.id));
+	};
+	if entry.metadata.permissions.mode & bsd::TYPE_MASK != bsd::DIRECTORY {
 		return Err(CaptureError::EntryMetadata(entry.metadata.id));
 	}
-	convert(&entry.metadata, FLAG_HAS_ATTRIBUTES, 0)
+	// The structural audit has checked HFSX counts before capture. Recompute
+	// them when sealing because edits can change the immediate children.
+	let flags = match format {
+		VolumeFormat::HfsPlus if tail_word == 0 => FLAG_HAS_ATTRIBUTES,
+		VolumeFormat::HfsX => FLAG_HAS_ATTRIBUTES | FLAG_HAS_FOLDER_COUNT,
+		_ => return Err(CaptureError::EntryMetadata(entry.metadata.id)),
+	};
+	convert(&entry.metadata, flags, 0)
 }
 
 pub(super) fn symlink<E: Error + 'static>(

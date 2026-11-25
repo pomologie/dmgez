@@ -287,7 +287,7 @@ fn rejects_colliding_host_copy_and_checks_expected_image_before_opening_hosts() 
 	let original = fs::read(root.join(ORIGINAL)).unwrap();
 	assert_failure(
 		edit_from(root, HOST_BATCH, EDITED, &REPORT_POLICY),
-		"collide under HFS+ name matching",
+		"collide under volume catalog name matching",
 	);
 	assert!(!root.join(EDITED).exists());
 	assert_eq!(fs::read(root.join(ORIGINAL)).unwrap(), original);

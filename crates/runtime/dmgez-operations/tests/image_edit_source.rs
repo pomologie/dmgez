@@ -9,7 +9,7 @@ use dmgez_udif::{
 	Error as UdifError, SECTOR_BYTES, TRAILER_BYTES,
 	writer::{Profile, WriteOptions, write_image},
 };
-use dmgez_vfs::LogicalDisk;
+use dmgez_vfs::{Filesystem, LogicalDisk};
 use sha2::{Digest, Sha256};
 
 const PROBE_BLOCK_BYTES: u32 = 4096;
@@ -24,9 +24,12 @@ const XML_LENGTH_FIELD: std::ops::Range<usize> = 224..232;
 // A synthetic header and stable logical bytes. These admission tests exercise
 // geometry only. A filesystem-level rebuild must also qualify the catalog.
 fn raw_disk() -> Vec<u8> {
+	raw_disk_with_signature(HFS_PLUS_SIGNATURE_AND_VERSION)
+}
+
+fn raw_disk_with_signature(signature: [u8; 4]) -> Vec<u8> {
 	let mut raw = vec![0; (PROBE_BLOCK_BYTES * PROBE_BLOCK_COUNT) as usize];
-	raw[VOLUME_HEADER_OFFSET..][..HFS_PLUS_SIGNATURE_AND_VERSION.len()]
-		.copy_from_slice(&HFS_PLUS_SIGNATURE_AND_VERSION);
+	raw[VOLUME_HEADER_OFFSET..][..signature.len()].copy_from_slice(&signature);
 	raw[BLOCK_BYTES_FIELD..][..4].copy_from_slice(&PROBE_BLOCK_BYTES.to_be_bytes());
 	raw[BLOCK_COUNT_FIELD..][..4].copy_from_slice(&PROBE_BLOCK_COUNT.to_be_bytes());
 	*raw.last_mut().unwrap() = 1;
@@ -51,21 +54,27 @@ fn open(path: &Path) -> Result<ImageSource, ImageSourceError> {
 fn pins_unsigned_images_to_exact_bytes_and_an_admitted_layout() {
 	let dir = tempfile::tempdir().unwrap();
 	let path = dir.path().join("input.dmg");
-	let raw = raw_disk();
-	for profile in [Profile::Udro, Profile::Udzo] {
-		let container = wrap(&raw, profile);
-		fs::write(&path, &container).unwrap();
-		let expected = ImageRevision::from_sha256(Sha256::digest(&container).into());
-		let mut source =
-			ImageSource::open(&path, Some(expected), ImageSourceOptions::default()).unwrap();
-		assert_eq!(source.revision(), expected);
-		assert_eq!(source.envelope(), SourceEnvelope::Unsigned);
-		assert_eq!(source.container_metadata().source_profile(), profile);
-		let mut decoded = vec![0; raw.len()];
-		source.read_exact_at(0, &mut decoded).unwrap();
-		assert_eq!(decoded, raw);
-		source.revalidate().unwrap();
-		assert_eq!(fs::read(&path).unwrap(), container);
+	for (signature, filesystem) in [
+		(HFS_PLUS_SIGNATURE_AND_VERSION, Filesystem::HfsPlus),
+		(HFS_X_SIGNATURE_AND_VERSION, Filesystem::HfsX),
+	] {
+		let raw = raw_disk_with_signature(signature);
+		for profile in [Profile::Udro, Profile::Udzo] {
+			let container = wrap(&raw, profile);
+			fs::write(&path, &container).unwrap();
+			let expected = ImageRevision::from_sha256(Sha256::digest(&container).into());
+			let mut source =
+				ImageSource::open(&path, Some(expected), ImageSourceOptions::default()).unwrap();
+			assert_eq!(source.revision(), expected);
+			assert_eq!(source.envelope(), SourceEnvelope::Unsigned);
+			assert_eq!(source.filesystem(), filesystem);
+			assert_eq!(source.container_metadata().source_profile(), profile);
+			let mut decoded = vec![0; raw.len()];
+			source.read_exact_at(0, &mut decoded).unwrap();
+			assert_eq!(decoded, raw);
+			source.revalidate().unwrap();
+			assert_eq!(fs::read(&path).unwrap(), container);
+		}
 	}
 	assert!(matches!(
 		ImageSource::open(
@@ -131,7 +140,6 @@ fn refuses_unqualified_geometry_corruption_opaque_metadata_and_limits() {
 		open(&path),
 		Err(ImageSourceError::NotWholeHfsPlus)
 	));
-	trailing.truncate((PROBE_BLOCK_BYTES * PROBE_BLOCK_COUNT) as usize);
 	trailing[VOLUME_HEADER_OFFSET..][..HFS_X_SIGNATURE_AND_VERSION.len()]
 		.copy_from_slice(&HFS_X_SIGNATURE_AND_VERSION);
 	fs::write(&path, wrap(&trailing, Profile::Udro)).unwrap();

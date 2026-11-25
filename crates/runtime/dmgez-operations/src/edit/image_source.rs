@@ -86,13 +86,13 @@ pub enum ImageSourceError {
 	Signature(#[from] SignatureIntegrityError),
 	#[error("input image partition layout could not be read")]
 	Layout(#[from] dmgez_vfs::Error),
-	#[error("image editing requires one HFS+ volume covering the whole logical disk")]
+	#[error("image editing requires one HFS+ or HFSX volume covering the whole logical disk")]
 	NotWholeHfsPlus,
 	#[error("input image is missing one or more required CRC32 checksums")]
 	MissingChecksums,
 }
 
-/// An admitted HFS+ image and its pinned, read-only input handle.
+/// An admitted HFS+ or HFSX image and its pinned, read-only input handle.
 ///
 /// Admission establishes container layout and integrity. The filesystem
 /// adapter must still qualify the volume and account for metadata before
@@ -106,13 +106,14 @@ pub struct ImageSource {
 	identity: std::fs::Metadata,
 	revision: ImageRevision,
 	envelope: SourceEnvelope,
+	filesystem: Filesystem,
 	metadata: RebuildMetadata,
 	logical: Image<PinnedFile>,
 }
 
 impl ImageSource {
 	/// Admit a signed or unsigned UDRO/UDZO image whose logical disk is one
-	/// complete partitionless HFS+ volume. When supplied, the expected
+	/// complete partitionless HFS+ or HFSX volume. When supplied, the expected
 	/// revision must match all physical input bytes.
 	/// # Errors
 	/// Rejects non-regular sources, unsupported layouts or metadata, failed
@@ -134,13 +135,13 @@ impl ImageSource {
 		let metadata = logical.rebuild_release_metadata()?;
 		let logical_bytes = logical.descriptor().logical_bytes;
 		let disk = Disk::discover(&mut logical, options.disk)?;
-		if !matches!(
-			disk.layout(),
-			Layout::Partitionless { filesystem: Filesystem::HfsPlus, range }
-				if *range == (0..logical_bytes)
-		) {
-			return Err(ImageSourceError::NotWholeHfsPlus);
-		}
+		let filesystem = match disk.layout() {
+			Layout::Partitionless {
+				filesystem: filesystem @ (Filesystem::HfsPlus | Filesystem::HfsX),
+				range,
+			} if *range == (0..logical_bytes) => *filesystem,
+			_ => return Err(ImageSourceError::NotWholeHfsPlus),
+		};
 		let signature = logical.embedded_signature_range();
 		let (revision, envelope) = source_revision(&file, signature)?;
 		if expected.is_some_and(|expected| expected != revision) {
@@ -163,6 +164,7 @@ impl ImageSource {
 			identity,
 			revision,
 			envelope,
+			filesystem,
 			metadata,
 			logical,
 		};
@@ -179,6 +181,12 @@ impl ImageSource {
 	#[must_use]
 	pub const fn envelope(&self) -> SourceEnvelope {
 		self.envelope
+	}
+
+	/// The filesystem signature recognized at whole-disk admission.
+	#[must_use]
+	pub const fn filesystem(&self) -> Filesystem {
+		self.filesystem
 	}
 
 	/// Container metadata admitted for regeneration independently of filesystem

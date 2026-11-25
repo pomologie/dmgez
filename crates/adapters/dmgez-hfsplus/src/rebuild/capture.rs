@@ -7,7 +7,7 @@ use std::{
 
 use dmgez_config::{VirtualPath, VirtualPathError};
 use dmgez_finder::{STORE_NAME, edit::StoreEditError};
-use hfsplus_builder::volume::{EntryMetadata, VolumeError};
+use hfsplus_builder::volume::{EntryMetadata, VolumeError, VolumeFormat};
 use hfsplus_core::{
 	ReadAt,
 	names::{MAX_NAME_UNITS, NameError, NormalizedName, normalize, normalize_utf16},
@@ -136,11 +136,8 @@ pub(super) fn capture<'volume, S: ReadAt>(
 where
 	S::Error: Error + 'static,
 {
-	if !catalog.belongs_to(volume) {
-		return Err(CaptureError::ForeignCatalog);
-	}
 	let header = volume.header();
-	metadata::check_volume(header)?;
+	let format = volume_format(volume, catalog)?;
 	if !volume
 		.reserved_sectors_are_clear()
 		.map_err(OverflowError::Read)?
@@ -151,18 +148,18 @@ where
 		max_catalog_entries: MAX_ENTRIES,
 		..CheckLimits::default()
 	};
-	let report = volume.check_structure(limits)?;
-	metadata::check_storage(&report)?;
+	let report = check_catalog_structure(volume, format, limits)?;
 	if !volume.overflow_tree_is_empty(limits.allocation.overflow)? {
 		return Err(CaptureError::OverflowRecords);
 	}
 	let mut attributes = AttributeInventory::read(volume, &mut remaining)?;
 	let root = catalog.root()?;
 	let name = stored_name(&root)?;
-	let root_metadata = metadata::directory(&root)?;
+	let root_metadata = metadata::directory(&root, format)?;
 	let root_attributes = attributes.take(&root.metadata)?;
 	let mut capture = Capture {
 		catalog,
+		format,
 		limits,
 		remaining,
 		attributes,
@@ -187,6 +184,7 @@ where
 	}
 	Ok(Snapshot {
 		name,
+		format,
 		root: root_metadata,
 		dates: header.dates,
 		finder_info: header.finder_info,
@@ -197,8 +195,38 @@ where
 	})
 }
 
+pub(super) fn volume_format<S: ReadAt>(
+	volume: &Volume<S>,
+	catalog: &Catalog<'_, S>,
+) -> Result<VolumeFormat, CaptureError<S::Error>>
+where
+	S::Error: Error + 'static,
+{
+	if !catalog.belongs_to(volume) {
+		return Err(CaptureError::ForeignCatalog);
+	}
+	metadata::volume_format(volume.header(), catalog.collation())
+}
+
+pub(super) fn check_catalog_structure<S: ReadAt>(
+	volume: &Volume<S>,
+	format: VolumeFormat,
+	limits: CheckLimits,
+) -> Result<StructuralReport, CaptureError<S::Error>>
+where
+	S::Error: Error + 'static,
+{
+	let report = match format {
+		VolumeFormat::HfsPlus => volume.check_structure(limits),
+		VolumeFormat::HfsX => volume.check_structure_with_folder_counts(limits),
+	}?;
+	metadata::check_storage(&report)?;
+	Ok(report)
+}
+
 struct Capture<'catalog, 'volume, S> {
 	catalog: &'catalog Catalog<'volume, S>,
+	format: VolumeFormat,
 	limits: CheckLimits,
 	remaining: usize,
 	attributes: AttributeInventory,
@@ -298,7 +326,7 @@ where
 			}
 			_ if finder_store => return Err(CaptureError::FinderReferences(raw.id)),
 			(EntryKind::Directory { .. }, bsd::DIRECTORY) => {
-				(metadata::directory(entry)?, Kind::Directory)
+				(metadata::directory(entry, self.format)?, Kind::Directory)
 			}
 			(EntryKind::File { resource, .. }, bsd::SYMLINK) => {
 				let metadata = metadata::symlink(raw, &resource)?;
