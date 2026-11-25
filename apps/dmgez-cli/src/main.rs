@@ -14,12 +14,14 @@ mod inspect;
 mod lint;
 #[cfg(feature = "convert")]
 mod optimize;
-#[cfg(any(feature = "appdmg-import", feature = "lint"))]
+mod project_build;
+#[cfg(any(feature = "appdmg-import", feature = "lint", feature = "project-build"))]
 mod project_input;
 #[cfg(feature = "build")]
 mod wrap;
 
 const WRAP_RAW_COMMAND: &str = "wrap-raw";
+const BUILD_PROJECT_COMMAND: &str = "build";
 const INSPECT_COMMAND: &str = "inspect";
 const ANALYZE_COMMAND: &str = "analyze";
 const CONVERT_COMMAND: &str = "convert";
@@ -55,6 +57,9 @@ struct Cli {
 enum Command {
 	/// List the capabilities built into this binary.
 	Capabilities,
+	/// Plan or build an HFS+ disk image from a TOML project.
+	#[command(name = BUILD_PROJECT_COMMAND)]
+	Build(project_build::Arguments),
 	/// Wrap a regular file of raw sectors in a UDIF image.
 	#[command(name = WRAP_RAW_COMMAND)]
 	WrapRaw {
@@ -278,6 +283,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 	let result = match command {
 		Command::Capabilities => {
 			for (name, compiled) in [
+				(BUILD_PROJECT_COMMAND, cfg!(feature = "project-build")),
 				(WRAP_RAW_COMMAND, cfg!(feature = "build")),
 				(
 					PARALLEL_FEATURE,
@@ -314,6 +320,10 @@ fn run(command: Command) -> CliResult<ExitCode> {
 			}
 			Ok(())
 		}
+		#[cfg(feature = "project-build")]
+		Command::Build(arguments) => project_build::build(arguments, &std::env::current_dir()?),
+		#[cfg(not(feature = "project-build"))]
+		Command::Build(_) => Err("project building requires an HFS+ composed CLI".into()),
 		#[cfg(feature = "build")]
 		Command::WrapRaw {
 			source,

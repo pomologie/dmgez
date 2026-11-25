@@ -335,7 +335,6 @@ dependencies = [
  "hfsplus-format",
  "rustix",
  "tempfile",
- "thiserror",
 ]
 
 [[package]]

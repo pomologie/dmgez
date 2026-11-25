@@ -2,7 +2,10 @@ use std::{env, error::Error, path::PathBuf, process::ExitCode};
 
 use clap::Parser;
 
-mod project;
+mod project_build;
+mod project_input;
+
+type CliResult<T = ()> = Result<T, Box<dyn Error>>;
 
 #[derive(Parser)]
 #[command(about = "Build a TOML project through the HFS+ compatibility adapter")]
@@ -11,7 +14,7 @@ struct Cli {
 	#[arg(long, hide = true)]
 	working_directory: Option<PathBuf>,
 	#[command(flatten)]
-	build: project::Arguments,
+	build: project_build::Arguments,
 }
 
 fn main() -> ExitCode {
@@ -35,6 +38,6 @@ fn run(cli: Cli) -> Result<(), Box<dyn Error>> {
 		Some(directory) => directory,
 		None => env::current_dir()?,
 	};
-	project::build(cli.build, &directory)?;
+	project_build::build(cli.build, &directory)?;
 	Ok(())
 }

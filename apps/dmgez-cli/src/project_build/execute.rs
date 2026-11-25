@@ -1,80 +1,44 @@
 use std::{
 	cell::Cell,
 	collections::BTreeMap,
-	fs::File,
-	io::{self, Read, Write},
-	path::{Path, PathBuf},
+	io::{self, Write},
+	path::Path,
 	thread,
 };
 
-use clap::Args;
 use dmgez_builder::{
 	planning::PreparedBuild,
 	preflight::{OutputIntent, PreflightOptions, ReleaseIntent},
 	progress::BuildProgress,
 };
-use dmgez_config::{ConfigError, ConfigOverride, MAX_MANIFEST_BYTES, OverrideError, Project};
-use dmgez_hfs_adapter_probe::hfsplus::{self, HfsImage, MetadataLoss};
-use thiserror::Error;
+use dmgez_config::{ConfigOverride, Project};
+use dmgez_hfsplus::{self as hfsplus, HfsImage, MetadataLoss};
+
+use crate::{CliResult, project_input};
+
+use super::Arguments;
 
 const DEFINITION_SEPARATOR: char = '=';
 const OVERWRITE_ASSIGNMENT: &str = "build.overwrite=true";
 const MAX_LOSS_DETAILS: usize = 20;
 const READ_PROGRESS_STEPS: u64 = 10;
+const RELATIVE_WORKING_DIRECTORY: &str = "working directory must be absolute";
+const MISSING_PROJECT_DIRECTORY: &str = "project path has no parent directory";
+const INVALID_DEFINITION: &str = "expected a definition in NAME=VALUE form";
+const DUPLICATE_OVERWRITE: &str = "choose either --overwrite or --set build.overwrite";
 
-#[derive(Args)]
-pub(crate) struct Arguments {
-	/// TOML project file. Relative paths use the caller's working directory.
-	project: PathBuf,
-	/// Plan the exact virtual disk capacity and report the resolved build summary.
-	#[arg(long)]
-	dry_run: bool,
-	/// Define a literal substitution value. May be repeated.
-	#[arg(long, value_name = "NAME=VALUE")]
-	define: Vec<String>,
-	/// Override a typed scalar project setting. May be repeated.
-	#[arg(long, value_name = "SECTION.FIELD=VALUE")]
-	set: Vec<String>,
-	/// Authorize staged replacement in a trusted local output directory.
-	#[arg(long)]
-	overwrite: bool,
-}
-
-#[derive(Debug, Error)]
-pub(crate) enum Error {
-	#[error("working directory must be absolute")]
-	RelativeWorkingDirectory,
-	#[error("project path has no parent directory")]
-	MissingProjectDirectory,
-	#[error("expected a definition in NAME=VALUE form")]
-	Definition,
-	#[error("choose either --overwrite or --set build.overwrite")]
-	DuplicateOverwrite,
-	#[error(transparent)]
-	Io(#[from] io::Error),
-	#[error(transparent)]
-	Override(#[from] OverrideError),
-	#[error(transparent)]
-	Config(#[from] ConfigError),
-	#[error(transparent)]
-	Build(#[from] hfsplus::Error),
-}
-
-pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> Result<(), Error> {
+pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> CliResult {
 	if !working_directory.is_absolute() {
-		return Err(Error::RelativeWorkingDirectory);
+		return Err(RELATIVE_WORKING_DIRECTORY.into());
 	}
 	let path = working_directory.join(&arguments.project).canonicalize()?;
-	let directory = path.parent().ok_or(Error::MissingProjectDirectory)?;
-	let mut input = String::new();
-	File::open(&path)?
-		.take(MAX_MANIFEST_BYTES as u64 + 1)
-		.read_to_string(&mut input)?;
+	let directory = path.parent().ok_or(MISSING_PROJECT_DIRECTORY)?;
+	let input = project_input::read(&path)?;
 	let mut defines = BTreeMap::new();
 	for definition in arguments.define {
 		let (name, value) = definition
 			.split_once(DEFINITION_SEPARATOR)
-			.ok_or(Error::Definition)?;
+			.ok_or(INVALID_DEFINITION)?;
 		defines.insert(name.to_owned(), value.to_owned());
 	}
 	let mut overrides = arguments
@@ -88,7 +52,7 @@ pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> Result<()
 			.iter()
 			.any(|assignment| assignment.key() == overwrite.key())
 		{
-			return Err(Error::DuplicateOverwrite);
+			return Err(DUPLICATE_OVERWRITE.into());
 		}
 		overrides.push(overwrite);
 	}

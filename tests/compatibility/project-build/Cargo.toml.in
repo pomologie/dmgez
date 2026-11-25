@@ -10,6 +10,7 @@ default = ["finder-write", "parallel"]
 finder-write = ["dmgez-hfsplus/finder-write"]
 lzma = ["dmgez-hfsplus/lzma", "dmgez-udif/lzma"]
 parallel = ["dmgez-hfsplus/parallel"]
+project-build = []
 volume-icon = ["finder-write", "dmgez-hfsplus/volume-icon"]
 
 [dependencies]
@@ -17,7 +18,6 @@ clap = { version = "=4.6.8", features = ["derive"] }
 dmgez-builder = { path = @dmgez-builder@, default-features = false }
 dmgez-config = { path = @dmgez-config@ }
 dmgez-hfsplus = { path = @dmgez-hfsplus@, default-features = false }
-thiserror = "=2.0.21"
 
 [dev-dependencies]
 dmgez-udif = { path = @dmgez-udif@, default-features = false, features = ["read", "zlib"] }

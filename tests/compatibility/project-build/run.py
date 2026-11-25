@@ -11,6 +11,9 @@ import sys
 from tempfile import TemporaryDirectory
 
 COMPATIBILITY = Path(__file__).resolve().parent
+CLI_SOURCE = "apps/dmgez-cli/src"
+CLI_BUILD_FILES = ("project_build.rs", "project_input.rs")
+CLI_BUILD_MODULES = "project_build"
 HFSPLUS_VERSION = "0.1.0"
 HFSPLUS_CORE_PACKAGE = "hfsplus-pomologie-core"
 VOLUME_ICON_FIXTURE = "crates/presentation/dmgez-finder/tests/fixtures/apple-iconutil.icns"
@@ -81,7 +84,8 @@ def main():
         unpacked = {name: f"{name}-{HFSPLUS_VERSION}" for name in HFSPLUS_PACKAGES}
         paths.update(resolved_packages(options.hfsplus_packages, unpacked))
 
-    command = ["cargo", "run" if options.project else "test", "--offline", "--locked"]
+    command = ["cargo", "run" if options.project else "test", "--offline", "--locked",
+               "--features", "project-build"]
     if options.no_default_features:
         command.append("--no-default-features")
     if options.lzma:
@@ -106,6 +110,10 @@ def main():
             shutil.copy2(COMPATIBILITY / required, isolated / required)
         for required in ("src", "tests"):
             shutil.copytree(COMPATIBILITY / required, isolated / required)
+        cli = dmgez_source / CLI_SOURCE
+        for source in CLI_BUILD_FILES:
+            shutil.copy2(cli / source, isolated / "src" / source)
+        shutil.copytree(cli / CLI_BUILD_MODULES, isolated / "src" / CLI_BUILD_MODULES)
         if options.volume_icon and not options.project:
             shutil.copy2(dmgez_source / VOLUME_ICON_FIXTURE, isolated / "tests" / "smoke")
         (isolated / "Cargo.toml").write_text(isolated_manifest(paths), encoding="utf-8")
