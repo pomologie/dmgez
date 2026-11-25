@@ -95,6 +95,7 @@ pub(super) fn write() {
 	] {
 		report_field(name, if compiled { COMPILED } else { NOT_COMPILED });
 	}
+	report_field(signing::RUST_FEATURE, signing::RUST_CAPABILITY);
 	report_field(signing::NATIVE_FEATURE, signing::NATIVE_CAPABILITY);
 	report_field(notarize::NATIVE_FEATURE, notarize::NATIVE_CAPABILITY);
 }

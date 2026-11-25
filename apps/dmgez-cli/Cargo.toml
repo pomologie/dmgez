@@ -13,7 +13,7 @@ name = "dmgez"
 path = "src/main.rs"
 
 [features]
-default = ["build", "parallel"]
+default = ["build", "parallel", "signing-rust"]
 
 # Image creation and conversion
 build = [
@@ -63,6 +63,7 @@ installer-test = ["inspect", "dep:dmgez-operations", "dmgez-operations/install"]
 mount-system = ["dep:dmgez-mount", "dmgez-mount/system", "dep:serde", "dep:serde_json"]
 
 # Signing and notarization
+signing-rust = ["dmgez-signing/rust", "dep:serde", "dep:serde_json"]
 signing-native = ["dep:dmgez-signing", "dmgez-signing/native", "dep:serde", "dep:serde_json"]
 notarization-native = ["signing-native", "dmgez-signing/notarization-native"]
 

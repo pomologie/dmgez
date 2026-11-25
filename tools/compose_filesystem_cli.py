@@ -72,7 +72,7 @@ PROJECT_EDIT_FEATURE = "project-edit"
 PROJECT_EDIT_TEST = "project_edit_cli"
 IMAGE_EDIT_FEATURE = "image-edit"
 IMAGE_EDIT_TEST = "image_edit_cli"
-SOURCE_DIRS = ("apps", "crates", "tests")
+SOURCE_DIRS = ("apps", "crates", "tests", "third_party")
 PROJECT_FEATURES = {
     "project-build": ["dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config"],
     PROJECT_RELEASE_FEATURE: ["project-build", "inspect", "dep:dmgez-signing", "dep:sha2", "dep:tempfile"],

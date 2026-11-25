@@ -2,6 +2,7 @@ use std::process::Command;
 
 const BINARY: &str = env!("CARGO_BIN_EXE_dmgez");
 const CAPABILITY: &str = "signing-native";
+const RUST_CAPABILITY: &str = "signing-rust";
 const INSPECT: &str = "inspect";
 const VERIFY: &str = "verify";
 const ERROR: i32 = 2;
@@ -17,20 +18,33 @@ fn sign(operation: &str) -> Command {
 fn reports_signing_capability() {
 	let output = Command::new(BINARY).arg("capabilities").output().unwrap();
 	assert!(output.status.success(), "{output:?}");
-	let state = match (cfg!(feature = "signing-native"), cfg!(target_os = "macos")) {
-		(true, true) => "compiled",
-		(true, false) => "unavailable",
-		(false, _) => "not_compiled",
-	};
-	let expected = format!("{CAPABILITY} = {state}");
 	let capabilities = String::from_utf8_lossy(&output.stdout);
-	assert!(
-		capabilities.lines().any(|line| line == expected),
-		"{capabilities}"
-	);
+	for (capability, compiled, supported) in [
+		(
+			CAPABILITY,
+			cfg!(feature = "signing-native"),
+			cfg!(target_os = "macos"),
+		),
+		(
+			RUST_CAPABILITY,
+			cfg!(feature = "signing-rust"),
+			cfg!(any(target_os = "linux", target_os = "macos", windows)),
+		),
+	] {
+		let state = match (compiled, supported) {
+			(true, true) => "compiled",
+			(true, false) => "unavailable",
+			(false, _) => "not_compiled",
+		};
+		let expected = format!("{capability} = {state}");
+		assert!(
+			capabilities.lines().any(|line| line == expected),
+			"{capabilities}"
+		);
+	}
 }
 
-#[cfg(not(feature = "signing-native"))]
+#[cfg(not(any(feature = "signing-native", feature = "signing-rust")))]
 #[test]
 fn refuses_disabled_signing_before_accessing_the_artifact() {
 	let directory = tempfile::tempdir().unwrap();
@@ -52,7 +66,7 @@ fn refuses_disabled_signing_before_accessing_the_artifact() {
 	assert!(!missing.exists());
 }
 
-#[cfg(feature = "signing-native")]
+#[cfg(any(feature = "signing-native", feature = "signing-rust"))]
 mod enabled {
 	use std::process::Output;
 
@@ -69,13 +83,17 @@ mod enabled {
 	fn unavailable_backend_reports_without_opening_the_artifact() {
 		let directory = tempfile::tempdir().unwrap();
 		let missing = directory.path().join(MISSING_APP);
-		let unavailable: &[&str] = if cfg!(target_os = "macos") {
-			&[RUST]
-		} else {
-			&[AUTO, NATIVE, RUST]
-		};
+		let native = cfg!(all(feature = "signing-native", target_os = "macos"));
+		let rust = cfg!(all(
+			feature = "signing-rust",
+			any(target_os = "linux", target_os = "macos", windows)
+		));
+		let unavailable = [(AUTO, !native && !rust), (NATIVE, !native), (RUST, !rust)];
 		for operation in [INSPECT, VERIFY] {
-			for backend in unavailable {
+			for (backend, _) in unavailable
+				.into_iter()
+				.filter(|&(_, unavailable)| unavailable)
+			{
 				let output = sign(operation)
 					.arg(&missing)
 					.args(["--backend", backend, "--json"])
@@ -83,7 +101,7 @@ mod enabled {
 					.unwrap();
 				let report = json_report(&output, ERROR, "unavailable");
 				assert_eq!(report["operation"], operation);
-				assert_eq!(report["requested_backend"], *backend);
+				assert_eq!(report["requested_backend"], backend);
 				assert!(report["backend"].is_null(), "{report}");
 				assert!(report["kind"].is_null(), "{report}");
 			}
@@ -101,7 +119,7 @@ mod enabled {
 		report
 	}
 
-	#[cfg(target_os = "macos")]
+	#[cfg(all(feature = "signing-native", target_os = "macos"))]
 	mod macos {
 		use std::{
 			collections::BTreeMap,

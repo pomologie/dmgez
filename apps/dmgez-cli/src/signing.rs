@@ -4,7 +4,7 @@ use clap::{Args, Subcommand, ValueEnum};
 
 use crate::{COMPILED, CliResult, NOT_COMPILED};
 
-#[cfg(feature = "signing-native")]
+#[cfg(any(feature = "signing-native", feature = "signing-rust"))]
 mod report;
 
 pub(super) const NATIVE_FEATURE: &str = "signing-native";
@@ -14,6 +14,18 @@ pub(super) const NATIVE_CAPABILITY: &str =
 		(true, false) => "unavailable",
 		(true, true) => COMPILED,
 	};
+pub(super) const RUST_FEATURE: &str = "signing-rust";
+pub(super) const RUST_CAPABILITY: &str = match (
+	cfg!(feature = "signing-rust"),
+	cfg!(any(target_os = "linux", target_os = "macos", windows)),
+) {
+	(false, _) => NOT_COMPILED,
+	(true, false) => "unavailable",
+	(true, true) => COMPILED,
+};
+
+const AD_HOC_ARG: &str = "ad_hoc";
+const IDENTITY_ARG: &str = "identity";
 
 #[derive(Subcommand)]
 pub(super) enum Action {
@@ -43,8 +55,11 @@ pub(super) struct DiskSigningArguments {
 	#[arg(long, value_name = "PATH")]
 	output: PathBuf,
 	/// SHA-1 fingerprint of a Developer ID Application certificate in the keychain.
-	#[arg(long, value_name = "SHA1")]
-	identity: String,
+	#[arg(long, id = IDENTITY_ARG, value_name = "SHA1", required_unless_present = AD_HOC_ARG)]
+	identity: Option<String>,
+	/// Sign without a certificate. The default backend is apple-codesign.
+	#[arg(long, id = AD_HOC_ARG, conflicts_with = IDENTITY_ARG)]
+	ad_hoc: bool,
 	/// Code signing identifier for the disk image.
 	#[arg(long, value_name = "ID")]
 	identifier: String,
@@ -87,7 +102,7 @@ enum BackendChoice {
 	Rust,
 }
 
-#[cfg(feature = "signing-native")]
+#[cfg(any(feature = "signing-native", feature = "signing-rust"))]
 impl From<BackendChoice> for dmgez_signing::Backend {
 	fn from(choice: BackendChoice) -> Self {
 		match choice {
@@ -98,31 +113,64 @@ impl From<BackendChoice> for dmgez_signing::Backend {
 	}
 }
 
-#[cfg(not(feature = "signing-native"))]
-pub(super) fn run(_action: &Action) -> CliResult<ExitCode> {
-	Err(format!("feature not compiled: {NATIVE_FEATURE}").into())
+pub(super) fn run(action: &Action) -> CliResult<ExitCode> {
+	match action {
+		#[cfg(any(feature = "signing-native", feature = "signing-rust"))]
+		Action::Inspect(arguments) => check(dmgez_signing::Operation::Inspect, arguments),
+		#[cfg(any(feature = "signing-native", feature = "signing-rust"))]
+		Action::Verify(arguments) => check(dmgez_signing::Operation::Verify, arguments),
+		#[cfg(not(any(feature = "signing-native", feature = "signing-rust")))]
+		Action::Inspect(_) | Action::Verify(_) => {
+			Err(format!("feature not compiled: {NATIVE_FEATURE} or {RUST_FEATURE}").into())
+		}
+		Action::App(arguments) => sign_app(arguments),
+		Action::Dmg(arguments) if arguments.ad_hoc => sign_ad_hoc(arguments),
+		Action::Dmg(arguments) => sign_developer_id(arguments),
+	}
+}
+
+#[cfg(feature = "signing-rust")]
+fn sign_ad_hoc(arguments: &DiskSigningArguments) -> CliResult<ExitCode> {
+	let result = dmgez_signing::sign_ad_hoc_disk_image(
+		&arguments.source,
+		&arguments.output,
+		&arguments.identifier,
+		arguments.options.backend.into(),
+	)?;
+	report::write_disk_signing(&result, arguments.options.json)?;
+	Ok(ExitCode::SUCCESS)
+}
+
+#[cfg(not(feature = "signing-rust"))]
+fn sign_ad_hoc(_: &DiskSigningArguments) -> CliResult<ExitCode> {
+	Err(format!("feature not compiled: {RUST_FEATURE}").into())
 }
 
 #[cfg(feature = "signing-native")]
-pub(super) fn run(action: &Action) -> CliResult<ExitCode> {
-	use dmgez_signing::{Operation, sign_disk_image};
+fn sign_developer_id(arguments: &DiskSigningArguments) -> CliResult<ExitCode> {
+	let identity = arguments
+		.identity
+		.as_deref()
+		.ok_or("missing signing identity")?;
+	let result = dmgez_signing::sign_disk_image(
+		&arguments.source,
+		&arguments.output,
+		identity,
+		&arguments.identifier,
+		arguments.options.backend.into(),
+	)?;
+	report::write_disk_signing(&result, arguments.options.json)?;
+	Ok(ExitCode::SUCCESS)
+}
 
-	match action {
-		Action::Inspect(arguments) => check(Operation::Inspect, arguments),
-		Action::Verify(arguments) => check(Operation::Verify, arguments),
-		Action::App(arguments) => sign_app(arguments),
-		Action::Dmg(arguments) => {
-			let result = sign_disk_image(
-				&arguments.source,
-				&arguments.output,
-				&arguments.identity,
-				&arguments.identifier,
-				arguments.options.backend.into(),
-			)?;
-			report::write_disk_signing(&result, arguments.options.json)?;
-			Ok(ExitCode::SUCCESS)
-		}
-	}
+#[cfg(not(feature = "signing-native"))]
+fn sign_developer_id(_: &DiskSigningArguments) -> CliResult<ExitCode> {
+	Err(format!("feature not compiled: {NATIVE_FEATURE}").into())
+}
+
+#[cfg(not(feature = "signing-native"))]
+fn sign_app(_: &AppSigningArguments) -> CliResult<ExitCode> {
+	Err(format!("feature not compiled: {NATIVE_FEATURE}").into())
 }
 
 #[cfg(feature = "signing-native")]
@@ -182,7 +230,7 @@ fn entitlement_mapping(value: &std::ffi::OsStr) -> CliResult<dmgez_signing::AppE
 	})
 }
 
-#[cfg(feature = "signing-native")]
+#[cfg(any(feature = "signing-native", feature = "signing-rust"))]
 fn check(operation: dmgez_signing::Operation, arguments: &Arguments) -> CliResult<ExitCode> {
 	use dmgez_signing::{Status, check_signature};
 
