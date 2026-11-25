@@ -110,6 +110,7 @@ struct Fixture<'test> {
 	resource: Option<&'test [u8]>,
 	quarantined: Option<Node>,
 	read_count: &'test Cell<usize>,
+	read_size_limit: usize,
 }
 
 impl<'test> Fixture<'test> {
@@ -123,6 +124,7 @@ impl<'test> Fixture<'test> {
 			resource: None,
 			quarantined: None,
 			read_count,
+			read_size_limit: usize::MAX,
 		}
 	}
 
@@ -168,6 +170,7 @@ impl DirectoryReader for Directory {
 struct Data<'test> {
 	bytes: &'test [u8],
 	read_count: &'test Cell<usize>,
+	read_size_limit: usize,
 }
 
 impl ForkReader for Data<'_> {
@@ -178,6 +181,11 @@ impl ForkReader for Data<'_> {
 	}
 
 	fn read_exact_at(&mut self, offset: u64, output: &mut [u8]) -> io::Result<()> {
+		if output.len() > self.read_size_limit {
+			return Err(io::Error::other(
+				"source read exceeds the fixture chunk limit",
+			));
+		}
 		self.read_count.set(self.read_count.get() + 1);
 		let offset = usize::try_from(offset).map_err(io::Error::other)?;
 		let source = self
@@ -251,6 +259,7 @@ impl VolumeBackend for Fixture<'_> {
 			read(&mut Data {
 				bytes,
 				read_count: self.read_count,
+				read_size_limit: self.read_size_limit,
 			})
 		}))
 	}
@@ -290,6 +299,7 @@ impl VolumeBackend for Fixture<'_> {
 				read(&mut Data {
 					bytes,
 					read_count: self.read_count,
+					read_size_limit: self.read_size_limit,
 				})
 			}))
 	}
@@ -483,3 +493,7 @@ mod destination;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[path = "virtual_install/execute.rs"]
 mod execute;
+
+#[cfg(target_os = "macos")]
+#[path = "virtual_install/existing.rs"]
+mod existing;

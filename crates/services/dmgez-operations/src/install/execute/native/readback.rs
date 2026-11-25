@@ -1,6 +1,6 @@
 use std::{error::Error as StdError, fs::File};
 
-use dmgez_vfs::volume::{ForkKind, NodeHandle, VolumeBackend};
+use dmgez_vfs::volume::{NodeHandle, VolumeBackend};
 use rustix::{
 	fd::AsFd,
 	fs::{self, AtFlags, Dir, Mode},
@@ -14,8 +14,8 @@ use super::{
 	verify_attribute, verify_link,
 };
 
-const CURRENT_DIRECTORY: &[u8] = b".";
-const PARENT_DIRECTORY: &[u8] = b"..";
+pub(super) const CURRENT_DIRECTORY: &[u8] = b".";
+pub(super) const PARENT_DIRECTORY: &[u8] = b"..";
 const ATTRIBUTE_TERMINATOR: u8 = 0;
 
 impl<B: VolumeBackend> Run<'_, '_, B> {
@@ -46,14 +46,12 @@ impl<B: VolumeBackend> Run<'_, '_, B> {
 		let fd = directory.descriptor();
 		verify_mode(fd, entry.mode)?;
 		self.verify_attributes(source, entry, fd)?;
-		let mut expected = Vec::new();
-		expected.try_reserve_exact(children[index].len())?;
-		expected.extend(
+		verify_directory_names(
+			fd,
 			children[index]
 				.iter()
 				.map(|&child| names[child].name.as_str().as_bytes()),
-		);
-		verify_directory_names(fd, expected)?;
+		)?;
 		for &child in &children[index] {
 			self.check_ready()?;
 			directory.check_attachment()?;
@@ -95,7 +93,7 @@ impl<B: VolumeBackend> Run<'_, '_, B> {
 		Ok(())
 	}
 
-	fn verify_attributes(
+	pub(super) fn verify_attributes(
 		&mut self,
 		source: &NodeHandle<B::Id>,
 		entry: &CopyEntry,
@@ -108,15 +106,11 @@ impl<B: VolumeBackend> Run<'_, '_, B> {
 		}
 		if let CopyContent::File {
 			resource_bytes: Some(bytes),
+			ref resource_alias,
 			..
 		} = entry.content
 		{
-			let value = self
-				.view
-				.with_fork(source, ForkKind::Resource, |fork| {
-					read_value(fork, bytes, self.cancelled)
-				})?
-				.ok_or(InstallFailure::SourceChanged)??;
+			let value = self.read_resource(source, bytes, resource_alias.as_ref())?;
 			verify_attribute(fd, RESOURCE_ATTRIBUTE, &value)?;
 		}
 		for item in &entry.attributes {
@@ -133,11 +127,17 @@ impl<B: VolumeBackend> Run<'_, '_, B> {
 	}
 }
 
-fn verify_directory_names<E: StdError + 'static>(
+pub(super) fn verify_directory_names<'name, E: StdError + 'static>(
 	fd: impl AsFd,
-	mut expected: Vec<&[u8]>,
+	names: impl ExactSizeIterator<Item = &'name [u8]>,
 ) -> Result<(), InstallFailure<E>> {
+	let mut expected = Vec::new();
+	expected.try_reserve_exact(names.len())?;
+	expected.extend(names);
 	expected.sort_unstable();
+	let mut seen = Vec::new();
+	seen.try_reserve_exact(expected.len())?;
+	seen.resize(expected.len(), false);
 	let mut count = 0;
 	for item in os(Dir::read_from(fd))? {
 		let item = os(item)?;
@@ -145,7 +145,10 @@ fn verify_directory_names<E: StdError + 'static>(
 		if name == CURRENT_DIRECTORY || name == PARENT_DIRECTORY {
 			continue;
 		}
-		if count == expected.len() || expected.binary_search(&name).is_err() {
+		let index = expected
+			.binary_search(&name)
+			.map_err(|_| InstallFailure::ReadBack)?;
+		if std::mem::replace(&mut seen[index], true) {
 			return Err(InstallFailure::ReadBack);
 		}
 		count += 1;
@@ -154,6 +157,16 @@ fn verify_directory_names<E: StdError + 'static>(
 		return Err(InstallFailure::ReadBack);
 	}
 	Ok(())
+}
+
+#[cfg(target_os = "macos")]
+pub(super) fn verify_empty_attributes<E: StdError + 'static>(
+	fd: impl AsFd,
+) -> Result<(), InstallFailure<E>> {
+	let fd = fd.as_fd();
+	match_attribute_names(Vec::new(), fs::flistxattr_query(fd), |names| {
+		fs::flistxattr(fd, names)
+	})
 }
 
 fn verify_mode<E: StdError + 'static>(fd: impl AsFd, mode: u16) -> Result<(), InstallFailure<E>> {

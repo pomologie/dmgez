@@ -12,6 +12,9 @@ use super::{CopyContent, CopyPlan, CopySummary};
 
 mod native;
 
+#[cfg(target_os = "macos")]
+pub use native::existing::{ExistingBundleError, verify_existing_bundle};
+
 /// Application metadata that the host copy profile cannot reproduce.
 #[derive(Debug, Error)]
 #[error("application metadata cannot be represented in this host profile")]

@@ -5,7 +5,7 @@ use std::{
 	os::unix::ffi::OsStrExt,
 };
 
-use dmgez_vfs::volume::{Fork, ForkKind, NodeHandle, VolumeBackend};
+use dmgez_vfs::volume::{Fork, ForkKind, NodeHandle, RawName, VolumeBackend};
 use rustix::{
 	fd::AsFd,
 	fs::{self, AtFlags, FileType, Mode, OFlags, XattrFlags},
@@ -21,6 +21,8 @@ use crate::{
 
 use super::{HostMetadataError, InstallFailure, Run};
 
+#[cfg(target_os = "macos")]
+pub(super) mod existing;
 mod readback;
 
 const CHUNK_BYTES: usize = 64 << 10;
@@ -107,23 +109,7 @@ impl<B: VolumeBackend> Run<'_, '_, B> {
 		verify_file(&writer, &reader, *data_bytes)?;
 		self.verify_data(source, *data_bytes, &mut reader)?;
 		if let Some(bytes) = *resource_bytes {
-			let value = self
-				.view
-				.with_fork(source, ForkKind::Resource, |fork| {
-					read_value(fork, bytes, self.cancelled)
-				})?
-				.ok_or(InstallFailure::SourceChanged)??;
-			if let Some(alias) = resource_alias {
-				let attribute = self
-					.view
-					.with_xattr(source, alias.as_lookup(), |fork| {
-						read_value(fork, bytes, self.cancelled)
-					})?
-					.ok_or(InstallFailure::SourceChanged)??;
-				if attribute != value {
-					return Err(InstallFailure::SourceChanged);
-				}
-			}
+			let value = self.read_resource(source, bytes, resource_alias.as_ref())?;
 			set_attribute(&reader, RESOURCE_ATTRIBUTE, &value)?;
 		}
 		self.write_attributes(source, entry, &reader)?;
@@ -136,6 +122,32 @@ impl<B: VolumeBackend> Run<'_, '_, B> {
 			return Err(InstallFailure::ReadBack);
 		}
 		Ok(())
+	}
+
+	fn read_resource(
+		&mut self,
+		source: &NodeHandle<B::Id>,
+		bytes: u64,
+		alias: Option<&RawName>,
+	) -> Result<Vec<u8>, InstallFailure<B::Error>> {
+		let value = self
+			.view
+			.with_fork(source, ForkKind::Resource, |fork| {
+				read_value(fork, bytes, self.cancelled)
+			})?
+			.ok_or(InstallFailure::SourceChanged)??;
+		if let Some(alias) = alias {
+			let attribute = self
+				.view
+				.with_xattr(source, alias.as_lookup(), |fork| {
+					read_value(fork, bytes, self.cancelled)
+				})?
+				.ok_or(InstallFailure::SourceChanged)??;
+			if attribute != value {
+				return Err(InstallFailure::SourceChanged);
+			}
+		}
+		Ok(value)
 	}
 
 	fn verify_data(

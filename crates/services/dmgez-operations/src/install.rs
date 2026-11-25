@@ -15,6 +15,8 @@ pub use copy_plan::{
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod execute;
+#[cfg(target_os = "macos")]
+pub use execute::{ExistingBundleError, verify_existing_bundle};
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use execute::{
 	HostMetadataError, InstallError, InstallFailure, execute_copy, execute_copy_with_check,
