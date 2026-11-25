@@ -40,3 +40,17 @@ fn visibility_selections_require_a_finder_flag_backend_before_discovery() {
 		))
 	));
 }
+
+#[cfg(feature = "finder-write")]
+#[test]
+fn accepts_unicode_finder_folder_paths_only_in_the_unicode_profile() {
+	let project = project("[[finder.folders]]\npath = '/Guidé 🚀'\n");
+	let mut options = options();
+	options.capabilities.finder_layout = Availability::Available;
+	assert!(matches!(
+		preflight(&project, options),
+		Err(PreflightError::FinderFolderName { index: 0 })
+	));
+	options.capabilities.hfsplus_unicode = Availability::Available;
+	preflight(&project, options).unwrap();
+}

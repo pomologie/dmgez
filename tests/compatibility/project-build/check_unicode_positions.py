@@ -20,6 +20,7 @@ PAYLOAD = b"positioned payload\0\xff\n"
 ORIGINAL_NAME = "Cafe\u0301 🚀"
 RENAMED_NAME = "Re\u0301sume\u0301 🎉"
 NESTED_NAME = "A\u030angstro\u0308m"
+FOLDER_NAME = "Guide\u0301 🚀"
 PROJECT = """\
 schema_version = 1
 [image]
@@ -37,12 +38,14 @@ destination = "/Café 🚀"
 position = [17, 23]
 [[contents]]
 source = "payload.bin"
-destination = "/Guide/Ångström"
+destination = "/Guidé 🚀/Ångström"
 [finder]
 background = { kind = "image", source = "background.png" }
 [[finder.folders]]
-path = "/Guide"
+path = "/guide\u0301 🚀"
 background = { kind = "none" }
+[finder.folders.icon_view]
+icon_size = 64
 [finder.folders.icon_view.positions]
 "Ångström" = [31, 47]
 """
@@ -55,8 +58,13 @@ destination = "/Résumé 🎉"
 position = [29, 53]
 [[edits]]
 operation = "modify"
-target = "/guide/ångström"
+target = "/guidé 🚀/ångström"
 position = [59, 61]
+"""
+EQUIVALENT_FOLDER = """\
+
+[[finder.folders]]
+path = "/Guidé 🚀"
 """
 
 
@@ -69,9 +77,10 @@ def extract(seven_zip, raw, path):
     return subprocess.check_output([seven_zip, "x", "-thfs", "-so", raw, path])
 
 
-def positions(data):
+def layout(data):
     with DSStore.open(BytesIO(data), "r") as store:
-        return [(entry.filename, entry.value) for entry in store if entry.code == b"Iloc"]
+        positions = [(entry.filename, entry.value) for entry in store if entry.code == b"Iloc"]
+        return positions, store["."]["icvp"]["iconSize"]
 
 
 def verify(binary, seven_zip, root, image, name, xy, nested_xy):
@@ -81,15 +90,16 @@ def verify(binary, seven_zip, root, image, name, xy, nested_xy):
     subprocess.run([binary, "unwrap-raw", image, "--output", raw], cwd=root, check=True)
     catalog = entries(seven_zip, raw)
     assert f"{VOLUME}/{name}" in catalog, catalog
-    assert f"{VOLUME}/Guide/{NESTED_NAME}" in catalog, catalog
+    assert f"{VOLUME}/{FOLDER_NAME}/{NESTED_NAME}" in catalog, catalog
+    assert f"{VOLUME}/{FOLDER_NAME}/.DS_Store" in catalog, catalog
     # Match payloads using their unique ASCII prefixes because host argument
     # normalization can change a complete Unicode 7-Zip selector.
     assert extract(seven_zip, raw, f"{VOLUME}/{name[0]}*") == PAYLOAD
-    assert extract(seven_zip, raw, f"{VOLUME}/Guide/{NESTED_NAME[0]}*") == PAYLOAD
-    root_positions = positions(extract(seven_zip, raw, f"{VOLUME}/.DS_Store"))
-    nested_positions = positions(extract(seven_zip, raw, f"{VOLUME}/Guide/.DS_Store"))
-    assert root_positions == [(name, xy)], root_positions
-    assert nested_positions == [(NESTED_NAME, nested_xy)], nested_positions
+    assert extract(seven_zip, raw, f"{VOLUME}/Gui*/{NESTED_NAME[0]}*") == PAYLOAD
+    root_layout = layout(extract(seven_zip, raw, f"{VOLUME}/.DS_Store"))
+    nested_layout = layout(extract(seven_zip, raw, f"{VOLUME}/Gui*/.DS_Store"))
+    assert root_layout == ([(name, xy)], 128.0), root_layout
+    assert nested_layout == ([(NESTED_NAME, nested_xy)], 64.0), nested_layout
 
 
 def main():
@@ -103,10 +113,17 @@ def main():
     with TemporaryDirectory(prefix="dmgez-finder-unicode-") as temporary:
         root = Path(temporary)
         (root / "dmg.toml").write_text(PROJECT, encoding="utf-8")
+        (root / "duplicate.toml").write_text(PROJECT + EQUIVALENT_FOLDER, encoding="utf-8")
         (root / "edits.toml").write_text(EDITS, encoding="utf-8")
         (root / "payload.bin").write_bytes(PAYLOAD)
         shutil.copyfile(BACKGROUND, root / "background.png")
 
+        duplicate = subprocess.run(
+            [binary, "build", "duplicate.toml", "--dry-run"], cwd=root,
+            capture_output=True, text=True,
+        )
+        assert duplicate.returncode != 0 and "duplicates an earlier folder" in duplicate.stderr
+        assert not (root / "original.dmg").exists()
         subprocess.run([binary, "build", "dmg.toml"], cwd=root, check=True)
         verify(binary, args.seven_zip, root, "original.dmg", ORIGINAL_NAME, (17, 23), (31, 47))
         source = (root / "original.dmg").read_bytes()
@@ -117,7 +134,7 @@ def main():
         )
         verify(binary, args.seven_zip, root, "edited.dmg", RENAMED_NAME, (29, 53), (59, 61))
         assert (root / "original.dmg").read_bytes() == source
-    print("Verified exact Unicode Finder position names in original and edited images")
+    print("Verified Unicode Finder folder aliases, positions, and settings in both images")
 
 
 if __name__ == "__main__":

@@ -1,7 +1,13 @@
 use dmgez_config::{Project, VolumeIcon};
 
 #[cfg(feature = "finder-write")]
-use crate::presentation::settings::{resolve_options, without_positions};
+use super::{FilesystemProfile, filesystem::printable_ascii};
+#[cfg(feature = "finder-write")]
+use crate::presentation::{
+	CatalogNames,
+	catalog_paths::folder_key,
+	settings::{resolve_options, without_positions},
+};
 
 use super::{
 	Availability, BuildCapabilities, BuildFeature, FinderPlan, FinderSetting, PreflightError,
@@ -10,6 +16,8 @@ use super::{
 pub(super) fn finder_plan(
 	project: &Project,
 	capabilities: BuildCapabilities,
+	#[cfg(feature = "finder-write")] filesystem: FilesystemProfile,
+	#[cfg(feature = "finder-write")] names: CatalogNames,
 ) -> Result<FinderPlan, PreflightError> {
 	if project
 		.contents
@@ -51,7 +59,14 @@ pub(super) fn finder_plan(
 	capabilities
 		.finder_layout
 		.require(BuildFeature::FinderLayout)?;
-	admit_layout(project, capabilities.finder_image_background)
+	admit_layout(
+		project,
+		capabilities.finder_image_background,
+		#[cfg(feature = "finder-write")]
+		filesystem,
+		#[cfg(feature = "finder-write")]
+		names,
+	)
 }
 
 pub(super) fn admit_volume_icon(
@@ -95,6 +110,8 @@ fn admit_layout(
 fn admit_layout(
 	project: &Project,
 	image_background: Availability,
+	filesystem: FilesystemProfile,
+	names: CatalogNames,
 ) -> Result<FinderPlan, PreflightError> {
 	use std::collections::BTreeSet;
 
@@ -107,16 +124,23 @@ fn admit_layout(
 	let inherited = (!finder.folders.is_empty()).then(|| without_positions(&finder.options));
 	let mut folders = BTreeSet::new();
 	for (index, folder) in finder.folders.iter().enumerate() {
-		if !folder.path.components().all(super::printable_ascii) {
+		let supported = match filesystem {
+			FilesystemProfile::HfsplusAscii => folder.path.components().all(printable_ascii),
+			FilesystemProfile::HfsplusUnicode => folder
+				.path
+				.components()
+				.all(|name| !name.chars().any(char::is_control)),
+		};
+		if !supported {
 			return Err(PreflightError::FinderFolderName { index });
 		}
-		if !folders.insert(folder.path.as_str().to_ascii_lowercase()) {
+		if !folders.insert(folder_key(folder.path.as_str(), names)?) {
 			return Err(PreflightError::DuplicateFinderFolder { index });
 		}
 		let options = resolve_options(inherited.as_ref(), Some(&folder.options));
 		admit_options(options.as_deref(), image_background)?;
 	}
-	check_duplicate_positions(project, finder)?;
+	check_duplicate_positions(project, finder, names)?;
 	match finder.options.default_view {
 		None | Some(View::IconView) => Ok(FinderPlan::IconView),
 		Some(View::ListView) => Ok(FinderPlan::ListView),
@@ -149,6 +173,7 @@ fn admit_options(
 fn check_duplicate_positions(
 	project: &Project,
 	finder: &dmgez_config::Finder,
+	names: CatalogNames,
 ) -> Result<(), PreflightError> {
 	use std::collections::{BTreeMap, BTreeSet};
 
@@ -164,15 +189,15 @@ fn check_duplicate_positions(
 		let Some(icon_view) = &options.icon_view else {
 			continue;
 		};
-		let names: BTreeSet<_> = icon_view
+		let keys = icon_view
 			.positions
 			.keys()
-			.map(|name| name.to_ascii_lowercase())
-			.collect();
-		if names.len() != icon_view.positions.len() {
+			.map(|name| names.comparison_key(name))
+			.collect::<Result<BTreeSet<_>, _>>()?;
+		if keys.len() != icon_view.positions.len() {
 			return Err(PreflightError::DuplicatePositionName);
 		}
-		positions.insert(path.to_ascii_lowercase(), names);
+		positions.insert(folder_key(path, names)?, keys);
 	}
 	for (index, entry) in project
 		.contents
@@ -185,9 +210,8 @@ fn check_duplicate_positions(
 			.as_str()
 			.rsplit_once(IMAGE_PATH_SEPARATOR)
 			.expect("validated virtual paths begin with a separator");
-		if positions
-			.get(&parent.to_ascii_lowercase())
-			.is_some_and(|names| names.contains(&name.to_ascii_lowercase()))
+		if let Some(keys) = positions.get(&folder_key(parent, names)?)
+			&& keys.contains(&names.comparison_key(name)?)
 		{
 			return Err(PreflightError::DuplicatePosition { index });
 		}

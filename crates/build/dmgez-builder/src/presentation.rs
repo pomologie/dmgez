@@ -17,6 +17,7 @@ use crate::{
 };
 
 mod background;
+pub(crate) mod catalog_paths;
 mod error;
 #[cfg(feature = "volume-icon")]
 mod item_icons;
@@ -27,6 +28,7 @@ pub(crate) mod volume_icon;
 
 pub use background::DeferredFinderStore;
 use background::{BackgroundSource, PendingFinderStore};
+use catalog_paths::folder_key;
 pub use dmgez_finder::ImageBackgroundIdentity;
 #[cfg(feature = "volume-icon")]
 pub use dmgez_finder::item_icon;
@@ -180,7 +182,7 @@ fn plan_stores(
 	check_cancelled(profile)?;
 
 	let root_options = project.finder.as_ref().map(|finder| &finder.options);
-	let mut folders = layout_folders(project, manifest, profile, budget.entries)?;
+	let mut folders = layout_folders(project, manifest, profile, budget.entries, names)?;
 	budget.reserve_assets(folders.len())?;
 	assign_children(manifest, profile, &mut folders)?;
 	let inherited = root_options
@@ -291,6 +293,7 @@ fn layout_folders<'a>(
 	manifest: &'a Manifest,
 	profile: &ExecutionProfile,
 	entry_budget: usize,
+	names: CatalogNames,
 ) -> Result<BTreeMap<&'a str, Folder<'a>>, Error> {
 	if entry_budget == 0 {
 		return Err(Error::EntryBudget);
@@ -316,7 +319,7 @@ fn layout_folders<'a>(
 				matched: false,
 			};
 			let duplicate = requests
-				.insert(path.to_ascii_lowercase(), request)
+				.insert(matching_folder_key(path, names)?, request)
 				.is_some();
 			if duplicate || folder.path.is_root() {
 				return Err(Error::AmbiguousFolder {
@@ -330,7 +333,7 @@ fn layout_folders<'a>(
 		check_cancelled(profile)?;
 		let path = entry.destination.as_str();
 		if !requests.is_empty()
-			&& let Some(request) = requests.get_mut(&path.to_ascii_lowercase())
+			&& let Some(request) = requests.get_mut(&matching_folder_key(path, names)?)
 		{
 			if request.matched {
 				return Err(Error::AmbiguousFolder {
@@ -359,15 +362,22 @@ fn layout_folders<'a>(
 			folder: missing.path.to_owned(),
 		});
 	}
-	let mut names = BTreeSet::new();
+	let mut keys = BTreeSet::new();
 	for path in folders.keys() {
-		if !names.insert(path.to_ascii_lowercase()) {
+		if !keys.insert(matching_folder_key(path, names)?) {
 			return Err(Error::AmbiguousFolder {
 				folder: (*path).to_owned(),
 			});
 		}
 	}
 	Ok(folders)
+}
+
+fn matching_folder_key(path: &str, names: CatalogNames) -> Result<catalog_paths::FolderKey, Error> {
+	folder_key(path, names).map_err(|source| Error::Layout {
+		folder: path.to_owned(),
+		source,
+	})
 }
 
 fn assign_children<'a>(

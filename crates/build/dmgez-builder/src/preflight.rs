@@ -1,6 +1,6 @@
 //! Pure build capability negotiation before the manifest walker opens sources.
 
-use std::{num::NonZeroUsize, ops::RangeInclusive};
+use std::num::NonZeroUsize;
 
 use dmgez_config::{
 	AutoFlag, Capacity, CompressionCache, Filesystem, ImageFormat, Partition, Project,
@@ -11,6 +11,7 @@ use thiserror::Error;
 use crate::partition::Layout;
 
 mod capabilities;
+mod filesystem;
 mod finder;
 mod partition;
 mod profile;
@@ -20,12 +21,12 @@ mod tests;
 mod udrw;
 
 pub use capabilities::{Availability, BuildCapabilities, BuildFeature};
+use filesystem::{check_known_names, filesystem_profile};
 use finder::{admit_volume_icon, finder_plan};
 use partition::partition_layout;
 pub use profile::{ExecutionProfile, ResourceLimits};
 use release::release_plan;
 
-const PRINTABLE_ASCII: RangeInclusive<u8> = b' '..=b'~';
 const DEFAULT_MEMORY_BYTES: usize = 512 << 20;
 const DEFAULT_METADATA_BYTES: usize = 128 << 20;
 const DEFAULT_MAX_ENTRIES: usize = 1_000_000;
@@ -211,6 +212,19 @@ pub fn preflight(
 	project: &Project,
 	options: PreflightOptions,
 ) -> Result<ExecutionProfile, PreflightError> {
+	preflight_with_names(
+		project,
+		options,
+		#[cfg(feature = "finder-write")]
+		dmgez_finder::CatalogNames::default(),
+	)
+}
+
+pub(crate) fn preflight_with_names(
+	project: &Project,
+	options: PreflightOptions,
+	#[cfg(feature = "finder-write")] names: dmgez_finder::CatalogNames,
+) -> Result<ExecutionProfile, PreflightError> {
 	let capabilities = options.capabilities;
 	if project.image.filesystem != Filesystem::Hfsplus {
 		return Err(PreflightError::Filesystem(project.image.filesystem));
@@ -247,7 +261,14 @@ pub fn preflight(
 	let output = output_plan(project, options)?;
 	let release = release_plan(project, options)?;
 	let cache = cache_plan(project, profile, release)?;
-	let finder = finder_plan(project, capabilities)?;
+	let finder = finder_plan(
+		project,
+		capabilities,
+		#[cfg(feature = "finder-write")]
+		filesystem,
+		#[cfg(feature = "finder-write")]
+		names,
+	)?;
 	let volume_icon = admit_volume_icon(project, capabilities)?;
 	if project.license.is_some() {
 		return Err(PreflightError::FeatureNotCompiled(BuildFeature::License));
@@ -305,35 +326,6 @@ pub fn preflight(
 		_ => {}
 	}
 	Ok(result)
-}
-
-fn filesystem_profile(
-	capabilities: BuildCapabilities,
-) -> Result<FilesystemProfile, PreflightError> {
-	match (capabilities.hfsplus_unicode, capabilities.hfsplus_ascii) {
-		(Availability::Available, _) => Ok(FilesystemProfile::HfsplusUnicode),
-		(_, Availability::Available) => Ok(FilesystemProfile::HfsplusAscii),
-		(Availability::Unavailable, _) | (_, Availability::Unavailable) => {
-			Err(PreflightError::BackendUnavailable(BuildFeature::Hfsplus))
-		}
-		_ => Err(PreflightError::FeatureNotCompiled(BuildFeature::Hfsplus)),
-	}
-}
-
-fn check_known_names(project: &Project) -> Result<(), PreflightError> {
-	if !printable_ascii(project.image.name.as_str()) {
-		return Err(PreflightError::VolumeLabel);
-	}
-	for (index, entry) in project.contents.iter().enumerate() {
-		if !entry.destination.components().all(printable_ascii) {
-			return Err(PreflightError::Destination { index });
-		}
-	}
-	Ok(())
-}
-
-fn printable_ascii(name: &str) -> bool {
-	name.bytes().all(|byte| PRINTABLE_ASCII.contains(&byte))
 }
 
 fn output_plan(project: &Project, options: PreflightOptions) -> Result<OutputPlan, PreflightError> {

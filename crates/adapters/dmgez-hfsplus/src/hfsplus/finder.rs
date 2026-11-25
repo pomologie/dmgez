@@ -9,7 +9,7 @@ use dmgez_udif::writer::Cancellation;
 use hfsplus_builder::volume::{
 	EntryKind, EntryMetadata, ForkSource, ManifestEntry, VolumeDraft, VolumeError,
 };
-use hfsplus_core::names::normalize;
+use hfsplus_core::names::{NameCollation, normalize};
 
 use super::{
 	Error, IMAGE_PATH_SEPARATOR, Payload, charge, charge_many, check_cancelled,
@@ -22,10 +22,15 @@ const FINDER_FLAGS_OFFSET: usize = 8;
 const FINDER_FLAGS_END: usize = FINDER_FLAGS_OFFSET + size_of::<u16>();
 const FINDER_INVISIBLE: u16 = 0x4000;
 
-pub(super) const CATALOG_NAMES: CatalogNames = CatalogNames::new(stored_name);
+pub(super) const CATALOG_NAMES: CatalogNames =
+	CatalogNames::new(stored_name).with_comparison_key(comparison_key);
 
 fn stored_name(name: &str) -> Result<String, Box<dyn StdError + Send + Sync>> {
 	Ok(String::from_utf16(normalize(name)?.as_units())?)
+}
+
+fn comparison_key(name: &str) -> Result<Vec<u16>, Box<dyn StdError + Send + Sync>> {
+	Ok(NameCollation::CaseFolded.key(normalize(name)?.as_units())?)
 }
 
 pub(super) fn account_assets(

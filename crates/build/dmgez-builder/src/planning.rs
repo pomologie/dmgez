@@ -14,7 +14,9 @@ use thiserror::Error;
 use crate::{
 	manifest::{self, Limits, Manifest, discover_for_output},
 	metadata::sidecar::{self, Binding},
-	preflight::{ExecutionProfile, OutputIntent, PreflightError, PreflightOptions, preflight},
+	preflight::{
+		ExecutionProfile, OutputIntent, PreflightError, PreflightOptions, preflight_with_names,
+	},
 	progress::BuildProgress,
 };
 
@@ -227,7 +229,12 @@ fn prepare_build(
 	progress: impl Fn(BuildProgress),
 	#[cfg(feature = "finder-write")] names: CatalogNames,
 ) -> Result<PreparedBuild, Error> {
-	let mut profile = preflight(project, options)?;
+	let mut profile = preflight_with_names(
+		project,
+		options,
+		#[cfg(feature = "finder-write")]
+		names,
+	)?;
 	if cancellation.is_cancelled() {
 		return Err(Error::Cancelled);
 	}
