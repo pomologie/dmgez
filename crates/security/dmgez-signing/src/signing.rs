@@ -85,11 +85,11 @@ pub enum SignError {
 	ImageIntegrity(#[source] Box<dyn std::error::Error + Send + Sync>),
 	#[error("the native signing tool failed ({status})")]
 	SigningFailed { status: std::process::ExitStatus },
-	#[error("the staged artifact did not pass strict Developer ID signature verification")]
+	#[error("the artifact did not pass strict Developer ID signature verification")]
 	SigningPolicy,
-	#[error("the staged artifact did not have an unambiguous secure timestamp")]
+	#[error("the artifact did not have an unambiguous secure timestamp")]
 	Timestamp,
-	#[error("the staged executable did not have the hardened runtime flag")]
+	#[error("the executable did not have the hardened runtime flag")]
 	HardenedRuntime,
 	#[error("could not copy or revalidate the application bundle")]
 	AppCopy(#[source] Box<dyn std::error::Error + Send + Sync>),
@@ -153,6 +153,25 @@ pub fn verify_signed_disk_image(
 		return crate::native::disk::verify(path, identity, identifier);
 	}
 	let _ = (path, identity, identifier);
+	Err(SignError::BackendUnavailable { backend })
+}
+
+/// Verifies an existing app bundle against the native Developer ID Application policy.
+///
+/// Checks the root and admitted nested code for valid signatures, secure
+/// timestamps, and hardened runtime on eligible executables. No private key
+/// is required. Keep the bundle and its pathname stable during verification.
+/// Bundle stamps and link targets are checked before and after inspection.
+/// Gatekeeper and any caller-specific entitlement policy are separate checks.
+/// # Errors
+/// Fails when the backend is unavailable, the bundle cannot be admitted,
+/// the observed bundle changes, or the nested code fails verification.
+pub fn verify_application(path: &Path, backend: Backend) -> Result<(), SignError> {
+	#[cfg(all(feature = "native", target_os = "macos"))]
+	if backend != Backend::Rust {
+		return crate::native::app::verify(path);
+	}
+	let _ = path;
 	Err(SignError::BackendUnavailable { backend })
 }
 

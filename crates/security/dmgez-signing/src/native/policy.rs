@@ -69,18 +69,7 @@ impl AppIdentity {
 		deep: bool,
 	) -> Result<(), SignError> {
 		self.verify_requirement(path, None, deep)?;
-		let architectures = architectures
-			.iter()
-			.copied()
-			.map(Some)
-			.chain(architectures.is_empty().then_some(None));
-		for architecture in architectures {
-			let display = inspect(path, architecture)?;
-			let fields =
-				display_fields(executable, &display.stderr).ok_or(SignError::SigningPolicy)?;
-			verify_display(fields, runtime)?;
-		}
-		Ok(())
+		verify_application_display(path, executable, architectures, runtime)
 	}
 
 	pub(in crate::native) fn sign_disk(
@@ -117,6 +106,36 @@ impl AppIdentity {
 			OsStr::new(TIMESTAMP_OPTION),
 		]
 	}
+}
+
+pub(super) fn verify_developer_application(
+	path: &Path,
+	executable: &Path,
+	architectures: &[&str],
+	runtime: bool,
+	deep: bool,
+) -> Result<(), SignError> {
+	verify_requirement(path, DEVELOPER_ID_POLICY, deep)?;
+	verify_application_display(path, executable, architectures, runtime)
+}
+
+fn verify_application_display(
+	path: &Path,
+	executable: &Path,
+	architectures: &[&str],
+	runtime: bool,
+) -> Result<(), SignError> {
+	let architectures = architectures
+		.iter()
+		.copied()
+		.map(Some)
+		.chain(architectures.is_empty().then_some(None));
+	for architecture in architectures {
+		let display = inspect(path, architecture)?;
+		let fields = display_fields(executable, &display.stderr).ok_or(SignError::SigningPolicy)?;
+		verify_display(fields, runtime)?;
+	}
+	Ok(())
 }
 
 #[cfg(feature = "notarization-native")]

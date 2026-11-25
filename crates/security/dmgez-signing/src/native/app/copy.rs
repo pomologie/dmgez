@@ -36,9 +36,9 @@ pub(super) enum CopyError {
 	Unsupported(PathBuf),
 	#[error("bundle link {0:?} does not resolve within the bundle")]
 	Link(PathBuf),
-	#[error("the app bundle exceeds the signing copy limit for {0}")]
+	#[error("the app bundle exceeds the inspection limit for {0}")]
 	Limit(&'static str),
-	#[error("the app source changed during staging or signing at {0:?}")]
+	#[error("the app source changed during inspection at {0:?}")]
 	SourceChanged(PathBuf),
 	#[error("the staged copy differs from the source at {0:?}")]
 	CopyDiffers(PathBuf),
@@ -66,10 +66,7 @@ pub(super) fn copy_bundle(source: &Path, destination: &Path) -> Result<Snapshot,
 	{
 		return Err(CopyError::Location);
 	}
-	let snapshot = Snapshot {
-		source: source.to_path_buf(),
-		inventory: Inventory::read(source, Inspection::Full)?,
-	};
+	let snapshot = Snapshot::capture(source, Inspection::Full)?;
 	match fs::symlink_metadata(destination) {
 		Err(error) if error.kind() == io::ErrorKind::NotFound => {}
 		Err(error) => return Err(at(destination, error)),
@@ -88,6 +85,17 @@ pub(super) fn copy_bundle(source: &Path, destination: &Path) -> Result<Snapshot,
 }
 
 impl Snapshot {
+	pub(super) fn observe(source: &Path) -> Result<Self, CopyError> {
+		Self::capture(source, Inspection::Stamps)
+	}
+
+	fn capture(source: &Path, inspection: Inspection) -> Result<Self, CopyError> {
+		Ok(Self {
+			source: source.to_path_buf(),
+			inventory: Inventory::read(source, inspection)?,
+		})
+	}
+
 	pub(super) fn validate_source(&self) -> Result<(), CopyError> {
 		let current = Inventory::read(&self.source, Inspection::Stamps)?;
 		self.inventory.compare_source(&current)

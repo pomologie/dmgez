@@ -84,6 +84,61 @@ fn keeps_a_failed_private_signature_out_of_the_destination() {
 	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
 }
 
+#[test]
+fn existing_application_verification_rejects_a_valid_ad_hoc_signature() {
+	let directory = tempfile::tempdir().unwrap();
+	let source = directory.path().join(SOURCE_NAME);
+	make_bundle(&source, "org.dmgez.fixture.ad-hoc");
+	fixture_sign(&source, true, None).unwrap();
+	fixture_verify(&source, &source.join(MAIN_EXECUTABLE), &[], true, true).unwrap();
+
+	assert!(matches!(
+		crate::verify_application(&source, crate::Backend::Native),
+		Err(SignError::SigningPolicy)
+	));
+	assert_eq!(fs::read(source.join(RESOURCE)).unwrap(), RESOURCE_BYTES);
+}
+
+#[test]
+fn existing_application_verification_checks_nested_code_and_revalidates_its_tree() {
+	let directory = tempfile::tempdir().unwrap();
+	let source = directory.path().join(SOURCE_NAME);
+	let helper = source.join(HELPER);
+	make_bundle(&source, "org.dmgez.fixture.verify");
+	make_bundle(&helper, "org.dmgez.fixture.verify.helper");
+	let source = open_app(&source).unwrap();
+
+	let mut checked = Vec::new();
+	verify_existing(
+		&source,
+		|bundle, executable, architectures, runtime, deep| {
+			assert_eq!(executable, bundle.join(MAIN_EXECUTABLE));
+			assert!(!architectures.is_empty());
+			assert!(runtime);
+			assert_eq!(deep, bundle == source.path());
+			checked.push(bundle.strip_prefix(source.path()).unwrap().to_path_buf());
+			Ok(())
+		},
+	)
+	.unwrap();
+	assert_eq!(checked, [PathBuf::from(HELPER), PathBuf::new()]);
+
+	let nested = Path::new(HELPER).join(RESOURCE);
+	let result = verify_existing(&source, |_, _, _, _, deep| {
+		if deep {
+			fs::write(source.path().join(&nested), b"changed nested resource").unwrap();
+		}
+		Ok(())
+	});
+	let Err(SignError::AppCopy(error)) = result else {
+		panic!("bundle verification accepted a changed nested resource");
+	};
+	assert!(matches!(
+		error.downcast_ref(),
+		Some(copy::CopyError::SourceChanged(path)) if path == &nested
+	));
+}
+
 fn make_bundle(path: &Path, id: &str) {
 	let executable = path.join(MAIN_EXECUTABLE);
 	let resource = path.join(RESOURCE);

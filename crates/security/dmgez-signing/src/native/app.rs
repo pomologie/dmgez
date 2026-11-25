@@ -5,7 +5,12 @@ use crate::{
 	PolicyAssessment, ResolvedBackend, SignError,
 };
 
-use super::{artifact::Artifact, identity, policy::AppIdentity, stage::Stage};
+use super::{
+	artifact::Artifact,
+	identity,
+	policy::{AppIdentity, verify_developer_application},
+	stage::Stage,
+};
 
 mod copy;
 mod entitlements;
@@ -62,6 +67,42 @@ fn open_app(path: &Path) -> Result<Artifact, SignError> {
 	} else {
 		Err(artifact.invalid(ArtifactProblem::Kind).into())
 	}
+}
+
+pub(crate) fn verify(path: &Path) -> Result<(), SignError> {
+	verify_existing(&open_app(path)?, verify_developer_application)
+}
+
+fn verify_existing(
+	source: &Artifact,
+	mut verify_item: impl FnMut(&Path, &Path, &[&str], bool, bool) -> Result<(), SignError>,
+) -> Result<(), SignError> {
+	let snapshot = copy::Snapshot::observe(source.path())
+		.map_err(|source| SignError::AppCopy(Box::new(source)))?;
+	source.validate()?;
+	let result = (|| {
+		let items =
+			plan::build(source.path()).map_err(|source| SignError::AppPlan(Box::new(source)))?;
+		for item in items {
+			source.validate()?;
+			let path = source.path().join(&item.relative);
+			let executable = source.path().join(&item.executable);
+			let architectures = architecture_names(&executable)?;
+			verify_item(
+				&path,
+				&executable,
+				&architectures,
+				item.hardened,
+				item.relative.as_os_str().is_empty(),
+			)?;
+		}
+		Ok(())
+	})();
+	snapshot
+		.validate_source()
+		.map_err(|source| SignError::AppCopy(Box::new(source)))?;
+	source.validate()?;
+	result
 }
 
 struct Published {
