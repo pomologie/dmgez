@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build, mount, and resolve a Finder background alias with Core Foundation."""
+"""Check mounted Finder aliases and Retina representations with macOS frameworks."""
 
 import argparse
 import ctypes
@@ -18,6 +18,8 @@ from mac_alias import Alias
 BASE = Path(__file__).resolve().parent
 HDIUTIL = "/usr/bin/hdiutil"
 FSCK_HFS = "/sbin/fsck_hfs"
+TIFFUTIL = "/usr/bin/tiffutil"
+XCRUN = "/usr/bin/xcrun"
 WHOLE_DEVICE = re.compile(r"/dev/disk[0-9]+")
 CORE_FOUNDATION = "/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation"
 WITHOUT_UI = 1 << 8
@@ -33,9 +35,21 @@ BACKGROUND_DIRECTORY = ".background"
 NESTED_FOLDER = "Documentation"
 IMAGE_NAME = "background.dmg"
 SOURCE_NAME = "background.png"
-PNG = (BASE / "tests" / "fixtures" / "background-root.png").read_bytes()
+RETINA_SOURCE_NAME = "background@2x.png"
+EXPLICIT_RETINA_SOURCE_NAME = "detail.png"
+PREBUILT_SOURCE_NAME = "prebuilt-image"
+PNG_ASSET = "background-0.png"
+TIFF_ASSET = "background-0.tiff"
+FIXTURES = BASE / "tests" / "fixtures"
+PNG = FIXTURES / "background-root.png"
+RETINA_PNG = FIXTURES / "background-root@2x.png"
+RETINA_CHECK = BASE / "check_retina_representations.swift"
 REPRODUCIBLE_BUILD = "[build]\nreproducible = true\nsource_date_epoch = 1700000000\n\n"
-PROJECT = f"""\
+
+
+def project_text(background, reproducible):
+    dates = REPRODUCIBLE_BUILD if reproducible else ""
+    return f"""\
 schema_version = 1
 
 [image]
@@ -44,8 +58,8 @@ output = "{IMAGE_NAME}"
 format = "udzo"
 size = "1MiB"
 
-{REPRODUCIBLE_BUILD}[finder]
-background = {{ kind = "image", source = "{SOURCE_NAME}" }}
+{dates}[finder]
+background = {{ kind = "image", {background} }}
 
 [[finder.folders]]
 path = "/{NESTED_FOLDER}"
@@ -125,7 +139,7 @@ def verify_hfs(image):
             subprocess.run([HDIUTIL, "detach", device], check=True)
 
 
-def qualify_mount(image, mount):
+def qualify_mount(image, mount, asset_name, verify_asset):
     subprocess.run([HDIUTIL, "verify", image], check=True)
     verify_hfs(image)
     mount.mkdir()
@@ -138,14 +152,78 @@ def qualify_mount(image, mount):
         assert read_alias(mount / NESTED_FOLDER / STORE_NAME) == encoded
         alias = Alias.from_bytes(encoded)
         target = Path(alias.target.posix_path)
-        assert target.parts[0:2] == ("/", BACKGROUND_DIRECTORY) and len(target.parts) == 3
+        assert target == Path("/", BACKGROUND_DIRECTORY, asset_name)
         background = mount.joinpath(*target.parts[1:])
         assert resolve_alias(encoded).resolve(strict=True) == background.resolve(strict=True)
-        assert background.read_bytes() == PNG
         assert background.stat().st_ino == alias.target.cnid
         assert background.parent.stat().st_ino == alias.target.folder_cnid
+        verify_asset(background)
     finally:
         subprocess.run([HDIUTIL, "detach", mount], check=True)
+
+
+def prepare_project(args, root, source, reproducible):
+    root.mkdir()
+    project = root / "project.toml"
+    project.write_text(project_text(source, reproducible), encoding="utf-8")
+    return [
+        sys.executable, BASE / "run.py", "--dmgez", args.dmgez, "--hfsplus", args.hfsplus,
+        "--project", project,
+    ]
+
+
+def build_and_mount(runner, root, asset_name, verify_asset):
+    dry_run = subprocess.check_output([*runner, "--dry-run"], text=True)
+    assert "finder_assets=3" in dry_run.splitlines()
+    image = root / IMAGE_NAME
+    assert not image.exists()
+    subprocess.run(runner, check=True)
+    qualify_mount(image, root / "mount", asset_name, verify_asset)
+
+
+def qualify_pngs(args, scratch):
+    def verify_png(asset):
+        assert asset.read_bytes() == PNG.read_bytes()
+
+    for reproducible, profile in ((True, "reproducible"), (False, "default-dates")):
+        root = scratch / profile
+        runner = prepare_project(args, root, f'source = "{SOURCE_NAME}"', reproducible)
+        (root / SOURCE_NAME).write_bytes(PNG.read_bytes())
+        build_and_mount(runner, root, PNG_ASSET, verify_png)
+
+
+def qualify_retina(args, scratch):
+    verifier = scratch / "retina-representations"
+    subprocess.run([
+        XCRUN, "swiftc", "-module-cache-path", scratch / "swift-cache",
+        RETINA_CHECK, "-o", verifier,
+    ], check=True)
+
+    def verify_representations(asset):
+        subprocess.run([verifier, asset, PNG, RETINA_PNG], check=True)
+
+    pair = scratch / "paired-retina"
+    runner = prepare_project(
+        args, pair, f'source = "{SOURCE_NAME}", retina = "{EXPLICIT_RETINA_SOURCE_NAME}"', True,
+    )
+    (pair / SOURCE_NAME).write_bytes(PNG.read_bytes())
+    (pair / EXPLICIT_RETINA_SOURCE_NAME).write_bytes(RETINA_PNG.read_bytes())
+    build_and_mount(runner, pair, TIFF_ASSET, verify_representations)
+
+    prebuilt = scratch / "prebuilt-retina"
+    original = prebuilt / PREBUILT_SOURCE_NAME
+
+    def verify_prebuilt(asset):
+        assert asset.read_bytes() == original.read_bytes()
+        verify_representations(asset)
+
+    runner = prepare_project(args, prebuilt, f'source = "{PREBUILT_SOURCE_NAME}"', False)
+    base_png = prebuilt / SOURCE_NAME
+    retina_png = prebuilt / RETINA_SOURCE_NAME
+    base_png.write_bytes(PNG.read_bytes())
+    retina_png.write_bytes(RETINA_PNG.read_bytes())
+    subprocess.run([TIFFUTIL, "-cathidpicheck", base_png, retina_png, "-out", original], check=True)
+    build_and_mount(runner, prebuilt, TIFF_ASSET, verify_prebuilt)
 
 
 def main():
@@ -158,25 +236,10 @@ def main():
     assert version("ds_store") == "1.3.4"
     assert version("mac_alias") == "2.2.3"
     with TemporaryDirectory(prefix="dmgez-finder-background-") as temporary:
-        for profile, source in (
-            ("reproducible", PROJECT),
-            ("default-dates", PROJECT.replace(REPRODUCIBLE_BUILD, "")),
-        ):
-            root = Path(temporary).resolve() / profile
-            root.mkdir()
-            project = root / "project.toml"
-            project.write_text(source, encoding="utf-8")
-            (root / SOURCE_NAME).write_bytes(PNG)
-            runner = [
-                sys.executable, BASE / "run.py", "--dmgez", args.dmgez, "--hfsplus", args.hfsplus,
-                "--project", project,
-            ]
-            dry_run = subprocess.check_output([*runner, "--dry-run"], text=True)
-            assert "finder_assets=3" in dry_run.splitlines()
-            assert not (root / IMAGE_NAME).exists()
-            subprocess.run(runner, check=True)
-            qualify_mount(root / IMAGE_NAME, root / "mount")
-    print("Core Foundation resolved both mounted Finder backgrounds with matching catalog IDs")
+        scratch = Path(temporary).resolve()
+        qualify_pngs(args, scratch)
+        qualify_retina(args, scratch)
+    print("Core Foundation resolved all mounted backgrounds with matching catalog IDs")
 
 
 if __name__ == "__main__":
