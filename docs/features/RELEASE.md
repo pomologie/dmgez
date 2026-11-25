@@ -12,7 +12,9 @@ The optimized CLI passed this project smoke for UDRO and UDZO on arm64 macOS 14.
 
 An optimized `x86_64-unknown-linux-gnu` CLI built from dmgez `ea181d7` and HFS+ `ecef68f` with Rust 1.99.1 and Zig passed the same project smoke, all five installer tests, and the archive test on Debian 12.15 under Docker Desktop x86-64 emulation with networking disabled. Debian's 7-Zip 26.02 independently verified the payload. Each of the four Linux fixture DMGs matched the corresponding fresh macOS artifact byte for byte.
 
-The optimized `aarch64-unknown-linux-gnu` CLI built and ran inside an ARM64 Ubuntu 22.04.5 LTS container using Rust 1.99.1 and GCC 11.4.0, with dmgez `4e044ea` and the same HFS+ revision. After staging the toolchain and dependencies, the build and tests ran with networking disabled. Ubuntu's 7-Zip 21.07 verified the payload. The installer and archive tests passed, and all four image SHA-256 digests matched the previous macOS and Linux x86-64 results. The GitHub-hosted workflow, Windows build and runtime, and three-OS comparison remain open.
+The optimized `aarch64-unknown-linux-gnu` CLI built and ran inside an ARM64 Ubuntu 22.04.5 LTS container using Rust 1.99.1 and GCC 11.4.0, with dmgez `4e044ea` and the same HFS+ revision. After staging the toolchain and dependencies, the build and tests ran with networking disabled. Ubuntu's 7-Zip 21.07 verified the payload. The installer and archive tests passed, and all four image SHA-256 digests matched the previous macOS and Linux x86-64 results.
+
+An optimized `x86_64-pc-windows-gnu` CLI built from dmgez `fafabd8` and HFS+ `ecef68f` with Rust 1.99.1, Clang, and MinGW passed the UDRO and UDZO project smoke under Wine 10.0 on macOS. Before the fix, the held writable stage caused a Windows sharing violation during signing. The regression test now passes, including stage cleanup. Host 7-Zip verified the payload, Apple tools verified the images and signatures, and all four DMGs matched the fresh macOS artifacts byte for byte and the previously recorded Linux digests. The native Windows MSVC build and NTFS runtime, along with the GitHub-hosted three-OS workflow, remain open.
 
 ## Pipeline
 
