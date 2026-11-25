@@ -112,6 +112,12 @@ python3 check_finder_artwork.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplu
 
 The qualified source profile covers ordinary regular file permissions and ownership, timestamp conversion at HFS+ precision, inline attributes, Finder information, a buffered resource fork, and exact symlink target bytes. The Unicode profile gives included regular-file hard links distinct catalog entries that share one chain-free inode, with both forks and attributes captured once. Source checks cover every alias before publication. Shared metadata losses name the representative and its other image paths. The strict policy rejects unavailable required directory and symlink attributes, subsecond date loss, unsupported BSD flags and attribute encodings, and hard-link groups outside the supported regular-file profile. Report policy records those losses, and an explicit hard-link preservation opt-out emits independent files with omission diagnostics. Explicit timestamp omission and an explicit generated epoch suit deterministic synthetic fixtures.
 
+## Cross-platform signing fixture
+
+With a composed release CLI that includes `inspect`, run `python3 check_ci_project.py /path/to/dmgez /path/to/output --seven-zip 7z`. The fixture builds the unsigned image twice and builds an ad hoc release with the default Rust signer. It checks each container, verifies the signature separately, and compares the signed raw export with 7-Zip’s independent decode.
+
+The fixture passed on arm64 macOS 14.7.2 and in an offline x86-64 Linux container with HFS+ `185ba1d`. The two hosts produced identical DMGs. The unsigned SHA-256 was `2ee99222fba33459bb167732656ded0452e53f5db3d01f7e536900a193fb16ea`. The signed SHA-256 was `7d4e0d4a49f1287c02ab40ba5c681aab4b2a2c7944c55ec1d50f08e0b787e85b`. Apple’s `hdiutil verify` and strict `codesign` checks passed on macOS. The hosted three-platform matrix still awaits its first recorded run. [CI workflow](../../../.github/workflows/project-build.yml)
+
 ## Windows NTFS composition
 
 Run the standalone HFS+ composition tool with Python 3.11 or newer on local NTFS. Use the checkout or unpacked package form. Add `--test` on a native Windows machine to execute the project build tests, including the NTFS source and metadata fixture.
