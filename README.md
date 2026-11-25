@@ -57,6 +57,16 @@ target/hfsplus-cli/debug/dmgez verify volume.dmg --full --json
 
 A successful HFS+ structural check reports `reachable_structure` and a partial result. The complete `--full` request exits nonzero until global filesystem and file payload checks are available. [Verification coverage](docs/features/INSPECTION.md#verify-is-separate)
 
+Enable `hfsplus-read` to browse a UDIF image or an explicitly selected raw HFS+ or HFSX disk image. Add `hfsplus-verify` to the same composition to include structural verification.
+
+```sh
+python3 tools/compose_hfsplus_cli.py --hfsplus ../hfsplus --no-default-features --features hfsplus-read
+target/hfsplus-cli/debug/dmgez ls volume.dmg --limit 32 --json
+target/hfsplus-cli/debug/dmgez tree volume.dmg / --depth 2
+target/hfsplus-cli/debug/dmgez stat volume.dmg /ReadMe.txt
+target/hfsplus-cli/debug/dmgez cat volume.raw /ReadMe.txt --raw --fork data
+```
+
 The [native desktop app](apps/dmgez/README.md) opens TOML projects for layout editing and disk images for container and partition inspection. Launch it with `cargo run --locked -p dmgez-gui`.
 
 See the [architecture](ARCHITECTURE.md), [roadmap](ROADMAP.md), and [UDIF evidence](docs/reference/UDIF_EVIDENCE.md) for the implemented profile and its verification limits.
