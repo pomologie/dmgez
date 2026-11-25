@@ -10,6 +10,8 @@ use std::{
 
 use rustix::fs::{OFlags, fcntl_getfl, fcntl_setfl};
 
+use crate::NativeAssessmentTool;
+
 #[cfg(test)]
 mod tests;
 
@@ -21,6 +23,8 @@ const LIST: &str = "/bin/ls";
 #[cfg(feature = "notarization-native")]
 const ACL_LIST_OPTIONS: &str = "-ldben";
 const SECURITY: &str = "/usr/bin/security";
+const SPCTL: &str = "/usr/sbin/spctl";
+const SYSPOLICY_CHECK: &str = "/usr/bin/syspolicy_check";
 #[cfg(feature = "notarization-native")]
 const XCRUN: &str = "/usr/bin/xcrun";
 #[cfg(feature = "notarization-native")]
@@ -76,6 +80,14 @@ pub(super) fn ditto(args: &[&OsStr]) -> Result<Output, Error> {
 
 pub(super) fn hdiutil(args: &[&OsStr]) -> Result<Output, Error> {
 	run(Command::new(HDIUTIL).args(args), TIMEOUT, MAX_OUTPUT_BYTES)
+}
+
+pub(super) fn assess(tool: NativeAssessmentTool, args: &[&OsStr]) -> Result<Output, Error> {
+	let path = match tool {
+		NativeAssessmentTool::Spctl => SPCTL,
+		NativeAssessmentTool::SyspolicyCheck => SYSPOLICY_CHECK,
+	};
+	run(Command::new(path).args(args), TIMEOUT, MAX_OUTPUT_BYTES)
 }
 
 #[cfg(feature = "notarization-native")]

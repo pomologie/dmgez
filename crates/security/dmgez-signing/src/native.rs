@@ -7,6 +7,7 @@ use crate::{
 
 pub(super) mod app;
 mod artifact;
+pub(super) mod assessment;
 pub(super) mod disk;
 mod identity;
 #[cfg(feature = "notarization-native")]

@@ -12,6 +12,7 @@ mod import_appdmg;
 mod inspect;
 #[cfg(feature = "lint")]
 mod lint;
+mod native_assessment;
 mod notarize;
 #[cfg(feature = "convert")]
 mod optimize;
@@ -115,7 +116,7 @@ enum Command {
 	/// Compare decoded disk bytes, stored container bytes, or filesystem contents.
 	#[command(name = diff::COMMAND)]
 	Diff(diff::Arguments),
-	/// Check a project's Finder layout or installer contents.
+	/// Check project layout, installer inputs, or macOS policy for a release artifact.
 	#[command(name = LINT_COMMAND)]
 	Lint {
 		project: PathBuf,
@@ -221,6 +222,8 @@ enum LintProfile {
 	Layout,
 	#[value(name = INSTALLER_PROFILE_NAME)]
 	Installer,
+	#[value(name = native_assessment::PROFILE)]
+	MacosRelease,
 }
 
 #[derive(Args)]
@@ -426,6 +429,13 @@ fn run(command: Command) -> CliResult<ExitCode> {
 			profile: LintProfile::Layout,
 			..
 		} => Err(format!("feature not compiled: {LINT_COMMAND}").into()),
+		Command::Lint {
+			project,
+			profile: LintProfile::MacosRelease,
+			folder,
+			suppress,
+			json,
+		} => return native_assessment::run(&project, folder.as_deref(), &suppress, json),
 		Command::Sign { action } => return signing::run(&action),
 		Command::Notarize(arguments) => return notarize::run(&arguments),
 		Command::Staple(arguments) => staple::run(&arguments),

@@ -2,6 +2,7 @@
 //!
 //! Results concern code signatures. Native system policy is a separate check.
 
+mod assessment;
 #[cfg(all(feature = "native", target_os = "macos"))]
 mod native;
 #[cfg(feature = "notarization-native")]
@@ -10,6 +11,10 @@ mod report;
 mod signature;
 mod signing;
 
+pub use assessment::{
+	NativeAssessmentError, NativeAssessmentReport, NativeAssessmentStatus, NativeAssessmentTool,
+	NativeAssessmentUnavailable, assess_native_policy,
+};
 pub use report::{
 	ArtifactKind, Backend, Operation, PolicyAssessment, Report, ResolvedBackend, Status,
 };
