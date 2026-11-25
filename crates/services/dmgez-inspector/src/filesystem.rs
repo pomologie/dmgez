@@ -179,7 +179,9 @@ pub enum SelectedWindowId {
 }
 
 impl SelectedWindowId {
-	pub(crate) fn from_volume(volume: VolumeId) -> Option<Self> {
+	/// Converts an admitted disk window identity to its serialized representation.
+	#[must_use]
+	pub fn from_volume(volume: VolumeId) -> Option<Self> {
 		match volume {
 			VolumeId::WholeDisk => Some(Self::WholeDisk),
 			VolumeId::Partition(id) => Some(Self::Partition {

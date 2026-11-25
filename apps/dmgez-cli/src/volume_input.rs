@@ -1,8 +1,16 @@
 use std::{io, num::NonZeroU32, path::Path};
 
+#[cfg(feature = "apfs-read")]
+use dmgez_apfs_read::{
+	ApfsBackend, ApfsContainer, CheckpointDiagnostic, TransactionId, VolumeInfo, VolumeSelector,
+	WindowSource, probe_partitionless,
+};
+#[cfg(feature = "hfsplus-read")]
 use dmgez_hfsplus_read::browse::{self, HfsView};
 use dmgez_udif::reader::{FileSource, Image, Limits as ImageLimits, ReadAt};
 use dmgez_vfs::{Disk, Layout, Limits as DiskLimits, LogicalDisk, PartitionId, Raw, VolumeId};
+#[cfg(feature = "apfs-read")]
+use dmgez_vfs::{Filesystem, volume::VolumeView};
 
 use crate::{CliResult, inspect::open_source};
 
@@ -22,6 +30,7 @@ impl ReadAt for BorrowedSource<'_> {
 	}
 }
 
+#[cfg(feature = "hfsplus-read")]
 pub(super) fn with_hfs_view<T>(
 	image: &Path,
 	raw: bool,
@@ -57,11 +66,95 @@ pub(super) fn with_hfs_view_verified<T>(
 	with_source(&source, raw, partition, |view| read(view, &verify_source))
 }
 
+#[cfg(feature = "hfsplus-read")]
 fn with_source<T>(
 	source: &FileSource,
 	raw: bool,
 	partition: Option<NonZeroU32>,
 	read: impl FnOnce(&mut HfsView<'_, '_, &mut dyn LogicalDisk>) -> CliResult<T>,
+) -> CliResult<T> {
+	with_logical_disk(source, raw, |logical| {
+		let mut disk = Disk::discover(logical, DiskLimits::default())?;
+		let selected = select(&disk, partition)?;
+		browse::with_view(&mut disk, selected, browse::Limits::default(), read)?
+	})
+}
+
+#[cfg(feature = "apfs-read")]
+pub(super) fn with_apfs_view<T>(
+	image: &Path,
+	raw: bool,
+	partition: Option<NonZeroU32>,
+	selector: Option<VolumeSelector>,
+	xid: Option<TransactionId>,
+	read: impl FnOnce(
+		&mut VolumeView<ApfsBackend<'_, WindowSource<'_, &mut dyn LogicalDisk>>>,
+		&VolumeInfo,
+	) -> CliResult<T>,
+) -> CliResult<T> {
+	with_apfs_container(image, raw, partition, xid, |selected, container| {
+		use io::Write as _;
+
+		let backend = container.open_volume(selector)?;
+		let info = backend.info().clone();
+		let mut stderr = io::stderr().lock();
+		for diagnostic in container.diagnostics() {
+			writeln!(stderr, "APFS checkpoint warning: {diagnostic:?}")?;
+		}
+		drop(stderr);
+		read(&mut VolumeView::new(selected, backend), &info)
+	})
+}
+
+#[cfg(feature = "apfs-read")]
+pub(super) struct ApfsVolumes {
+	pub(super) selected: VolumeId,
+	pub(super) checkpoint: TransactionId,
+	pub(super) volumes: Vec<VolumeInfo>,
+	pub(super) diagnostics: Vec<CheckpointDiagnostic>,
+}
+
+#[cfg(feature = "apfs-read")]
+pub(super) fn apfs_volumes(
+	image: &Path,
+	raw: bool,
+	partition: Option<NonZeroU32>,
+	xid: Option<TransactionId>,
+) -> CliResult<ApfsVolumes> {
+	with_apfs_container(image, raw, partition, xid, |selected, container| {
+		Ok(ApfsVolumes {
+			selected,
+			checkpoint: container.checkpoint(),
+			volumes: container.volumes()?,
+			diagnostics: container.diagnostics().to_vec(),
+		})
+	})
+}
+
+#[cfg(feature = "apfs-read")]
+fn with_apfs_container<T>(
+	image: &Path,
+	raw: bool,
+	partition: Option<NonZeroU32>,
+	xid: Option<TransactionId>,
+	read: impl FnOnce(VolumeId, &ApfsContainer<'_, &mut dyn LogicalDisk>) -> CliResult<T>,
+) -> CliResult<T> {
+	let source = open_source(image)?;
+	let result = with_logical_disk(&source, raw, |logical| {
+		let mut disk = Disk::discover(logical, DiskLimits::default())?;
+		disk.recognize_partitionless(Filesystem::Apfs, probe_partitionless)?;
+		let selected = select(&disk, partition)?;
+		let container = ApfsContainer::open(disk.data_window(selected)?, xid)?;
+		read(selected, &container)
+	})?;
+	source.check_unchanged()?;
+	Ok(result)
+}
+
+fn with_logical_disk<T>(
+	source: &FileSource,
+	raw: bool,
+	read: impl FnOnce(&mut dyn LogicalDisk) -> CliResult<T>,
 ) -> CliResult<T> {
 	let borrowed = BorrowedSource(source);
 	let mut raw_disk;
@@ -73,9 +166,7 @@ fn with_source<T>(
 		udif_disk = Image::open(borrowed, ImageLimits::default())?;
 		&mut udif_disk
 	};
-	let mut disk = Disk::discover(logical, DiskLimits::default())?;
-	let selected = select(&disk, partition)?;
-	browse::with_view(&mut disk, selected, browse::Limits::default(), read)?
+	read(logical)
 }
 
 fn select(disk: &Disk<impl LogicalDisk>, slot: Option<NonZeroU32>) -> CliResult<VolumeId> {

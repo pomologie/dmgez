@@ -18,10 +18,10 @@ mod optimize;
 mod project_build;
 #[cfg(any(feature = "appdmg-import", feature = "lint", feature = "project-build"))]
 mod project_input;
-#[cfg(feature = "hfsplus-read")]
+#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 mod report_output;
 mod volume_commands;
-#[cfg(feature = "hfsplus-read")]
+#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 mod volume_input;
 #[cfg(feature = "build")]
 mod wrap;
@@ -179,6 +179,9 @@ enum Command {
 	Stat(volume_commands::StatArguments),
 	/// Write the selected file fork to standard output.
 	Cat(volume_commands::CatArguments),
+	/// List APFS volume identities at a retained container checkpoint.
+	#[command(name = volume_commands::VOLUMES_COMMAND)]
+	Volumes(volume_commands::VolumesArguments),
 	/// Extract a selected fork or directory tree to an absent host path.
 	Extract(extract::Arguments),
 	/// Export the decoded disk or one partition to a regular file.
@@ -330,7 +333,14 @@ fn run(command: Command) -> CliResult<ExitCode> {
 					HFSPLUS_DECMPFS_CAPABILITY,
 					cfg!(feature = "hfsplus-decmpfs"),
 				),
-				(volume_commands::FEATURE, cfg!(feature = "hfsplus-read")),
+				(
+					volume_commands::HFSPLUS_READ_FEATURE,
+					cfg!(feature = "hfsplus-read"),
+				),
+				(
+					volume_commands::APFS_READ_FEATURE,
+					cfg!(feature = "apfs-read"),
+				),
 				(extract::FEATURE, extract::COMPILED),
 				(ANALYZE_COMMAND, cfg!(feature = "inspect")),
 				(CONVERT_COMMAND, cfg!(feature = "convert")),
@@ -418,18 +428,11 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		Command::Analyze { image, json } => inspect::analyze(&image, json),
 		#[cfg(feature = "inspect")]
 		Command::Verify { image, json, scope } => inspect::verify(&image, json, scope),
-		#[cfg(feature = "hfsplus-read")]
-		Command::Ls(arguments) => volume_commands::list(&arguments),
-		#[cfg(feature = "hfsplus-read")]
-		Command::Tree(arguments) => volume_commands::tree(&arguments),
-		#[cfg(feature = "hfsplus-read")]
-		Command::Stat(arguments) => volume_commands::stat(&arguments),
-		#[cfg(feature = "hfsplus-read")]
-		Command::Cat(arguments) => volume_commands::cat(&arguments),
-		#[cfg(not(feature = "hfsplus-read"))]
-		Command::Ls(_) | Command::Tree(_) | Command::Stat(_) | Command::Cat(_) => {
-			Err(format!("feature not compiled: {}", volume_commands::FEATURE).into())
-		}
+		Command::Ls(arguments) => volume_commands::run(volume_commands::Query::List(&arguments)),
+		Command::Tree(arguments) => volume_commands::run(volume_commands::Query::Tree(&arguments)),
+		Command::Stat(arguments) => volume_commands::run(volume_commands::Query::Stat(&arguments)),
+		Command::Cat(arguments) => volume_commands::run(volume_commands::Query::Cat(&arguments)),
+		Command::Volumes(arguments) => volume_commands::volumes(&arguments),
 		Command::Extract(arguments) => extract::run(&arguments),
 		#[cfg(feature = "inspect")]
 		Command::UnwrapRaw {
