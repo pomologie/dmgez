@@ -10,7 +10,10 @@ use toml_edit::DocumentMut;
 
 use crate::{ConfigError, MAX_MANIFEST_BYTES, Project, VirtualPath};
 
+mod batch;
 mod patch;
+
+pub use batch::{EditBatchError, MAX_EDIT_BATCH_BYTES, parse_edit_batch};
 
 const MAX_HISTORY_BYTES: usize = MAX_MANIFEST_BYTES * 2;
 const MAX_HISTORY_REVISIONS: usize = 64;
