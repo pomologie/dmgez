@@ -343,6 +343,7 @@ dependencies = [
 name = "dmgez-cache"
 version = "0.1.0"
 dependencies = [
+ "dmgez-core",
  "dmgez-udif",
  "rustix",
  "thiserror",

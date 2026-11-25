@@ -1,3 +1,5 @@
+//! Descriptor-relative checks for macOS extended access controls.
+
 use std::{
 	ffi::{c_int, c_void},
 	io,
@@ -5,7 +7,7 @@ use std::{
 	ptr::NonNull,
 };
 
-#[allow(
+#[expect(
 	unsafe_code,
 	reason = "opaque descriptor ACL interface from the macOS SDK"
 )]
@@ -14,13 +16,18 @@ unsafe extern "C" {
 	fn acl_free(object: *mut c_void) -> c_int;
 }
 
-// Apple's acl_get_fd uses the extended ACL property. On a held
-// descriptor ENOENT indicates that the ACL property is absent.
-#[allow(
+/// Checks whether an open file or directory lacks an extended access control list.
+///
+/// This checks the held object. Callers must also check its ownership and mode
+/// before using it as a private directory or file.
+///
+/// # Errors
+/// Returns an error if the descriptor's ACL cannot be queried or released.
+#[expect(
 	unsafe_code,
 	reason = "held descriptor ACL query and release of its opaque result"
 )]
-pub(super) fn absent(fd: BorrowedFd<'_>) -> io::Result<bool> {
+pub fn no_extended_acl(fd: BorrowedFd<'_>) -> io::Result<bool> {
 	// SAFETY: fd remains borrowed for the synchronous query. The function
 	// returns either null or a caller-owned opaque ACL allocated by libc.
 	let acl = unsafe { acl_get_fd(fd.as_raw_fd()) };
@@ -33,6 +40,7 @@ pub(super) fn absent(fd: BorrowedFd<'_>) -> io::Result<bool> {
 		Ok(false)
 	} else {
 		let error = io::Error::last_os_error();
+		// Apple's acl_get_fd returns ENOENT when the held object lacks an ACL.
 		if error.raw_os_error() == Some(rustix::io::Errno::NOENT.raw_os_error()) {
 			Ok(true)
 		} else {

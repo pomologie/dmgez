@@ -18,12 +18,13 @@ thiserror.workspace = true
 # Filesystem access and staging
 rustix = { workspace = true, features = ["process"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# Workspace foundation
+dmgez-core = { workspace = true, features = ["native-directory-privacy"] }
+
 [dev-dependencies]
 # Filesystem access and staging
 tempfile.workspace = true
 
-[lints.rust]
-unsafe_code = "deny"
-
-[lints.clippy]
-undocumented_unsafe_blocks = "deny"
+[lints]
+workspace = true

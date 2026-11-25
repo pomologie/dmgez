@@ -13,8 +13,6 @@ use rustix::{
 
 use super::{DirectoryIdentity, Error};
 
-#[cfg(target_os = "macos")]
-mod darwin_acl;
 mod entry;
 #[cfg(test)]
 mod tests;
@@ -147,7 +145,7 @@ fn owned_regular_file(stat: &Stat) -> bool {
 fn no_extended_acl(file: impl AsFd) -> io::Result<bool> {
 	#[cfg(target_os = "macos")]
 	{
-		darwin_acl::absent(file.as_fd())
+		dmgez_core::private_directory::no_extended_acl(file.as_fd())
 	}
 	#[cfg(target_os = "linux")]
 	{

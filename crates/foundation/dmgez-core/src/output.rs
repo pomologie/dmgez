@@ -1,5 +1,7 @@
 //! Same-directory staging and publication (C7).
 
+#![forbid(unsafe_code)]
+
 use std::{
 	ffi::OsStr,
 	fs::File,

@@ -1,5 +1,7 @@
 //! Bounded reads and mutation checks on already-opened host files (C2 and C3).
 
+#![forbid(unsafe_code)]
+
 use std::{
 	fs::{File, Metadata},
 	io::{self, Read, Seek, SeekFrom},
