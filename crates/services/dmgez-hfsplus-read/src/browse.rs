@@ -8,11 +8,11 @@ use dmgez_vfs::{
 	Disk, LogicalDisk, VolumeId, Window,
 	volume::{
 		DirectoryEntry, DirectoryPage, DirectoryReader, FinderInfo, ForkKind, ForkReader, HardLink,
-		LookupName, Metadata, NodeKind, Quarantine, QuarantineScope, RawName, VolumeBackend,
-		VolumeView,
+		LookupName, Metadata, NativeNameKey, NativeNameProfile, NodeKind, Quarantine,
+		QuarantineScope, RawName, VolumeBackend, VolumeView,
 	},
 };
-use hfsplus_core::{ByteLen, ByteOffset, ReadAt};
+use hfsplus_core::{ByteLen, ByteOffset, ReadAt, names::NameError};
 use hfsplus_format::volume::CatalogId;
 pub use hfsplus_format::volume::Signature as VolumeSignature;
 use hfsplus_reader::{
@@ -27,6 +27,7 @@ use hfsplus_reader::{
 };
 
 mod finder_info;
+mod native_names;
 mod quarantine;
 mod xattrs;
 
@@ -88,6 +89,8 @@ pub enum Error {
 	Allocation(#[from] TryReserveError),
 	#[error("unsupported HFS+ lookup encoding")]
 	LookupEncoding,
+	#[error("could not key a stored HFS+ name")]
+	NativeName(#[from] NameError),
 	#[error("unsupported HFS+ fork selection")]
 	ForkSelection,
 	#[error("admitted HFS+ attribute owner is missing")]
@@ -239,6 +242,14 @@ impl<'volume, 'disk, S: LogicalDisk> VolumeBackend for HfsBackend<'volume, 'disk
 
 	fn numeric_id(&self, id: CatalogId) -> Option<u64> {
 		Some(u64::from(id.0))
+	}
+
+	fn native_name_profile(&self) -> Option<NativeNameProfile> {
+		native_names::profile(self.catalog.collation())
+	}
+
+	fn native_name_key(&self, name: LookupName<'_>) -> Result<Option<NativeNameKey>, Error> {
+		native_names::key(self.catalog.collation(), name)
 	}
 
 	fn quarantine(&mut self, node: CatalogId, scope: QuarantineScope) -> Result<Quarantine, Error> {

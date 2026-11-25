@@ -1,4 +1,5 @@
 use std::{
+	collections::TryReserveError,
 	error::Error as StdError,
 	num::{NonZeroU16, NonZeroU32},
 };
@@ -11,7 +12,8 @@ use apfs_reader::{
 };
 use dmgez_vfs::volume::{
 	DirectoryEntry, DirectoryPage, DirectoryReader, FinderInfo, ForkKind, ForkReader, HardLink,
-	LookupName, Metadata, NodeKind, Quarantine, QuarantineScope, RawName, VolumeBackend,
+	LookupName, Metadata, NativeNameKey, NativeNameProfile, NodeKind, Quarantine, QuarantineScope,
+	RawName, VolumeBackend,
 };
 use thiserror::Error;
 
@@ -19,6 +21,9 @@ use crate::VolumeInfo;
 
 mod quarantine;
 mod xattrs;
+
+// The directory reader admits names within the 10-bit byte length, including the NUL.
+const MAX_STORED_NAME_BYTES: usize = (1 << 10) - 2;
 
 /// Visible identity retains the APFS sibling ID and its admitted parent.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -34,6 +39,10 @@ pub enum AdapterError<E: StdError + 'static> {
 	Reader(#[from] NativeError<E>),
 	#[error("APFS stored names require UTF-8")]
 	NameEncoding,
+	#[error("APFS stored name exceeds the admitted byte length")]
+	NameKeyLength,
+	#[error("could not allocate an APFS name key")]
+	NameKeyAllocation(#[source] TryReserveError),
 	#[error("APFS directory entry changed or could not be revalidated")]
 	DirectoryEntry,
 	#[error("APFS sibling is outside the checked hard-link group")]
@@ -92,6 +101,32 @@ where
 
 	fn numeric_id(&self, node: Node) -> Option<u64> {
 		Some(node.inode.as_raw())
+	}
+
+	fn native_name_profile(&self) -> Option<NativeNameProfile> {
+		let features = self.view.volume().superblock.features;
+		if features.case_insensitive() || features.normalization_insensitive() {
+			return None;
+		}
+		Some(NativeNameProfile::ApfsBinary)
+	}
+
+	fn native_name_key(&self, name: LookupName<'_>) -> Result<Option<NativeNameKey>, Self::Error> {
+		if self.native_name_profile().is_none() {
+			return Ok(None);
+		}
+		let LookupName::Utf8(name) = name else {
+			return Err(AdapterError::NameEncoding);
+		};
+		if name.len() > MAX_STORED_NAME_BYTES {
+			return Err(AdapterError::NameKeyLength);
+		}
+		let mut bytes = Vec::new();
+		bytes
+			.try_reserve_exact(name.len())
+			.map_err(AdapterError::NameKeyAllocation)?;
+		bytes.extend_from_slice(name.as_bytes());
+		Ok(Some(NativeNameKey::new(bytes)))
 	}
 
 	fn quarantine(
