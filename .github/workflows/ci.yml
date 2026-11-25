@@ -20,6 +20,18 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup show active-toolchain
+      - name: Prepare NTFS temporary storage for Windows tests
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $work = Join-Path $env:LOCALAPPDATA "Temp\dmgez-tests-${env:GITHUB_RUN_ID}-${env:GITHUB_RUN_ATTEMPT}"
+          $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($work))
+          if ($drive.DriveFormat -ne 'NTFS') {
+            throw "Windows tests require NTFS temporary storage. Found $($drive.DriveFormat) at $($drive.Name)."
+          }
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          "TEMP=$work" >> $env:GITHUB_ENV
+          "TMP=$work" >> $env:GITHUB_ENV
       - if: runner.os == 'Linux'
         run: |
           python3 -B tools/test_check_rust_roots.py
