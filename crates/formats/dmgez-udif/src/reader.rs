@@ -195,16 +195,16 @@ impl<S: ReadAt> Image<S> {
 	/// Rejects malformed, out-of-budget or unsupported container metadata and I/O failures.
 	pub fn open(source: S, limits: Limits) -> Result<Self, Error> {
 		let (tail, body_len) = release::read_trailer(&source, limits)?;
-		Self::open_from_trailer(source, limits, &tail, body_len)
+		let trailer = trailer::Trailer::decode(&tail, body_len)?;
+		Self::open_with_trailer(source, limits, trailer, body_len)
 	}
 
-	fn open_from_trailer(
+	fn open_with_trailer(
 		source: S,
 		limits: Limits,
-		tail: &[u8; trailer::BYTES],
+		trailer: trailer::Trailer,
 		body_len: u64,
 	) -> Result<Self, Error> {
-		let trailer = trailer::Trailer::decode(tail, body_len)?;
 		if trailer.logical_bytes > limits.max_logical_bytes {
 			return Err(Error::ResourceLimit("logical disk size"));
 		}

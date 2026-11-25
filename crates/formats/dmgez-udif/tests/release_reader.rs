@@ -1,5 +1,7 @@
 #![cfg(all(feature = "read", feature = "zlib"))]
 
+use std::cell::Cell;
+
 use dmgez_udif::{
 	Error, MAX_EMBEDDED_SIGNATURE_BYTES, TRAILER_BYTES,
 	reader::{CheckStatus, Image, Limits, ReadAt},
@@ -137,4 +139,55 @@ fn bounds_the_signature_frame_before_attempting_a_read() {
 		Image::open_release(source, Limits::default()),
 		Err(Error::ResourceLimit(_))
 	));
+}
+
+#[test]
+fn applies_the_combined_budget_before_reading_the_xml_or_signature() {
+	struct Metered<'image> {
+		image: &'image [u8],
+		bytes_read: Cell<u64>,
+	}
+	impl ReadAt for &Metered<'_> {
+		fn len(&self) -> u64 {
+			self.image.len() as u64
+		}
+
+		fn read_exact_at(&self, offset: u64, output: &mut [u8]) -> Result<(), Error> {
+			self.bytes_read
+				.set(self.bytes_read.get() + output.len() as u64);
+			self.image.read_exact_at(offset, output)
+		}
+	}
+
+	for bytes in [UNSIGNED, SIGNED] {
+		let baseline = Image::open_release(bytes, Limits::default()).unwrap();
+		let xml = &baseline.descriptor().resource_xml;
+		let signature = baseline.embedded_signature_range();
+		let metadata_bytes = TRAILER_BYTES as u64
+			+ (xml.end - xml.start)
+			+ signature
+				.as_ref()
+				.map_or(0, |range| range.end - range.start);
+		let source = Metered {
+			image: bytes,
+			bytes_read: Cell::new(0),
+		};
+		for (limit, expected_read) in [
+			(TRAILER_BYTES as u64 - 1, 0),
+			(metadata_bytes - 1, TRAILER_BYTES as u64),
+		] {
+			source.bytes_read.set(0);
+			assert!(matches!(
+				Image::open_release_with_metadata_limit(&source, Limits::default(), limit),
+				Err(Error::ResourceLimit(_))
+			));
+			assert_eq!(source.bytes_read.get(), expected_read);
+		}
+		source.bytes_read.set(0);
+		let image =
+			Image::open_release_with_metadata_limit(&source, Limits::default(), metadata_bytes)
+				.unwrap();
+		assert_eq!(source.bytes_read.get(), metadata_bytes);
+		assert_eq!(image.embedded_signature_range(), signature);
+	}
 }
