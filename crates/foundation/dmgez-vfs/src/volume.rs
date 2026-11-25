@@ -11,7 +11,11 @@ use std::{
 
 use thiserror::Error;
 
-use crate::{VolumeId, window::translate};
+use crate::VolumeId;
+
+mod fork;
+
+pub use fork::{Fork, ForkReader};
 
 /// A native name retained without Unicode replacement or path interpretation.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -106,23 +110,6 @@ pub trait DirectoryReader {
 	fn next_page(&mut self, limit: NonZeroU16) -> Result<DirectoryPage<Self::Id>, Self::Error>;
 }
 
-/// Engine operator for exact positional reads of one admitted fork.
-pub trait ForkReader {
-	type Error: StdError + 'static;
-
-	fn len(&self) -> u64;
-
-	fn is_empty(&self) -> bool {
-		self.len() == 0
-	}
-
-	/// Fills the buffer exactly from the selected fork, with no implicit fallback.
-	///
-	/// # Errors
-	/// Reports range, encoding, integrity and source failures.
-	fn read_exact_at(&mut self, offset: u64, output: &mut [u8]) -> Result<(), Self::Error>;
-}
-
 /// Filesystem engine adapter bound to one immutable volume and source.
 /// Operations must preserve the source identity and enforce engine I/O budgets.
 /// The engine interprets native names, on-disk object kinds, and fork formats.
@@ -135,6 +122,11 @@ pub trait VolumeBackend {
 
 	/// Resolves the visible root directory, validating it as necessary.
 	fn root(&mut self) -> Result<Self::Id, Self::Error>;
+
+	/// A numeric engine-native identity, when its identifier has such a representation.
+	fn numeric_id(&self, _node: Self::Id) -> Option<u64> {
+		None
+	}
 
 	/// Finds one child in a directory without resolving a symbolic link.
 	fn lookup(
@@ -194,6 +186,14 @@ pub struct NodeHandle<Id> {
 	session: Session,
 }
 
+impl<Id: Copy> NodeHandle<Id> {
+	/// The stored engine identifier reported by this handle's view.
+	#[must_use]
+	pub const fn native_id(&self) -> Id {
+		self.local
+	}
+}
+
 /// A visible directory entry whose handle belongs to the opened view.
 pub type ViewEntry<Id> = DirectoryEntry<NodeHandle<Id>>;
 
@@ -202,6 +202,14 @@ pub type ViewEntry<Id> = DirectoryEntry<NodeHandle<Id>>;
 pub struct StorageId {
 	local: u64,
 	session: Session,
+}
+
+impl StorageId {
+	/// The stored engine identifier of this hard-link group within its view.
+	#[must_use]
+	pub const fn native_id(&self) -> u64 {
+		self.local
+	}
 }
 
 /// Failure accessing a selected filesystem view.
@@ -288,6 +296,13 @@ impl<B: VolumeBackend> VolumeView<B> {
 		Ok(entry.map(|entry| bind_entry(entry, &self.session)))
 	}
 
+	/// Reports the admitted object identifier in numeric form when supported.
+	/// # Errors
+	/// Rejects an object handle from another view.
+	pub fn numeric_id(&self, node: &NodeHandle<B::Id>) -> Result<Option<u64>, ViewError<B::Error>> {
+		Ok(self.backend.numeric_id(self.require_session(node)?))
+	}
+
 	/// Gets effective metadata with any storage group scoped to this view.
 	///
 	/// # Errors
@@ -351,10 +366,7 @@ impl<B: VolumeBackend> VolumeView<B> {
 	) -> Result<Option<T>, ViewError<B::Error>> {
 		let local = self.require_kind(node, NodeKind::RegularFile)?;
 		self.backend
-			.with_fork(local, kind, |reader| {
-				let length = reader.len();
-				read(&mut Fork { reader, length })
-			})
+			.with_fork(local, kind, |reader| read(&mut Fork::new(reader)))
 			.map_err(ViewError::Backend)
 	}
 
@@ -374,7 +386,7 @@ impl<B: VolumeBackend> VolumeView<B> {
 		if self.session != node.session {
 			return Err(ViewError::ForeignHandle);
 		}
-		Ok(node.local)
+		Ok(node.native_id())
 	}
 
 	fn require_kind(
@@ -444,41 +456,5 @@ fn bind_entry<Id>(entry: DirectoryEntry<Id>, session: &Session) -> DirectoryEntr
 			session: session.clone(),
 		},
 		kind: entry.kind,
-	}
-}
-
-/// Bounded exact read of one file's selected fork.
-pub struct Fork<'reader, E> {
-	reader: &'reader mut dyn ForkReader<Error = E>,
-	length: u64,
-}
-
-impl<E: StdError + 'static> Fork<'_, E> {
-	#[must_use]
-	pub const fn len(&self) -> u64 {
-		self.length
-	}
-
-	#[must_use]
-	pub const fn is_empty(&self) -> bool {
-		self.len() == 0
-	}
-
-	/// Reads exactly the requested bytes, including an empty read at EOF.
-	///
-	/// # Errors
-	/// Rejects out-of-bounds or overflowing ranges and propagates read failures.
-	pub fn read_exact_at(&mut self, offset: u64, output: &mut [u8]) -> Result<(), ViewError<E>> {
-		let len = output.len() as u64;
-		if translate(&(0..self.length), offset, len).is_none() {
-			return Err(ViewError::OutOfRange {
-				offset,
-				len,
-				available: self.length,
-			});
-		}
-		self.reader
-			.read_exact_at(offset, output)
-			.map_err(ViewError::Backend)
 	}
 }
