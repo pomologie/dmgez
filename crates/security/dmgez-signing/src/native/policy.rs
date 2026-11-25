@@ -1,11 +1,8 @@
 use std::{ffi::OsStr, path::Path};
 
-use crate::{Error, SignError};
+use crate::{Error, SignError, is_valid_certificate_fingerprint};
 
-use super::{
-	END_OPTIONS, EXECUTABLE_PREFIX, FORMAT_PREFIX, INSPECT_OPTIONS, identity::valid_fingerprint,
-	runner,
-};
+use super::{END_OPTIONS, EXECUTABLE_PREFIX, FORMAT_PREFIX, INSPECT_OPTIONS, runner};
 
 const SIGN: &str = "--sign";
 const TIMESTAMP_OPTION: &str = "--timestamp";
@@ -34,7 +31,7 @@ pub(super) struct AppIdentity {
 
 impl AppIdentity {
 	pub(super) fn new(fingerprint: &str) -> Result<Self, SignError> {
-		if !valid_fingerprint(fingerprint) {
+		if !is_valid_certificate_fingerprint(fingerprint) {
 			return Err(SignError::Fingerprint);
 		}
 		Ok(Self {

@@ -1,13 +1,11 @@
 use std::path::Path;
 
 use crate::{
-	SignError, Status,
+	SignError, Status, is_valid_disk_identifier,
 	native::policy::{AppIdentity, display_fields, has_timestamp},
 };
 
 use super::{Artifact, inspect};
-
-const MAX_IDENTIFIER_BYTES: usize = 255;
 
 pub(super) struct DeveloperId<'a> {
 	identity: AppIdentity,
@@ -17,15 +15,7 @@ pub(super) struct DeveloperId<'a> {
 impl<'a> DeveloperId<'a> {
 	pub(super) fn new(fingerprint: &str, identifier: &'a str) -> Result<Self, SignError> {
 		let identity = AppIdentity::new(fingerprint)?;
-		if identifier.len() > MAX_IDENTIFIER_BYTES
-			|| !identifier
-				.as_bytes()
-				.first()
-				.is_some_and(u8::is_ascii_alphanumeric)
-			|| !identifier
-				.bytes()
-				.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'_'))
-		{
+		if !is_valid_disk_identifier(identifier) {
 			return Err(SignError::Identifier);
 		}
 		Ok(Self {

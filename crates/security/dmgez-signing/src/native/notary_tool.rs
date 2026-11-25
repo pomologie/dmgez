@@ -5,6 +5,7 @@ use std::{ffi::OsStr, io::ErrorKind, path::Path, time::Duration};
 use serde::Deserialize;
 
 use super::runner;
+use crate::is_valid_keychain_profile_name;
 use crate::notarization::{
 	CallError, Id, LogSummary, Receipt, Service, Status, Submission, valid_digest,
 };
@@ -113,7 +114,7 @@ impl Service for Tool {
 }
 
 fn profile_argument(profile: &str) -> Result<String, CallError> {
-	if profile.trim().is_empty() || profile.chars().any(char::is_control) {
+	if !is_valid_keychain_profile_name(profile) {
 		return Err(CallError::InvalidProfile);
 	}
 	Ok(format!("{KEYCHAIN_PROFILE}{profile}"))

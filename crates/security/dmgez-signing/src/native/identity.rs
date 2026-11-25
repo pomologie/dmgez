@@ -1,11 +1,11 @@
 use std::process::ExitStatus;
 
 use super::runner;
+use crate::is_valid_certificate_fingerprint;
 
 #[cfg(test)]
 mod tests;
 
-const SHA1_HEX_LENGTH: usize = 40;
 const VALID_IDENTITY_SUMMARY: &str = " valid identities found";
 const DEVELOPER_ID_APPLICATION_PREFIX: &str = "Developer ID Application: ";
 
@@ -24,7 +24,7 @@ pub(super) enum Error {
 /// Checks the selected fingerprint and the label from Security's valid identities.
 /// Cryptographic verification of the Apple chain is a separate post-signing check.
 pub(super) fn developer_id_available(fingerprint: &str) -> Result<bool, Error> {
-	if !valid_fingerprint(fingerprint) {
+	if !is_valid_certificate_fingerprint(fingerprint) {
 		return Err(Error::Fingerprint);
 	}
 	let output = runner::find_code_signing_identities().map_err(Error::Lookup)?;
@@ -34,10 +34,6 @@ pub(super) fn developer_id_available(fingerprint: &str) -> Result<bool, Error> {
 		});
 	}
 	listed_developer_id(&output.stdout, fingerprint)
-}
-
-pub(super) fn valid_fingerprint(fingerprint: &str) -> bool {
-	fingerprint.len() == SHA1_HEX_LENGTH && fingerprint.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn listed_developer_id(stdout: &[u8], fingerprint: &str) -> Result<bool, Error> {
@@ -83,7 +79,7 @@ fn identity_record(line: &str, expected_ordinal: usize) -> Option<IdentityRecord
 		return None;
 	}
 	let (fingerprint, quoted_label) = entry.split_once(" \"")?;
-	if !valid_fingerprint(fingerprint) {
+	if !is_valid_certificate_fingerprint(fingerprint) {
 		return None;
 	}
 	let (label, trust_annotation) = quoted_label.rsplit_once('"')?;
