@@ -5,6 +5,7 @@
 //! Each store uses one B-tree leaf. Writing it performs no filesystem access.
 
 mod background_alias;
+mod catalog_names;
 pub mod edit;
 pub mod finder_info;
 pub mod inspection;
@@ -20,6 +21,7 @@ pub use background_alias::{
 	BackgroundAliasError, ImageBackgroundIdentity, build_image_background_alias,
 	write_store_with_background_identity,
 };
+pub use catalog_names::CatalogNames;
 pub use dmg_layout::AliasRecord;
 pub use store::{
 	Error, LayoutItem, STORE_NAME, validate_options, validate_options_for_image_background,

@@ -7,7 +7,10 @@ use dmg_layout::{
 use dmgez_config::{FinderOptions, VirtualPath};
 use thiserror::Error;
 
-use crate::store::{self, LayoutItem};
+use crate::{
+	CatalogNames,
+	store::{self, LayoutItem},
+};
 
 const PATH_SEPARATOR: char = '/';
 const MACOS_VOLUME_MOUNT_DIRECTORY: &str = "/Volumes";
@@ -159,8 +162,24 @@ pub fn write_store_with_background_identity(
 	items: &[LayoutItem<'_>],
 	identity: ImageBackgroundIdentity<'_>,
 ) -> Result<Vec<u8>, store::Error> {
-	let alias = build_image_background_alias(identity)?;
-	store::write_store_with_background_alias(options, items, &alias)
+	CatalogNames::default().write_store_with_background_identity(options, items, identity)
+}
+
+impl CatalogNames {
+	/// Writes a Finder store with a bound background and exact stored item names.
+	///
+	/// # Errors
+	/// Returns a name encoding error or any error described by
+	/// [`write_store_with_background_identity`].
+	pub fn write_store_with_background_identity(
+		self,
+		options: &FinderOptions,
+		items: &[LayoutItem<'_>],
+		identity: ImageBackgroundIdentity<'_>,
+	) -> Result<Vec<u8>, store::Error> {
+		let alias = build_image_background_alias(identity)?;
+		self.write_store_with_background_alias(options, items, &alias)
+	}
 }
 
 fn valid_hfs_name(name: &str) -> bool {

@@ -95,7 +95,7 @@ pub enum StoreEditError {
 
 /// A bounded store whose folder settings can be retained when item names change.
 /// The profile uses canonical single-leaf framing, known folder settings and
-/// ASCII child names for position records. Background aliases require explicit
+/// UTF-16 child names for position records. Background aliases require explicit
 /// admission and validation against the source catalog by the caller.
 #[derive(Debug)]
 pub struct EditableStore {
@@ -310,10 +310,11 @@ impl EditableStore {
 		}
 		for (name, location) in positions {
 			check_name(name, self.limits)?;
-			if !names.insert(name.to_ascii_lowercase()) {
+			if !names.insert(name.to_lowercase()) {
 				return Err(StoreEditError::DuplicateName(name.to_owned()));
 			}
-			page_bytes += record_wire_bytes(name.len(), LENGTH_BYTES + LOCATION_BYTES);
+			page_bytes +=
+				record_wire_bytes(name.encode_utf16().count(), LENGTH_BYTES + LOCATION_BYTES);
 			if page_bytes > BTreeMaster::PAGE_SIZE.as_usize() {
 				return Err(StoreEditError::LeafBudget);
 			}
@@ -329,7 +330,7 @@ impl EditableStore {
 }
 
 fn check_name(name: &str, limits: ReadLimits) -> Result<(), StoreEditError> {
-	if name.len() > limits.name_units || validate_item_name(name).is_err() {
+	if validate_item_name(name).is_err() || name.encode_utf16().count() > limits.name_units {
 		return Err(StoreEditError::InvalidName(name.to_owned()));
 	}
 	Ok(())

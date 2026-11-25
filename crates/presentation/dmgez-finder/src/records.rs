@@ -6,13 +6,12 @@ use std::{
 use dmgez_config::Coordinate;
 use ds_parser::{DSStore, FieldKey, IconLocation, PropertyList, Record, layout::BTreeMaster};
 
-use crate::{Error, LayoutItem, layout::Layout};
+use crate::{CatalogNames, Error, LayoutItem, layout::Layout};
 
 pub(super) const CURRENT_FOLDER: &str = ".";
 const PARENT_FOLDER: &str = "..";
 pub(super) const STORE_VERSION: u32 = 1;
-const MAX_CATALOG_NAME_BYTES: usize = 255;
-const PRINTABLE_ASCII: std::ops::RangeInclusive<u8> = b' '..=b'~';
+const MAX_CATALOG_NAME_UNITS: usize = 255;
 const NAME_SEPARATORS: [char; 2] = ['/', ':'];
 const UTF16_UNIT_BYTES: usize = size_of::<u16>();
 pub(super) const LENGTH_BYTES: usize = size_of::<u32>();
@@ -60,6 +59,7 @@ impl Store {
 		&mut self,
 		items: &[LayoutItem<'_>],
 		configured: Option<&BTreeMap<String, [Coordinate; 2]>>,
+		names: CatalogNames,
 	) -> Result<(), Error> {
 		if let Some(configured) = configured {
 			for name in configured.keys() {
@@ -80,8 +80,10 @@ impl Store {
 				}
 				(None, None) => continue,
 			};
-			validate_item_name(item.name)?;
-			if !positioned.insert(item.name.to_ascii_lowercase()) {
+			let name = names.stored(item.name)?;
+			validate_item_name(&name)?;
+			// Match the writer's case-insensitive key ordering.
+			if !positioned.insert(name.to_lowercase()) {
 				return Err(Error::DuplicateName(item.name.to_owned()));
 			}
 			let [x, y] = position.map(Coordinate::get);
@@ -90,7 +92,7 @@ impl Store {
 				_ => return Err(Error::Position(item.name.to_owned())),
 			};
 			self.push(
-				item.name,
+				&name,
 				FieldKey::Iloc,
 				location,
 				LENGTH_BYTES + LOCATION_BYTES,
@@ -115,10 +117,9 @@ impl Store {
 		value: impl Into<ds_parser::Value>,
 		payload_bytes: usize,
 	) -> Result<(), Error> {
-		// Names have already been restricted to ASCII, so each byte is one
-		// UTF-16 unit. Plist values are measured with the same plist serializer
-		// the dependency writes. Exclude the unqualified multi-leaf writer.
-		let record_bytes = record_wire_bytes(name.len(), payload_bytes);
+		// Plist values are measured with the same plist serializer the dependency
+		// writes. Exclude the unqualified multi-leaf writer.
+		let record_bytes = record_wire_bytes(name.encode_utf16().count(), payload_bytes);
 		self.used_bytes += record_bytes;
 		if self.used_bytes > BTreeMaster::PAGE_SIZE.as_usize() {
 			return Err(Error::StoreBudget);
@@ -140,11 +141,11 @@ pub(super) const fn record_wire_bytes(name_units: usize, payload_bytes: usize) -
 
 pub(super) fn validate_item_name(name: &str) -> Result<(), Error> {
 	if name.is_empty()
-		|| name.len() > MAX_CATALOG_NAME_BYTES
+		|| name.encode_utf16().take(MAX_CATALOG_NAME_UNITS + 1).count() > MAX_CATALOG_NAME_UNITS
 		|| name == CURRENT_FOLDER
 		|| name == PARENT_FOLDER
 		|| name.contains(NAME_SEPARATORS)
-		|| !name.bytes().all(|byte| PRINTABLE_ASCII.contains(&byte))
+		|| name.chars().any(char::is_control)
 	{
 		return Err(Error::ItemName);
 	}

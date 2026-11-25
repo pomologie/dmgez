@@ -3,6 +3,7 @@ use dmgez_config::{Arrangement, Background, Column, Coordinate, FinderOptions, V
 use thiserror::Error;
 
 use crate::{
+	CatalogNames,
 	background_alias::BackgroundAliasError,
 	layout::{ImageBackground, Layout},
 	records::Store,
@@ -76,9 +77,12 @@ pub enum Error {
 	/// The arrangement key has no qualified icon-view spelling.
 	#[error("Finder icon arrangement by {0:?} is unavailable")]
 	Arrangement(Arrangement),
-	/// The item name must be one printable ASCII catalog component.
-	#[error("Finder item name is outside the printable ASCII catalog profile")]
+	/// The item name must be one printable UTF-16 catalog component.
+	#[error("Finder item name is outside the catalog component profile")]
 	ItemName,
+	/// The filesystem could not produce an item's exact stored spelling.
+	#[error("could not encode the stored Finder item name")]
+	CatalogName(#[source] Box<dyn std::error::Error + Send + Sync>),
 	/// A folder-level position must name an existing direct child exactly.
 	#[error("Finder icon position refers to absent item {0:?}")]
 	MissingItem(String),
@@ -141,8 +145,7 @@ pub fn write_store(
 	options: Option<&FinderOptions>,
 	items: &[LayoutItem<'_>],
 ) -> Result<Vec<u8>, Error> {
-	let layout = Layout::resolve(options, ImageBackground::Unavailable)?;
-	write_layout(layout, items)
+	CatalogNames::default().write_store(options, items)
 }
 
 /// Creates a Finder store with an image background bound to a final volume file.
@@ -161,13 +164,39 @@ pub fn write_store_with_background_alias(
 	items: &[LayoutItem<'_>],
 	alias: &AliasRecord,
 ) -> Result<Vec<u8>, Error> {
-	validate_image_background(options)?;
-	if alias.header.kind != AliasKind::File {
-		return Err(Error::ImageBackgroundTarget);
+	CatalogNames::default().write_store_with_background_alias(options, items, alias)
+}
+
+impl CatalogNames {
+	/// Writes a store whose position keys use the filesystem's stored spelling.
+	///
+	/// Position declarations still match the original manifest names.
+	///
+	/// # Errors
+	/// Returns a name encoding error or any error described by [`write_store`].
+	pub fn write_store(
+		self,
+		options: Option<&FinderOptions>,
+		items: &[LayoutItem<'_>],
+	) -> Result<Vec<u8>, Error> {
+		let layout = Layout::resolve(options, ImageBackground::Unavailable)?;
+		write_layout(layout, items, self)
 	}
-	let bytes = alias.to_bytes().map_err(Error::ImageBackgroundAlias)?;
-	let layout = Layout::resolve(Some(options), ImageBackground::Alias(bytes))?;
-	write_layout(layout, items)
+
+	pub(super) fn write_store_with_background_alias(
+		self,
+		options: &FinderOptions,
+		items: &[LayoutItem<'_>],
+		alias: &AliasRecord,
+	) -> Result<Vec<u8>, Error> {
+		validate_image_background(options)?;
+		if alias.header.kind != AliasKind::File {
+			return Err(Error::ImageBackgroundTarget);
+		}
+		let bytes = alias.to_bytes().map_err(Error::ImageBackgroundAlias)?;
+		let layout = Layout::resolve(Some(options), ImageBackground::Alias(bytes))?;
+		write_layout(layout, items, self)
+	}
 }
 
 fn validate_image_background(options: &FinderOptions) -> Result<(), Error> {
@@ -181,9 +210,13 @@ fn validate_image_background(options: &FinderOptions) -> Result<(), Error> {
 	}
 }
 
-fn write_layout(layout: Layout<'_>, items: &[LayoutItem<'_>]) -> Result<Vec<u8>, Error> {
+fn write_layout(
+	layout: Layout<'_>,
+	items: &[LayoutItem<'_>],
+	names: CatalogNames,
+) -> Result<Vec<u8>, Error> {
 	let positions = layout.positions;
 	let mut store = Store::for_layout(layout)?;
-	store.position_items(items, positions)?;
+	store.position_items(items, positions, names)?;
 	store.finish()
 }
