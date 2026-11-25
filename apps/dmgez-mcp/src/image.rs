@@ -1,6 +1,6 @@
 use std::cell::Cell;
 
-use dmgez_inspector::{ContainerSummary, VerificationMode, inspect, verify};
+use dmgez_inspector::{ContainerSummary, inspect};
 use dmgez_udif::{
 	Error, TRAILER_BYTES,
 	reader::{FileSource, Image, Limits, ReadAt},
@@ -17,7 +17,7 @@ const MAX_TABLES: usize = 512;
 const MAX_RECORDS: usize = 8192;
 const MAX_DECODE_BYTES: usize = 32 << 20;
 pub(super) const MAX_METADATA_BYTES: usize = MAX_XML_BYTES + TRAILER_BYTES;
-const MAX_METADATA_READS: usize = 2;
+const MAX_METADATA_READS: usize = 3;
 const READ_BUDGET: &str = "MCP image metadata read budget";
 const IMAGE_LIMITS: Limits = Limits {
 	max_physical_bytes: MAX_IMAGE_BYTES,
@@ -60,6 +60,14 @@ pub(super) struct Summary {
 	run_count: usize,
 	unsupported_run_count: usize,
 	decoder_unavailable_count: usize,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	embedded_signature: Option<SignatureRange>,
+}
+
+#[derive(Serialize, JsonSchema)]
+struct SignatureRange {
+	offset_bytes: u64,
+	length_bytes: u64,
 }
 
 impl From<&ContainerSummary> for Summary {
@@ -72,6 +80,10 @@ impl From<&ContainerSummary> for Summary {
 			run_count: container.runs.total,
 			unsupported_run_count: container.runs.unsupported,
 			decoder_unavailable_count: container.runs.decode_unavailable,
+			embedded_signature: container.embedded_signature.map(|range| SignatureRange {
+				offset_bytes: range.offset_bytes,
+				length_bytes: range.length_bytes,
+			}),
 		}
 	}
 }
@@ -146,43 +158,31 @@ impl LocalRoot {
 			remaining_bytes: Cell::new(MAX_METADATA_BYTES),
 			remaining_reads: Cell::new(MAX_METADATA_READS),
 		};
-		let result = match operation {
-			Operation::Inspect => inspect_image(&source),
-			Operation::Verify => verify_image(&source),
-		};
+		let result = Image::open_release_with_metadata_limit(
+			&source,
+			IMAGE_LIMITS,
+			MAX_METADATA_BYTES as u64,
+		)
+		.map(|image| Summary::from(&inspect(&image, None).container));
 		source
 			.file
 			.check_unchanged()
 			.map_err(|error| Issue::from(&error))?;
 		binding.verify()?;
-		result
+		let summary = result.map_err(|error| Issue::from(&error))?;
+		Ok(match operation {
+			Operation::Inspect => Outcome::Inspected { summary },
+			Operation::Verify => Outcome::Verified {
+				summary,
+				coverage: QuickCoverage {
+					structure: StructurePassed::Passed,
+					payload: NotChecked::NotChecked,
+					filesystem: NotChecked::NotChecked,
+					security: NotChecked::NotChecked,
+				},
+			},
+		})
 	}
-}
-
-fn inspect_image(source: &MetadataSource) -> Result<Outcome, Issue> {
-	let image = Image::open(source, IMAGE_LIMITS).map_err(|error| Issue::from(&error))?;
-	let report = inspect(&image, None);
-	Ok(Outcome::Inspected {
-		summary: (&report.container).into(),
-	})
-}
-
-fn verify_image(source: &MetadataSource) -> Result<Outcome, Issue> {
-	let report = verify(source, IMAGE_LIMITS, VerificationMode::Quick);
-	let container = report
-		.container
-		.as_ref()
-		.filter(|_| report.passed())
-		.ok_or_else(|| report.cause().map_or(Issue::ImageUnavailable, Issue::from))?;
-	Ok(Outcome::Verified {
-		summary: container.into(),
-		coverage: QuickCoverage {
-			structure: StructurePassed::Passed,
-			payload: NotChecked::NotChecked,
-			filesystem: NotChecked::NotChecked,
-			security: NotChecked::NotChecked,
-		},
-	})
 }
 
 struct MetadataSource {

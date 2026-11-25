@@ -9,7 +9,13 @@ const IMAGE_INSPECT: &str = "image_inspect";
 const IMAGE_VERIFY: &str = "image_verify";
 const IMAGE_FILE: &str = "fixture.dmg";
 const UDZO: &[u8] = include_bytes!("../../../../tests/fixtures/images/tiny-UDZO.dmg");
+const SIGNED: &[u8] =
+	include_bytes!("../../../../tests/fixtures/images/tiny-UDZO-adhoc-sha256.dmg");
 const XML_LENGTH_OFFSET: usize = 224;
+const SIGNATURE_LENGTH_FIELD: usize = 304;
+// Physical geometry recorded by the native fixture's provenance manifest.
+const SIGNATURE_OFFSET: usize = 3084;
+const SIGNATURE_BYTES: usize = 351;
 
 #[test]
 fn inspects_and_quickly_verifies_only_after_authorizing_a_separate_image_root() {
@@ -53,6 +59,7 @@ fn inspects_and_quickly_verifies_only_after_authorizing_a_separate_image_root() 
 	assert_eq!(summary["sector_bytes"], dmgez_udif::SECTOR_BYTES);
 	assert!(summary["logical_bytes"].as_u64().unwrap() > 0);
 	assert!(summary["block_map_count"].as_u64().unwrap() > 0);
+	assert!(summary.get("embedded_signature").is_none());
 	assert_eq!(summary.as_object().unwrap().len(), 7);
 	let verify = client.tool(IMAGE_VERIFY, json!({"file_name":IMAGE_FILE}));
 	assert_eq!(
@@ -81,6 +88,64 @@ fn inspects_and_quickly_verifies_only_after_authorizing_a_separate_image_root() 
 	);
 	assert!(full.get("error").is_some() || full["result"]["isError"] == true);
 	assert_eq!(fs::read(image_root.join(IMAGE_FILE)).unwrap(), UDZO);
+	client.finish();
+}
+
+#[test]
+fn admits_signed_frames_within_the_metadata_budget_without_checking_trust() {
+	const CHANGED: &str = "signed-changed.dmg";
+	const CORRUPT: &str = "malformed-signature.dmg";
+	const OVERSIZED: &str = "large-signature.dmg";
+	let temp = tempfile::tempdir().unwrap();
+	let root = temp.path().canonicalize().unwrap();
+	fs::write(root.join(IMAGE_FILE), SIGNED).unwrap();
+	let mut changed = SIGNED.to_vec();
+	changed[0] ^= 0xff;
+	fs::write(root.join(CHANGED), changed).unwrap();
+	let mut malformed = SIGNED.to_vec();
+	malformed[SIGNATURE_OFFSET] ^= 0xff;
+	fs::write(root.join(CORRUPT), malformed).unwrap();
+
+	let mut client = Client::start_with_images(&root, Some(&root));
+	let capabilities = client.tool(CAPABILITIES, json!({}));
+	let max_metadata =
+		usize::try_from(capabilities["max_image_metadata_bytes"].as_u64().unwrap()).unwrap();
+	let signature_size = max_metadata - TRAILER_BYTES;
+	let mut oversized = SIGNED.to_vec();
+	let mut trailer = oversized.split_off(SIGNED.len() - TRAILER_BYTES);
+	oversized.resize(SIGNATURE_OFFSET + signature_size, 0);
+	trailer[SIGNATURE_LENGTH_FIELD..][..size_of::<u64>()]
+		.copy_from_slice(&(signature_size as u64).to_be_bytes());
+	oversized.extend_from_slice(&trailer);
+	fs::write(root.join(OVERSIZED), oversized).unwrap();
+
+	let inspection = client.tool(IMAGE_INSPECT, json!({"file_name":IMAGE_FILE}));
+	assert_eq!(inspection["outcome"]["status"], "inspected");
+	let summary = &inspection["outcome"]["summary"];
+	assert_eq!(summary["physical_bytes"], SIGNED.len());
+	assert_eq!(
+		summary["embedded_signature"],
+		json!({"offset_bytes": SIGNATURE_OFFSET, "length_bytes": SIGNATURE_BYTES})
+	);
+	let expected_verification = json!({
+		"status":"verified",
+		"summary":summary,
+		"coverage":{"structure":"passed", "payload":"not_checked", "filesystem":"not_checked", "security":"not_checked"},
+	});
+	for name in [IMAGE_FILE, CHANGED] {
+		let verify = client.tool(IMAGE_VERIFY, json!({"file_name":name}));
+		assert_eq!(verify["outcome"], expected_verification);
+	}
+	for tool in [IMAGE_INSPECT, IMAGE_VERIFY] {
+		for (name, code) in [(CORRUPT, "corrupt_image"), (OVERSIZED, "resource_limit")] {
+			let rejected = client.tool(tool, json!({"file_name":name}));
+			assert_eq!(
+				rejected["outcome"],
+				json!({"status":"rejected", "issue":{"code":code}})
+			);
+		}
+	}
+	assert_eq!(fs::read(root.join(IMAGE_FILE)).unwrap(), SIGNED);
 	client.finish();
 }
 

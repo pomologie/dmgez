@@ -157,7 +157,7 @@ impl Server {
 	}
 
 	#[tool(annotations(read_only_hint = true, open_world_hint = false))]
-	/// Quickly verify a confined UDIF image's trailer and block map structure.
+	/// Check a confined UDIF image's trailer, signature frame and block map structure.
 	async fn image_verify(
 		&self,
 		Parameters(request): Parameters<ImageRequest>,
