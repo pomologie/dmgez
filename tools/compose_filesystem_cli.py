@@ -88,11 +88,18 @@ IMAGE_EDIT_TEST = "image_edit_cli"
 SOURCE_DIRS = ("apps", "crates", "tests", "third_party")
 RUNTIME = Path("crates/runtime/dmgez-runtime")
 PROJECT_FEATURES = {
-    "project-build": ["dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config", "dmgez-runtime/project-build"],
-    PROJECT_RELEASE_FEATURE: ["project-build", "inspect", "dep:dmgez-signing", "dep:sha2", "dep:tempfile"],
+    "project-build": [
+        "dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config", "dep:dmgez-udif",
+        "dmgez-runtime/project-build",
+    ],
+    PROJECT_RELEASE_FEATURE: [
+        "project-build", "inspect", "dep:dmgez-signing", "dep:sha2", "dep:tempfile",
+        "dmgez-runtime/project-release",
+    ],
     PROJECT_EDIT_FEATURE: [
         "project-build", "dep:dmgez-core", "dep:dmgez-operations", "dmgez-operations/edit",
         "dep:dmgez-udif", "dmgez-udif/read", "dep:serde", "dep:serde_json", "dep:sha2",
+        "dmgez-runtime/project-edit",
     ],
     "compression-cache": ["project-build", "dmgez-builder/compression-cache", f"{ADAPTER}/compression-cache"],
     PARTITION_WRITE_FEATURE: ["project-build", f"{ADAPTER}/partition-write"],
@@ -162,16 +169,25 @@ def compose_cli_manifest(manifest, reader, build, apfs):
         dependencies_to_add.extend(("dmgez-builder", ADAPTER))
     if reader:
         hfsplus_features = {
-            READ_FEATURE: ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse"],
-            ACTUAL_PREVIEW_FEATURE: ["preview", READ_FEATURE, f"{READ_ADAPTER}/preview"],
-            HFS_ANALYSIS_FEATURE: [READ_FEATURE, f"{READ_ADAPTER}/analysis"],
-            VERIFY_FEATURE: ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/verify"],
-            EXTRACT_FEATURE: [READ_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract"],
+            READ_FEATURE: ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse", "dmgez-runtime/hfsplus-volume"],
+            ACTUAL_PREVIEW_FEATURE: ["preview", READ_FEATURE, "dmgez-runtime/actual-preview"],
+            HFS_ANALYSIS_FEATURE: [READ_FEATURE, "dmgez-runtime/hfsplus-analysis"],
+            VERIFY_FEATURE: [
+                "inspect", f"dep:{READ_ADAPTER}", "dmgez-runtime/hfsplus-verification",
+            ],
+            EXTRACT_FEATURE: [
+                READ_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract",
+                "dmgez-runtime/extraction", "dmgez-runtime/verified-volume",
+            ],
             DECMPFS_FEATURE: [READ_FEATURE, f"{READ_ADAPTER}/decmpfs-zlib"],
             INSTALL_FEATURE: [
                 READ_FEATURE, "dep:dmgez-config", "dep:dmgez-operations", "dmgez-operations/install",
+                "dmgez-runtime/installation", "dmgez-runtime/verified-volume",
+                "dmgez-runtime/hfsplus-install",
             ],
-            MOUNT_WATCH_FEATURE: [INSTALL_FEATURE, "mount-system", "dmgez-mount/watch"],
+            MOUNT_WATCH_FEATURE: [
+                INSTALL_FEATURE, "mount-system", "dmgez-mount/watch", "dmgez-runtime/mount-watch",
+            ],
         }
         forwarding[INSTALLER_TEST_FEATURE] = [READ_FEATURE]
         if build:
@@ -183,14 +199,19 @@ def compose_cli_manifest(manifest, reader, build, apfs):
                 f"{READ_ADAPTER}/verify",
                 "dep:dmgez-core", "dep:dmgez-operations", "dmgez-operations/image-edit", "dep:dmgez-udif",
                 "dmgez-udif/read", "dmgez-udif/write", "dep:dmgez-vfs", "dep:serde", "dep:serde_json", "dep:sha2",
+                "dmgez-runtime/image-edit",
             ]
         dependencies_to_add.append(READ_ADAPTER)
     if apfs:
         apfs_features = {
-            APFS_FEATURE: ["inspect", f"dep:{APFS_ADAPTER}"],
-            APFS_EXTRACT_FEATURE: [APFS_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract"],
+            APFS_FEATURE: ["inspect", f"dep:{APFS_ADAPTER}", "dmgez-runtime/apfs-volume"],
+            APFS_EXTRACT_FEATURE: [
+                APFS_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract",
+                "dmgez-runtime/extraction", "dmgez-runtime/verified-volume",
+            ],
             APFS_INSTALL_FEATURE: [
                 APFS_FEATURE, "dep:dmgez-config", "dep:dmgez-operations", "dmgez-operations/install",
+                "dmgez-runtime/installation", "dmgez-runtime/verified-volume",
             ],
         }
         forwarding.setdefault(INSTALLER_TEST_FEATURE, []).append(APFS_FEATURE)
@@ -253,7 +274,7 @@ def compose_desktop_manifest(manifest):
     if dependency_section not in manifest or development_section not in manifest:
         raise ValueError("could not find the desktop dependencies sections")
     read = render_feature(READ_FEATURE, [f"dep:{READ_ADAPTER}", "dep:dmgez-vfs"])
-    preview = render_feature(ACTUAL_PREVIEW_FEATURE, [READ_FEATURE, f"{READ_ADAPTER}/preview"])
+    preview = render_feature(ACTUAL_PREVIEW_FEATURE, [READ_FEATURE, "dmgez-runtime/actual-preview"])
     group = f"# HFS+ volume access\n{read}\n{preview}\n"
     if feature_section in manifest:
         manifest = manifest.replace(feature_section, feature_section + group, 1)
@@ -270,21 +291,52 @@ def compose_desktop_manifest(manifest):
     )
 
 
-def compose_runtime_manifest(manifest):
+def compose_runtime_manifest(manifest, *, reader, build, apfs):
     dependency_section = "\n[dependencies]\n"
+    adapters = []
+    features = {}
+    if build:
+        adapters.append(ADAPTER)
+        features.update({
+            "project-build": [
+                "project-input", "dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-udif", "dmgez-udif/write",
+            ],
+            PROJECT_EDIT_FEATURE: [
+                "project-build", "stage-verification", "dep:dmgez-operations", "dmgez-operations/edit", "dep:sha2",
+            ],
+            PROJECT_RELEASE_FEATURE: [
+                "project-build", "image", "stage-verification", "dep:dmgez-signing", "dep:sha2", "dep:tempfile",
+                "dmgez-core/source",
+            ],
+            "finder-write": ["dmgez-builder?/finder-write"],
+        })
+    if reader:
+        adapters.append(READ_ADAPTER)
+        features.update({
+            "hfsplus-volume": ["image", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse"],
+            HFS_ANALYSIS_FEATURE: ["image", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/analysis"],
+            "hfsplus-verification": ["image", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/verify"],
+            INSTALL_FEATURE: ["hfsplus-volume", "installation", "verified-volume"],
+            ACTUAL_PREVIEW_FEATURE: ["preview", "hfsplus-volume", f"{READ_ADAPTER}/preview"],
+        })
+        if build:
+            features[IMAGE_EDIT_FEATURE] = [
+                "project-input", "stage-verification", f"dep:{ADAPTER}", f"{ADAPTER}/image-edit",
+                f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse", f"{READ_ADAPTER}/verify",
+                "dep:dmgez-operations", "dmgez-operations/image-edit", "dep:dmgez-vfs", "dep:sha2",
+            ]
+    if apfs:
+        adapters.append(APFS_ADAPTER)
+        features["apfs-volume"] = ["image", f"dep:{APFS_ADAPTER}"]
     dependencies = [
-        'dmgez-hfsplus = { path = "../../adapters/dmgez-hfsplus", optional = true, default-features = false }',
+        f'{name} = {{ path = "../../adapters/{name}", optional = true, default-features = false }}'
+        for name in adapters
     ]
-    features = [
-        render_feature("project-build", [
-            "project-input", "dep:dmgez-builder", "dep:dmgez-hfsplus", "dep:dmgez-udif", "dmgez-udif/write",
-        ]),
-        render_feature("finder-write", ["dmgez-builder?/finder-write"]),
-    ]
+    entries = "\n".join(render_feature(name, values) for name, values in features.items())
     before, boundary, after = manifest.partition(dependency_section)
     if not boundary:
         raise ValueError("could not find the runtime dependencies section")
-    return before + "\n# Composed project workflows\n" + "\n".join(features) + "\n" + (
+    return before + "\n# Composed filesystem workflows\n" + entries + "\n" + (
         boundary + "# Composed filesystem dependencies\n" + "\n".join(dependencies) + "\n\n" + after
     )
 
@@ -321,17 +373,20 @@ def prepare_workspace(directory, packages, *, desktop=False):
     )
 
     # Replace the copied entry or symlink without writing through to the checkout.
+    reader = HFSPLUS_READER in packages
     build = HFSPLUS_BUILDER in packages
-    if build:
-        replace_manifest(directory, RUNTIME, compose_runtime_manifest)
+    apfs = APFS_READER in packages
+    replace_manifest(directory, RUNTIME, lambda manifest: compose_runtime_manifest(
+        manifest, reader=reader, build=build, apfs=apfs,
+    ))
     if desktop:
         replace_manifest(directory, DESKTOP, compose_desktop_manifest)
     else:
         replace_manifest(directory, CLI, lambda manifest: compose_cli_manifest(
             manifest,
-            reader=HFSPLUS_READER in packages,
+            reader=reader,
             build=build,
-            apfs=APFS_READER in packages,
+            apfs=apfs,
         ))
 
 

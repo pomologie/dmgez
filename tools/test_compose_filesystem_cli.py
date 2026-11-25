@@ -50,7 +50,7 @@ class ReleaseCompositionTests(unittest.TestCase):
                 if reader:
                     self.assertEqual(
                         features[compose.MOUNT_WATCH_FEATURE],
-                        [compose.INSTALL_FEATURE, "mount-system", "dmgez-mount/watch"],
+                        [compose.INSTALL_FEATURE, "mount-system", "dmgez-mount/watch", "dmgez-runtime/mount-watch"],
                     )
 
     def test_partition_writing_is_an_explicit_project_build_feature(self):
@@ -124,7 +124,7 @@ class ReleaseCompositionTests(unittest.TestCase):
                 self.assertEqual(compose.ACTUAL_PREVIEW_FEATURE in features, reader)
                 if reader:
                     self.assertEqual(features[compose.ACTUAL_PREVIEW_FEATURE], [
-                        "preview", compose.READ_FEATURE, f"{compose.READ_ADAPTER}/preview",
+                        "preview", compose.READ_FEATURE, "dmgez-runtime/actual-preview",
                     ])
 
 
@@ -136,7 +136,7 @@ class DesktopCompositionTests(unittest.TestCase):
         self.assertEqual(manifest["features"], {
             **base.get("features", {}),
             compose.READ_FEATURE: [f"dep:{compose.READ_ADAPTER}", "dep:dmgez-vfs"],
-            compose.ACTUAL_PREVIEW_FEATURE: [compose.READ_FEATURE, f"{compose.READ_ADAPTER}/preview"],
+            compose.ACTUAL_PREVIEW_FEATURE: [compose.READ_FEATURE, "dmgez-runtime/actual-preview"],
         })
         self.assertEqual(manifest["dependencies"][compose.READ_ADAPTER]["features"], ["browse"])
         self.assertTrue(manifest["dependencies"][compose.READ_ADAPTER]["optional"])

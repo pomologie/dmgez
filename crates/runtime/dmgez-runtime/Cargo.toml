@@ -8,13 +8,88 @@ repository.workspace = true
 description = "Shared disk image workflows for dmgez applications"
 
 [features]
-image = ["dep:dmgez-inspector", "dep:dmgez-udif", "dep:dmgez-vfs", "dep:thiserror"]
-project-input = ["dep:dmgez-config", "dep:thiserror"]
+# Image access and publication
+encoding = ["dep:dmgez-udif", "dmgez-udif/write"]
+image = ["dep:dmgez-inspector", "dep:dmgez-udif", "dmgez-udif/read", "dep:dmgez-vfs", "dep:thiserror"]
+parallel = ["dmgez-udif?/parallel"]
 raw-export = ["image", "dep:dmgez-core", "dmgez-core/staging"]
+raw-wrap = [
+	"dep:dmgez-core",
+	"dmgez-core/source",
+	"dmgez-core/staging",
+	"dep:dmgez-udif",
+	"dmgez-udif/write",
+	"dep:thiserror",
+]
+stage-verification = [
+	"dep:dmgez-core",
+	"dmgez-core/staging",
+	"dep:dmgez-udif",
+	"dmgez-udif/read",
+	"dmgez-udif/write",
+	"dmgez-udif/zlib",
+]
+
+# Project inputs and presentation
+appdmg-import = ["project-input", "dmgez-config/appdmg-import", "dep:dmgez-core", "dmgez-core/staging"]
+installer-lint = ["lint", "dmgez-lint/installer"]
+lint = ["project-input", "dep:dmgez-lint", "dep:dmgez-preview"]
+project-input = ["dep:dmgez-config", "dep:thiserror"]
+preview = [
+	"project-input",
+	"dep:dmgez-core",
+	"dmgez-core/staging",
+	"dep:dmgez-preview",
+	"dmgez-preview/png-render",
+]
+
+# Comparison
+compare = [
+	"dep:dmgez-diff",
+	"dep:dmgez-udif",
+	"dmgez-udif/read",
+	"dmgez-udif/zlib",
+	"dep:dmgez-vfs",
+	"dep:thiserror",
+]
+
+# Filesystem operations
+extraction = [
+	"dep:dmgez-operations",
+	"dmgez-operations/extract",
+	"dep:dmgez-inspector",
+	"dep:dmgez-vfs",
+	"dep:thiserror",
+]
+installation = [
+	"dep:dmgez-config",
+	"dep:dmgez-operations",
+	"dmgez-operations/install",
+	"dep:dmgez-vfs",
+	"dep:thiserror",
+]
+installer-test = ["image", "dep:dmgez-operations", "dmgez-operations/install", "dep:serde"]
+mount-watch = [
+	"image",
+	"dep:dmgez-mount",
+	"dmgez-mount/system",
+	"dmgez-mount/watch",
+	"dep:dmgez-operations",
+	"dmgez-operations/install",
+	"dep:dmgez-config",
+	"dep:dmgez-vfs",
+	"dep:thiserror",
+]
+verified-volume = ["image", "dep:dmgez-operations", "dmgez-operations/extract"]
+
+# Signing and notarization
+signing-rust = ["dmgez-signing?/rust"]
+signing-native = ["dep:dmgez-signing", "dmgez-signing/native"]
+notarization-native = ["signing-native", "dmgez-signing/notarization-native"]
 
 [dependencies]
 # Workspace formats
-dmgez-udif = { workspace = true, optional = true, features = ["read"] }
+dmgez-udif = { workspace = true, optional = true }
 
 # Workspace foundation
 dmgez-config = { workspace = true, optional = true }
@@ -24,8 +99,25 @@ dmgez-vfs = { workspace = true, optional = true }
 # Workspace build
 dmgez-builder = { workspace = true, optional = true }
 
+# Workspace presentation
+dmgez-preview = { workspace = true, optional = true }
+
 # Workspace inspection
+dmgez-diff = { workspace = true, optional = true }
 dmgez-inspector = { workspace = true, optional = true }
+dmgez-lint = { workspace = true, optional = true }
+
+# Workspace operations and platform
+dmgez-mount = { workspace = true, optional = true }
+dmgez-operations = { workspace = true, optional = true }
+
+# Workspace security
+dmgez-signing = { workspace = true, optional = true }
+
+# Hashes, staging and serialization
+serde = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
 
 # Diagnostics
 thiserror = { workspace = true, optional = true }

@@ -1332,9 +1332,18 @@ dependencies = [
  "dmgez-builder",
  "dmgez-config",
  "dmgez-core",
+ "dmgez-diff",
  "dmgez-inspector",
+ "dmgez-lint",
+ "dmgez-mount",
+ "dmgez-operations",
+ "dmgez-preview",
+ "dmgez-signing",
  "dmgez-udif",
  "dmgez-vfs",
+ "serde",
+ "sha2",
+ "tempfile",
  "thiserror 2.0.21",
 ]
 
