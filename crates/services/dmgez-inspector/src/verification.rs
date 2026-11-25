@@ -1,15 +1,19 @@
+use std::num::NonZeroU64;
+
 use dmgez_udif::{
 	Error,
 	reader::{
 		CheckStatus as UdifStatus, Checksum, Descriptor, Image, Limits, ReadAt, Verification,
 	},
 };
+use dmgez_vfs::{Disk, Layout, LogicalDisk, Raw, VolumeId};
 use serde::Serialize;
 
 use crate::{
 	Capabilities, CheckStatus, ContainerSummary, Coverage, Diagnostic, ErrorCategory,
 	FilesystemCheckError, FilesystemCheckReport, FilesystemEvidence, FilesystemOptions,
-	FilesystemSource, ReportOperation, SCHEMA_VERSION, Stage, filesystem::verify_window,
+	FilesystemProbe, FilesystemSource, ReportOperation, SCHEMA_VERSION, Stage,
+	filesystem::{Failure, ReadBudget, verify_window},
 	schema::CAPABILITIES,
 };
 
@@ -118,6 +122,22 @@ pub struct VerificationReport {
 }
 
 impl VerificationReport {
+	fn new(mode: VerificationMode) -> Self {
+		Self {
+			schema_version: SCHEMA_VERSION,
+			operation: ReportOperation::Verify,
+			mode,
+			outcome: VerificationOutcome::Unavailable,
+			capabilities: CAPABILITIES,
+			coverage: Coverage::default(),
+			container: None,
+			checksums: None,
+			filesystem_check: None,
+			diagnostic: None,
+			cause: None,
+		}
+	}
+
 	/// Whether the entire requested scope passed.
 	#[must_use]
 	pub const fn passed(&self) -> bool {
@@ -179,18 +199,127 @@ pub fn verify(source: impl ReadAt, limits: Limits, mode: VerificationMode) -> Ve
 /// checks of one among multiple data windows leave whole-image coverage partial.
 /// Security checks remain independent of this operation.
 #[must_use]
-pub fn verify_filesystem(
-	source: impl ReadAt,
+pub fn verify_filesystem<S: ReadAt>(
+	source: S,
 	limits: Limits,
 	filesystem: FilesystemOptions,
 	checker: impl FnOnce(&mut dyn FilesystemSource) -> Result<FilesystemEvidence, FilesystemCheckError>,
 ) -> VerificationReport {
+	verify_prepared_filesystem(
+		source,
+		limits,
+		filesystem,
+		|_, _| Ok(filesystem.volume),
+		checker,
+	)
+}
+
+/// Verifies UDIF structure and checksums before admitting a selected filesystem.
+///
+/// Optional partitionless recognition and the checker share one read budget.
+/// A partition slot refers to the already validated logical disk map.
+#[must_use]
+pub fn verify_filesystem_with_probe<S: ReadAt>(
+	source: S,
+	limits: Limits,
+	filesystem: FilesystemOptions,
+	probe: FilesystemProbe<
+		impl FnOnce(&mut dyn FilesystemSource) -> Result<Option<NonZeroU64>, FilesystemCheckError>,
+	>,
+	checker: impl FnOnce(&mut dyn FilesystemSource) -> Result<FilesystemEvidence, FilesystemCheckError>,
+) -> VerificationReport {
+	verify_prepared_filesystem(
+		source,
+		limits,
+		filesystem,
+		|disk, budget| probe.select(disk, filesystem.volume, budget, Stage::Filesystem),
+		checker,
+	)
+}
+
+/// Checks the structure of an explicitly raw disk and one selected filesystem.
+///
+/// The raw format has no UDIF checksum domains. Only an admitted raw disk
+/// layout contributes to structure coverage.
+#[must_use]
+pub fn verify_raw_filesystem(
+	source: impl ReadAt,
+	filesystem: FilesystemOptions,
+	probe: FilesystemProbe<
+		impl FnOnce(&mut dyn FilesystemSource) -> Result<Option<NonZeroU64>, FilesystemCheckError>,
+	>,
+	checker: impl FnOnce(&mut dyn FilesystemSource) -> Result<FilesystemEvidence, FilesystemCheckError>,
+) -> VerificationReport {
+	let mut report = VerificationReport::new(VerificationMode::Full);
+	report.capabilities.container_checksums = false;
+	report.capabilities.filesystem = true;
+	report.coverage.payload = CheckStatus::NotPresent;
+	let mut source = Raw(source);
+	if let Err(error) = source.read_exact_at(0, &mut []) {
+		report.fail(Stage::Structure, error);
+		return report;
+	}
+	verify_disk(
+		report,
+		source,
+		filesystem,
+		|disk, budget| probe.select(disk, filesystem.volume, budget, Stage::Structure),
+		checker,
+	)
+}
+
+fn verify_prepared_filesystem<S: ReadAt>(
+	source: S,
+	limits: Limits,
+	filesystem: FilesystemOptions,
+	select: impl FnOnce(&mut Disk<Image<S>>, &mut ReadBudget) -> Result<Option<VolumeId>, Failure>,
+	checker: impl FnOnce(&mut dyn FilesystemSource) -> Result<FilesystemEvidence, FilesystemCheckError>,
+) -> VerificationReport {
 	let (mut report, next) = verify_container(source, limits, VerificationMode::Full);
 	report.capabilities.filesystem = true;
-	let Some(mut image) = next else {
+	let Some(image) = next else {
 		return report;
 	};
-	match verify_window(&mut image, filesystem, checker) {
+	verify_disk(report, image, filesystem, select, checker)
+}
+
+fn verify_disk<S: LogicalDisk>(
+	mut report: VerificationReport,
+	source: S,
+	filesystem: FilesystemOptions,
+	select: impl FnOnce(&mut Disk<S>, &mut ReadBudget) -> Result<Option<VolumeId>, Failure>,
+	checker: impl FnOnce(&mut dyn FilesystemSource) -> Result<FilesystemEvidence, FilesystemCheckError>,
+) -> VerificationReport {
+	let raw = !report.capabilities.container_checksums;
+	let disk_stage = if raw {
+		Stage::Structure
+	} else {
+		Stage::Filesystem
+	};
+	let mut disk = match Disk::discover(source, filesystem.disk_limits) {
+		Ok(disk) => disk,
+		Err(error) => {
+			let failure = Failure::from(error).at(disk_stage);
+			report.fail_with(failure.diagnostic, failure.cause);
+			return report;
+		}
+	};
+	let mut budget = ReadBudget::new(filesystem);
+	let requested = select(&mut disk, &mut budget);
+	let unrecognized_raw = raw && matches!(disk.layout(), Layout::Unknown);
+	if raw && !unrecognized_raw {
+		report.coverage.structure = CheckStatus::Passed;
+	}
+	let attempt = requested.and_then(|requested| {
+		verify_window(&mut disk, requested, budget, checker).map_err(|failure| {
+			if unrecognized_raw {
+				failure.at(Stage::Structure)
+			} else {
+				failure
+			}
+		})
+	});
+	match attempt {
 		Ok(attempt) => {
 			report.filesystem_check = Some(attempt.report);
 			if let Some(failure) = attempt.failure {
@@ -213,19 +342,7 @@ fn verify_container<S: ReadAt>(
 	limits: Limits,
 	mode: VerificationMode,
 ) -> (VerificationReport, Option<Image<S>>) {
-	let mut report = VerificationReport {
-		schema_version: SCHEMA_VERSION,
-		operation: ReportOperation::Verify,
-		mode,
-		outcome: VerificationOutcome::Unavailable,
-		capabilities: CAPABILITIES,
-		coverage: Coverage::default(),
-		container: None,
-		checksums: None,
-		filesystem_check: None,
-		diagnostic: None,
-		cause: None,
-	};
+	let mut report = VerificationReport::new(mode);
 	let image = source
 		.check_unchanged()
 		.and_then(|()| Image::open(source, limits));

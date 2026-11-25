@@ -1,10 +1,10 @@
-use std::fmt;
-
-use dmgez_udif::{
-	Error,
-	reader::{Image, ReadAt},
+use std::{
+	fmt,
+	num::{NonZeroU32, NonZeroU64},
 };
-use dmgez_vfs::{Disk, Error as DiskError, LogicalDisk, VolumeId, Window};
+
+use dmgez_udif::Error;
+use dmgez_vfs::{Disk, Error as DiskError, Filesystem, Layout, LogicalDisk, PartitionId, VolumeId};
 use serde::{Serialize, Serializer};
 
 use crate::{
@@ -14,6 +14,10 @@ use crate::{
 
 const DEFAULT_MAX_READ_REQUESTS: u64 = 1_000_000;
 const DEFAULT_MAX_READ_BYTES: u64 = 1 << 32;
+
+mod budget;
+
+pub(crate) use budget::ReadBudget;
 
 /// Selection and aggregate input limits for one filesystem verification.
 #[derive(Debug, Clone, Copy)]
@@ -35,6 +39,56 @@ impl Default for FilesystemOptions {
 			max_read_requests: DEFAULT_MAX_READ_REQUESTS,
 			max_read_bytes: DEFAULT_MAX_READ_BYTES,
 		}
+	}
+}
+
+/// Optional whole-disk recognizer and partition selection for a filesystem checker.
+///
+/// The recognizer runs only if disk discovery found no partition map or
+/// whole-disk filesystem. It must return the nonzero byte length of a validated
+/// filesystem extent starting at zero, or `None` for unrecognized input.
+pub struct FilesystemProbe<P> {
+	filesystem: Filesystem,
+	partition_slot: Option<NonZeroU32>,
+	probe: P,
+}
+
+impl<P> FilesystemProbe<P>
+where
+	P: FnOnce(&mut dyn FilesystemSource) -> Result<Option<NonZeroU64>, FilesystemCheckError>,
+{
+	#[must_use]
+	pub const fn new(filesystem: Filesystem, partition_slot: Option<NonZeroU32>, probe: P) -> Self {
+		Self {
+			filesystem,
+			partition_slot,
+			probe,
+		}
+	}
+
+	pub(crate) fn select<S: LogicalDisk>(
+		self,
+		disk: &mut Disk<S>,
+		requested: Option<VolumeId>,
+		budget: &mut ReadBudget,
+		recognition_stage: Stage,
+	) -> Result<Option<VolumeId>, Failure> {
+		if let Some(slot) = self.partition_slot {
+			let Layout::Partitioned { scheme, .. } = *disk.layout() else {
+				return Err(Failure::category(ErrorCategory::Conflict));
+			};
+			if requested.is_some() {
+				return Err(Failure::category(ErrorCategory::Conflict));
+			}
+			return Ok(Some(VolumeId::Partition(PartitionId { scheme, slot })));
+		}
+		disk.recognize_partitionless(self.filesystem, |window| {
+			let mut source = budget.source(window);
+			let result = (self.probe)(&mut source);
+			source.finish(result)
+		})
+		.map_err(|failure| failure.at(recognition_stage))?;
+		Ok(requested)
 	}
 }
 
@@ -94,6 +148,12 @@ pub enum FilesystemCheckError {
 	ResourceLimit,
 	Unavailable,
 	Cancelled,
+	/// The requested native volume or checkpoint could not be selected.
+	Selection,
+	/// Automatic selection requires an explicit native volume selector.
+	SelectionRequired {
+		candidates: usize,
+	},
 	Read(FilesystemReadError),
 }
 
@@ -105,6 +165,7 @@ impl FilesystemCheckError {
 			Self::ResourceLimit => ErrorCategory::ResourceLimit,
 			Self::Unavailable => ErrorCategory::BackendUnavailable,
 			Self::Cancelled => ErrorCategory::Cancelled,
+			Self::Selection | Self::SelectionRequired { .. } => ErrorCategory::Conflict,
 			Self::Read(error) => error.category(),
 		}
 	}
@@ -123,10 +184,25 @@ impl From<FilesystemReadError> for FilesystemCheckError {
 pub enum FilesystemScope {
 	/// Admitted reachable metadata was checked. Global consistency is unknown.
 	ReachableStructure,
+	/// Reachable structure and logical payload reads completed.
+	ReachableData,
 	/// Volume structure was checked. File payloads and other full checks may be absent.
 	VolumeStructure,
 	/// All required filesystem checks passed within the reported scope.
 	FullVolume,
+}
+
+impl FilesystemScope {
+	/// Stable spelling for text and JSON reports.
+	#[must_use]
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::ReachableStructure => "reachable_structure",
+			Self::ReachableData => "reachable_data",
+			Self::VolumeStructure => "volume_structure",
+			Self::FullVolume => "full_volume",
+		}
+	}
 }
 
 /// Engine-native object identifier scoped to the selected filesystem view.
@@ -139,6 +215,42 @@ impl Serialize for FilesystemObjectId {
 	}
 }
 
+/// Transaction identifier of the checked native filesystem checkpoint.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FilesystemCheckpointId(pub u64);
+
+impl Serialize for FilesystemCheckpointId {
+	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		crate::schema::decimal(&self.0, serializer)
+	}
+}
+
+/// Native filesystem volume UUID in standard UUID byte order.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FilesystemUuid(pub [u8; 16]);
+
+impl fmt::Display for FilesystemUuid {
+	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+		crate::schema::uuid(&self.0, formatter)
+	}
+}
+
+impl Serialize for FilesystemUuid {
+	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		serializer.collect_str(self)
+	}
+}
+
+/// Bounded summary of warnings from native checkpoint selection.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[non_exhaustive]
+pub struct FilesystemCheckpointDiagnostics {
+	pub rejected_descriptors: usize,
+	/// A newer XID advertised by the bootstrap than the selected checkpoint.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub advertised_xid: Option<FilesystemCheckpointId>,
+}
+
 /// Successful checking evidence for a data window or one engine-native volume.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[non_exhaustive]
@@ -147,6 +259,18 @@ pub struct FilesystemEvidence {
 	/// An ID narrows assurance to one native volume inside the data window.
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub volume_object_id: Option<FilesystemObjectId>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub checkpoint_xid: Option<FilesystemCheckpointId>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub volume_uuid: Option<FilesystemUuid>,
+	/// Logical payload bytes inspected by the checker, including sparse zero bytes.
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		serialize_with = "crate::schema::optional_decimal"
+	)]
+	pub logical_payload_bytes_read: Option<u64>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub checkpoint_diagnostics: Option<FilesystemCheckpointDiagnostics>,
 }
 
 impl FilesystemEvidence {
@@ -156,6 +280,10 @@ impl FilesystemEvidence {
 		Self {
 			scope,
 			volume_object_id: None,
+			checkpoint_xid: None,
+			volume_uuid: None,
+			logical_payload_bytes_read: None,
+			checkpoint_diagnostics: None,
 		}
 	}
 
@@ -163,9 +291,46 @@ impl FilesystemEvidence {
 	#[must_use]
 	pub const fn volume(scope: FilesystemScope, id: FilesystemObjectId) -> Self {
 		Self {
+			volume_object_id: Some(id),
+			..Self::window(scope)
+		}
+	}
+
+	/// Covers one native volume and its selected checkpoint.
+	#[must_use]
+	pub const fn checkpoint(
+		scope: FilesystemScope,
+		id: FilesystemObjectId,
+		checkpoint_xid: FilesystemCheckpointId,
+		volume_uuid: FilesystemUuid,
+		logical_payload_bytes_read: Option<u64>,
+	) -> Self {
+		Self {
 			scope,
 			volume_object_id: Some(id),
+			checkpoint_xid: Some(checkpoint_xid),
+			volume_uuid: Some(volume_uuid),
+			logical_payload_bytes_read,
+			checkpoint_diagnostics: None,
 		}
+	}
+
+	/// Records checkpoint scan warnings when the scan emitted any.
+	#[must_use]
+	pub const fn with_checkpoint_diagnostics(
+		mut self,
+		rejected_descriptors: usize,
+		advertised_xid: Option<FilesystemCheckpointId>,
+	) -> Self {
+		self.checkpoint_diagnostics = if rejected_descriptors == 0 && advertised_xid.is_none() {
+			None
+		} else {
+			Some(FilesystemCheckpointDiagnostics {
+				rejected_descriptors,
+				advertised_xid,
+			})
+		};
+		self
 	}
 }
 
@@ -213,6 +378,7 @@ pub struct FilesystemCheckReport {
 	/// The entire image's filesystem layer passed when this field is true.
 	pub all_filesystems_checked: bool,
 	/// Reads admitted under the budget, including any failed source read.
+	/// Includes any reads used to recognize a partitionless filesystem.
 	#[serde(serialize_with = "crate::schema::decimal")]
 	pub charged_read_requests: u64,
 	#[serde(serialize_with = "crate::schema::decimal")]
@@ -225,7 +391,12 @@ pub(crate) struct Failure {
 }
 
 impl Failure {
-	fn category(category: ErrorCategory) -> Self {
+	pub(crate) fn at(mut self, stage: Stage) -> Self {
+		self.diagnostic.stage = stage;
+		self
+	}
+
+	pub(super) fn category(category: ErrorCategory) -> Self {
 		Self {
 			diagnostic: Diagnostic {
 				stage: Stage::Filesystem,
@@ -236,7 +407,18 @@ impl Failure {
 		}
 	}
 
-	fn disk(error: DiskError) -> Self {
+	fn checker(error: FilesystemCheckError) -> Self {
+		let mut failure = Self::category(error.category());
+		if let FilesystemCheckError::SelectionRequired { candidates } = error {
+			failure.diagnostic.detail =
+				Some(DiagnosticDetail::FilesystemVolumeSelection { candidates });
+		}
+		failure
+	}
+}
+
+impl From<DiskError> for Failure {
+	fn from(error: DiskError) -> Self {
 		let mut diagnostic = discovery_error(&error);
 		diagnostic.stage = Stage::Filesystem;
 		let cause = match error {
@@ -252,17 +434,17 @@ pub(crate) struct Attempt {
 	pub failure: Option<Failure>,
 }
 
-pub(crate) fn verify_window<S: ReadAt>(
-	image: &mut Image<S>,
-	options: FilesystemOptions,
+pub(crate) fn verify_window<S: LogicalDisk>(
+	disk: &mut Disk<S>,
+	requested: Option<VolumeId>,
+	mut budget: ReadBudget,
 	checker: impl FnOnce(&mut dyn FilesystemSource) -> Result<FilesystemEvidence, FilesystemCheckError>,
 ) -> Result<Attempt, Failure> {
-	let mut disk = Disk::discover(image, options.disk_limits).map_err(Failure::disk)?;
-	let selected = disk.select_volume(options.volume).map_err(Failure::disk)?;
+	let selected = disk.select_volume(requested)?;
 	let sole_window = disk.select_volume(None).is_ok_and(|only| only == selected);
 	let id = SelectedWindowId::from_volume(selected)
 		.ok_or_else(|| Failure::category(ErrorCategory::UnsupportedVariant))?;
-	let window = disk.data_window(selected).map_err(Failure::disk)?;
+	let window = disk.data_window(selected)?;
 	let selected = SelectedWindow {
 		id,
 		logical: ByteRange {
@@ -270,27 +452,13 @@ pub(crate) fn verify_window<S: ReadAt>(
 			length_bytes: window.len(),
 		},
 	};
-	let mut source = BudgetedSource {
-		window,
-		limits: options,
-		charged_requests: 0,
-		charged_bytes: 0,
-		failure: None,
-	};
-	let checked = checker(&mut source);
-	let result = match source.failure.take() {
-		Some((_, failure)) => Err(failure),
-		None => checked
-			.map_err(|error| Failure::category(error.category()))
-			.and_then(|evidence| {
-				// Account this independent identity check outside the engine's budget.
-				let end = source.window.len();
-				source
-					.window
-					.read_exact_at(end, &mut [])
-					.map_err(Failure::disk)?;
-				Ok(evidence)
-			}),
+	let result = {
+		let mut source = budget.source(window);
+		let checked = checker(&mut source);
+		source.finish(checked).and_then(|evidence| {
+			source.revalidate()?;
+			Ok(evidence)
+		})
 	};
 	let (evidence, failure) = match result {
 		Ok(evidence) => (Some(evidence), None),
@@ -305,79 +473,9 @@ pub(crate) fn verify_window<S: ReadAt>(
 			window: selected,
 			evidence,
 			all_filesystems_checked,
-			charged_read_requests: source.charged_requests,
-			charged_read_bytes: source.charged_bytes,
+			charged_read_requests: budget.charged_requests,
+			charged_read_bytes: budget.charged_bytes,
 		},
 		failure,
 	})
-}
-
-struct BudgetedSource<'source, S> {
-	window: Window<'source, S>,
-	limits: FilesystemOptions,
-	charged_requests: u64,
-	charged_bytes: u64,
-	failure: Option<(FilesystemReadError, Failure)>,
-}
-
-impl<S: LogicalDisk> FilesystemSource for BudgetedSource<'_, S> {
-	fn len(&self) -> u64 {
-		self.window.len()
-	}
-
-	fn read_exact_at(&mut self, offset: u64, output: &mut [u8]) -> Result<(), FilesystemReadError> {
-		if let Some((error, _)) = &self.failure {
-			return Err(*error);
-		}
-		let length = output.len() as u64;
-		let Some(bytes) = self
-			.charged_bytes
-			.checked_add(length)
-			.filter(|&bytes| bytes <= self.limits.max_read_bytes)
-		else {
-			return self.reject(
-				FilesystemReadError::Budget,
-				Failure::category(ErrorCategory::ResourceLimit),
-			);
-		};
-		if self.charged_requests == self.limits.max_read_requests {
-			return self.reject(
-				FilesystemReadError::Budget,
-				Failure::category(ErrorCategory::ResourceLimit),
-			);
-		}
-		self.charged_bytes = bytes;
-		self.charged_requests += 1;
-		self.window.read_exact_at(offset, output).or_else(|error| {
-			if let DiskError::OutOfRange {
-				offset,
-				len,
-				available,
-			} = error
-			{
-				let mut failure = Failure::category(ErrorCategory::Corrupt);
-				failure.diagnostic.detail = Some(DiagnosticDetail::FilesystemWindowRange {
-					requested: ByteRange {
-						offset_bytes: offset,
-						length_bytes: len,
-					},
-					available_bytes: available,
-				});
-				self.reject(FilesystemReadError::OutOfRange, failure)
-			} else {
-				self.reject(FilesystemReadError::Source, Failure::disk(error))
-			}
-		})
-	}
-}
-
-impl<S> BudgetedSource<'_, S> {
-	fn reject(
-		&mut self,
-		error: FilesystemReadError,
-		failure: Failure,
-	) -> Result<(), FilesystemReadError> {
-		self.failure = Some((error, failure));
-		Err(error)
-	}
 }

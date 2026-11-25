@@ -14,6 +14,9 @@ use dmgez_udif::{
 };
 use dmgez_vfs::{PartitionId, Scheme, VolumeId};
 
+#[path = "filesystem_verification/probe.rs"]
+mod probe;
+
 const SECTOR: usize = SECTOR_BYTES as usize;
 const LOGICAL_SECTORS: usize = 10;
 const PARTITION_SECTORS: u32 = 2;
@@ -49,12 +52,16 @@ fn fixture(include_second: bool) -> Vec<u8> {
 		let start = start as usize * SECTOR;
 		raw[start..start + PARTITION_SECTORS as usize * SECTOR].fill(payload);
 	}
+	wrap(&raw)
+}
+
+fn wrap(raw: &[u8]) -> Vec<u8> {
 	let mut image = Vec::new();
 	let options = WriteOptions {
 		profile: Profile::Udro,
 		..WriteOptions::default()
 	};
-	write_image(raw.as_slice(), raw.len() as u64, &mut image, &options).unwrap();
+	write_image(raw, raw.len() as u64, &mut image, &options).unwrap();
 	image
 }
 
@@ -255,28 +262,32 @@ fn budget_and_range_errors_remain_authoritative_when_checker_ignores_them() {
 	assert_eq!(byte_limit.filesystem_check.unwrap().charged_read_bytes, 0);
 }
 
+struct MutableSource<'data> {
+	image: &'data [u8],
+	changed: &'data Cell<bool>,
+}
+
+impl ReadAt for MutableSource<'_> {
+	fn len(&self) -> u64 {
+		self.image.len() as u64
+	}
+
+	fn check_unchanged(&self) -> Result<(), Error> {
+		if self.changed.get() {
+			Err(Error::SourceChanged)
+		} else {
+			Ok(())
+		}
+	}
+
+	fn read_exact_at(&self, offset: u64, output: &mut [u8]) -> Result<(), Error> {
+		self.check_unchanged()?;
+		self.image.read_exact_at(offset, output)
+	}
+}
+
 #[test]
 fn source_change_during_read_or_after_checker_success_prevents_a_pass() {
-	struct MutableSource<'data> {
-		image: &'data [u8],
-		changed: &'data Cell<bool>,
-	}
-	impl ReadAt for MutableSource<'_> {
-		fn len(&self) -> u64 {
-			self.image.len() as u64
-		}
-		fn check_unchanged(&self) -> Result<(), Error> {
-			if self.changed.get() {
-				Err(Error::SourceChanged)
-			} else {
-				Ok(())
-			}
-		}
-		fn read_exact_at(&self, offset: u64, output: &mut [u8]) -> Result<(), Error> {
-			self.check_unchanged()?;
-			self.image.read_exact_at(offset, output)
-		}
-	}
 	let image = fixture(false);
 	for read_after_change in [false, true] {
 		let changed = Cell::new(false);

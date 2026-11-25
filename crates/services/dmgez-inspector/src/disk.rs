@@ -11,8 +11,6 @@ use crate::{
 
 pub use dmgez_vfs::Limits as DiskLimits;
 
-const UUID_GROUP_STARTS: [usize; 4] = [4, 6, 8, 10];
-
 /// Scheme identifier for the discovered logical disk map.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[non_exhaustive]
@@ -86,13 +84,7 @@ pub struct PartitionGuid(pub [u8; 16]);
 
 impl fmt::Display for PartitionGuid {
 	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-		for (index, byte) in self.0.into_iter().enumerate() {
-			if UUID_GROUP_STARTS.contains(&index) {
-				formatter.write_str("-")?;
-			}
-			write!(formatter, "{byte:02x}")?;
-		}
-		Ok(())
+		crate::schema::uuid(&self.0, formatter)
 	}
 }
 

@@ -100,6 +100,10 @@ pub enum DiagnosticDetail {
 	VolumeSelection {
 		candidates: usize,
 	},
+	/// Multiple native volumes exist inside the selected data window.
+	FilesystemVolumeSelection {
+		candidates: usize,
+	},
 }
 
 /// First condition preventing the requested operation from continuing.

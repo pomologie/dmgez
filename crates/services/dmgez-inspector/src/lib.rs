@@ -23,12 +23,13 @@ pub use disk::{
 	PartitionReport, PartitionRole, RecognizedFilesystem, inspect_disk,
 };
 pub use filesystem::{
-	FilesystemCheckError, FilesystemCheckReport, FilesystemEvidence, FilesystemObjectId,
-	FilesystemOptions, FilesystemReadError, FilesystemScope, FilesystemSource, SelectedWindow,
-	SelectedWindowId,
+	FilesystemCheckError, FilesystemCheckReport, FilesystemCheckpointDiagnostics,
+	FilesystemCheckpointId, FilesystemEvidence, FilesystemObjectId, FilesystemOptions,
+	FilesystemProbe, FilesystemReadError, FilesystemScope, FilesystemSource, FilesystemUuid,
+	SelectedWindow, SelectedWindowId,
 };
 pub use schema::{Capabilities, CheckStatus, Coverage, ReportOperation, SCHEMA_VERSION};
 pub use verification::{
 	ChecksumChecks, VerificationMode, VerificationOutcome, VerificationReport, verify,
-	verify_filesystem,
+	verify_filesystem, verify_filesystem_with_probe, verify_raw_filesystem,
 };

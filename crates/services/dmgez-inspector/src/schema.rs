@@ -1,4 +1,8 @@
+use std::fmt;
+
 use serde::{Serialize, Serializer};
+
+const UUID_GROUP_STARTS: [usize; 4] = [4, 6, 8, 10];
 
 /// Version of the serialized report shapes.
 pub const SCHEMA_VERSION: u32 = 1;
@@ -89,4 +93,24 @@ impl Default for Coverage {
 
 pub(super) fn decimal<S: Serializer>(value: &u64, serializer: S) -> Result<S::Ok, S::Error> {
 	serializer.collect_str(value)
+}
+
+pub(super) fn optional_decimal<S: Serializer>(
+	value: &Option<u64>,
+	serializer: S,
+) -> Result<S::Ok, S::Error> {
+	match value {
+		Some(value) => decimal(value, serializer),
+		None => serializer.serialize_none(),
+	}
+}
+
+pub(super) fn uuid(bytes: &[u8; 16], formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+	for (index, byte) in bytes.iter().enumerate() {
+		if UUID_GROUP_STARTS.contains(&index) {
+			formatter.write_str("-")?;
+		}
+		write!(formatter, "{byte:02x}")?;
+	}
+	Ok(())
 }
