@@ -132,15 +132,38 @@ impl ProjectTab {
 		self.saved = revision;
 	}
 
-	fn apply(&mut self, edit: ProjectEdit) {
-		let result = self.document.apply(&[edit]);
-		self.refresh_after_edit(result);
+	pub(crate) fn folder(&self) -> &VirtualPath {
+		&self.folder
 	}
 
-	fn refresh_after_edit(&mut self, result: Result<bool, ProjectEditError>) {
-		match result {
+	pub(crate) fn apply_edits(&mut self, edits: &[ProjectEdit]) {
+		self.update(|document| document.apply(edits));
+	}
+
+	fn apply(&mut self, edit: ProjectEdit) {
+		self.apply_edits(&[edit]);
+	}
+
+	fn update(
+		&mut self,
+		edit: impl FnOnce(&mut ProjectDocument) -> Result<bool, ProjectEditError>,
+	) {
+		let content_count = self.document.project().contents.len();
+		match edit(&mut self.document) {
 			Ok(true) => {
-				self.image_name = self.document.project().image.name.as_str().to_owned();
+				let project = self.document.project();
+				if project.contents.len() != content_count {
+					self.index = Index::build(project);
+					self.selected = self.selected.take().filter(|path| {
+						self.index.as_ref().is_ok_and(|index| {
+							index
+								.children(&self.folder)
+								.iter()
+								.any(|node| node.path == *path)
+						})
+					});
+				}
+				self.image_name = project.image.name.as_str().to_owned();
 				self.position_draft = None;
 				self.error = None;
 			}
@@ -150,13 +173,11 @@ impl ProjectTab {
 	}
 
 	pub(crate) fn undo(&mut self) {
-		let result = self.document.undo();
-		self.refresh_after_edit(result);
+		self.update(ProjectDocument::undo);
 	}
 
 	pub(crate) fn redo(&mut self) {
-		let result = self.document.redo();
-		self.refresh_after_edit(result);
+		self.update(ProjectDocument::redo);
 	}
 
 	fn navigate(&mut self, folder: VirtualPath) {
@@ -428,5 +449,16 @@ mod tests {
 		tab.mark_saved(revision);
 		assert!(!tab.is_dirty());
 		assert_eq!(tab.layout().unwrap().items()[0].center.y(), 65.0);
+
+		let added = ProjectEdit::Add(dmgez_config::project_edit::ContentDraft::Copy {
+			source: "second.txt".to_owned(),
+			destination: Some("/Docs/second.txt".parse().unwrap()),
+		});
+		tab.apply_edits(&[added]);
+		assert_eq!(tab.layout().unwrap().items().len(), 2);
+		tab.undo();
+		assert_eq!(tab.layout().unwrap().items().len(), 1);
+		tab.redo();
+		assert_eq!(tab.layout().unwrap().items().len(), 2);
 	}
 }

@@ -4,12 +4,16 @@ use std::{
 	thread,
 };
 
-use dmgez_config::project_edit::RevisionId;
+use dmgez_config::project_edit::{ProjectEdit, RevisionId};
 use eframe::egui::{
 	self, Color32, Context, Id, Key, Modifiers, Panel, RichText, TextEdit, Ui, ViewportCommand,
 };
 
 use crate::document::{self, Document, IMAGE_EXTENSION, Opened, PROJECT_EXTENSION};
+use crate::import;
+
+#[cfg(test)]
+mod import_tests;
 
 const WORKER_NAME: &str = "dmgez document";
 const PROJECT_COPY: &str = "project-copy.toml";
@@ -37,7 +41,14 @@ enum Pending {
 
 enum Completion {
 	Opened(Opened),
-	Saved { path: PathBuf, revision: RevisionId },
+	Saved {
+		path: PathBuf,
+		revision: RevisionId,
+	},
+	Added {
+		revision: RevisionId,
+		edits: Result<Vec<ProjectEdit>, import::Error>,
+	},
 	Cancelled,
 	Failed(document::Error),
 }
@@ -114,6 +125,19 @@ impl App {
 					*current = path;
 				}
 			}
+			Completion::Added { revision, edits } => {
+				if let Some(Opened {
+					document: Document::Project(project),
+					..
+				}) = &mut self.opened
+					&& project.document.revision() == revision
+				{
+					match edits {
+						Ok(edits) => project.apply_edits(&edits),
+						Err(error) => self.error = Some(error.to_string()),
+					}
+				}
+			}
 		}
 	}
 
@@ -127,6 +151,32 @@ impl App {
 				.pick_file();
 			selection.map_or(Completion::Cancelled, open_outcome)
 		});
+	}
+
+	fn add_files(
+		&mut self,
+		ctx: &Context,
+		pick: impl FnOnce(&Path) -> Option<Vec<PathBuf>> + Send + 'static,
+	) {
+		if let Some(Opened {
+			path,
+			document: Document::Project(project),
+		}) = &self.opened
+			&& let Some(directory) = path.parent()
+		{
+			let directory = directory.to_path_buf();
+			let folder = project.folder().clone();
+			let revision = project.document.revision();
+			self.start(ctx, move || {
+				let Some(paths) = pick(&directory).filter(|paths| !paths.is_empty()) else {
+					return Completion::Cancelled;
+				};
+				Completion::Added {
+					revision,
+					edits: import::prepare(&directory, &folder, paths),
+				}
+			});
+		}
 	}
 
 	fn ask_open(&mut self, ctx: &Context) {
@@ -180,6 +230,9 @@ impl App {
 							..
 						})
 					) {
+						if ui.button("Add files…").clicked() {
+							self.add_files(ui.ctx(), import::pick_files);
+						}
 						if ui.button("Save copy…").clicked() {
 							self.open_save_dialog();
 						}

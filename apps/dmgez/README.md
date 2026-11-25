@@ -4,6 +4,8 @@ Launch the desktop app with `cargo run -p dmgez-gui` or pass a local TOML projec
 
 The design workspace lays out project declarations and their implied folders. It uses the shared preview geometry for zoom, clipping, icon selection, and snapping. Volume-label, visibility, and position edits use the typed project document and preserve comments. Save copy creates a new TOML file beside the source project, keeping its relative paths valid.
 
+Use **Add files…** to add up to 256 selected files to the current folder layout. Files below the project directory keep project-relative source paths. Files outside it use absolute source paths. A successful selection is one undoable edit.
+
 The image workspace shows the inspector's observed UDIF metadata, partition discovery and first run page. Verification statuses come directly from the report. Mounted images, filesystem browsing, native Finder visualization, and build actions remain separate milestones.
 
 The desktop tests cover bounded project input, native GPT fixture inspection, copy publication and no-clobber behavior, cancelled or failed opens, and grouped position edits with undo and redo.

@@ -1,6 +1,7 @@
 mod app;
 mod canvas;
 mod document;
+mod import;
 mod inspector;
 mod project;
 
