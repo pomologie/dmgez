@@ -5,9 +5,17 @@ use std::{
 
 const BINARY: &str = env!("CARGO_BIN_EXE_dmgez");
 
+#[cfg(feature = "apfs-read")]
+#[path = "volume_cli/apfs.rs"]
+mod apfs;
+
 #[cfg(all(feature = "build", feature = "hfsplus-read"))]
 #[path = "volume_cli/lazy.rs"]
 mod lazy;
+
+#[cfg(not(all(feature = "hfsplus-read", feature = "apfs-read")))]
+#[path = "volume_cli/unavailable.rs"]
+mod unavailable;
 
 fn invoke(command: &str, image: &Path, options: &[&str]) -> Output {
 	Command::new(BINARY)
@@ -16,24 +24,6 @@ fn invoke(command: &str, image: &Path, options: &[&str]) -> Output {
 		.args(options)
 		.output()
 		.unwrap()
-}
-
-#[cfg(not(feature = "hfsplus-read"))]
-#[test]
-fn volume_commands_report_the_disabled_backend_before_opening_an_image() {
-	let directory = tempfile::tempdir().unwrap();
-	let absent = directory.path().join("absent.dmg");
-	for command in ["ls", "tree", "stat", "cat"] {
-		let output = invoke(command, &absent, &["/"]);
-		assert!(!output.status.success(), "{command}");
-		assert!(output.stdout.is_empty(), "{command}");
-		assert!(
-			String::from_utf8_lossy(&output.stderr).contains("feature not compiled: hfsplus-read"),
-			"{command}: {}",
-			String::from_utf8_lossy(&output.stderr),
-		);
-	}
-	assert_eq!(std::fs::read_dir(directory.path()).unwrap().count(), 0);
 }
 
 #[cfg(feature = "hfsplus-read")]

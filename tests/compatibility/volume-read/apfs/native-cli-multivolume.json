@@ -1,0 +1,64 @@
+{
+  "dmgez_revision": "0d259184ee151f7711b2b373e83b6d54386601ea",
+  "apfs_revision": "a8a0348cde041c875d20981c65a96a47fc38df78",
+  "macos_version": "14.7.2",
+  "macos_build": "23H311",
+  "architecture": "arm64",
+  "raw_sha256": "fa39b3ff22c137ffd33faf6aee904e4fc19a59716fecbfbb295ec9a40d179a4d",
+  "udzo_sha256": "faf40a84da7441d50d30609f7ad4807e259375e4183f6fe51047f47e846e1f40",
+  "native_check": [
+    "** Checking the container superblock.",
+    "   Checking the checkpoint with transaction ID 3.",
+    "** Checking the space manager.",
+    "** Checking the space manager free queue trees.",
+    "** Checking the object map.",
+    "** Checking volume <temporary directory>/source.raw.cdrs1.",
+    "** Checking the APFS volume superblock.",
+    "   The volume Pomologie APFS Primary was formatted by newfs_apfs (2236.141.1) and last modified by .",
+    "** Checking the object map.",
+    "** Checking the snapshot metadata tree.",
+    "** Checking the snapshot metadata.",
+    "** Checking the fsroot tree.",
+    "** Checking the extent ref tree.",
+    "** Verifying volume object map space.",
+    "** The volume <temporary directory>/source.raw.cdrs1 with UUID 81FFCCA8-BEA7-49E9-B519-EA74A3AD142C appears to be OK.",
+    "** Checking volume <temporary directory>/source.raw.cdrs2.",
+    "** Checking the APFS volume superblock.",
+    "   The volume Pomologie APFS Secondary was formatted by storagekitd (2236.141.1) and last modified by .",
+    "** Checking the object map.",
+    "** Checking the snapshot metadata tree.",
+    "** Checking the snapshot metadata.",
+    "** Checking the fsroot tree.",
+    "** Checking the extent ref tree.",
+    "** Verifying volume object map space.",
+    "** The volume <temporary directory>/source.raw.cdrs2 with UUID 3B5FB117-6EF5-4C08-A81F-25B01E9D5E49 appears to be OK.",
+    "** Verifying allocated space.",
+    "** The container <temporary directory>/source.raw.cdr appears to be OK."
+  ],
+  "native_check_stderr": [
+    "warning: <temporary directory>/source.raw.cdr: not a valid disk name/path"
+  ],
+  "volume_discovery": {
+    "schema_version": 1,
+    "operation": "volumes",
+    "volume": {
+      "kind": "whole_disk"
+    },
+    "checkpoint_xid": "3",
+    "volumes": [
+      {
+        "uuid": "81ffcca8-bea7-49e9-b519-ea74a3ad142c",
+        "object_id": "1026",
+        "name": "Pomologie APFS Primary",
+        "role": "unspecified"
+      },
+      {
+        "uuid": "3b5fb117-6ef5-4c08-a81f-25b01e9d5e49",
+        "object_id": "1030",
+        "name": "Pomologie APFS Secondary",
+        "role": "unspecified"
+      }
+    ],
+    "checkpoint_diagnostics": []
+  }
+}
