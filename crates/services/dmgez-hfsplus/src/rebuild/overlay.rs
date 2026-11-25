@@ -44,6 +44,8 @@ pub enum OverlayError {
 	FinderPosition { index: usize },
 	#[error("image edit {index} would copy host content without a qualified metadata capture")]
 	HostCopy { index: usize },
+	#[error("the captured host copies do not belong to this edit batch")]
+	UnexpectedHostCopies,
 	#[error("image edit {index} uses an operation unsupported for existing images")]
 	UnsupportedEdit { index: usize },
 	#[error("image edit {index} supplies an empty, NUL-containing, or oversized symlink target")]
@@ -106,7 +108,18 @@ pub(super) fn apply<S: ReadAt>(
 	edits: &[ProjectEdit],
 	_changes_dir: &Path,
 ) -> Result<(), OverlayError> {
-	if edits.is_empty()
+	apply_with_copies(snapshot, edits, Vec::new())
+}
+
+/// The caller supplies only entries captured for the copy edits in this batch.
+/// All destinations are validated before the snapshot is modified.
+pub(super) fn apply_with_copies<'volume, S: ReadAt>(
+	snapshot: &mut Snapshot<'volume, S>,
+	edits: &[ProjectEdit],
+	copies: Vec<(VirtualPath, Node<'volume, S>)>,
+) -> Result<(), OverlayError> {
+	if copies.is_empty()
+		&& edits.is_empty()
 		&& !snapshot
 			.entries
 			.values()
@@ -114,7 +127,7 @@ pub(super) fn apply<S: ReadAt>(
 	{
 		return Ok(());
 	}
-	let mut plan = plan(&snapshot.entries, edits)?;
+	let mut plan = plan(&snapshot.entries, edits, copies)?;
 	let mut entries = BTreeMap::new();
 	for ((original, mut entry), route) in std::mem::take(&mut snapshot.entries)
 		.into_iter()
@@ -147,9 +160,24 @@ struct Plan<'edit, 'v, S> {
 fn plan<'edit, 'v, S>(
 	entries: &BTreeMap<VirtualPath, Node<'v, S>>,
 	edits: &'edit [ProjectEdit],
+	mut additions: Vec<(VirtualPath, Node<'v, S>)>,
 ) -> Result<Plan<'edit, 'v, S>, OverlayError> {
-	let mut additions = Vec::new();
+	let captured_count = additions.len();
+	if captured_count > MAX_ENTRIES {
+		return Err(OverlayError::Budget);
+	}
 	let mut added_path_bytes = 0;
+	for (path, node) in &additions {
+		if path.is_root() {
+			return Err(OverlayError::PathProfile { path: path.clone() });
+		}
+		if matches!(node.kind, Kind::FinderStore { .. }) {
+			return Err(OverlayError::FinderStore { path: path.clone() });
+		}
+		check_path_bounds(path)?;
+		charge(&mut added_path_bytes, path.as_str().len())?;
+	}
+	let mut copy_edits = 0;
 	let mut changes = BTreeMap::new();
 	let mut positions = BTreeMap::new();
 	let mut label = None;
@@ -160,6 +188,12 @@ fn plan<'edit, 'v, S>(
 	{
 		for (edit_index, edit) in edits.iter().enumerate() {
 			match edit {
+				ProjectEdit::Add(ContentDraft::Copy { .. }) => {
+					if copy_edits == captured_count {
+						return Err(OverlayError::HostCopy { index: edit_index });
+					}
+					copy_edits += 1;
+				}
 				ProjectEdit::Add(draft) => {
 					if additions.len() == MAX_ENTRIES {
 						return Err(OverlayError::Budget);
@@ -210,6 +244,9 @@ fn plan<'edit, 'v, S>(
 				_ => return Err(OverlayError::UnsupportedEdit { index: edit_index }),
 			}
 		}
+	}
+	if copy_edits == 0 && captured_count != 0 {
+		return Err(OverlayError::UnexpectedHostCopies);
 	}
 	let routes = route_entries(entries, &changes, added_path_bytes)?;
 	let layout = {
@@ -274,7 +311,6 @@ fn add<'v, S>(
 			}
 			(destination, SYMLINK_MODE, Kind::Symlink(bytes.to_vec()))
 		}
-		ContentDraft::Copy { .. } => return Err(OverlayError::HostCopy { index }),
 		_ => return Err(OverlayError::UnsupportedEdit { index }),
 	};
 	check_destination(index, destination)?;

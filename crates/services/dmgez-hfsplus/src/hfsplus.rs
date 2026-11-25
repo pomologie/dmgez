@@ -33,6 +33,13 @@ mod source;
 use metadata::{Capture, DEFAULT_FOLDER_MODE, MISSING_HFS_DATE, epoch_seconds, generated_metadata};
 use source::Payload;
 
+#[cfg(feature = "image-edit")]
+pub use metadata::HostCopyMetadataLoss;
+#[cfg(feature = "image-edit")]
+pub(crate) use metadata::{HostCapture, HostEntry, HostKind, capture_host_copies};
+#[cfg(feature = "image-edit")]
+pub(crate) use source::read_host_source;
+
 const ALLOCATION_BLOCK_BYTES: u32 = 4096;
 const IMAGE_PATH_SEPARATOR: char = '/';
 
@@ -343,11 +350,9 @@ fn seal<'build>(
 	let mut capture = Capture {
 		policy: &policy,
 		links: &links,
-		project,
-		prepared,
+		requests: &project.metadata,
 		supports_file_hard_links,
 		remaining: &mut remaining,
-		losses: &mut losses,
 	};
 	for entry in manifest.entries() {
 		check_cancelled(cancellation)?;
@@ -357,7 +362,15 @@ fn seal<'build>(
 			members.push(member);
 			continue;
 		}
-		let (catalog_entry, attrs) = capture.entry(entry, generated_seconds)?;
+		let captured = capture.entry(entry, generated_seconds, prepared)?;
+		let catalog_entry = captured.entry;
+		if !captured.losses.is_empty() {
+			losses.push(MetadataLoss {
+				path: &entry.destination,
+				aliases: Vec::new(),
+				details: captured.losses,
+			});
+		}
 		#[cfg(feature = "volume-icon")]
 		let catalog_entry = item_icons::apply(
 			prepared,
@@ -366,8 +379,8 @@ fn seal<'build>(
 			&mut entries,
 			generated_seconds,
 		)?;
-		if !attrs.is_empty() {
-			pending_attrs.push((catalog_entry.path, attrs));
+		if !captured.attributes.is_empty() {
+			pending_attrs.push((catalog_entry.path, captured.attributes));
 		}
 		entries.push(catalog_entry);
 	}
@@ -375,8 +388,10 @@ fn seal<'build>(
 		members,
 		&mut capture,
 		&mut pending_attrs,
+		&mut losses,
 		generated_seconds,
 		cancellation,
+		prepared,
 	)?;
 	#[cfg(feature = "finder-write")]
 	finder::reserve_assets(prepared, &mut entries, generated_seconds, cancellation)?;

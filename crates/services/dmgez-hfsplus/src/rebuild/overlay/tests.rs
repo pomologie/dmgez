@@ -74,6 +74,30 @@ fn add_directory(destination: &str) -> ProjectEdit {
 	})
 }
 
+fn copy(destination: &str) -> ProjectEdit {
+	ProjectEdit::Add(ContentDraft::Copy {
+		source: "host".into(),
+		destination: Some(path(destination)),
+	})
+}
+
+fn captured_file(destination: &str, bytes: &[u8]) -> (VirtualPath, Node<'static, &'static [u8]>) {
+	(
+		path(destination),
+		Node {
+			metadata: EntryMetadata::new(0o640),
+			kind: Kind::File {
+				file: Rc::new(File {
+					data: Payload::bytes(bytes.to_vec()),
+					resource: None,
+				}),
+				inode: None,
+			},
+			attributes: Default::default(),
+		},
+	)
+}
+
 fn position(target: &str, position: FieldChange<[f64; 2]>) -> ProjectEdit {
 	let mut changes = ContentChanges::default();
 	changes.position = position;
@@ -182,6 +206,85 @@ fn permits_replacement_after_removal_and_requires_directory_parents() {
 		),
 		Err(OverlayError::Parent { .. })
 	));
+}
+
+#[test]
+fn host_replacement_does_not_inherit_the_removed_items_finder_position() {
+	let mut image = snapshot();
+	let replaced = "/Right/Shortcut";
+	let payload = b"captured file bytes";
+	add_store(&mut image, "/Right/.DS_Store", 31, &[("Shortcut", 11, 17)]);
+	apply_with_copies(
+		&mut image,
+		&[copy(replaced), remove(replaced)],
+		vec![captured_file(replaced, payload)],
+	)
+	.unwrap();
+	let replacement = &image.entries[&path(replaced)];
+	let Kind::File { file, .. } = &replacement.kind else {
+		panic!("expected the captured replacement file");
+	};
+	let mut actual = [0; b"captured file bytes".len()];
+	file.data.read_exact_at(ByteOffset(0), &mut actual).unwrap();
+	assert_eq!(&actual, payload);
+	assert_eq!(replacement.metadata.mode, 0o640);
+	assert!(locations(&image, "/Right/.DS_Store").is_empty());
+}
+
+#[test]
+fn admitted_host_nodes_share_native_collision_and_parent_validation() {
+	let mut image = snapshot();
+	let edits = [
+		ProjectEdit::SetImageName("After".into()),
+		copy("/right/shortcut"),
+	];
+	assert!(matches!(
+		apply_with_copies(
+			&mut image,
+			&edits,
+			vec![captured_file("/right/shortcut", b"")]
+		),
+		Err(OverlayError::Collision { .. })
+	));
+	assert_eq!(image.name, "Original");
+	assert_eq!(target(&image, "/Right/Shortcut"), b"other");
+	let descendant = "/right/shortcut/Child";
+	assert!(matches!(
+		apply_with_copies(
+			&mut image,
+			&[copy(descendant)],
+			vec![captured_file(descendant, b"")]
+		),
+		Err(OverlayError::Parent { .. })
+	));
+	let reserved = "/Right/.ds_store";
+	assert!(matches!(
+		apply_with_copies(
+			&mut image,
+			&[copy(reserved)],
+			vec![captured_file(reserved, b"")]
+		),
+		Err(OverlayError::FinderStore { .. })
+	));
+	assert_eq!(image.entries.len(), 7);
+}
+
+#[test]
+fn captured_nodes_require_a_matching_copy_batch() {
+	let mut image = snapshot();
+	assert!(matches!(
+		apply_with_copies(&mut image, &[], vec![captured_file("/Admitted", b"")]),
+		Err(OverlayError::UnexpectedHostCopies)
+	));
+	assert!(matches!(
+		apply_with_copies(
+			&mut image,
+			&[copy("/Admitted"), copy("/Missing")],
+			vec![captured_file("/Admitted", b"")]
+		),
+		Err(OverlayError::HostCopy { index: 1 })
+	));
+	assert_eq!(image.entries.len(), 7);
 }
 
 #[test]

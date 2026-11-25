@@ -9,10 +9,18 @@ use dmgez_builder::{
 	metadata::{Attribute, policy, sidecar},
 	planning::PreparedBuild,
 };
-use dmgez_config::Project;
+use dmgez_config::Metadata;
 use hfsplus_builder::volume::{self, EntryKind, EntryMetadata, ForkSource, ManifestEntry};
 
-use super::{Error, MetadataLoss, Payload, charge, relative};
+use super::{Error, Payload, charge, relative};
+
+#[cfg(feature = "image-edit")]
+mod host;
+
+#[cfg(feature = "image-edit")]
+pub use host::HostCopyMetadataLoss;
+#[cfg(feature = "image-edit")]
+pub(crate) use host::{HostCapture, HostEntry, HostKind, capture_host_copies};
 
 const HFS_EPOCH_SECONDS: i64 = 2_082_844_800;
 const FIRST_HFS_UNIX_SECOND: i64 = 1 - HFS_EPOCH_SECONDS;
@@ -23,109 +31,126 @@ pub(super) const DEFAULT_FOLDER_MODE: u16 = 0o755;
 const DEFAULT_SYMLINK_MODE: u16 = 0o777;
 pub(super) const MISSING_HFS_DATE: u32 = 0;
 
-pub(super) struct Capture<'scope, 'config, 'build> {
+pub(super) struct Capture<'scope, 'config> {
 	pub(super) policy: &'scope policy::Policy<'config>,
 	pub(super) links: &'scope policy::HardLinks,
-	pub(super) project: &'config Project,
-	pub(super) prepared: &'build PreparedBuild,
+	pub(super) requests: &'config Metadata,
 	pub(super) supports_file_hard_links: bool,
 	pub(super) remaining: &'scope mut usize,
-	pub(super) losses: &'scope mut Vec<MetadataLoss<'build>>,
 }
 
-impl<'build> Capture<'_, '_, 'build> {
-	pub(super) fn entry(
+pub(super) struct CapturedEntry<'build> {
+	pub(super) entry: ManifestEntry<'build, Payload<'build>>,
+	pub(super) attributes: Vec<Attribute>,
+	pub(super) losses: Vec<policy::Loss>,
+}
+
+struct CapturedMetadata {
+	metadata: EntryMetadata,
+	resource: Option<Vec<u8>>,
+	attributes: Vec<Attribute>,
+	losses: Vec<policy::Loss>,
+}
+
+impl Capture<'_, '_> {
+	pub(super) fn entry<'build>(
 		&mut self,
 		entry: &'build manifest::Entry,
 		generated_seconds: u32,
-	) -> Result<(ManifestEntry<'build, Payload<'build>>, Vec<Attribute>), Error> {
+		prepared: &PreparedBuild,
+	) -> Result<CapturedEntry<'build>, Error> {
 		let path = relative(&entry.destination)?;
-		validate_finder_overrides(entry)?;
-		let unsupported_entry = || Error::UnsupportedEntry {
-			path: entry.destination.as_str().into(),
-		};
-		let mode = match &entry.kind {
-			manifest::EntryKind::Directory => DEFAULT_FOLDER_MODE,
-			manifest::EntryKind::File => DEFAULT_FILE_MODE,
-			manifest::EntryKind::Symlink(_) => DEFAULT_SYMLINK_MODE,
-			_ => return Err(unsupported_entry()),
-		};
-		let mut metadata = generated_metadata(mode, generated_seconds);
-		let mut fork = None;
-		let mut extended = Vec::new();
-		if let Some(source) = &entry.source {
-			let is_file = matches!(&entry.kind, manifest::EntryKind::File);
-			let attributes = self.capture_attributes(entry, source, is_file)?;
-			let attributes =
-				match self.prepared.metadata_sidecar_for(source) {
-					Some(snapshot) => sidecar::merge(attributes, snapshot, self.remaining)
-						.map_err(|cause| Error::Sidecar {
-							path: entry.destination.as_str().into(),
-							cause,
-						})?,
-					None => attributes,
-				};
-			let mut admitted = self
-				.policy
-				.admit(
-					source.metadata(),
-					attributes,
-					self.links.group_for(entry),
-					&metadata_capabilities(is_file, self.supports_file_hard_links),
-					self.remaining,
-				)
-				.map_err(|cause| Error::Policy {
-					path: entry.destination.as_str().into(),
-					cause,
-				})?;
-			if !admitted.losses.is_empty() {
-				self.losses.push(MetadataLoss {
-					path: &entry.destination,
-					aliases: Vec::new(),
-					details: admitted.losses,
-				});
-			}
-
-			metadata = entry_metadata(
-				mode,
-				admitted.metadata.permissions,
-				admitted.metadata.ownership,
-				admitted.metadata.finder_info,
-				&admitted.metadata,
-			)?;
-			fork = admitted
-				.metadata
-				.resource_fork
-				.take()
-				.map(|bytes| ForkSource::whole(Payload::Bytes(Cow::Owned(bytes))));
-			extended = admitted.metadata.extended_attributes;
-		}
-
+		let sidecar = entry
+			.source
+			.as_ref()
+			.and_then(|source| prepared.metadata_sidecar_for(source));
+		let captured = self.metadata(entry, generated_seconds, sidecar)?;
 		let kind = match &entry.kind {
 			manifest::EntryKind::Directory => EntryKind::Folder,
 			manifest::EntryKind::File => EntryKind::File {
 				data: ForkSource::whole(Payload::File(
-					entry.source.as_ref().ok_or_else(unsupported_entry)?,
+					entry.source.as_ref().ok_or_else(|| unsupported(entry))?,
 				)),
-				resource: fork,
+				resource: captured
+					.resource
+					.map(|bytes| ForkSource::whole(Payload::Bytes(Cow::Owned(bytes)))),
 			},
-			manifest::EntryKind::Symlink(target) => {
-				charge(self.remaining, target.len())?;
-				let mut copied = Vec::new();
-				copied.try_reserve_exact(target.len())?;
-				copied.extend_from_slice(target);
-				EntryKind::Symlink { target: copied }
-			}
-			_ => return Err(unsupported_entry()),
+			manifest::EntryKind::Symlink(target) => EntryKind::Symlink {
+				target: copy_symlink(target, self.remaining)?,
+			},
+			_ => return Err(unsupported(entry)),
 		};
-		Ok((
-			ManifestEntry {
+		Ok(CapturedEntry {
+			entry: ManifestEntry {
 				path,
-				metadata,
+				metadata: captured.metadata,
 				kind,
 			},
-			extended,
-		))
+			attributes: captured.attributes,
+			losses: captured.losses,
+		})
+	}
+
+	fn metadata(
+		&mut self,
+		entry: &manifest::Entry,
+		generated_seconds: u32,
+		sidecar: Option<&manifest::SourceSnapshot>,
+	) -> Result<CapturedMetadata, Error> {
+		validate_finder_overrides(entry)?;
+		let mode = match &entry.kind {
+			manifest::EntryKind::Directory => DEFAULT_FOLDER_MODE,
+			manifest::EntryKind::File => DEFAULT_FILE_MODE,
+			manifest::EntryKind::Symlink(_) => DEFAULT_SYMLINK_MODE,
+			_ => return Err(unsupported(entry)),
+		};
+		let Some(source) = &entry.source else {
+			return Ok(CapturedMetadata {
+				metadata: generated_metadata(mode, generated_seconds),
+				resource: None,
+				attributes: Vec::new(),
+				losses: Vec::new(),
+			});
+		};
+		let is_file = matches!(&entry.kind, manifest::EntryKind::File);
+		let attributes = self.capture_attributes(entry, source, is_file)?;
+		let attributes = match sidecar {
+			Some(snapshot) => {
+				sidecar::merge(attributes, snapshot, self.remaining).map_err(|cause| {
+					Error::Sidecar {
+						path: entry.destination.as_str().into(),
+						cause,
+					}
+				})?
+			}
+			None => attributes,
+		};
+		let admitted = self
+			.policy
+			.admit(
+				source.metadata(),
+				attributes,
+				self.links.group_for(entry),
+				&metadata_capabilities(is_file, self.supports_file_hard_links),
+				self.remaining,
+			)
+			.map_err(|cause| Error::Policy {
+				path: entry.destination.as_str().into(),
+				cause,
+			})?;
+		let metadata = entry_metadata(
+			mode,
+			admitted.metadata.permissions,
+			admitted.metadata.ownership,
+			admitted.metadata.finder_info,
+			&admitted.metadata,
+		)?;
+		Ok(CapturedMetadata {
+			metadata,
+			resource: admitted.metadata.resource_fork,
+			attributes: admitted.metadata.extended_attributes,
+			losses: admitted.losses,
+		})
 	}
 
 	fn capture_attributes(
@@ -134,7 +159,7 @@ impl<'build> Capture<'_, '_, 'build> {
 		source: &manifest::SourceSnapshot,
 		is_file: bool,
 	) -> Result<policy::AttributeCapture, Error> {
-		let requests = &self.project.metadata;
+		let requests = self.requests;
 		#[cfg(all(feature = "volume-icon", not(windows)))]
 		if is_file && entry.finder.custom_icon.is_some() {
 			validate_icon_source(entry, source)?;
@@ -170,6 +195,20 @@ impl<'build> Capture<'_, '_, 'build> {
 			charge(self.remaining, attributes.accounted_bytes)?;
 			Ok(policy::AttributeCapture::Known(attributes))
 		}
+	}
+}
+
+fn copy_symlink(target: &[u8], remaining: &mut usize) -> Result<Vec<u8>, Error> {
+	charge(remaining, target.len())?;
+	let mut copied = Vec::new();
+	copied.try_reserve_exact(target.len())?;
+	copied.extend_from_slice(target);
+	Ok(copied)
+}
+
+fn unsupported(entry: &manifest::Entry) -> Error {
+	Error::UnsupportedEntry {
+		path: entry.destination.as_str().into(),
 	}
 }
 

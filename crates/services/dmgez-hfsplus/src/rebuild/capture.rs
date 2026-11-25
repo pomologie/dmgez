@@ -25,7 +25,7 @@ use hfsplus_reader::{
 };
 use thiserror::Error;
 
-use super::{Attributes, File, Kind, Node, Payload, Snapshot};
+use super::{Attributes, File, Kind, LinkIdentity, Node, Payload, Snapshot};
 
 mod attributes;
 mod finder;
@@ -110,6 +110,7 @@ pub enum CaptureError<E: Error + 'static> {
 pub(super) fn capture<'volume, S: ReadAt>(
 	volume: &'volume Volume<S>,
 	catalog: &Catalog<'volume, S>,
+	mut remaining: usize,
 ) -> Result<Snapshot<'volume, S>, CaptureError<S::Error>>
 where
 	S::Error: Error + 'static,
@@ -134,7 +135,6 @@ where
 	if !volume.overflow_tree_is_empty(limits.allocation.overflow)? {
 		return Err(CaptureError::OverflowRecords);
 	}
-	let mut remaining = MAX_CAPTURE_BYTES;
 	let mut attributes = AttributeInventory::read(volume, &mut remaining)?;
 	let root = catalog.root()?;
 	let name = stored_name(&root)?;
@@ -320,7 +320,7 @@ where
 				metadata,
 				kind: Kind::File {
 					file: Rc::clone(&shared.file),
-					inode,
+					inode: inode.map(LinkIdentity::Image),
 				},
 				attributes: Rc::clone(&shared.attributes),
 			});
@@ -352,7 +352,10 @@ where
 		}
 		let kind = match layout {
 			Some(layout) => Kind::FinderStore { file, layout },
-			None => Kind::File { file, inode },
+			None => Kind::File {
+				file,
+				inode: inode.map(LinkIdentity::Image),
+			},
 		};
 		Ok(Node {
 			metadata,

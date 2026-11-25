@@ -3,11 +3,12 @@
 use std::{
 	collections::{BTreeMap, TryReserveError},
 	error::Error as StdError,
-	io::Read,
+	io::{self, Read},
 	path::Path,
 	rc::Rc,
 };
 
+use dmgez_builder::manifest::{SourceIdentity, SourceSnapshot};
 use dmgez_config::{VirtualPath, project_edit::ProjectEdit};
 use dmgez_finder::edit::EditableStore;
 use hfsplus_builder::{
@@ -17,16 +18,19 @@ use hfsplus_builder::{
 		ManifestEntry, VolumeError, VolumeOptions,
 	},
 };
-use hfsplus_core::{ByteLen, ByteOffset, ReadAt};
+use hfsplus_core::{ByteLen, ByteOffset, RangeError, ReadAt};
 use hfsplus_format::volume::CatalogId;
 use hfsplus_reader::{Volume, catalog::Catalog, overflow::ResolvedFork};
 use thiserror::Error;
 
 mod capture;
 mod overlay;
+mod prepared;
 
+pub use crate::hfsplus::HostCopyMetadataLoss;
 pub use capture::CaptureError;
 pub use overlay::OverlayError;
+pub use prepared::{PrepareError, PreparedEdit};
 
 const IMAGE_SEPARATOR: char = '/';
 const VOLUME_DATE_COUNT: usize = 4;
@@ -56,13 +60,19 @@ enum Kind<'volume, S> {
 	File {
 		file: Rc<File<'volume, S>>,
 		// Only effective regular-file hard links carry a shared inode key.
-		inode: Option<CatalogId>,
+		inode: Option<LinkIdentity>,
 	},
 	FinderStore {
 		file: Rc<File<'volume, S>>,
 		layout: EditableStore,
 	},
 	Symlink(Vec<u8>),
+}
+
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+enum LinkIdentity {
+	Image(CatalogId),
+	Host(SourceIdentity),
 }
 
 struct File<'volume, S> {
@@ -79,6 +89,8 @@ struct LinkedPaths<'path, 'volume, S> {
 enum Payload<'volume, S> {
 	Image(Rc<ResolvedFork<'volume, S>>),
 	Bytes(Rc<[u8]>),
+	HostFile(&'volume SourceSnapshot),
+	HostBytes(&'volume [u8]),
 }
 
 impl<'volume, S> Payload<'volume, S> {
@@ -96,28 +108,42 @@ impl<S> Clone for Payload<'_, S> {
 		match self {
 			Self::Image(fork) => Self::Image(Rc::clone(fork)),
 			Self::Bytes(bytes) => Self::Bytes(Rc::clone(bytes)),
+			Self::HostFile(source) => Self::HostFile(source),
+			Self::HostBytes(bytes) => Self::HostBytes(bytes),
 		}
 	}
 }
 
+#[derive(Debug, Error)]
+enum PayloadError<E> {
+	#[error(transparent)]
+	Image(#[from] hfsplus_reader::Error<E>),
+	#[error(transparent)]
+	Host(#[from] io::Error),
+	#[error(transparent)]
+	Range(#[from] RangeError),
+}
+
 impl<S: ReadAt> ReadAt for Payload<'_, S> {
-	type Error = hfsplus_reader::Error<S::Error>;
+	type Error = PayloadError<S::Error>;
 
 	fn len(&self) -> ByteLen {
 		match self {
 			Self::Image(fork) => fork.len(),
 			Self::Bytes(bytes) => ReadAt::len(bytes.as_ref()),
+			Self::HostFile(source) => ByteLen(source.metadata().size),
+			Self::HostBytes(bytes) => ReadAt::len(*bytes),
 		}
 	}
 
 	fn read_exact_at(&self, offset: ByteOffset, output: &mut [u8]) -> Result<(), Self::Error> {
 		match self {
-			Self::Image(fork) => fork.read_exact_at(offset, output),
-			Self::Bytes(bytes) => bytes
-				.as_ref()
-				.read_exact_at(offset, output)
-				.map_err(hfsplus_reader::Error::Bounds),
-		}
+			Self::Image(fork) => fork.read_exact_at(offset, output)?,
+			Self::Bytes(bytes) => bytes.as_ref().read_exact_at(offset, output)?,
+			Self::HostFile(source) => crate::hfsplus::read_host_source(source, offset, output)?,
+			Self::HostBytes(bytes) => bytes.read_exact_at(offset, output)?,
+		};
+		Ok(())
 	}
 }
 
@@ -182,11 +208,40 @@ pub fn seal<'volume, S: ReadAt>(
 where
 	S::Error: StdError + 'static,
 {
-	let mut snapshot = capture::capture(volume, catalog)?;
+	let mut snapshot = capture::capture(volume, catalog, capture::MAX_CAPTURE_BYTES)?;
 	overlay::apply(&mut snapshot, edits, changes_dir)?;
+	seal_volume(volume, &snapshot)
+}
+
+/// Seal a rebuild with the host inputs captured for this exact edit batch.
+/// The caller must revalidate the prepared host sources and the original image
+/// after staged verification and before publication.
+/// # Errors
+/// Refuses unsupported source metadata, invalid or conflicting edits, exhausted
+/// budgets, or a final tree the HFS+ writer cannot represent.
+pub fn seal_prepared<'volume, S: ReadAt>(
+	volume: &'volume Volume<S>,
+	catalog: &Catalog<'volume, S>,
+	prepared: &'volume PreparedEdit,
+) -> Result<RebuiltVolume<'volume, S>, RebuildError<S::Error>>
+where
+	S::Error: StdError + 'static,
+{
+	let mut snapshot = capture::capture(volume, catalog, prepared.capture_budget())?;
+	overlay::apply_with_copies(&mut snapshot, prepared.edits(), prepared.nodes()?)?;
+	seal_volume(volume, &snapshot)
+}
+
+fn seal_volume<'volume, S: ReadAt>(
+	volume: &Volume<S>,
+	snapshot: &Snapshot<'volume, S>,
+) -> Result<RebuiltVolume<'volume, S>, RebuildError<S::Error>>
+where
+	S::Error: StdError + 'static,
+{
 	let entries = snapshot.entries.len();
 	let original_bytes = volume.header().geometry.allocation_bytes();
-	let plan = seal_snapshot(&snapshot, original_bytes)?;
+	let plan = seal_snapshot(snapshot, original_bytes)?;
 	Ok(RebuiltVolume { plan, entries })
 }
 
@@ -205,7 +260,7 @@ where
 	entries.try_reserve_exact(snapshot.entries.len())?;
 	let mut attributes = Vec::new();
 	attributes.try_reserve_exact(snapshot.entries.len())?;
-	let mut hard_links = BTreeMap::<CatalogId, LinkedPaths<'_, 'volume, S>>::new();
+	let mut hard_links = BTreeMap::<LinkIdentity, LinkedPaths<'_, 'volume, S>>::new();
 	for (path, node) in &snapshot.entries {
 		// VirtualPath always begins with one ASCII separator.
 		let relative = &path.as_str()[IMAGE_SEPARATOR.len_utf8()..];
