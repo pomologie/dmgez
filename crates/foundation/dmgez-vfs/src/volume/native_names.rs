@@ -10,6 +10,10 @@ pub enum NativeNameProfile {
 	HfsXBinary,
 	/// APFS binary comparison of the stored UTF-8 bytes.
 	ApfsBinary,
+	/// APFS canonical decomposition of names within the Unicode 9 repertoire.
+	ApfsUnicode9Normalized,
+	/// APFS canonical decomposition and full case folding within Unicode 9.
+	ApfsUnicode9Folded,
 }
 
 impl NativeNameProfile {
@@ -20,6 +24,8 @@ impl NativeNameProfile {
 			Self::HfsUnicodeFolded => "hfs_unicode_folded",
 			Self::HfsXBinary => "hfsx_binary",
 			Self::ApfsBinary => "apfs_binary",
+			Self::ApfsUnicode9Normalized => "apfs_unicode9_normalized",
+			Self::ApfsUnicode9Folded => "apfs_unicode9_folded",
 		}
 	}
 }

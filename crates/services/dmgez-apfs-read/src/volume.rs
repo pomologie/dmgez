@@ -1,5 +1,4 @@
 use std::{
-	collections::TryReserveError,
 	error::Error as StdError,
 	num::{NonZeroU16, NonZeroU32},
 };
@@ -8,7 +7,7 @@ use apfs_core::{ByteOffset, ReadAt};
 use apfs_format::object::ObjectId;
 use apfs_reader::{
 	DirectoryCursor, DirectoryEntry as NativeEntry, Error as NativeError, FileData, FileKind,
-	InodeCount, InodeId, VolumeView as NativeView, XattrData,
+	InodeCount, InodeId, NameError, NameProfile, VolumeView as NativeView, XattrData,
 };
 use dmgez_vfs::volume::{
 	DirectoryEntry, DirectoryPage, DirectoryReader, FinderInfo, ForkKind, ForkReader, HardLink,
@@ -21,9 +20,6 @@ use crate::VolumeInfo;
 
 mod quarantine;
 mod xattrs;
-
-// The directory reader admits names within the 10-bit byte length, including the NUL.
-const MAX_STORED_NAME_BYTES: usize = (1 << 10) - 2;
 
 /// Visible identity retains the APFS sibling ID and its admitted parent.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -39,10 +35,8 @@ pub enum AdapterError<E: StdError + 'static> {
 	Reader(#[from] NativeError<E>),
 	#[error("APFS stored names require UTF-8")]
 	NameEncoding,
-	#[error("APFS stored name exceeds the admitted byte length")]
-	NameKeyLength,
-	#[error("could not allocate an APFS name key")]
-	NameKeyAllocation(#[source] TryReserveError),
+	#[error("could not derive an APFS native name key")]
+	NameKey(#[from] NameError),
 	#[error("APFS directory entry changed or could not be revalidated")]
 	DirectoryEntry,
 	#[error("APFS sibling is outside the checked hard-link group")]
@@ -104,11 +98,12 @@ where
 	}
 
 	fn native_name_profile(&self) -> Option<NativeNameProfile> {
-		let features = self.view.volume().superblock.features;
-		if features.case_insensitive() || features.normalization_insensitive() {
-			return None;
+		match self.view.name_profile() {
+			NameProfile::Binary => Some(NativeNameProfile::ApfsBinary),
+			NameProfile::Unicode9Normalized => Some(NativeNameProfile::ApfsUnicode9Normalized),
+			NameProfile::Unicode9Folded => Some(NativeNameProfile::ApfsUnicode9Folded),
+			_ => None,
 		}
-		Some(NativeNameProfile::ApfsBinary)
 	}
 
 	fn native_name_key(&self, name: LookupName<'_>) -> Result<Option<NativeNameKey>, Self::Error> {
@@ -118,14 +113,7 @@ where
 		let LookupName::Utf8(name) = name else {
 			return Err(AdapterError::NameEncoding);
 		};
-		if name.len() > MAX_STORED_NAME_BYTES {
-			return Err(AdapterError::NameKeyLength);
-		}
-		let mut bytes = Vec::new();
-		bytes
-			.try_reserve_exact(name.len())
-			.map_err(AdapterError::NameKeyAllocation)?;
-		bytes.extend_from_slice(name.as_bytes());
+		let bytes = self.view.name_profile().key(name)?;
 		Ok(Some(NativeNameKey::new(bytes)))
 	}
 

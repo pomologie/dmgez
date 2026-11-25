@@ -8,7 +8,7 @@ use std::{
 use serde_json::json;
 
 use super::{
-	BINARY, DIFFERENT, EQUAL, ERROR, NATIVE_PATHS, PATHS_OPTION, XATTR_OPTION, assert_error,
+	BINARY, DIFFERENT, EQUAL, ERROR, XATTR_OPTION, assert_error,
 	fixture::{
 		HARD_LINK_CHECKPOINT_XID, HARD_LINK_FIXTURE, HARD_LINK_VOLUME_OID, HARD_LINK_VOLUME_UUID,
 		NATIVE_BLOCK_BYTES, NATIVE_VOLUME_BYTES, SPARSE_FIXTURE, materialize,
@@ -33,6 +33,8 @@ const MARKER_RENAMED: &str = "com.pomologie.marke\x1b";
 
 #[path = "apfs/finder_info.rs"]
 mod finder_info;
+#[path = "apfs/native_paths.rs"]
+mod native_paths;
 
 #[test]
 fn same_native_volume_compares_equal_across_disk_layouts() {
@@ -92,22 +94,6 @@ fn same_native_volume_compares_equal_across_disk_layouts() {
 	});
 	assert_eq!(report["left"]["apfs_volume"], identity);
 	assert_eq!(report["right"]["apfs_volume"], identity);
-}
-
-#[test]
-fn native_path_comparison_refuses_insensitive_apfs() {
-	let root = tempfile::tempdir().unwrap();
-	let image = root.path().join("case-insensitive-apfs.raw");
-	materialize(&image, HARD_LINK_FIXTURE, &[]);
-
-	let exact = report(&semantic_diff(&image, &image, APFS, BOTH_RAW), EQUAL);
-	assert_eq!(exact["policy"]["paths"], "exact_stored_text");
-	let options = [BOTH_RAW, &[PATHS_OPTION, NATIVE_PATHS]].concat();
-	let unsupported = semantic_diff(&image, &image, APFS, &options);
-	assert_error(
-		&unsupported,
-		"the left filesystem native path profile is unavailable",
-	);
 }
 
 #[cfg(feature = "build")]
