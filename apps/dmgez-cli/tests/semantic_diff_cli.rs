@@ -10,10 +10,20 @@ const EQUAL: i32 = 0;
 #[cfg(all(feature = "diff", any(feature = "hfsplus-read", feature = "apfs-read")))]
 const DIFFERENT: i32 = 1;
 const XATTR_OPTION: &str = "--xattrs";
+#[cfg(feature = "diff")]
+const FINDER_LAYOUT_OPTION: &str = "--finder-layout";
 
 #[cfg(all(feature = "diff", feature = "apfs-read"))]
 #[path = "semantic_diff_cli/apfs.rs"]
 mod apfs;
+#[cfg(all(
+	feature = "finder-diff",
+	feature = "finder-write",
+	feature = "hfsplus-read",
+	feature = "project-build"
+))]
+#[path = "semantic_diff_cli/finder_layout.rs"]
+mod finder_layout;
 #[cfg(all(feature = "diff", feature = "apfs-read"))]
 #[path = "support/native_apfs.rs"]
 mod fixture;
@@ -84,25 +94,37 @@ fn semantic_diff_refuses_a_nonregular_input_before_opening_it() {
 
 #[cfg(feature = "diff")]
 #[test]
-fn byte_diff_rejects_the_attribute_option_before_opening_inputs() {
+fn byte_diff_rejects_semantic_options_before_opening_inputs() {
 	let directory = tempfile::tempdir().unwrap();
 	let absent = directory.path().join("unused.dmg");
 	for mode in ["logical", "physical"] {
-		let output = Command::new(BINARY)
-			.arg("diff")
-			.arg(&absent)
-			.arg(&absent)
-			.args(["--mode", mode, XATTR_OPTION, "--json"])
-			.output()
-			.unwrap();
-		let stderr = String::from_utf8_lossy(&output.stderr);
-		assert_eq!(output.status.code(), Some(ERROR), "{stderr}");
-		assert!(output.stdout.is_empty(), "{output:?}");
-		assert!(
-			stderr.contains("--xattrs requires --mode semantic"),
-			"{stderr}"
-		);
+		for option in [XATTR_OPTION, FINDER_LAYOUT_OPTION] {
+			let output = Command::new(BINARY)
+				.arg("diff")
+				.arg(&absent)
+				.arg(&absent)
+				.args(["--mode", mode, option, "--json"])
+				.output()
+				.unwrap();
+			assert_error(&output, &format!("{option} requires --mode semantic"));
+		}
 	}
+}
+
+#[cfg(all(feature = "diff", not(feature = "finder-diff")))]
+#[test]
+fn unavailable_finder_comparison_refuses_before_opening_inputs() {
+	let directory = tempfile::tempdir().unwrap();
+	let absent = directory.path().join("unused.dmg");
+	let output = semantic_diff(&absent, &absent, "hfsplus", &[FINDER_LAYOUT_OPTION]);
+	assert_error(&output, "feature not compiled: finder-diff");
+}
+
+fn assert_error(output: &Output, expected: &str) {
+	let stderr = String::from_utf8_lossy(&output.stderr);
+	assert_eq!(output.status.code(), Some(ERROR), "{stderr}");
+	assert!(output.stdout.is_empty(), "{output:?}");
+	assert!(stderr.contains(expected), "{stderr}");
 }
 
 #[cfg(not(all(feature = "diff", feature = "hfsplus-read", feature = "apfs-read")))]
@@ -129,10 +151,7 @@ fn unavailable_semantic_backend_refuses_before_opening_inputs() {
 		};
 		for options in [&[][..], &[XATTR_OPTION][..]] {
 			let output = semantic_diff(&left, &right, filesystem, options);
-			let stderr = String::from_utf8_lossy(&output.stderr);
-			assert_eq!(output.status.code(), Some(ERROR), "{stderr}");
-			assert!(output.stdout.is_empty(), "{output:?}");
-			assert!(stderr.contains(&expected), "{stderr}");
+			assert_error(&output, &expected);
 		}
 	}
 }

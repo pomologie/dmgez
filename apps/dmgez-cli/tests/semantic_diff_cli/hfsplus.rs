@@ -16,8 +16,8 @@ use super::{
 	report, semantic_diff,
 };
 
-const HFSPLUS: &str = "hfsplus";
-const BOTH_RAW: &[&str] = &["--left-raw", "--right-raw"];
+pub(super) const HFSPLUS: &str = "hfsplus";
+pub(super) const BOTH_RAW: &[&str] = &["--left-raw", "--right-raw"];
 const RAW_WITH_XATTRS: &[&str] = &["--left-raw", "--right-raw", XATTR_OPTION];
 const HFSX_FIXTURE: &str = "native-hfsx.bin";
 const HFSX_VOLUME_BYTES: usize = 24 * (1 << 20);
@@ -193,7 +193,7 @@ destination = "/Alias.bin"
 }
 
 #[cfg(feature = "project-build")]
-fn build(root: &Path, name: &str, entries: &str) -> PathBuf {
+pub(super) fn build(root: &Path, name: &str, entries: &str) -> PathBuf {
 	let project = root.join(name).with_extension("toml");
 	let image = root.join(name).with_extension("dmg");
 	fs::write(
