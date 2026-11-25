@@ -32,6 +32,7 @@ dmgez-core = { path = "crates/foundation/dmgez-core", default-features = false }
 dmgez-diff = { path = "crates/services/dmgez-diff" }
 dmgez-finder = { path = "crates/presentation/dmgez-finder" }
 dmgez-inspector = { path = "crates/services/dmgez-inspector", default-features = false }
+dmgez-lint = { path = "crates/services/dmgez-lint" }
 dmgez-operations = { path = "crates/services/dmgez-operations", default-features = false }
 dmgez-preview = { path = "crates/presentation/dmgez-preview" }
 dmgez-udif = { path = "crates/formats/dmgez-udif", default-features = false }

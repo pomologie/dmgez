@@ -17,6 +17,7 @@ default = ["build", "parallel"]
 build = ["dep:dmgez-core", "dmgez-core/source", "dep:dmgez-udif", "dmgez-udif/write", "dmgez-udif/zlib"]
 convert = ["dep:dmgez-operations", "dmgez-operations/convert", "dep:dmgez-udif"]
 diff = ["dep:dmgez-diff", "dep:dmgez-udif", "dmgez-udif/read", "dmgez-udif/zlib", "dep:dmgez-vfs", "dep:serde", "dep:serde_json"]
+lint = ["dep:dmgez-config", "dep:dmgez-lint", "dep:dmgez-preview", "dep:serde", "dep:serde_json"]
 parallel = ["dmgez-udif?/parallel", "dmgez-operations?/parallel"]
 lzfse = ["dmgez-udif?/lzfse"]
 lzma = ["dmgez-udif?/lzma"]
@@ -24,10 +25,13 @@ inspect = ["dep:dmgez-core", "dep:dmgez-inspector", "dmgez-inspector/zlib", "dep
 
 [dependencies]
 clap.workspace = true
+dmgez-config = { workspace = true, optional = true }
 dmgez-core = { workspace = true, optional = true, features = ["staging"] }
 dmgez-diff = { workspace = true, optional = true }
 dmgez-inspector = { workspace = true, optional = true }
+dmgez-lint = { workspace = true, optional = true }
 dmgez-operations = { workspace = true, optional = true }
+dmgez-preview = { workspace = true, optional = true }
 dmgez-udif = { workspace = true, optional = true }
 dmgez-vfs = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }

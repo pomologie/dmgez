@@ -45,9 +45,7 @@
     "diff": [
       "inspect"
     ],
-    "lint": [
-      "inspect"
-    ],
+    "lint": [],
     "convert": [
       "udif-read",
       "udif-write",
@@ -152,6 +150,7 @@
     "All edges are additive; mount-watch requires an available backend at runtime.",
     "mount-write requires qualified transaction support and writable container, not merely mount.",
     "GUI and MCP separate packages, never CLI dependency.",
+    "Project layout lint does not need an image reader. Image and release checks require their own inspection or trust integrations.",
     "Codec and profile negotiation requires relevant reader/writer plus codec feature; `legacy` alone does not imply inspection.",
     "APFS read/build flags forward filesystem package features; actual operation requires relevant orchestration."
   ]

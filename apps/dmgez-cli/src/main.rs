@@ -8,6 +8,8 @@ mod convert;
 mod diff;
 #[cfg(feature = "inspect")]
 mod inspect;
+#[cfg(feature = "lint")]
+mod lint;
 #[cfg(feature = "convert")]
 mod optimize;
 #[cfg(feature = "build")]
@@ -18,7 +20,10 @@ const INSPECT_COMMAND: &str = "inspect";
 const ANALYZE_COMMAND: &str = "analyze";
 const CONVERT_COMMAND: &str = "convert";
 const DIFF_COMMAND: &str = "diff";
-const DIFF_ERROR_EXIT_CODE: u8 = 2;
+const LINT_COMMAND: &str = "lint";
+const SUPPRESSION_VALUE_NAME: &str = "RULE=REASON";
+const LAYOUT_PROFILE_NAME: &str = "layout";
+const REPORT_ERROR_EXIT_CODE: u8 = 2;
 const OPTIMIZE_COMMAND: &str = "optimize";
 const UNWRAP_RAW_COMMAND: &str = "unwrap-raw";
 const THREADS_ARG_ID: &str = "threads";
@@ -86,6 +91,21 @@ enum Command {
 		/// Maximum paired bytes compared from each input.
 		#[arg(long)]
 		max_bytes: Option<u64>,
+		#[arg(long)]
+		json: bool,
+	},
+	/// Check configured Finder icon geometry in a project folder.
+	#[command(name = LINT_COMMAND)]
+	Lint {
+		project: PathBuf,
+		#[arg(long, value_enum)]
+		profile: LintProfile,
+		/// Virtual project folder to inspect. The default selects the root.
+		#[arg(long)]
+		folder: Option<String>,
+		/// Suppress a rule with an explicit reason. May be repeated.
+		#[arg(long, value_name = SUPPRESSION_VALUE_NAME)]
+		suppress: Vec<String>,
 		#[arg(long)]
 		json: bool,
 	},
@@ -168,6 +188,12 @@ enum DiffMode {
 	Physical,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum LintProfile {
+	#[value(name = LAYOUT_PROFILE_NAME)]
+	Layout,
+}
+
 #[derive(Args)]
 struct EncodingFlags {
 	/// Encode on the calling thread even when parallel support is available.
@@ -211,8 +237,8 @@ type CliResult<T = ()> = Result<T, Box<dyn Error>>;
 
 fn main() -> ExitCode {
 	let command = Cli::parse().command;
-	let error_status = if matches!(command, Command::Diff { .. }) {
-		ExitCode::from(DIFF_ERROR_EXIT_CODE)
+	let error_status = if matches!(command, Command::Diff { .. } | Command::Lint { .. }) {
+		ExitCode::from(REPORT_ERROR_EXIT_CODE)
 	} else {
 		ExitCode::FAILURE
 	};
@@ -261,6 +287,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 				(CONVERT_COMMAND, cfg!(feature = "convert")),
 				(OPTIMIZE_COMMAND, cfg!(feature = "convert")),
 				(DIFF_COMMAND, cfg!(feature = "diff")),
+				(LINT_COMMAND, cfg!(feature = "lint")),
 				(VERIFY_CONTAINER_CAPABILITY, cfg!(feature = "inspect")),
 				(UNWRAP_RAW_COMMAND, cfg!(feature = "inspect")),
 			] {
@@ -305,6 +332,16 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		} => return diff::run(&left, &right, mode, max_bytes, json),
 		#[cfg(not(feature = "diff"))]
 		Command::Diff { .. } => Err(format!("feature not compiled: {DIFF_COMMAND}").into()),
+		#[cfg(feature = "lint")]
+		Command::Lint {
+			project,
+			profile: LintProfile::Layout,
+			folder,
+			suppress,
+			json,
+		} => return lint::run(&project, folder.as_deref(), &suppress, json),
+		#[cfg(not(feature = "lint"))]
+		Command::Lint { .. } => Err(format!("feature not compiled: {LINT_COMMAND}").into()),
 		#[cfg(feature = "inspect")]
 		Command::Inspect {
 			image,

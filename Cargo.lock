@@ -960,10 +960,13 @@ name = "dmgez-cli"
 version = "0.1.0"
 dependencies = [
  "clap",
+ "dmgez-config",
  "dmgez-core",
  "dmgez-diff",
  "dmgez-inspector",
+ "dmgez-lint",
  "dmgez-operations",
+ "dmgez-preview",
  "dmgez-udif",
  "dmgez-vfs",
  "serde",
