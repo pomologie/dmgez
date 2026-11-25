@@ -15,12 +15,14 @@ mod host;
 #[cfg(windows)]
 #[path = "manifest/host_windows.rs"]
 mod host;
+mod inspection;
 #[cfg(feature = "volume-icon")]
 mod signed_bundle;
 #[cfg(any(unix, windows))]
 mod walk;
 
 use catalog::{Body, Catalog, Origin};
+pub use inspection::{AssetInspector, discover_for_inspection};
 
 const PATH_SEPARATOR: char = '/';
 const MAX_SYMLINK_BYTES: usize = 4096;
@@ -112,20 +114,15 @@ impl Manifest {
 		}
 		#[cfg(any(unix, windows))]
 		{
-			let path = input.resolve(config_dir);
 			let anchor = host::Anchor::new()?;
-			let leaf = anchor.locate(&path)?;
-			let snapshot = anchor.snapshot(&leaf.directory, leaf.name, path.clone())?;
-			if snapshot.kind != SourceKind::RegularFile {
-				return Err(Error::RegularSourceRequired { path });
-			}
+			let snapshot = inspection::capture_regular(&anchor, input, config_dir)?;
 			if let Some(output) = output {
 				anchor
 					.probe_output(&output.resolve(config_dir))?
 					.check(&snapshot)?;
 			}
 			let delta = std::mem::size_of::<SourceSnapshot>()
-				.checked_add(path.as_os_str().len())
+				.checked_add(snapshot.path.as_os_str().len())
 				.and_then(|bytes| u64::try_from(bytes).ok())
 				.ok_or(Error::Limit(Budget::Metadata))?;
 			let next = self

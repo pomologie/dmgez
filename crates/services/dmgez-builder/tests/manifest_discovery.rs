@@ -5,16 +5,17 @@
 use std::{
 	ffi::OsString,
 	fs,
-	io::Read,
+	io::{ErrorKind, Read},
 	os::unix::{ffi::OsStringExt, fs::symlink},
 	path::{Path, PathBuf},
 	process::Command,
 };
 
 use dmgez_builder::manifest::{
-	Budget, EntryKind, Error, Limits, Manifest, PatternList, discover, discover_with_cancellation,
+	AssetInspector, Budget, EntryKind, Error, Limits, Manifest, PatternList, discover,
+	discover_for_inspection, discover_with_cancellation,
 };
-use dmgez_config::Project;
+use dmgez_config::{Payload, Project};
 
 const HEADER: &str = r#"
 schema_version = 1
@@ -274,9 +275,16 @@ fn rejects_output_hardlinks_and_output_under_a_copied_directory() {
 	let (_temp, base) = fixture();
 	file(&base, "tree/in.bin", b"payload");
 	fs::hard_link(base.join("tree/in.bin"), base.join("output.dmg")).unwrap();
+	let options = project(COPY);
 	assert!(matches!(
-		discover(&project(COPY), &base, Limits::default()),
+		discover(&options, &base, Limits::default()),
 		Err(Error::OutputSourceAlias { .. })
+	));
+	let inspected = discover_for_inspection(&options, &base, Limits::default(), || false).unwrap();
+	assert_eq!(paths(&inspected), ["/Package.app", "/Package.app/in.bin"]);
+	assert!(matches!(
+		discover_for_inspection(&options, &base, Limits::default(), || true),
+		Err(Error::Cancelled)
 	));
 	let nested = Project::parse(&format!(
 		"{}{COPY}",
@@ -286,6 +294,41 @@ fn rejects_output_hardlinks_and_output_under_a_copied_directory() {
 	assert!(matches!(
 		discover(&nested, &base, Limits::default()),
 		Err(Error::OutputSourceAlias { .. })
+	));
+}
+
+#[test]
+fn inspection_captures_regular_assets_and_rejects_replaced_links() {
+	const ASSET_PATH: &str = "tree/asset.png";
+	const MOVED_ASSET: &str = "renamed.png";
+	const PAYLOAD: &[u8] = b"image bytes";
+	let (_temp, base) = fixture();
+	let options = project(&format!(
+		r#"
+[[contents]]
+source = "{ASSET_PATH}"
+"#
+	));
+	let Payload::Copy(copy) = &options.contents[0].payload else {
+		panic!("fixture must declare a copy source");
+	};
+	let inspector = AssetInspector::new(&base).unwrap();
+	assert!(matches!(
+		inspector.capture_regular(&copy.source),
+		Err(Error::Io { source, .. }) if source.kind() == ErrorKind::NotFound
+	));
+	file(&base, ASSET_PATH, PAYLOAD);
+	let asset = inspector.capture_regular(&copy.source).unwrap();
+	assert_eq!(asset.metadata().size, PAYLOAD.len() as u64);
+	asset.validate().unwrap();
+	let original = base.join(ASSET_PATH);
+	let moved = original.with_file_name(MOVED_ASSET);
+	fs::rename(&original, &moved).unwrap();
+	symlink(&moved, &original).unwrap();
+	assert!(matches!(asset.validate(), Err(Error::SourceChanged { .. })));
+	assert!(matches!(
+		inspector.capture_regular(&copy.source),
+		Err(Error::RegularSourceRequired { path }) if path == original
 	));
 }
 
