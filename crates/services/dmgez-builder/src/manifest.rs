@@ -12,7 +12,10 @@ use thiserror::Error;
 mod catalog;
 #[cfg(unix)]
 mod host;
-#[cfg(unix)]
+#[cfg(windows)]
+#[path = "manifest/host_windows.rs"]
+mod host;
+#[cfg(any(unix, windows))]
 mod walk;
 
 use catalog::{Body, Catalog, Origin};
@@ -100,18 +103,18 @@ impl Manifest {
 		output: Option<&LocalPath>,
 		max_metadata_bytes: u64,
 	) -> Result<usize, Error> {
-		#[cfg(not(unix))]
+		#[cfg(not(any(unix, windows)))]
 		{
 			let _ = (input, config_dir, output, max_metadata_bytes);
 			Err(Error::UnsupportedHost)
 		}
-		#[cfg(unix)]
+		#[cfg(any(unix, windows))]
 		{
 			let path = input.resolve(config_dir);
 			let anchor = host::Anchor::new()?;
 			let leaf = anchor.locate(&path)?;
-			let snapshot = anchor.snapshot(leaf.directory, leaf.name, path.clone())?;
-			if snapshot.kind != rustix::fs::FileType::RegularFile {
+			let snapshot = anchor.snapshot(&leaf.directory, leaf.name, path.clone())?;
+			if snapshot.kind != SourceKind::RegularFile {
 				return Err(Error::RegularSourceRequired { path });
 			}
 			if let Some(output) = output {
@@ -195,13 +198,14 @@ pub struct Timestamp {
 pub struct SourceMetadata {
 	pub identity: SourceIdentity,
 	pub size: u64,
-	pub mode: u16,
-	pub uid: u32,
-	pub gid: u32,
+	/// POSIX mode, when observed on the source host.
+	pub permissions: Option<u16>,
+	/// POSIX user and group IDs, when observed on the source host.
+	pub ownership: Option<(u32, u32)>,
 	pub link_count: u64,
-	pub accessed: Timestamp,
-	pub modified: Timestamp,
-	pub changed: Timestamp,
+	pub accessed: Option<Timestamp>,
+	pub modified: Option<Timestamp>,
+	pub changed: Option<Timestamp>,
 	pub created: Option<Timestamp>,
 	pub flags: Option<u32>,
 }
@@ -213,14 +217,49 @@ pub struct SourceSnapshot {
 	metadata: SourceMetadata,
 	#[cfg(unix)]
 	root: Arc<rustix::fd::OwnedFd>,
+	#[cfg(any(unix, windows))]
+	kind: SourceKind,
+	#[cfg(windows)]
+	attributes: u32,
+}
+
+#[cfg(any(unix, windows))]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum SourceKind {
+	Directory,
+	RegularFile,
 	#[cfg(unix)]
-	kind: rustix::fs::FileType,
+	Symlink,
+	#[cfg(unix)]
+	Other,
+}
+
+#[cfg(any(unix, windows))]
+#[derive(Default)]
+struct OutputProbe {
+	parent: Option<SourceIdentity>,
+	output: Option<SourceIdentity>,
+}
+
+#[cfg(any(unix, windows))]
+impl OutputProbe {
+	fn check(&self, source: &SourceSnapshot) -> Result<(), Error> {
+		let identity = Some(source.metadata.identity);
+		if self.output == identity
+			|| (source.kind == SourceKind::Directory && self.parent == identity)
+		{
+			return Err(Error::OutputSourceAlias {
+				path: source.path.clone(),
+			});
+		}
+		Ok(())
+	}
 }
 
 impl SourceSnapshot {
 	#[cfg(any(target_os = "linux", target_os = "macos"))]
 	pub(crate) fn is_directory(&self) -> bool {
-		self.kind == rustix::fs::FileType::Directory
+		self.kind == SourceKind::Directory
 	}
 
 	/// Returns the diagnostic path supplied by discovery.
@@ -240,11 +279,11 @@ impl SourceSnapshot {
 	/// # Errors
 	/// Fails if the source was replaced, changed or cannot be opened safely.
 	pub fn open_regular(&self) -> Result<File, Error> {
-		#[cfg(unix)]
+		#[cfg(any(unix, windows))]
 		{
 			host::open_regular(self)
 		}
-		#[cfg(not(unix))]
+		#[cfg(not(any(unix, windows)))]
 		{
 			Err(Error::UnsupportedHost)
 		}
@@ -255,11 +294,11 @@ impl SourceSnapshot {
 	/// # Errors
 	/// Fails if the source changed, vanished or cannot be checked.
 	pub fn validate(&self) -> Result<(), Error> {
-		#[cfg(unix)]
+		#[cfg(any(unix, windows))]
 		{
 			host::validate(self)
 		}
-		#[cfg(not(unix))]
+		#[cfg(not(any(unix, windows)))]
 		{
 			Err(Error::UnsupportedHost)
 		}
@@ -292,7 +331,7 @@ pub enum Error {
 	UnsupportedOutput { path: PathBuf },
 	#[error("source patterns require a recursively copied directory: {path:?}")]
 	PatternsRequireDirectory { path: PathBuf },
-	#[cfg(unix)]
+	#[cfg(any(unix, windows))]
 	#[error("invalid source glob {index} in {list:?}")]
 	InvalidPattern {
 		list: PatternList,
@@ -300,7 +339,7 @@ pub enum Error {
 		#[source]
 		source: globset::Error,
 	},
-	#[cfg(unix)]
+	#[cfg(any(unix, windows))]
 	#[error("source glob set for {list:?} exceeds its compilation budget")]
 	PatternSet {
 		list: PatternList,
@@ -384,9 +423,9 @@ pub(crate) fn discover_for_output(
 		return Err(Error::RelativeConfigDirectory);
 	}
 	let mut catalog = Catalog::new(limits);
-	#[cfg(unix)]
+	#[cfg(any(unix, windows))]
 	let mut walker = walk::Walker::new(config_dir, output);
-	#[cfg(not(unix))]
+	#[cfg(not(any(unix, windows)))]
 	let _ = output;
 	for content in &project.contents {
 		if cancelled() {
@@ -410,7 +449,7 @@ pub(crate) fn discover_for_output(
 				)?;
 			}
 			Payload::Copy(copy) => {
-				#[cfg(unix)]
+				#[cfg(any(unix, windows))]
 				walker.copy(
 					&content.destination,
 					copy,
@@ -418,7 +457,7 @@ pub(crate) fn discover_for_output(
 					&mut catalog,
 					&mut cancelled,
 				)?;
-				#[cfg(not(unix))]
+				#[cfg(not(any(unix, windows)))]
 				{
 					let _ = copy;
 					return Err(Error::UnsupportedHost);

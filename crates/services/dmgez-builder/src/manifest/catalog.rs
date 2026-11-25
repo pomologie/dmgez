@@ -13,9 +13,9 @@ use super::{
 pub(super) enum Origin {
 	Synthesized,
 	DeclaredDirectory,
-	#[cfg(unix)]
+	#[cfg(any(unix, windows))]
 	Host,
-	#[cfg(unix)]
+	#[cfg(any(unix, windows))]
 	MergedDirectory,
 	Other,
 }
@@ -125,7 +125,7 @@ impl Catalog {
 	}
 
 	fn insert(&mut self, destination: VirtualPath, body: Body) -> Result<(), Error> {
-		#[cfg(unix)]
+		#[cfg(any(unix, windows))]
 		let mut body = body;
 		let limits = self.limits;
 		let (existing_bytes, count) = if let Some(existing) = self.entries.get(&destination) {
@@ -139,9 +139,9 @@ impl Catalog {
 				return Err(Error::DestinationConflict { path: destination });
 			}
 			if existing.origin != Origin::Synthesized {
-				#[cfg(unix)]
+				#[cfg(any(unix, windows))]
 				merge_directory(&destination, existing, &mut body)?;
-				#[cfg(not(unix))]
+				#[cfg(not(any(unix, windows)))]
 				return Err(Error::DestinationConflict { path: destination });
 			}
 			(
@@ -198,7 +198,7 @@ impl Catalog {
 		Ok(())
 	}
 
-	#[cfg(unix)]
+	#[cfg(any(unix, windows))]
 	pub(super) const fn metadata_bytes(&self) -> u64 {
 		self.metadata_bytes
 	}
@@ -227,7 +227,7 @@ fn parse_parent(parent: &str) -> Result<VirtualPath, Error> {
 	})
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 fn merge_directory(
 	destination: &VirtualPath,
 	existing: &Body,
@@ -256,7 +256,7 @@ fn merge_directory(
 	Ok(())
 }
 
-#[cfg(unix)]
+#[cfg(any(unix, windows))]
 fn merge_override<T: Clone + PartialEq>(old: &Option<T>, new: &mut Option<T>) -> bool {
 	match (old, new.as_ref()) {
 		(Some(old), Some(new)) => old == new,

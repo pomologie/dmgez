@@ -31,13 +31,12 @@ fn source() -> SourceMetadata {
 	SourceMetadata {
 		identity: IDENTITY,
 		size: 1,
-		mode: MODE,
-		uid: UID,
-		gid: GID,
+		permissions: Some(MODE),
+		ownership: Some((UID, GID)),
 		link_count: 1,
-		accessed: FIXTURE_TIMESTAMP,
-		modified: FIXTURE_TIMESTAMP,
-		changed: FIXTURE_TIMESTAMP,
+		accessed: Some(FIXTURE_TIMESTAMP),
+		modified: Some(FIXTURE_TIMESTAMP),
+		changed: Some(FIXTURE_TIMESTAMP),
 		created: Some(FIXTURE_TIMESTAMP),
 		flags: Some(FLAG_PRESERVED),
 	}
@@ -142,10 +141,60 @@ fn strict_rejects_unobserved_and_unsupported_required_fields() {
 }
 
 #[test]
+fn missing_posix_stat_fields_require_an_explicit_loss_policy() {
+	let mut observed = source();
+	observed.permissions = None;
+	observed.ownership = None;
+	let requests = Metadata::default();
+	let mut report_bytes = REPORT_BUDGET;
+	let strict = Policy::new(&requests, true)
+		.admit(
+			&observed,
+			AttributeCapture::NotApplicable,
+			None,
+			&capabilities(),
+			&mut report_bytes,
+		)
+		.unwrap_err();
+	assert!(matches!(
+		strict,
+		Error::Loss(Loss {
+			field: Field::Permissions,
+			reason: LossReason::SourceUnavailable,
+		})
+	));
+	assert_eq!(report_bytes, REPORT_BUDGET);
+	let admit = Policy::new(&requests, false)
+		.admit(
+			&observed,
+			AttributeCapture::NotApplicable,
+			None,
+			&capabilities(),
+			&mut report_bytes,
+		)
+		.unwrap();
+	assert_eq!(admit.metadata.permissions, None);
+	assert_eq!(admit.metadata.ownership, None);
+	assert_eq!(
+		admit.losses,
+		[
+			Loss {
+				field: Field::Permissions,
+				reason: LossReason::SourceUnavailable
+			},
+			Loss {
+				field: Field::Ownership,
+				reason: LossReason::SourceUnavailable
+			},
+		]
+	);
+}
+
+#[test]
 fn report_keeps_supported_fields_and_names_each_loss() {
 	let mut observed = source();
-	observed.modified.nanoseconds = 1;
-	observed.changed.seconds = 2;
+	observed.modified.as_mut().unwrap().nanoseconds = 1;
+	observed.changed.as_mut().unwrap().seconds = 2;
 	observed.flags = Some(FLAG_PRESERVED | FLAG_UNSUPPORTED);
 	let mut caps = capabilities();
 	caps.hard_links = false;
@@ -289,7 +338,7 @@ fn strict_distinguishes_optional_stat_absence_from_precision_loss() {
 			},
 		]
 	);
-	observed.modified.nanoseconds = 1;
+	observed.modified.as_mut().unwrap().nanoseconds = 1;
 	assert!(matches!(
 		policy.admit(
 			&observed,

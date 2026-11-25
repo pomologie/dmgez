@@ -14,8 +14,12 @@ use rustix::{
 };
 
 use super::{
-	Budget, Error, MAX_SYMLINK_BYTES, SourceIdentity, SourceMetadata, SourceSnapshot, Timestamp,
+	Budget, EntryKind, Error, MAX_SYMLINK_BYTES, OutputProbe, SourceIdentity, SourceKind,
+	SourceMetadata, SourceSnapshot, Timestamp,
 };
+
+pub(super) type Directory = Dir;
+pub(super) const DIRECTORY_BUFFER_BYTES: usize = 0;
 
 const DIRECTORY_FLAGS: OFlags = OFlags::RDONLY
 	.union(OFlags::DIRECTORY)
@@ -67,7 +71,7 @@ impl Anchor {
 		let metadata = metadata(&stat).map_err(|err| annotated(STAT_SOURCE, &path, err))?;
 		Ok(SourceSnapshot {
 			root: Arc::clone(&self.root),
-			kind: FileType::from_raw_mode(stat.st_mode),
+			kind: source_kind(&stat),
 			path,
 			metadata,
 		})
@@ -98,26 +102,6 @@ impl Anchor {
 pub(super) struct Leaf<'a> {
 	pub(super) directory: OwnedFd,
 	pub(super) name: &'a OsStr,
-}
-
-#[derive(Default)]
-pub(super) struct OutputProbe {
-	parent: Option<SourceIdentity>,
-	output: Option<SourceIdentity>,
-}
-
-impl OutputProbe {
-	pub(super) fn check(&self, source: &SourceSnapshot) -> Result<(), Error> {
-		let identity = Some(source.metadata.identity);
-		if self.output == identity
-			|| (source.kind == FileType::Directory && self.parent == identity)
-		{
-			return Err(Error::OutputSourceAlias {
-				path: source.path.clone(),
-			});
-		}
-		Ok(())
-	}
 }
 
 pub(super) fn open_directory(
@@ -154,11 +138,22 @@ pub(super) fn next_name(
 	Ok(None)
 }
 
-pub(super) fn read_link(
+pub(super) fn entry_kind(
 	parent: impl AsFd,
 	name: &OsStr,
 	source: &SourceSnapshot,
-) -> Result<Vec<u8>, Error> {
+) -> Result<EntryKind, Error> {
+	match source.kind {
+		SourceKind::Directory => Ok(EntryKind::Directory),
+		SourceKind::RegularFile => Ok(EntryKind::File),
+		SourceKind::Symlink => Ok(EntryKind::Symlink(read_link(parent, name, source)?)),
+		SourceKind::Other => Err(Error::UnsupportedSource {
+			path: source.path.clone(),
+		}),
+	}
+}
+
+fn read_link(parent: impl AsFd, name: &OsStr, source: &SourceSnapshot) -> Result<Vec<u8>, Error> {
 	let mut bytes = [0_u8; MAX_SYMLINK_BYTES + 1];
 	let length = fs::readlinkat_raw(&parent, name, &mut bytes[..])
 		.map_err(|err| recheck_error(source, READ_LINK, err))?;
@@ -172,7 +167,7 @@ pub(super) fn read_link(
 }
 
 pub(super) fn open_regular(source: &SourceSnapshot) -> Result<File, Error> {
-	if source.kind != FileType::RegularFile {
+	if source.kind != SourceKind::RegularFile {
 		return Err(Error::RegularSourceRequired {
 			path: source.path.clone(),
 		});
@@ -205,12 +200,21 @@ fn match_stat(source: &SourceSnapshot, stat: &Stat) -> Result<(), Error> {
 	let mut observed = metadata(stat).map_err(|err| annotated(STAT_SOURCE, &source.path, err))?;
 	// Reading an admitted file or directory may legitimately update its access time.
 	observed.accessed = source.metadata.accessed;
-	if FileType::from_raw_mode(stat.st_mode) != source.kind || observed != source.metadata {
+	if source_kind(stat) != source.kind || observed != source.metadata {
 		return Err(Error::SourceChanged {
 			path: source.path.clone(),
 		});
 	}
 	Ok(())
+}
+
+fn source_kind(stat: &Stat) -> SourceKind {
+	match FileType::from_raw_mode(stat.st_mode) {
+		FileType::Directory => SourceKind::Directory,
+		FileType::RegularFile => SourceKind::RegularFile,
+		FileType::Symlink => SourceKind::Symlink,
+		_ => SourceKind::Other,
+	}
 }
 
 fn resolve_parent<'a>(root: &OwnedFd, path: &'a Path) -> rustix::io::Result<(OwnedFd, &'a OsStr)> {
@@ -261,13 +265,14 @@ fn metadata(stat: &Stat) -> io::Result<SourceMetadata> {
 	Ok(SourceMetadata {
 		identity: identity(stat)?,
 		size: checked_stat_value(stat.st_size)?,
-		mode: checked_stat_value(Mode::from_raw_mode(stat.st_mode).bits())?,
-		uid: stat.st_uid,
-		gid: stat.st_gid,
+		permissions: Some(checked_stat_value(
+			Mode::from_raw_mode(stat.st_mode).bits(),
+		)?),
+		ownership: Some((stat.st_uid, stat.st_gid)),
 		link_count: checked_stat_value(stat.st_nlink)?,
-		accessed: timestamp(stat.st_atime, stat.st_atime_nsec)?,
-		modified: timestamp(stat.st_mtime, stat.st_mtime_nsec)?,
-		changed: timestamp(stat.st_ctime, stat.st_ctime_nsec)?,
+		accessed: Some(timestamp(stat.st_atime, stat.st_atime_nsec)?),
+		modified: Some(timestamp(stat.st_mtime, stat.st_mtime_nsec)?),
+		changed: Some(timestamp(stat.st_ctime, stat.st_ctime_nsec)?),
 		created,
 		flags,
 	})

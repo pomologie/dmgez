@@ -173,15 +173,15 @@ impl<'config> Policy<'config> {
 		};
 		let requests = self.requests;
 		let mut metadata = AdmittedMetadata {
-			permissions: report.retain(
+			permissions: report.retain_stat(
 				Field::Permissions,
-				source.mode,
+				source.permissions,
 				requests.preserve_permissions,
 				capabilities.permissions,
 			)?,
-			ownership: report.retain(
+			ownership: report.retain_stat(
 				Field::Ownership,
-				(source.uid, source.gid),
+				source.ownership,
 				requests.preserve_ownership,
 				capabilities.ownership,
 			)?,
@@ -191,17 +191,17 @@ impl<'config> Policy<'config> {
 		for (field, observed, admitted) in [
 			(
 				TimestampField::Accessed,
-				Some(source.accessed),
+				source.accessed,
 				&mut metadata.accessed,
 			),
 			(
 				TimestampField::Modified,
-				Some(source.modified),
+				source.modified,
 				&mut metadata.modified,
 			),
 			(
 				TimestampField::Changed,
-				Some(source.changed),
+				source.changed,
 				&mut metadata.changed,
 			),
 			(
@@ -337,6 +337,25 @@ struct Report {
 }
 
 impl Report {
+	fn retain_stat<T>(
+		&mut self,
+		field: Field,
+		value: Option<T>,
+		requested: bool,
+		supported: bool,
+	) -> Result<Option<T>, Error> {
+		if let Some(value) = value {
+			return self.retain(field, value, requested, supported);
+		}
+		let reason = if requested {
+			LossReason::SourceUnavailable
+		} else {
+			LossReason::ConfiguredOmission
+		};
+		self.add(field, reason)?;
+		Ok(None)
+	}
+
 	fn retain<T>(
 		&mut self,
 		field: Field,

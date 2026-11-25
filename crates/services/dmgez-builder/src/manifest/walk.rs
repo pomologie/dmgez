@@ -1,20 +1,15 @@
 use std::{
-	ffi::OsStr,
 	mem::size_of,
 	path::{Path, PathBuf},
 };
 
 use dmgez_config::{CopySource, LocalPath, Text, VirtualPath};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
-use rustix::{
-	fd::AsFd,
-	fs::{Dir, FileType},
-};
 
 use super::{
-	Body, Budget, Catalog, EntryKind, Error, FinderOverrides, Origin, PATH_SEPARATOR, PatternList,
-	SourceSnapshot,
-	host::{self, Anchor, OutputProbe},
+	Body, Budget, Catalog, EntryKind, Error, FinderOverrides, Origin, OutputProbe, PATH_SEPARATOR,
+	PatternList, SourceKind, SourceSnapshot,
+	host::{self, Anchor, Directory},
 };
 
 const MAX_PATTERNS: usize = 1024;
@@ -70,11 +65,12 @@ impl<'a> Walker<'a> {
 			.snapshot(&leaf.directory, leaf.name, path.clone())?;
 		host.output.check(&source)?;
 
-		if source.kind != FileType::Directory || !copy.recursive {
+		if source.kind != SourceKind::Directory || !copy.recursive {
 			if !filters.is_empty() {
 				return Err(Error::PatternsRequireDirectory { path });
 			}
-			let body = capture(&leaf.directory, leaf.name, source, finder)?;
+			let kind = host::entry_kind(&leaf.directory, leaf.name, &source)?;
+			let body = source_body(kind, source, finder);
 			return catalog.admit(destination.clone(), body);
 		}
 
@@ -99,7 +95,7 @@ impl<'a> Walker<'a> {
 }
 
 struct Frame {
-	directory: Dir,
+	directory: Directory,
 	source: SourceSnapshot,
 	relative: PathBuf,
 	included: bool,
@@ -109,7 +105,8 @@ struct Frame {
 impl Frame {
 	fn bytes(&self) -> Result<u64, Error> {
 		let bytes = size_of::<Frame>()
-			.checked_add(self.relative.as_os_str().len())
+			.checked_add(host::DIRECTORY_BUFFER_BYTES)
+			.and_then(|bytes| bytes.checked_add(self.relative.as_os_str().len()))
 			.and_then(|bytes| bytes.checked_add(self.source.path.as_os_str().len()))
 			.ok_or(Error::Limit(Budget::Metadata))?;
 		u64::try_from(bytes).map_err(|_| Error::Limit(Budget::Metadata))
@@ -175,7 +172,7 @@ fn walk_tree(
 			.anchor
 			.snapshot(directory, &name, frame.source.path.join(&name))?;
 		let included = filters.include.is_empty() || filters.include.is_match(&relative);
-		if source.kind == FileType::Directory {
+		if source.kind == SourceKind::Directory {
 			host.output.check(&source)?;
 			let child = host::open_directory(directory, &name, &source)?;
 			let frame = Frame {
@@ -189,7 +186,8 @@ fn walk_tree(
 		} else if included {
 			host.output.check(&source)?;
 			let path = child_destination(destination, &relative)?;
-			let body = capture(directory, &name, source, FinderOverrides::default())?;
+			let kind = host::entry_kind(directory, &name, &source)?;
+			let body = source_body(kind, source, FinderOverrides::default());
 			catalog.admit(path, body)?;
 			check_combined_metadata(scratch_bytes, catalog)?;
 			frame.included = true;
@@ -236,24 +234,13 @@ fn record_visit(count: &mut u64, catalog: &Catalog) -> Result<(), Error> {
 	Ok(())
 }
 
-fn capture(
-	parent: impl AsFd,
-	name: &OsStr,
-	source: SourceSnapshot,
-	finder: FinderOverrides,
-) -> Result<Body, Error> {
-	let kind = match source.kind {
-		FileType::Directory => EntryKind::Directory,
-		FileType::RegularFile => EntryKind::File,
-		FileType::Symlink => EntryKind::Symlink(host::read_link(parent, name, &source)?),
-		_ => return Err(Error::UnsupportedSource { path: source.path }),
-	};
-	Ok(Body {
+fn source_body(kind: EntryKind, source: SourceSnapshot, finder: FinderOverrides) -> Body {
+	Body {
 		kind,
 		source: Some(source),
 		finder,
 		origin: Origin::Host,
-	})
+	}
 }
 
 fn child_destination(root: &VirtualPath, relative: &Path) -> Result<VirtualPath, Error> {
@@ -263,10 +250,12 @@ fn child_destination(root: &VirtualPath, relative: &Path) -> Result<VirtualPath,
 	let path_error = || Error::InvalidSourceName {
 		path: relative.into(),
 	};
-	let relative = relative.to_str().ok_or_else(path_error)?;
-	format!("{root}{PATH_SEPARATOR}{relative}")
-		.parse()
-		.map_err(|_| path_error())
+	let mut destination = root.as_str().to_owned();
+	for component in relative.components() {
+		destination.push(PATH_SEPARATOR);
+		destination.push_str(component.as_os_str().to_str().ok_or_else(path_error)?);
+	}
+	destination.parse().map_err(|_| path_error())
 }
 
 struct Filters {

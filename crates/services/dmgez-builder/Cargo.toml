@@ -27,6 +27,12 @@ thiserror.workspace = true
 globset.workspace = true
 rustix.workspace = true
 
+[target.'cfg(windows)'.dependencies]
+fs_at = "=0.2.1"
+globset.workspace = true
+windows-namespace-request-sys = "=0.5.1"
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
+
 [dev-dependencies]
 tempfile.workspace = true
 
