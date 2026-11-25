@@ -445,7 +445,7 @@
       "id": "D-REL-01",
       "milestone": "0.6.0",
       "owner": "docs/features/RELEASE.md",
-      "requirement": "Rust signing in default Linux and Windows builds, opt-in signing on macOS, and explicit actions with source preservation on all hosts.",
+      "requirement": "Default Rust ad hoc DMG signing on macOS, Linux and Windows, optional native Developer ID signing on macOS, and explicit signing actions that preserve source artifacts.",
       "source_ids": [
         "S09",
         "S10"
