@@ -1,4 +1,4 @@
-"""Check the two classic TIFF directories and their uncompressed pixel strips.
+"""Check the two classic TIFF directories and decode their RGB pixel strips.
 
 Field layout and tags follow sections 2, 8, and 18 of the Adobe TIFF 6.0 specification.
 https://printtechnologies.org/standards/files/tiff-v6.pdf
@@ -7,6 +7,7 @@ https://printtechnologies.org/standards/files/tiff-v6.pdf
 from fractions import Fraction
 import struct
 import sys
+from zlib import decompress
 
 
 TIFF_MAGIC = 42
@@ -36,6 +37,7 @@ PLANAR_CONFIGURATION = 284
 RESOLUTION_UNIT = 296
 EXTRA_SAMPLES = 338
 UNCOMPRESSED, RGB, TOP_LEFT, CHUNKY, INCH, UNASSOCIATED_ALPHA = 1, 2, 1, 1, 2, 2
+DEFLATE = 8
 
 BASE_PIXELS = bytes((24, 52, 75)) * 4
 RETINA_PIXELS = bytes(
@@ -77,13 +79,14 @@ class ClassicTiff:
         next_directory, = self.unpack("I", cursor)
         return fields, next_directory
 
-    def verify_representation(self, offset, dimension, resolution, samples, pixels):
+    def read_representation(self, offset, dimensions, resolution, samples, compression=UNCOMPRESSED):
+        width, height = dimensions
         fields, next_directory = self.directory(offset)
-        assert fields[IMAGE_WIDTH] == fields[IMAGE_LENGTH] == (dimension,)
+        assert fields[IMAGE_WIDTH] == (width,) and fields[IMAGE_LENGTH] == (height,)
         assert fields[X_RESOLUTION] == fields[Y_RESOLUTION] == (resolution,)
         assert fields[RESOLUTION_UNIT] == (INCH,)
         assert fields[PHOTOMETRIC_INTERPRETATION] == (RGB,)
-        assert fields[COMPRESSION] == (UNCOMPRESSED,)
+        assert fields[COMPRESSION] == (compression,)
         assert fields.get(ORIENTATION, (TOP_LEFT,)) == (TOP_LEFT,)
         assert fields.get(PLANAR_CONFIGURATION, (CHUNKY,)) == (CHUNKY,)
         assert fields[BITS_PER_SAMPLE] == (8,) * samples
@@ -94,21 +97,26 @@ class ClassicTiff:
         rows_per_strip, = fields[ROWS_PER_STRIP]
         assert rows_per_strip > 0
         expected_lengths = tuple(
-            min(rows_per_strip, dimension - first_row) * dimension * samples
-            for first_row in range(0, dimension, rows_per_strip)
+            min(rows_per_strip, height - first_row) * width * samples
+            for first_row in range(0, height, rows_per_strip)
         )
-        assert len(offsets) == len(lengths) and lengths == expected_lengths
-        strips = zip(offsets, lengths)
+        assert len(offsets) == len(lengths) == len(expected_lengths)
         chunks = []
-        for start, length in strips:
-            assert HEADER_BYTES <= start <= len(self.data) - length
-            chunks.append(self.data[start:start + length])
-        actual = b"".join(chunks)
-        assert actual == pixels
-        return next_directory
+        for start, length, expected in zip(offsets, lengths, expected_lengths):
+            assert length > 0 and HEADER_BYTES <= start <= len(self.data) - length
+            payload = self.data[start:start + length]
+            if compression == DEFLATE:
+                payload = decompress(payload)
+            else:
+                assert compression == UNCOMPRESSED
+            assert len(payload) == expected
+            chunks.append(payload)
+        return b"".join(chunks), next_directory
 
 
-tiff = ClassicTiff(sys.stdin.buffer.read())
-retina = tiff.verify_representation(tiff.first_directory, 2, 72, 3, BASE_PIXELS)
-assert retina != 0
-assert tiff.verify_representation(retina, 4, 144, 4, RETINA_PIXELS) == 0
+if __name__ == "__main__":
+    tiff = ClassicTiff(sys.stdin.buffer.read())
+    base_pixels, retina = tiff.read_representation(tiff.first_directory, (2, 2), 72, 3)
+    assert base_pixels == BASE_PIXELS and retina != 0
+    retina_pixels, end = tiff.read_representation(retina, (4, 4), 144, 4)
+    assert retina_pixels == RETINA_PIXELS and end == 0

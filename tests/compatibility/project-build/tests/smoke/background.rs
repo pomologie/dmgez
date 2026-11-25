@@ -15,6 +15,8 @@ use super::{
 mod color;
 #[path = "retina_background.rs"]
 mod retina;
+#[path = "template_background.rs"]
+mod template;
 
 const PROJECT: &str = include_str!("../fixtures/finder-background.toml");
 const ROOT_SOURCE: &str = "background-root.png";
