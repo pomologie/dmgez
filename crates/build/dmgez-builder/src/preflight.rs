@@ -67,6 +67,7 @@ pub struct PreflightOptions {
 pub enum FilesystemProfile {
 	HfsplusAscii,
 	HfsplusUnicode,
+	Hfsx,
 }
 
 /// Publication semantics for the admitted operation.
@@ -226,10 +227,7 @@ pub(crate) fn preflight_with_names(
 	#[cfg(feature = "finder-write")] names: dmgez_finder::CatalogNames,
 ) -> Result<ExecutionProfile, PreflightError> {
 	let capabilities = options.capabilities;
-	if project.image.filesystem != Filesystem::Hfsplus {
-		return Err(PreflightError::Filesystem(project.image.filesystem));
-	}
-	let filesystem = filesystem_profile(capabilities)?;
+	let filesystem = filesystem_profile(project.image.filesystem, capabilities)?;
 	let partition = partition_layout(project.image.partition, project.image.format)?;
 	let profile = match project.image.format {
 		ImageFormat::Udro | ImageFormat::Udrw => Profile::Udro,

@@ -5,6 +5,8 @@ use std::io::Read;
 use dmgez_udif::{SECTOR_BYTES, writer::Cancellation};
 use thiserror::Error;
 
+use crate::preflight::FilesystemProfile;
+
 #[cfg(feature = "partition-write")]
 mod apm;
 #[cfg(feature = "partition-write")]
@@ -93,6 +95,26 @@ impl Envelope {
 		open_volume: impl FnOnce() -> R,
 		cancellation: &Cancellation,
 	) -> Result<Self, Error> {
+		Self::from_volume_with_filesystem(
+			layout,
+			FilesystemProfile::HfsplusUnicode,
+			volume_bytes,
+			open_volume,
+			cancellation,
+		)
+	}
+
+	/// Prepare the map with the partition type appropriate for the sealed volume.
+	///
+	/// # Errors
+	/// Returns the same map, geometry, and cancellation errors as [`Self::from_volume`].
+	pub fn from_volume_with_filesystem<R: Read>(
+		layout: Layout,
+		filesystem: FilesystemProfile,
+		volume_bytes: u64,
+		open_volume: impl FnOnce() -> R,
+		cancellation: &Cancellation,
+	) -> Result<Self, Error> {
 		let disk_bytes = layout.disk_bytes(volume_bytes).ok_or(Error::Geometry)?;
 		match layout {
 			Layout::Partitionless => Ok(Self {
@@ -100,14 +122,14 @@ impl Envelope {
 				suffix: Vec::new(),
 			}),
 			#[cfg(feature = "partition-write")]
-			Layout::Apm => apm::generate(volume_bytes, disk_bytes),
+			Layout::Apm => apm::generate(volume_bytes, disk_bytes, filesystem),
 			#[cfg(feature = "partition-write")]
 			Layout::Gpt => gpt::generate(volume_bytes, disk_bytes, open_volume(), cancellation),
 			#[cfg(feature = "partition-write")]
 			Layout::Mbr => mbr::generate(volume_bytes),
 			#[cfg(not(feature = "partition-write"))]
 			_ => {
-				let _ = (disk_bytes, open_volume, cancellation);
+				let _ = (disk_bytes, filesystem, open_volume, cancellation);
 				Err(Error::Unavailable)
 			}
 		}

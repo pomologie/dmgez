@@ -45,9 +45,17 @@ Each list takes distinct absolute paths within the image. Use the exact destinat
 
 The recursive-copy visibility case of D-FINDER-01-T02 verified the UDIF with Apple's `hdiutil` on macOS 14.7.2 (23H311). 7-Zip decoded the image and read back the files. An independent catalog decoder matched the flags for three selected items and an unselected control. [Independent Finder flag check](../../tests/compatibility/project-build/check_finder_visibility.py)
 
+### Build a case-sensitive HFSX volume
+
+Set `filesystem = "hfsx"` under `[image]` to build a case-sensitive volume. The builder applies historical HFS Unicode decomposition and compares canonical UTF-16 names by code unit. Distinct names such as `Case.txt` and `case.txt` can coexist, while two names with the same canonical decomposition still conflict. The dry-run JSON reports `filesystem` as `hfsx`. The default filesystem remains case-folded HFS+.
+
+An HFSX project can use the same UDIF encodings as HFS+. With `partition-write`, APM identifies the volume as `Apple_HFSX`. Project Finder folder paths follow the selected filesystem's name comparison. The Finder store writer requires case-insensitively distinct names for positioned items within a single folder. [Apple HFSX format notes](https://developer.apple.com/library/archive/technotes/tn/tn1150.html) · [HFSX project tests](../../apps/dmgez-cli/tests/project_build/hfsx.rs)
+
+On arm64 macOS 14.7.2 (23H311), Apple verified a signed HFSX/UDZO project, identified its `Apple_HFSX` partition, and accepted its strict ad hoc signature. An independent 7-Zip read matched both case-distinct payloads in the exported raw volume. The project tests cover exact lookups and the reader's reachable-stored-data checks. A native mount and filesystem check for the generated volume remain open.
+
 ### Write an APM, GPT or MBR disk layout
 
-Compose the HFS+ CLI with `--features partition-write`, then set `partition = "apm"`, `"gpt"`, or `"mbr"` under `[image]` in `dmg.toml`. Each profile places one sealed HFS+ volume within a single-table UDRO or UDZO image. Add `lzfse` to the composition features for ULFO or `lzma` for ULMO. The default remains `partition = "none"`.
+Compose the HFS+ CLI with `--features partition-write`, then set `partition = "apm"`, `"gpt"`, or `"mbr"` under `[image]` in `dmg.toml`. Each profile places one sealed HFS+ or HFSX volume within a single-table UDRO or UDZO image. Add `lzfse` to the composition features for ULFO or `lzma` for ULMO. The default remains `partition = "none"`.
 
 `image.size` describes the entire logical disk. The filesystem planner subtracts the map reservations from that size and applies `free_space` within the volume. The dry run reports the selected map and whole disk size. APM reserves 64 sectors before the volume. GPT reserves 40 sectors at each end and derives reproducible identifiers from the sealed volume bytes. MBR reserves eight sectors and writes one non-bootable primary `Apple_HFS` entry in slot 1, with a 4 KiB-aligned start and a 32-bit disk sector limit. The partition tests cover disk geometry and feature admission for D-BUILD-01-T01. [Partition build tests](../../apps/dmgez-cli/tests/project_build/partitions.rs)
 

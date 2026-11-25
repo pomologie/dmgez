@@ -13,6 +13,9 @@ mod compression_cache;
 ))]
 #[path = "project_build/finder_flags.rs"]
 mod finder_flags;
+#[cfg(all(feature = "project-build", feature = "hfsplus-read"))]
+#[path = "project_build/hfsx.rs"]
+mod hfsx;
 #[cfg(feature = "project-build")]
 #[path = "project_build/json.rs"]
 mod json;

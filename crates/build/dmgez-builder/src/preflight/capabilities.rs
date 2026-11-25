@@ -26,6 +26,8 @@ pub struct BuildCapabilities {
 	pub hfsplus_ascii: Availability,
 	/// Clean HFS+ construction with historical Unicode name admission and collation.
 	pub hfsplus_unicode: Availability,
+	/// Clean HFSX construction with case-sensitive Unicode collation.
+	pub hfsx: Availability,
 	/// Finder metadata store writing for icon and list layouts.
 	pub finder_layout: Availability,
 	/// Binding a captured Finder background to frozen filesystem catalog identities.
@@ -52,6 +54,8 @@ pub struct BuildCapabilities {
 pub enum BuildFeature {
 	#[error("HFS+ construction")]
 	Hfsplus,
+	#[error("case-sensitive HFSX construction")]
+	Hfsx,
 	#[error("zlib encoding")]
 	Zlib,
 	#[error("LZFSE encoding")]

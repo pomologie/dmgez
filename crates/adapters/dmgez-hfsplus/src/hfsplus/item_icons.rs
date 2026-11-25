@@ -62,7 +62,10 @@ pub(super) fn apply<'build>(
 			*resource = Some(fork);
 		}
 		(EntryKind::Folder, Some(child))
-			if prepared.profile().filesystem() == FilesystemProfile::HfsplusUnicode =>
+			if matches!(
+				prepared.profile().filesystem(),
+				FilesystemProfile::HfsplusUnicode | FilesystemProfile::Hfsx
+			) =>
 		{
 			let mut metadata = generated_metadata(DEFAULT_FILE_MODE, date);
 			metadata.finder_info = item_icon::folder_icon_file_finder_info();

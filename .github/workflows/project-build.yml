@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 env:
-  HFSPLUS_REVISION: 1e7f360ddf386165668634cc9ee017214900b646
+  HFSPLUS_REVISION: d3daf6e70c2e46cbae6812f19eb310abf4006afb
 
 jobs:
   build:

@@ -2,16 +2,26 @@ use dmgez_udif::SECTOR_BYTES;
 use part_tables::apm::build_minimal_apm;
 
 use super::{APM_HEAD_SECTORS, Envelope, Error, VOLUME_PARTITION_NAME};
+use crate::preflight::FilesystemProfile;
 
 const HFS_PARTITION_TYPE: &str = "Apple_HFS";
+const HFSX_PARTITION_TYPE: &str = "Apple_HFSX";
 
-pub(super) fn generate(volume_bytes: u64, disk_bytes: u64) -> Result<Envelope, Error> {
+pub(super) fn generate(
+	volume_bytes: u64,
+	disk_bytes: u64,
+	filesystem: FilesystemProfile,
+) -> Result<Envelope, Error> {
 	let volume_blocks = u32::try_from(volume_bytes / SECTOR_BYTES).map_err(|_| Error::Geometry)?;
 	let disk_blocks = u32::try_from(disk_bytes / SECTOR_BYTES).map_err(|_| Error::Geometry)?;
 	let head_blocks = u32::try_from(APM_HEAD_SECTORS).map_err(|_| Error::Geometry)?;
 	let block_bytes = u32::try_from(SECTOR_BYTES).map_err(|_| Error::Geometry)?;
+	let partition_type = match filesystem {
+		FilesystemProfile::Hfsx => HFSX_PARTITION_TYPE,
+		FilesystemProfile::HfsplusAscii | FilesystemProfile::HfsplusUnicode => HFS_PARTITION_TYPE,
+	};
 	let mut apm = build_minimal_apm(
-		&[(HFS_PARTITION_TYPE.to_owned(), head_blocks, volume_blocks)],
+		&[(partition_type.to_owned(), head_blocks, volume_blocks)],
 		block_bytes,
 		disk_blocks,
 	);

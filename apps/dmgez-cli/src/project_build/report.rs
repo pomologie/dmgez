@@ -151,6 +151,7 @@ const fn filesystem_name(filesystem: FilesystemProfile) -> &'static str {
 	match filesystem {
 		FilesystemProfile::HfsplusAscii => "hfsplus_ascii",
 		FilesystemProfile::HfsplusUnicode => "hfsplus_unicode",
+		FilesystemProfile::Hfsx => "hfsx",
 		_ => "unknown",
 	}
 }

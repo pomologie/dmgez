@@ -12,10 +12,12 @@ use dmgez_builder::{
 	progress::BuildProgress,
 };
 use dmgez_config::{Capacity, Project, VirtualPath};
+#[cfg(feature = "finder-write")]
+use dmgez_config::Filesystem;
 use dmgez_udif::writer::Cancellation;
 use hfsplus_builder::{
 	SealedPlan,
-	volume::{self, CapacityPolicy, ManifestEntry, VolumeOptions},
+	volume::{self, CapacityPolicy, ManifestEntry, VolumeFormat, VolumeOptions},
 };
 use hfsplus_core::ByteLen;
 
@@ -82,6 +84,7 @@ pub fn capabilities() -> BuildCapabilities {
 	let mut capabilities = BuildCapabilities::default();
 	capabilities.hfsplus_unicode = Availability::Available;
 	capabilities.hfsplus_ascii = Availability::Available;
+	capabilities.hfsx = Availability::Available;
 	if cfg!(any(target_os = "linux", target_os = "macos")) {
 		capabilities.metadata_sidecar = Availability::Available;
 	}
@@ -137,7 +140,11 @@ pub fn prepare_with_progress<'project>(
 		options,
 		cancellation,
 		progress,
-		finder::CATALOG_NAMES,
+		if project.image.filesystem == Filesystem::Hfsx {
+			finder::HFSX_CATALOG_NAMES
+		} else {
+			finder::CATALOG_NAMES
+		},
 	)?;
 	#[cfg(not(feature = "finder-write"))]
 	let build = planning::prepare_with_progress(project, config_dir, options, cancellation, progress)?;
@@ -226,8 +233,9 @@ impl<'build> HfsImage<'build> {
 
 	fn envelope(&self) -> Result<Envelope, Error> {
 		let profile = self.prepared.profile();
-		Ok(Envelope::from_volume(
+		Ok(Envelope::from_volume_with_filesystem(
 			profile.partition(),
+			profile.filesystem(),
 			self.image.image_len().0,
 			|| self.image.reader(),
 			&profile.write_options().cancellation,
@@ -259,7 +267,10 @@ fn seal<'build>(
 	let finder_flag_targets = finder_flags::signed_targets(manifest.entries(), &mut remaining)?;
 	let links = policy::HardLinks::discover(manifest, remaining).map_err(Error::HardLinks)?;
 	charge(&mut remaining, links.accounted_bytes())?;
-	let supports_file_hard_links = profile.filesystem() == FilesystemProfile::HfsplusUnicode;
+	let supports_file_hard_links = matches!(
+		profile.filesystem(),
+		FilesystemProfile::HfsplusUnicode | FilesystemProfile::Hfsx
+	);
 	let shared_member = |entry| {
 		if supports_file_hard_links && project.metadata.preserve_hard_links {
 			hard_links::Member::new(entry, &links)
@@ -359,6 +370,9 @@ fn seal<'build>(
 
 	let mut options =
 		VolumeOptions::for_capacity(project.image.name.as_str(), ALLOCATION_BLOCK_BYTES)?;
+	if profile.filesystem() == FilesystemProfile::Hfsx {
+		options.format = VolumeFormat::HfsX;
+	}
 	options.max_entries = profile.limits().max_entries;
 	options.limits.max_metadata_bytes =
 		ByteLen(u64::try_from(remaining).map_err(|_| Error::MetadataBudget)?);
@@ -373,7 +387,7 @@ fn seal<'build>(
 	];
 
 	let mut draft = match profile.filesystem() {
-		FilesystemProfile::HfsplusUnicode => {
+		FilesystemProfile::HfsplusUnicode | FilesystemProfile::Hfsx => {
 			volume::plan_with_hard_links(options, entries, groups)?
 		}
 		FilesystemProfile::HfsplusAscii => volume::plan_ascii(options, entries)?,

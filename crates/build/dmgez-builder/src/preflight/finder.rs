@@ -126,7 +126,7 @@ fn admit_layout(
 	for (index, folder) in finder.folders.iter().enumerate() {
 		let supported = match filesystem {
 			FilesystemProfile::HfsplusAscii => folder.path.components().all(printable_ascii),
-			FilesystemProfile::HfsplusUnicode => folder
+			FilesystemProfile::HfsplusUnicode | FilesystemProfile::Hfsx => folder
 				.path
 				.components()
 				.all(|name| !name.chars().any(char::is_control)),

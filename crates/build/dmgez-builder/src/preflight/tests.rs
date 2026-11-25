@@ -82,15 +82,13 @@ fn rejects_declared_and_final_sizes_outside_admitted_run_budget() {
 
 #[test]
 fn rejects_unsupported_filesystems_formats_and_catalog_names() {
-	for filesystem in [Filesystem::Hfsx, Filesystem::Apfs] {
-		let mut project = project("");
-		project.image.filesystem = filesystem;
-		assert!(matches!(
-			preflight(&project, options()),
-			Err(PreflightError::Filesystem(actual)) if actual == filesystem
-		));
-	}
 	let mut unsupported = project("");
+	unsupported.image.filesystem = Filesystem::Apfs;
+	assert!(matches!(
+		preflight(&unsupported, options()),
+		Err(PreflightError::Filesystem(Filesystem::Apfs))
+	));
+	unsupported.image.filesystem = Filesystem::Hfsplus;
 	unsupported.image.format = ImageFormat::Raw;
 	assert!(matches!(
 		preflight(&unsupported, options()),
@@ -112,6 +110,26 @@ fn rejects_unsupported_filesystems_formats_and_catalog_names() {
 	assert_eq!(
 		preflight(&unicode, unicode_options).unwrap().filesystem(),
 		FilesystemProfile::HfsplusUnicode
+	);
+}
+
+#[test]
+fn admits_hfsx_only_with_the_case_sensitive_builder_profile() {
+	let planned = project("filesystem = 'hfsx'\n");
+	let mut options = options();
+	assert!(matches!(
+		preflight(&planned, options),
+		Err(PreflightError::FeatureNotCompiled(BuildFeature::Hfsx))
+	));
+	options.capabilities.hfsx = Availability::Unavailable;
+	assert!(matches!(
+		preflight(&planned, options),
+		Err(PreflightError::BackendUnavailable(BuildFeature::Hfsx))
+	));
+	options.capabilities.hfsx = Availability::Available;
+	assert_eq!(
+		preflight(&planned, options).unwrap().filesystem(),
+		FilesystemProfile::Hfsx
 	);
 }
 
