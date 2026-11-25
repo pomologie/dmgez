@@ -16,6 +16,10 @@ use crate::inspector::{self, Action};
 const NATIVE_UDZO: &[u8] = include_bytes!("../../../../tests/fixtures/images/tiny-UDZO.dmg");
 const NATIVE_SIGNED: &[u8] =
 	include_bytes!("../../../../tests/fixtures/images/tiny-UDZO-adhoc-sha256.dmg");
+const NATIVE_ULFO: &[u8] =
+	include_bytes!("../../../../crates/formats/dmgez-udif/tests/fixtures/apple-ulfo.dmg");
+const NATIVE_ULMO: &[u8] =
+	include_bytes!("../../../../crates/formats/dmgez-udif/tests/fixtures/apple-ulmo.dmg");
 const IMAGE_NAME: &str = "snapshot.dmg";
 
 const LAST_PAGE_ROWS: usize = 3;
@@ -137,6 +141,31 @@ fn opens_a_signed_snapshot_and_keeps_security_coverage_independent() {
 	assert!(check.passed());
 	assert_eq!(check.coverage.payload, CheckStatus::Passed);
 	assert_eq!(check.coverage.security, CheckStatus::NotChecked);
+}
+
+#[test]
+fn verifies_native_modern_images_only_with_the_selected_decoder() {
+	let scratch = tempfile::tempdir().unwrap();
+	let path = scratch.path().join(IMAGE_NAME);
+	for (bytes, decoder_enabled) in [
+		(NATIVE_ULFO, cfg!(feature = "lzfse")),
+		(NATIVE_ULMO, cfg!(feature = "lzma")),
+	] {
+		fs::write(&path, bytes).unwrap();
+		let tab = ImageTab::open(File::open(&path).unwrap()).unwrap();
+		let runs = tab.report.container.runs;
+		assert!(runs.lzfse + runs.lzma2 > 0);
+		assert_eq!(runs.decode_unavailable == 0, decoder_enabled);
+		let check = tab.snapshot.verify(&Cancellation::default());
+		let expected = if decoder_enabled {
+			CheckStatus::Passed
+		} else {
+			CheckStatus::Unavailable
+		};
+		assert_eq!(check.coverage.payload, expected);
+		assert_eq!(check.passed(), decoder_enabled);
+		assert_eq!(fs::read(&path).unwrap(), bytes);
+	}
 }
 
 #[test]

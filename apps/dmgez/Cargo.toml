@@ -8,6 +8,11 @@ license.workspace = true
 repository.workspace = true
 publish = false
 
+[features]
+# Optional image codecs
+lzfse = ["dmgez-udif/lzfse"]
+lzma = ["dmgez-udif/lzma"]
+
 [dependencies]
 # Workspace formats
 dmgez-udif = { workspace = true, features = ["read"] }
