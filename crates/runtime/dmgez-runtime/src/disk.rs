@@ -1,10 +1,12 @@
 //! Shared logical disk admission and partition selection.
 
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, path::Path};
 
-use dmgez_udif::reader::{Image, Limits, ReadAt};
+use dmgez_udif::reader::{FileSource, Image, Limits, ReadAt};
 use dmgez_vfs::{Disk, Layout, LogicalDisk, PartitionId, Raw, VolumeId};
 use thiserror::Error;
+
+use crate::image::open_file;
 
 /// The representation supplied by a frontend.
 #[derive(Debug, Clone, Copy)]
@@ -25,6 +27,24 @@ pub enum SelectionError {
 	Disk(#[from] dmgez_vfs::Error),
 }
 
+/// Borrows a captured file for use with an owning logical disk reader.
+#[derive(Debug)]
+pub struct BorrowedSource<'source>(pub &'source FileSource);
+
+impl ReadAt for BorrowedSource<'_> {
+	fn len(&self) -> u64 {
+		self.0.len()
+	}
+
+	fn check_unchanged(&self) -> Result<(), dmgez_udif::Error> {
+		self.0.check_unchanged()
+	}
+
+	fn read_exact_at(&self, offset: u64, output: &mut [u8]) -> Result<(), dmgez_udif::Error> {
+		self.0.read_exact_at(offset, output)
+	}
+}
+
 /// Admits a held source and calls an operation on its logical disk bytes.
 ///
 /// # Errors
@@ -38,6 +58,21 @@ pub fn with_logical_disk<S: ReadAt, T, E: From<dmgez_udif::Error>>(
 		Encoding::Raw => read(&mut Raw(source)),
 		Encoding::Udif(limits) => read(&mut Image::open_release(source, limits)?),
 	}
+}
+
+/// Follows one file path, reads the logical disk, and rechecks the held source.
+///
+/// # Errors
+/// Returns admission, callback or source change errors.
+pub fn with_path<T, E: From<dmgez_udif::Error>>(
+	path: &Path,
+	encoding: Encoding,
+	read: impl FnOnce(&mut dyn LogicalDisk) -> Result<T, E>,
+) -> Result<T, E> {
+	let source = open_file(path)?;
+	let result = with_logical_disk(BorrowedSource(&source), encoding, read)?;
+	source.check_unchanged()?;
+	Ok(result)
 }
 
 /// Selects the default admitted volume or a one-based partition from its map.

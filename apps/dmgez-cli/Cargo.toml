@@ -19,11 +19,13 @@ default = ["build", "parallel", "signing-rust"]
 build = [
 	"dep:dmgez-core",
 	"dmgez-core/source",
+	"dmgez-runtime/encoding",
+	"dmgez-runtime/raw-wrap",
 	"dep:dmgez-udif",
 	"dmgez-udif/write",
 	"dmgez-udif/zlib",
 ]
-convert = ["dep:dmgez-operations", "dmgez-operations/convert", "dep:dmgez-udif"]
+convert = ["dep:dmgez-operations", "dmgez-operations/convert", "dmgez-runtime/encoding", "dep:dmgez-udif"]
 
 # Inspection and comparison
 inspect = [
@@ -40,6 +42,7 @@ inspect = [
 ]
 diff = [
 	"dep:dmgez-diff",
+	"dmgez-runtime/compare",
 	"dep:dmgez-udif",
 	"dmgez-udif/read",
 	"dmgez-udif/zlib",
@@ -54,44 +57,32 @@ finder-diff = ["diff", "dmgez-diff/finder-layout"]
 remote = ["inspect", "dmgez-inspector/remote-http"]
 
 # Project configuration and linting
-appdmg-import = [
-	"dep:dmgez-config",
-	"dmgez-config/appdmg-import",
-	"dep:dmgez-core",
-	"dmgez-runtime/project-input",
-]
-lint = [
-	"dep:dmgez-config",
-	"dep:dmgez-lint",
-	"dep:dmgez-preview",
-	"dmgez-runtime/project-input",
-	"dep:serde",
-	"dep:serde_json",
-]
+appdmg-import = ["dmgez-runtime/appdmg-import"]
+lint = ["dep:dmgez-lint", "dmgez-runtime/lint", "dep:serde", "dep:serde_json"]
 
 # Headless design preview
-preview = [
-	"dep:dmgez-config",
-	"dep:dmgez-core",
-	"dep:dmgez-preview",
-	"dmgez-preview/png-render",
-	"dmgez-runtime/project-input",
-]
+preview = ["dmgez-runtime/preview"]
 
 # Installer checks
-installer-lint = ["lint", "dmgez-lint/installer"]
-installer-test = ["inspect", "dep:dmgez-operations", "dmgez-operations/install"]
+installer-lint = ["lint", "dmgez-runtime/installer-lint"]
+installer-test = ["inspect", "dep:dmgez-operations", "dmgez-operations/install", "dmgez-runtime/installer-test"]
 
 # Host mount sessions
 mount-system = ["dep:dmgez-mount", "dmgez-mount/system", "dep:serde", "dep:serde_json"]
 
 # Signing and notarization
-signing-rust = ["dmgez-signing/rust", "dep:serde", "dep:serde_json"]
-signing-native = ["dep:dmgez-signing", "dmgez-signing/native", "dep:serde", "dep:serde_json"]
-notarization-native = ["signing-native", "dmgez-signing/notarization-native"]
+signing-rust = ["dmgez-signing/rust", "dmgez-runtime?/signing-rust", "dep:serde", "dep:serde_json"]
+signing-native = [
+	"dep:dmgez-signing",
+	"dmgez-signing/native",
+	"dmgez-runtime?/signing-native",
+	"dep:serde",
+	"dep:serde_json",
+]
+notarization-native = ["signing-native", "dmgez-signing/notarization-native", "dmgez-runtime?/notarization-native"]
 
 # Parallel execution and compression
-parallel = ["dmgez-udif?/parallel", "dmgez-operations?/parallel"]
+parallel = ["dmgez-udif?/parallel", "dmgez-operations?/parallel", "dmgez-runtime?/parallel"]
 lzfse = ["dmgez-udif?/lzfse"]
 lzma = ["dmgez-udif?/lzma"]
 
@@ -106,9 +97,6 @@ dmgez-vfs = { workspace = true, optional = true }
 
 # Workspace platform
 dmgez-mount = { workspace = true, optional = true }
-
-# Workspace presentation
-dmgez-preview = { workspace = true, optional = true }
 
 # Workspace security
 dmgez-signing = { workspace = true, optional = true }
@@ -130,6 +118,9 @@ serde_json = { workspace = true, optional = true }
 clap.workspace = true
 
 [dev-dependencies]
+# Workspace foundation
+dmgez-config.workspace = true
+
 # Image codecs
 png = "=0.18.1"
 

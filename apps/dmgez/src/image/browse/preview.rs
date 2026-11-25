@@ -1,5 +1,6 @@
-use dmgez_hfsplus_read::{browse, preview};
+use dmgez_hfsplus_read::browse;
 use dmgez_preview::{ItemVisibility, actual::Coverage};
+use dmgez_runtime::preview::actual::render_disk;
 use dmgez_vfs::{Disk, LogicalDisk, VolumeId, volume::RawName};
 use eframe::egui::{Color32, ColorImage, Context, TextureHandle, TextureOptions};
 
@@ -53,8 +54,7 @@ pub(super) fn render(
 			_ => Err(Error::PreviewNameEncoding),
 		})
 		.collect::<Result<Vec<_>, _>>()?;
-	let raster = preview::capture_disk(disk, selected, limits, &components)?
-		.render(ItemVisibility::Visible)?;
+	let raster = render_disk(disk, selected, limits, &components, ItemVisibility::Visible)?;
 	let (width, height) = raster.size();
 	let size = [width as usize, height as usize];
 	let pixels = size[0]

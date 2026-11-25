@@ -4,14 +4,11 @@ use std::{
 	process::ExitCode,
 };
 
-use dmgez_config::{Project, VirtualPath};
-use dmgez_lint::{
-	Diagnostic, Evidence, Limits, Report, RuleId, Severity, Suppression, lint_layout,
-};
-use dmgez_preview::DeclaredTree;
+use dmgez_lint::{Diagnostic, Evidence, Limits, Report, RuleId, Suppression};
+use dmgez_runtime::lint::LayoutProject;
 use serde::Serialize;
 
-use crate::{CliResult, LAYOUT_PROFILE_NAME, SUPPRESSION_VALUE_NAME, project_input};
+use crate::{CliResult, LAYOUT_PROFILE_NAME, SUPPRESSION_VALUE_NAME};
 
 #[cfg(all(feature = "installer-lint", any(unix, windows)))]
 pub(super) mod installer;
@@ -34,21 +31,13 @@ pub(crate) fn run(
 	suppressions: &[String],
 	json: bool,
 ) -> CliResult<ExitCode> {
-	let folder: VirtualPath = folder.unwrap_or(ROOT_FOLDER).parse()?;
+	let folder = folder.unwrap_or(ROOT_FOLDER).parse()?;
 	let suppressions = suppressions
 		.iter()
 		.map(|argument| parse_suppression(argument))
 		.collect::<CliResult<Vec<_>>>()?;
-	let project = Project::parse(&project_input::read(path)?)?;
-	let tree = DeclaredTree::from_project(&project)?;
-	if !tree.contains_folder(&folder) {
-		return Err(format!("no declared project folder at {:?}", folder.as_str()).into());
-	}
-	let layout = tree.layout(&project, &folder)?;
-	let layout = lint_layout(&layout, Limits::default(), &suppressions, || false)?;
-	let has_warnings = layout.diagnostics.iter().any(|finding| {
-		finding.severity == Severity::Warning && finding.suppression_reason.is_none()
-	});
+	let project = LayoutProject::load(path)?;
+	let layout = project.lint(&folder, Limits::default(), &suppressions, || false)?;
 	let report = LayoutReport {
 		profile: LAYOUT_PROFILE_NAME,
 		folder: folder.as_str(),
@@ -67,7 +56,7 @@ pub(crate) fn run(
 		}
 	}
 	stdout.flush()?;
-	Ok(if has_warnings {
+	Ok(if report.layout.has_warnings() {
 		ExitCode::from(LINT_FINDINGS_EXIT_CODE)
 	} else {
 		ExitCode::SUCCESS

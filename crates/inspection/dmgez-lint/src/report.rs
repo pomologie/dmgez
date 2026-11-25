@@ -181,3 +181,13 @@ pub struct Report<'input> {
 	pub viewport: Bounds,
 	pub diagnostics: Vec<Diagnostic<'input>>,
 }
+
+impl Report<'_> {
+	/// Returns whether the layout has any unsuppressed warnings.
+	#[must_use]
+	pub fn has_warnings(&self) -> bool {
+		self.diagnostics.iter().any(|finding| {
+			finding.severity == Severity::Warning && finding.suppression_reason.is_none()
+		})
+	}
+}

@@ -53,23 +53,18 @@ pub(super) fn run(arguments: &Arguments) -> CliResult {
 
 #[cfg(feature = "preview")]
 fn design(path: &Path, arguments: &Arguments) -> CliResult {
-	use dmgez_config::Project;
-	use dmgez_preview::raster::DesignPreview;
+	use dmgez_runtime::preview::design_png;
 
 	const DESIGN_MODE: &str = "design";
 
-	let folder = arguments.folder.parse()?;
-	let project_directory = path.parent().unwrap_or(Path::new(""));
-	let project = Project::parse(&crate::project_input::read(path)?)?;
-	let preview =
-		DesignPreview::from_project(&project, project_directory, &folder, arguments.visibility())?;
-	publish(
+	let size = design_png(
+		path,
+		&arguments.folder.parse()?,
+		arguments.visibility(),
 		&arguments.output,
-		DESIGN_MODE,
-		preview.size(),
-		|output| preview.write_png(output),
-		|| Ok(()),
-	)
+	)?;
+	print_report(DESIGN_MODE, size);
+	Ok(())
 }
 
 #[cfg(not(feature = "preview"))]
@@ -87,30 +82,22 @@ fn image(_: &Path, _: &Arguments) -> CliResult {
 
 #[cfg(feature = "preview")]
 impl Arguments {
-	fn visibility(&self) -> dmgez_preview::ItemVisibility {
+	fn visibility(&self) -> dmgez_runtime::preview::ItemVisibility {
+		use dmgez_runtime::preview::ItemVisibility;
+
 		if self.show_hidden {
-			dmgez_preview::ItemVisibility::IncludeHidden
+			ItemVisibility::IncludeHidden
 		} else {
-			dmgez_preview::ItemVisibility::Visible
+			ItemVisibility::Visible
 		}
 	}
 }
 
 #[cfg(feature = "preview")]
-fn publish<E: std::error::Error + 'static>(
-	output: &Path,
-	mode: &str,
-	(width, height): (u32, u32),
-	render: impl FnOnce(&mut dyn std::io::Write) -> Result<(), E>,
-	validate: impl FnOnce() -> Result<(), E>,
-) -> CliResult {
-	use dmgez_core::output::publish_new;
-
+fn print_report(mode: &str, (width, height): (u32, u32)) {
 	const MODE_KEY: &str = "mode";
 	const WIDTH_KEY: &str = "width";
 	const HEIGHT_KEY: &str = "height";
 
-	publish_new(output, render, |_, ()| validate())?;
 	println!("{MODE_KEY}={mode}\n{WIDTH_KEY}={width}\n{HEIGHT_KEY}={height}");
-	Ok(())
 }

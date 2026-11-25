@@ -4,13 +4,13 @@ use std::{
 	process::ExitCode,
 };
 
-use dmgez_config::Project;
-use dmgez_lint::installer::{Limits, Report, RuleId, Suppression, lint_installer};
+use dmgez_lint::installer::{Limits, Report, RuleId, Suppression};
+use dmgez_runtime::lint::installer::lint_project;
 use serde::Serialize;
 
 use super::{LINT_FINDINGS_EXIT_CODE, suppression_parts};
 use crate::{
-	CliResult, INSTALLER_PROFILE_NAME, project_input,
+	CliResult, INSTALLER_PROFILE_NAME,
 	report_output::{EscapedText, write_report},
 };
 
@@ -34,18 +34,7 @@ pub(crate) fn run(
 		.iter()
 		.map(|argument| parse_suppression(argument))
 		.collect::<CliResult<Vec<_>>>()?;
-	let project_path = path.canonicalize()?;
-	let project = Project::parse(&project_input::read(&project_path)?)?;
-	let config_dir = project_path
-		.parent()
-		.ok_or("project path has no parent directory")?;
-	let installer = lint_installer(
-		&project,
-		config_dir,
-		Limits::default(),
-		&suppressions,
-		|| false,
-	)?;
+	let installer = lint_project(path, Limits::default(), &suppressions, || false)?;
 	let report = InstallerReport {
 		profile: INSTALLER_PROFILE_NAME,
 		installer,

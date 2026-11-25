@@ -28,12 +28,7 @@ mod optimize;
 mod preview;
 mod project_build;
 mod project_edit;
-#[cfg(any(
-	feature = "appdmg-import",
-	feature = "lint",
-	feature = "preview",
-	feature = "project-build"
-))]
+#[cfg(feature = "project-build")]
 mod project_input;
 #[cfg(any(
 	feature = "hfsplus-read",
@@ -48,11 +43,7 @@ mod project_input;
 ))]
 mod report_output;
 mod signing;
-#[cfg(any(
-	feature = "image-edit",
-	feature = "project-edit",
-	feature = "project-release"
-))]
+#[cfg(feature = "project-release")]
 mod staged_image;
 mod staple;
 mod verify_command;
@@ -277,18 +268,10 @@ struct SamplingFlags {
 #[cfg(any(feature = "build", feature = "convert"))]
 impl EncodingFlags {
 	fn execution(&self) -> Result<dmgez_udif::writer::Execution, dmgez_udif::Error> {
-		use dmgez_udif::{Error, writer::Execution};
-
-		const SERIAL_WORKER_COUNT: usize = 1;
-		match (self.serial, cfg!(feature = "parallel"), self.threads) {
-			(true, _, _)
-			| (false, false, None | Some(Execution::AUTO_WORKERS | SERIAL_WORKER_COUNT)) => {
-				Ok(Execution::Serial)
-			}
-			(false, false, Some(_)) => Err(Error::FeatureNotCompiled(PARALLEL_FEATURE)),
-			(false, true, workers) => Ok(Execution::Parallel {
-				workers: workers.unwrap_or(Execution::AUTO_WORKERS),
-			}),
+		if self.serial {
+			Ok(dmgez_udif::writer::Execution::Serial)
+		} else {
+			dmgez_runtime::encoding::scheduled_execution(self.threads)
 		}
 	}
 }

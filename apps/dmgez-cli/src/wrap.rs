@@ -1,12 +1,9 @@
-use std::{fs::File, path::Path};
+use std::path::Path;
 
-use dmgez_core::{
-	output::publish_new,
-	source::{CapturedFile, SourceError},
-};
+use dmgez_runtime::wrap;
 use dmgez_udif::{
 	Error,
-	writer::{self, Profile, WriteOptions},
+	writer::{Profile, WriteOptions},
 };
 
 use crate::{CliResult, EncodingFlags, Format, LZFSE_FEATURE, LZMA_FEATURE};
@@ -26,23 +23,12 @@ pub(crate) fn run(
 		Format::Ulmo => return Err(Error::FeatureNotCompiled(LZMA_FEATURE).into()),
 	};
 	let execution = encoding.execution()?;
-	let input = CapturedFile::new(File::open(input)?)?;
 	let options = WriteOptions {
 		profile,
 		execution,
 		..WriteOptions::default()
 	};
-	let report = publish_new(
-		destination,
-		|stage| writer::write_image(input.reader(), input.len(), stage, &options),
-		|_, _| {
-			input.validate().map_err(|error| match error {
-				SourceError::Changed => Error::SourceChanged,
-				SourceError::Io(error) => error.into(),
-				error => std::io::Error::other(error).into(),
-			})
-		},
-	)?;
+	let report = wrap::file(input, destination, &options)?;
 	println!(
 		"wrote {} bytes from {} logical bytes",
 		report.physical_bytes, report.logical_bytes

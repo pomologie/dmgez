@@ -168,10 +168,7 @@ pub(crate) enum Error {
 	StalledDirectory,
 	#[cfg(feature = "actual-preview")]
 	#[error(transparent)]
-	PreviewCapture(#[from] dmgez_hfsplus_read::preview::CaptureError),
-	#[cfg(feature = "actual-preview")]
-	#[error(transparent)]
-	PreviewRaster(#[from] dmgez_preview::raster::Error),
+	Preview(#[from] dmgez_runtime::preview::actual::RenderError),
 	#[cfg(feature = "actual-preview")]
 	#[error("the folder name encoding cannot be used for this preview")]
 	PreviewNameEncoding,
