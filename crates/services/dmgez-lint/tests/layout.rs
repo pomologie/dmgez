@@ -2,7 +2,8 @@
 
 use dmgez_config::{Project, VirtualPath};
 use dmgez_lint::{
-	Bounds, Budget, Error, Evidence, Limits, RuleId, Severity, Suppression, lint_layout,
+	Bounds, Budget, Error, Evidence, Limits, ParseRuleIdError, RuleId, Severity, Suppression,
+	lint_layout,
 };
 use dmgez_preview::{ItemInput, ProjectFolder};
 
@@ -131,6 +132,35 @@ fn preserves_reason_and_versioned_rule_names_in_serialized_results() {
 		),
 		Err(Error::DuplicateSuppression(RuleId::IconClipped))
 	));
+}
+
+#[test]
+fn parses_exactly_the_rule_identifiers_serialized_in_reports() {
+	for (id, spelling) in [
+		(RuleId::IconClipped, "icon_clipped"),
+		(RuleId::IconOutsideViewport, "icon_outside_viewport"),
+		(RuleId::IconsOverlap, "icons_overlap"),
+		(RuleId::HiddenPositionedIcon, "hidden_positioned_icon"),
+		(RuleId::AutomaticArrangement, "automatic_arrangement"),
+		(RuleId::TightGridSpacing, "tight_grid_spacing"),
+	] {
+		assert_eq!(spelling.parse::<RuleId>(), Ok(id));
+		assert_eq!(id.as_str(), spelling);
+		assert_eq!(serde_json::to_value(id).unwrap(), spelling);
+	}
+	for spelling in [
+		"",
+		"unknown",
+		"IconClipped",
+		"icon-clipped",
+		"icon_clipped ",
+	] {
+		assert_eq!(spelling.parse::<RuleId>(), Err(ParseRuleIdError));
+	}
+	for (severity, spelling) in [(Severity::Info, "info"), (Severity::Warning, "warning")] {
+		assert_eq!(severity.as_str(), spelling);
+		assert_eq!(serde_json::to_value(severity).unwrap(), spelling);
+	}
 }
 
 #[test]

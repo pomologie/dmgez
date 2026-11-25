@@ -1,13 +1,15 @@
+use std::str::FromStr;
+
 use dmgez_preview::FolderRect;
-use serde::Serialize;
+use serde::{Serialize, Serializer};
+use thiserror::Error;
 
 /// Version of the serialized layout report.
 pub const SCHEMA_VERSION: u32 = 1;
 
 /// Stable identifiers for the implemented layout rules.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
-#[serde(rename_all = "snake_case")]
 pub enum RuleId {
 	IconClipped,
 	IconOutsideViewport,
@@ -18,6 +20,16 @@ pub enum RuleId {
 }
 
 impl RuleId {
+	const ALL: [Self; 6] = [
+		Self::IconClipped,
+		Self::IconOutsideViewport,
+		Self::IconsOverlap,
+		Self::HiddenPositionedIcon,
+		Self::AutomaticArrangement,
+		Self::TightGridSpacing,
+	];
+
+	/// Returns the stable, case-sensitive rule identifier.
 	#[must_use]
 	pub const fn as_str(self) -> &'static str {
 		match self {
@@ -39,12 +51,51 @@ impl RuleId {
 	}
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+/// The supplied spelling is not a supported lint rule identifier.
+#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+#[error("unknown layout lint rule identifier")]
+pub struct ParseRuleIdError;
+
+impl FromStr for RuleId {
+	type Err = ParseRuleIdError;
+
+	fn from_str(value: &str) -> Result<Self, Self::Err> {
+		Self::ALL
+			.into_iter()
+			.find(|rule| rule.as_str() == value)
+			.ok_or(ParseRuleIdError)
+	}
+}
+
+impl Serialize for RuleId {
+	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		serializer.serialize_unit_variant(stringify!(RuleId), *self as u32, self.as_str())
+	}
+}
+
+/// Severity of a layout finding.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[non_exhaustive]
-#[serde(rename_all = "snake_case")]
 pub enum Severity {
 	Info,
 	Warning,
+}
+
+impl Severity {
+	/// Returns the stable severity name used in reports.
+	#[must_use]
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::Info => "info",
+			Self::Warning => "warning",
+		}
+	}
+}
+
+impl Serialize for Severity {
+	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+		serializer.serialize_unit_variant(stringify!(Severity), *self as u32, self.as_str())
+	}
 }
 
 /// The exact inspected geometry in logical folder points.
