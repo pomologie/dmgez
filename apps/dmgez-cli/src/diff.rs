@@ -24,6 +24,7 @@ mod bytes;
 mod semantic;
 
 pub(super) const COMMAND: &str = "diff";
+pub(super) const FINDER_DIFF_FEATURE: &str = "finder-diff";
 pub(super) const HFSPLUS_CAPABILITY: &str = "diff-hfsplus";
 pub(super) const APFS_CAPABILITY: &str = "diff-apfs";
 pub(super) const HFSPLUS_COMPILED: bool = cfg!(all(feature = "diff", feature = "hfsplus-read"));
@@ -67,6 +68,9 @@ struct SemanticOptions {
 	/// Include supported extended attributes in the semantic comparison.
 	#[arg(long)]
 	xattrs: bool,
+	/// Compare supported Finder settings from matched .DS_Store files.
+	#[arg(long)]
+	finder_layout: bool,
 	/// Interpret the left input as a raw disk image in semantic mode.
 	#[arg(long)]
 	left_raw: bool,
@@ -122,6 +126,9 @@ pub(super) fn run(arguments: &Arguments) -> CliResult<ExitCode> {
 	match arguments.mode {
 		Mode::Semantic => run_semantic(arguments),
 		_ if arguments.options.xattrs => Err(invalid("--xattrs requires --mode semantic").into()),
+		_ if arguments.options.finder_layout => {
+			Err(invalid("--finder-layout requires --mode semantic").into())
+		}
 		_ if arguments.options.has_selectors() => Err(invalid(
 			"filesystem, raw input, partition, volume and checkpoint selectors require --mode semantic",
 		)
@@ -136,6 +143,10 @@ fn run_semantic(arguments: &Arguments) -> CliResult<ExitCode> {
 		.options
 		.filesystem
 		.ok_or_else(|| invalid("semantic comparison requires --filesystem hfsplus or apfs"))?;
+	#[cfg(not(feature = "finder-diff"))]
+	if arguments.options.finder_layout {
+		return Err(format!("feature not compiled: {FINDER_DIFF_FEATURE}").into());
+	}
 	match filesystem {
 		Filesystem::Hfsplus => {
 			if arguments.options.has_apfs_selectors() {

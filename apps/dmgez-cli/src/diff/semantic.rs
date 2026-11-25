@@ -4,6 +4,8 @@ use std::{
 	process::ExitCode,
 };
 
+#[cfg(feature = "finder-diff")]
+use dmgez_diff::semantic::{Field, compare_with_finder_layout};
 use dmgez_diff::{
 	Side,
 	semantic::{Limits, Outcome, Report, compare, compare_with_xattrs},
@@ -148,10 +150,13 @@ where
 		Input::new(right.partition(), arguments.options.right_raw, right_volume),
 		Side::Right,
 	)?;
-	let comparison = if arguments.options.xattrs {
-		compare_with_xattrs(left, right, limits, || false)?
-	} else {
-		compare(left, right, limits, || false)?
+	let comparison = match &arguments.options {
+		#[cfg(feature = "finder-diff")]
+		options if options.finder_layout => {
+			compare_with_finder_layout(left, right, limits, options.xattrs, || false)?
+		}
+		options if options.xattrs => compare_with_xattrs(left, right, limits, || false)?,
+		_ => compare(left, right, limits, || false)?,
 	};
 	Ok(DiffReport {
 		address_space: FILESYSTEM_SPACE,
@@ -267,6 +272,11 @@ impl DiffReport {
 			if !change.xattrs.is_empty() {
 				write!(output, "\txattrs = ")?;
 				write_json(output, &change.xattrs)?;
+			}
+			#[cfg(feature = "finder-diff")]
+			if !change.finder_layout.is_empty() {
+				write!(output, "\t{} = ", Field::FinderLayout.as_str())?;
+				write_json(output, &change.finder_layout)?;
 			}
 			writeln!(output)?;
 		}

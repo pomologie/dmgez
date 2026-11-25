@@ -313,6 +313,11 @@ fn run(command: Command) -> CliResult<ExitCode> {
 				(diff::COMMAND, cfg!(feature = "diff")),
 				(diff::HFSPLUS_CAPABILITY, diff::HFSPLUS_COMPILED),
 				(diff::APFS_CAPABILITY, diff::APFS_COMPILED),
+				(
+					diff::FINDER_DIFF_FEATURE,
+					cfg!(feature = "finder-diff")
+						&& (diff::HFSPLUS_COMPILED || diff::APFS_COMPILED),
+				),
 				(IMPORT_APPDMG_COMMAND, cfg!(feature = "appdmg-import")),
 				(LINT_COMMAND, cfg!(feature = "lint")),
 				(VERIFY_CONTAINER_CAPABILITY, cfg!(feature = "inspect")),
