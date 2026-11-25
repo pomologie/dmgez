@@ -365,6 +365,7 @@ dependencies = [
  "ds_parser",
  "icns",
  "plist",
+ "png",
  "thiserror",
 ]
 

@@ -31,6 +31,7 @@ FEATURE_ADDITIONS = {
     "project-build": ["dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config"],
     "finder-write": ["dmgez-builder?/finder-write", f"{ADAPTER}?/finder-write"],
     "volume-icon": ["finder-write", f"{ADAPTER}?/volume-icon"],
+    "badge-icons": ["volume-icon", f"{ADAPTER}?/badge-icons"],
 }
 FEATURE_FORWARDING = {
     "build": ["project-build", "finder-write"],

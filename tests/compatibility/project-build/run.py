@@ -71,6 +71,8 @@ def main():
     parser.add_argument("--lzma", action="store_true", help="enable the optional ULMO codec")
     parser.add_argument("--volume-icon", action="store_true",
                         help="enable prebuilt or PNG-set volume icons")
+    parser.add_argument("--badge-icons", action="store_true",
+                        help="enable volume icons rendered from a PNG badge")
     options = parser.parse_args()
     if not (sys.platform == "darwin" or sys.platform.startswith("linux")):
         parser.error("the development adapter requires a macOS or Linux host metadata adapter")
@@ -93,7 +95,9 @@ def main():
         command.append("--no-default-features")
     if options.lzma:
         command.extend(["--features", "lzma"])
-    if options.volume_icon:
+    if options.badge_icons:
+        command.extend(["--features", "badge-icons"])
+    elif options.volume_icon:
         command.extend(["--features", "volume-icon"])
     if options.project:
         command.extend(["--quiet", "--", "--working-directory", str(Path.cwd())])
@@ -119,7 +123,7 @@ def main():
         for source in CLI_BUILD_FILES:
             shutil.copy2(cli / source, isolated / "src" / source)
         shutil.copytree(cli / CLI_BUILD_MODULES, isolated / "src" / CLI_BUILD_MODULES)
-        if options.volume_icon and not options.project:
+        if (options.volume_icon or options.badge_icons) and not options.project:
             shutil.copy2(dmgez_source / VOLUME_ICON_FIXTURE, isolated / "tests" / "smoke")
         (isolated / "Cargo.toml").write_text(isolated_manifest(paths), encoding="utf-8")
         # Preserve the command's status without echoing its definition values on failure.

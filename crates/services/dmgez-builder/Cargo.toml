@@ -9,6 +9,7 @@ description = "Plan and execute dmgez image builds"
 
 [features]
 default = ["finder-write", "parallel", "zlib"]
+badge-icons = ["volume-icon", "dmgez-finder/badge-icons"]
 finder-write = ["dep:dmgez-finder", "dep:flate2", "dep:png", "dep:tiff"]
 lzfse = ["dmgez-udif/lzfse"]
 lzma = ["dmgez-udif/lzma"]

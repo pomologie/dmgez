@@ -8,6 +8,8 @@ repository.workspace = true
 description = "Generate Finder presentation records for dmgez images"
 
 [features]
+badge-icons = ["image-processing", "volume-icon"]
+image-processing = ["dep:png"]
 volume-icon = [
 	"dep:crc32fast",
 	"dep:icns",
@@ -21,6 +23,7 @@ dmgez-config.workspace = true
 ds_parser.workspace = true
 icns = { workspace = true, optional = true }
 plist.workspace = true
+png = { version = "=0.18.1", optional = true }
 thiserror.workspace = true
 
 [lints]
