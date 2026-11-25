@@ -4,6 +4,8 @@ Launch the desktop app with `cargo run -p dmgez-gui` or pass a local TOML projec
 
 The design workspace lays out project declarations and their implied folders. It uses the shared preview geometry for zoom, clipping, icon selection, and snapping. Volume-label, visibility, and position edits use the typed project document and preserve comments. Save copy creates a new TOML file beside the source project, keeping its relative paths valid.
 
+On macOS and Linux, **Save** and Cmd/Ctrl+S save the exact edited TOML back to the open project. Save compares the file identity and original text before atomic replacement in a trusted local directory. Conflicts and unsupported access metadata leave your edits available in the editor. **Save copy** is available on Windows as well.
+
 Enable **Show layout findings** to check the current folder's declared icon layout. Visible icons with warnings get a marker on the canvas. The text list also includes findings for hidden and off-canvas icons. The check uses the same rules as `dmgez lint --profile layout` and refreshes after folder navigation, applied edits, undo, or redo. Dragging keeps the findings for the last applied edit until you release the icon. Dense layouts that exceed the desktop check's budget show an error.
 
 Use **Add files…** to add up to 256 selected files to the current folder layout. Files below the project directory keep project-relative source paths. Files outside it use absolute source paths. A successful selection is one undoable edit.
@@ -27,6 +29,8 @@ Enter a decimal or `0x` hexadecimal offset in **Logical byte offset** and choose
 
 Choose **Verify container** to scan stored runs and declared container checksums in the background. The sidebar reports structure, payload, filesystem, and security coverage independently. Filesystem and security stay “Not checked” for a container scan. **Cancel** stops at the next verification boundary and keeps the last completed result. If the open file changes, reopen the image before relying on its observed metadata.
 
+Export the current inspection or completed verification as JSON from the sidebar. After jumping to a run, **Export selected run…** saves its decoded logical bytes when the decoder is available and the run is at most 64 MiB. Exports require a fresh destination and recheck the open image before publication.
+
 ### Browse HFS+ and HFSX files
 
 From the workspace root, compose the desktop app with the sibling HFS+ reader.
@@ -40,9 +44,13 @@ Choose **Files** to open a recognized whole-disk HFS+ or HFSX volume or select a
 
 Regular file details report logical data and stored resource fork lengths separately. Extended attribute details show up to 64 stored names. The view distinguishes an empty inventory from an unavailable observation and reports the cause of a failed query.
 
+Use **Back** and **Forward** to revisit folders and their last catalog pages. **Find in folder** searches up to 4,096 immediate catalog entries and shows up to 64 matches in native catalog order. It uses the volume's name matching rules and indicates when a limit stops the search.
+
 Add `--features lzfse,lzma` to enable ULFO and ULMO decoding for verification and filesystem reads. Container metadata remains visible when its decoder is unavailable.
 
 Add `--features actual-preview` to the desktop composer and choose **Preview folder** after opening a volume or folder in **Files**. The preview shows actual stored icon positions and supported artwork, with fallback status next to the image. Use **Show catalog list** to return to folder navigation and file details. [Actual-image preview profile](../../crates/presentation/dmgez-preview/README.md#render-an-actual-disk-image)
+
+Activate a rendered folder icon to browse it, or activate a file, application bundle, or symlink icon to open its details. The icon controls are keyboard accessible. **Show hidden items** redraws the preview from the opened volume, and the setting carries across folder navigation.
 
 Add `--test` to the composer command to run the desktop suite with the sibling reader’s fixtures. The macOS suite exercised an Apple partition map, exact decomposed HFS+ names, separate case-sensitive HFSX entries, pagination, cancellation, and a modified source. An AccessKit simulation opened the Files view and navigated the paged catalog. [Volume tests](src/image/browse/tests.rs)
 
