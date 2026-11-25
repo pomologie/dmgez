@@ -22,14 +22,26 @@ pub use hfsplus_reader::check::{AlternateStatus, ReachableDataReport, Structural
 #[cfg(feature = "verify")]
 pub use verification::{check, check_reachable_data};
 
-#[cfg(all(feature = "build", any(target_os = "linux", target_os = "macos", windows)))]
+#[cfg(all(
+	feature = "build",
+	any(target_os = "linux", target_os = "macos", windows)
+))]
 mod hfsplus;
-#[cfg(all(feature = "image-edit", any(target_os = "linux", target_os = "macos", windows)))]
+#[cfg(all(
+	feature = "image-edit",
+	any(target_os = "linux", target_os = "macos", windows)
+))]
 pub mod rebuild;
 
-#[cfg(all(feature = "image-edit", any(target_os = "linux", target_os = "macos", windows)))]
+#[cfg(all(
+	feature = "image-edit",
+	any(target_os = "linux", target_os = "macos", windows)
+))]
 pub use hfsplus::HostCopyMetadataLoss;
-#[cfg(all(feature = "build", any(target_os = "linux", target_os = "macos", windows)))]
+#[cfg(all(
+	feature = "build",
+	any(target_os = "linux", target_os = "macos", windows)
+))]
 pub use hfsplus::{
 	Error, HfsBuildReport, HfsImage, MetadataLoss, PreparedHfsBuild, capabilities, prepare,
 	prepare_with_progress,

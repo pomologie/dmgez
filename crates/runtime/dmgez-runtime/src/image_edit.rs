@@ -12,12 +12,12 @@ use dmgez_config::{
 	project_edit::{EditBatchError, MAX_EDIT_BATCH_BYTES, parse_edit_batch},
 };
 use dmgez_core::output::{PublishError, StagedReader, publish_new};
+use dmgez_hfsplus::AlternateStatus;
+use dmgez_hfsplus::browse::{Limits, with_catalog};
 use dmgez_hfsplus::{
 	HostCopyMetadataLoss,
 	rebuild::{PrepareError, PreparedEdit, seal_prepared},
 };
-use dmgez_hfsplus::AlternateStatus;
-use dmgez_hfsplus::browse::{Limits, with_catalog};
 use dmgez_operations::edit::image_source::{
 	ImageSource, ImageSourceError, ImageSourceOptions, SourceEnvelope as ObservedEnvelope,
 };

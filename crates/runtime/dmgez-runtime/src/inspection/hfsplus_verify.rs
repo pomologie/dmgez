@@ -18,11 +18,9 @@ pub(super) fn verify(
 	let limits = Limits::default();
 	let mut cause = None;
 	let check = |window: &mut dyn FilesystemSource| {
-		dmgez_hfsplus::check_reachable_data(
-			window.len(),
-			max_payload_bytes,
-			|offset, output| window.read_exact_at(offset, output),
-		)
+		dmgez_hfsplus::check_reachable_data(window.len(), max_payload_bytes, |offset, output| {
+			window.read_exact_at(offset, output)
+		})
 		.map(|report| FilesystemEvidence::stored_window(report.stored_bytes.0))
 		.map_err(|error| {
 			let kind = error.kind();

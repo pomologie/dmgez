@@ -4,7 +4,8 @@ use hfsplus_format::attributes::MAX_NAME_UNITS;
 use hfsplus_reader::{attributes::AttributeReadError, catalog::CatalogAttributeError};
 
 use super::{
-	CatalogId, Error, ForkReader, HfsBackend, LogicalDisk, LookupName, RawName, ReadFork, SourceError,
+	CatalogId, Error, ForkReader, HfsBackend, LogicalDisk, LookupName, RawName, ReadFork,
+	SourceError,
 };
 
 impl<S: LogicalDisk> HfsBackend<'_, '_, S> {
@@ -16,13 +17,10 @@ impl<S: LogicalDisk> HfsBackend<'_, '_, S> {
 		let mut limits = self.limits.logical_data.attributes;
 		let requested = usize::try_from(limit.get()).unwrap_or(usize::MAX);
 		limits.max_entries = limits.max_entries.min(requested);
-		let names = self
-			.catalog
-			.list_entry_attribute_names(node, self.limits.hard_links, limits)?;
-		Ok(names
-			.into_iter()
-			.map(RawName::Utf16)
-			.collect())
+		let names =
+			self.catalog
+				.list_entry_attribute_names(node, self.limits.hard_links, limits)?;
+		Ok(names.into_iter().map(RawName::Utf16).collect())
 	}
 
 	pub(super) fn with_extended_attribute<T>(
@@ -47,7 +45,7 @@ impl<S: LogicalDisk> HfsBackend<'_, '_, S> {
 	}
 }
 
-	impl From<CatalogAttributeError<SourceError>> for Error {
+impl From<CatalogAttributeError<SourceError>> for Error {
 	fn from(error: CatalogAttributeError<SourceError>) -> Self {
 		match error {
 			CatalogAttributeError::Catalog(error) => Self::Catalog(error),
