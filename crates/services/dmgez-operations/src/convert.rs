@@ -122,6 +122,12 @@ pub fn stream(source: impl ReadAt, sink: impl Write, options: &Options) -> Resul
 /// Refuses any existing destination, including an alias of the source.
 /// Conversion, verification or publication failure leaves existing files intact.
 pub fn file(source: &Path, destination: &Path, options: &Options) -> Result<Report, FileError> {
+	let source = open_source(source, destination)?;
+	let (plan, input_checks) = prepare(source, options)?;
+	publish_plan(plan, input_checks, destination, options)
+}
+
+pub(crate) fn open_source(source: &Path, destination: &Path) -> Result<FileSource, FileError> {
 	match fs::symlink_metadata(destination) {
 		Ok(_) => return Err(FileError::DestinationExists),
 		Err(error) if error.kind() == io::ErrorKind::NotFound => {}
@@ -133,9 +139,15 @@ pub fn file(source: &Path, destination: &Path, options: &Options) -> Result<Repo
 		))
 		.into());
 	}
-	let source =
-		FileSource::new(File::open(source).map_err(FileError::Open)?).map_err(Error::Input)?;
-	let (plan, input_checks) = prepare(source, options)?;
+	Ok(FileSource::new(File::open(source).map_err(FileError::Open)?).map_err(Error::Input)?)
+}
+
+pub(crate) fn publish_plan<S: ReadAt>(
+	plan: Plan<S>,
+	input_checks: Verification,
+	destination: &Path,
+	options: &Options,
+) -> Result<Report, FileError> {
 	let metadata = plan.metadata;
 	let plan = RefCell::new(plan);
 	let output = publish_new(
@@ -169,12 +181,15 @@ fn report(
 	}
 }
 
-struct Plan<S> {
+pub(crate) struct Plan<S> {
 	image: Image<CheckedSource<S>>,
 	metadata: RebuildMetadata,
 }
 
-fn prepare<S: ReadAt>(source: S, options: &Options) -> Result<(Plan<S>, Verification), Error> {
+pub(crate) fn prepare<S: ReadAt>(
+	source: S,
+	options: &Options,
+) -> Result<(Plan<S>, Verification), Error> {
 	if !matches!(options.output.profile, Profile::Udro | Profile::Udzo) {
 		return Err(Error::Target);
 	}
@@ -199,6 +214,16 @@ fn prepare<S: ReadAt>(source: S, options: &Options) -> Result<(Plan<S>, Verifica
 }
 
 impl<S: ReadAt> Plan<S> {
+	pub(crate) fn logical_bytes(&self) -> u64 {
+		self.image.descriptor().logical_bytes
+	}
+
+	pub(crate) fn read_exact_at(&mut self, offset: u64, bytes: &mut [u8]) -> Result<(), Error> {
+		self.image
+			.read_exact_at(offset, bytes)
+			.map_err(Error::Input)
+	}
+
 	fn encode(&mut self, sink: impl Write, options: &Options) -> Result<WriteReport, Error> {
 		let reader = LogicalReader {
 			image: &mut self.image,
