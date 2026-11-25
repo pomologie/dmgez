@@ -14,7 +14,7 @@ decmpfs-zlib = ["hfsplus-reader/decmpfs-zlib"]
 verify = []
 
 [dependencies]
-# dmgez crates
+# Workspace foundation
 dmgez-vfs = { path = "../../foundation/dmgez-vfs", default-features = false, optional = true }
 
 # HFS+ libraries

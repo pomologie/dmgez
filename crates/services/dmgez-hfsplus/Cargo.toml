@@ -18,12 +18,18 @@ parallel = ["dmgez-builder/parallel"]
 volume-icon = ["finder-write", "dmgez-builder/volume-icon"]
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", windows))'.dependencies]
-# dmgez crates
-dmgez-builder = { version = "=0.1.0", path = "../dmgez-builder", default-features = false, features = ["zlib"] }
+# Workspace formats
+dmgez-udif = { version = "=0.1.0", path = "../../formats/dmgez-udif", default-features = false, features = ["write"] }
+
+# Workspace foundation
 dmgez-config = { version = "=0.1.0", path = "../../foundation/dmgez-config" }
 dmgez-core = { version = "=0.1.0", path = "../../foundation/dmgez-core", default-features = false, features = ["source"] }
+
+# Workspace presentation
 dmgez-finder = { version = "=0.1.0", path = "../../presentation/dmgez-finder", optional = true }
-dmgez-udif = { version = "=0.1.0", path = "../../formats/dmgez-udif", default-features = false, features = ["write"] }
+
+# Workspace services
+dmgez-builder = { version = "=0.1.0", path = "../dmgez-builder", default-features = false, features = ["zlib"] }
 
 # HFS+ libraries
 hfsplus-builder = "=0.1.0"

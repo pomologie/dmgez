@@ -81,8 +81,10 @@ sha2 = { version = "0.11.1", default-features = false }
 gpt = { version = "=4.1.0", default-features = false }
 part-tables = { version = "=0.1.0", default-features = false, features = ["apm", "mbr"] }
 
-# Finder metadata and images
+# Finder metadata
 ds_parser = "=0.4.0"
+
+# Image codecs
 icns = { version = "=0.5.0", default-features = false, features = ["pngio"] }
 tiff = { version = "=0.11.3", default-features = false, features = ["deflate", "lzw"] }
 
@@ -102,8 +104,10 @@ tempfile = "3.27.0"
 # Parallel execution
 rayon = "1.12.0"
 
-# Application interfaces
+# Command-line interface
 clap = { version = "4.6.8", features = ["derive"] }
+
+# Desktop interface
 eframe = { version = "=0.37.0", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
 rfd = { version = "=0.17.2", default-features = false, features = ["xdg-portal", "wayland"] }
 

@@ -12,25 +12,27 @@ native = ["dep:dmgez-macho", "dep:dmgez-udif", "dep:plist", "dep:quick-xml", "de
 notarization-native = ["native", "dep:dmgez-core", "dep:serde_json", "rustix/process"]
 
 [dependencies]
-# Serialization
+# Serialization and configuration
 serde.workspace = true
 
 # Diagnostics
 thiserror.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
-# Workspace crates
-dmgez-core = { workspace = true, optional = true, features = ["staging"] }
+# Workspace formats
 dmgez-macho = { workspace = true, optional = true }
 dmgez-udif = { workspace = true, optional = true, features = ["signature-integrity"] }
 
-# Serialization
-plist = { workspace = true, optional = true, features = ["serde", "enable_unstable_features_that_may_break_with_minor_version_bumps"] }
-quick-xml = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
+# Workspace foundation
+dmgez-core = { workspace = true, optional = true, features = ["staging"] }
 
 # Hashes and checksums
 sha2 = { workspace = true, optional = true }
+
+# Serialization and configuration
+plist = { workspace = true, optional = true, features = ["serde", "enable_unstable_features_that_may_break_with_minor_version_bumps"] }
+quick-xml = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
 # Filesystem access and staging
 rustix = { workspace = true, optional = true }

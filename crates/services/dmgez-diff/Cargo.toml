@@ -12,24 +12,26 @@ finder-layout = ["dep:dmgez-finder"]
 content-hash = ["dep:blake3"]
 
 [dependencies]
-# Workspace crates
-dmgez-finder = { workspace = true, optional = true }
+# Workspace foundation
 dmgez-vfs.workspace = true
+
+# Workspace presentation
+dmgez-finder = { workspace = true, optional = true }
 
 # Hashes and checksums
 blake3 = { workspace = true, optional = true }
 
-# Serialization
+# Serialization and configuration
 serde.workspace = true
 
 # Diagnostics
 thiserror.workspace = true
 
 [dev-dependencies]
-# Workspace crates
+# Workspace formats
 dmgez-udif = { workspace = true, features = ["read", "zlib"] }
 
-# Serialization
+# Serialization and configuration
 serde_json.workspace = true
 
 [lints]

@@ -12,7 +12,7 @@ default = ["zlib"]
 zlib = ["dmgez-udif/zlib"]
 
 [dependencies]
-# Workspace crates
+# Workspace formats
 dmgez-udif = { workspace = true, features = ["read"] }
 
 # Partition tables
@@ -23,6 +23,7 @@ part-tables.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
+# Hashes and checksums
 crc32fast.workspace = true
 
 [lints]

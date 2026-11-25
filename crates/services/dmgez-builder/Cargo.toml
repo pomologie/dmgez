@@ -18,17 +18,21 @@ volume-icon = ["finder-write", "dmgez-finder/volume-icon", "dep:dmgez-macho"]
 zlib = ["dmgez-udif/zlib"]
 
 [dependencies]
-# Workspace crates
-dmgez-config.workspace = true
-dmgez-core = { workspace = true, features = ["source", "staging"] }
-dmgez-finder = { workspace = true, optional = true }
+# Workspace formats
 dmgez-macho = { workspace = true, optional = true }
 dmgez-udif = { workspace = true, features = ["write"] }
+
+# Workspace foundation
+dmgez-config.workspace = true
+dmgez-core = { workspace = true, features = ["source", "staging"] }
+
+# Workspace presentation
+dmgez-finder = { workspace = true, optional = true }
 
 # Compression
 flate2 = { workspace = true, optional = true }
 
-# Finder metadata and images
+# Image codecs
 png = { version = "=0.18.1", optional = true }
 tiff = { workspace = true, optional = true }
 
@@ -36,16 +40,21 @@ tiff = { workspace = true, optional = true }
 thiserror.workspace = true
 
 [target.'cfg(unix)'.dependencies]
+# Filesystem access and staging
 globset.workspace = true
 rustix.workspace = true
 
 [target.'cfg(windows)'.dependencies]
+# Filesystem access and staging
 fs_at = "=0.2.1"
 globset.workspace = true
+
+# Windows filesystem APIs
 windows-namespace-request-sys = "=0.5.1"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
+# Filesystem access and staging
 tempfile.workspace = true
 
 [lints]

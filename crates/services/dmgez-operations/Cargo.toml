@@ -17,17 +17,21 @@ install = ["extract", "dep:dmgez-config", "dep:plist", "dep:quick-xml"]
 parallel = ["dmgez-udif?/parallel"]
 
 [dependencies]
-# Workspace crates
-dmgez-builder = { workspace = true, optional = true }
+# Workspace formats
+dmgez-udif = { workspace = true, features = ["read", "write", "zlib"], optional = true }
+
+# Workspace foundation
 dmgez-config = { workspace = true, optional = true }
 dmgez-core = { workspace = true, features = ["staging"], optional = true }
-dmgez-udif = { workspace = true, features = ["read", "write", "zlib"], optional = true }
 dmgez-vfs = { workspace = true, optional = true }
+
+# Workspace services
+dmgez-builder = { workspace = true, optional = true }
 
 # Hashes and checksums
 sha2 = { workspace = true, optional = true }
 
-# Serialization
+# Serialization and configuration
 plist = { workspace = true, optional = true, features = ["enable_unstable_features_that_may_break_with_minor_version_bumps"] }
 quick-xml = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
@@ -36,11 +40,12 @@ serde = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+# Filesystem access and staging
 rustix = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
 
 [dev-dependencies]
-# Serialization
+# Serialization and configuration
 plist.workspace = true
 
 # Filesystem access and staging

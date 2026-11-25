@@ -17,18 +17,20 @@ volume-icon = [
 ]
 
 [dependencies]
-# Workspace crates
+# Workspace foundation
 dmgez-config.workspace = true
-
-# Finder metadata and images
-alias_record = "=0.3.0"
-ds_parser.workspace = true
-icns = { workspace = true, optional = true }
-plist.workspace = true
-png = { version = "=0.18.1", optional = true }
 
 # Hashes and checksums
 crc32fast = { workspace = true, optional = true }
+
+# Finder metadata
+alias_record = "=0.3.0"
+ds_parser.workspace = true
+plist.workspace = true
+
+# Image codecs
+icns = { workspace = true, optional = true }
+png = { version = "=0.18.1", optional = true }
 
 # Diagnostics
 thiserror.workspace = true

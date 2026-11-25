@@ -18,7 +18,7 @@ parallel = ["dep:rayon"]
 signature-integrity = ["dep:sha2"]
 
 [dependencies]
-# Workspace crates
+# Workspace foundation
 dmgez-core = { workspace = true, optional = true, features = ["source"] }
 
 # Compression
@@ -30,7 +30,7 @@ lzma-rust2 = { workspace = true, optional = true }
 crc32fast = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 
-# Serialization
+# Serialization and configuration
 plist = { workspace = true, optional = true }
 quick-xml = { workspace = true, optional = true }
 
@@ -41,6 +41,7 @@ rayon = { workspace = true, optional = true }
 thiserror.workspace = true
 
 [dev-dependencies]
+# Property testing
 proptest.workspace = true
 
 [lints]

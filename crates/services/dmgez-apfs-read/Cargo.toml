@@ -8,7 +8,7 @@ repository = "https://github.com/pomologie/dmgez"
 description = "Read-only APFS volume discovery, browsing and verification for dmgez"
 
 [dependencies]
-# dmgez crates
+# Workspace foundation
 dmgez-vfs = { path = "../../foundation/dmgez-vfs", default-features = false }
 
 # APFS libraries
