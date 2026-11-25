@@ -1,8 +1,13 @@
 //! Plans a fresh mountless application installation from one selected volume.
 
 mod bundle;
+mod check;
 mod copy_plan;
 
+pub use check::{
+	InstallerDiagnostic, InstallerError, InstallerLimits, InstallerReport, InstallerRule,
+	check_installer,
+};
 pub use copy_plan::{
 	CopyAttribute, CopyContent, CopyEntry, CopyLimits, CopyPlan, CopyPlanError, CopySummary,
 	prepare_copy,
@@ -154,13 +159,7 @@ where
 {
 	let selected = resolve(view, source, limits, &mut cancelled)?;
 	let destination_name = HostName::admit(selected.name, profile, limits.max_component_bytes)?;
-	if selected.kind != NodeKind::Directory
-		|| !destination_name
-			.as_str()
-			.rsplit_once(EXTENSION_SEPARATOR)
-			.is_some_and(|(stem, extension)| {
-				!stem.is_empty() && extension.eq_ignore_ascii_case(APPLICATION_EXTENSION)
-			}) {
+	if selected.kind != NodeKind::Directory || !is_application_name(destination_name.as_str()) {
 		return Err(Error::ExpectedApplication);
 	}
 	let names = preflight_names(view, &selected.node, profile, limits, &mut cancelled)?;
@@ -171,6 +170,13 @@ where
 		destination_name,
 		names,
 	})
+}
+
+fn is_application_name(name: &str) -> bool {
+	name.rsplit_once(EXTENSION_SEPARATOR)
+		.is_some_and(|(stem, extension)| {
+			!stem.is_empty() && extension.eq_ignore_ascii_case(APPLICATION_EXTENSION)
+		})
 }
 
 fn resolve<B: VolumeBackend>(
