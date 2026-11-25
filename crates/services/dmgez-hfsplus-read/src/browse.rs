@@ -13,6 +13,7 @@ use dmgez_vfs::{
 };
 use hfsplus_core::{ByteLen, ByteOffset, ReadAt};
 use hfsplus_format::volume::CatalogId;
+pub use hfsplus_format::volume::Signature as VolumeSignature;
 use hfsplus_reader::{
 	Volume,
 	attributes::AttributeReadError,
@@ -171,6 +172,19 @@ pub fn with_view<S: LogicalDisk, T>(
 	limits: Limits,
 	read: impl FnOnce(&mut HfsView<'_, '_, S>) -> T,
 ) -> Result<T, Error> {
+	with_view_signature(disk, selected, limits, |view, _| read(view))
+}
+
+/// Opens the selected data extent and reports its admitted HFS+ or HFSX signature.
+///
+/// # Errors
+/// Reports selection and filesystem admission failures before invoking the callback.
+pub fn with_view_signature<S: LogicalDisk, T>(
+	disk: &mut Disk<S>,
+	selected: VolumeId,
+	limits: Limits,
+	read: impl FnOnce(&mut HfsView<'_, '_, S>, VolumeSignature) -> T,
+) -> Result<T, Error> {
 	let window = disk.data_window(selected)?;
 	let source = WindowSource {
 		length: ByteLen(window.len()),
@@ -181,13 +195,14 @@ pub fn with_view<S: LogicalDisk, T>(
 		}),
 	};
 	let volume = Volume::open(source)?;
+	let signature = volume.header().signature;
 	let catalog = volume.open_catalog(limits.catalog)?;
 	let backend = HfsBackend {
 		volume: &volume,
 		catalog,
 		limits,
 	};
-	Ok(read(&mut VolumeView::new(selected, backend)))
+	Ok(read(&mut VolumeView::new(selected, backend), signature))
 }
 
 impl<'volume, 'disk, S: LogicalDisk> HfsBackend<'volume, 'disk, S> {
