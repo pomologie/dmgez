@@ -1,10 +1,9 @@
 //! D-READ-03 APFS browsing over native blocks retained by the sibling engine.
 
 use std::{
-	collections::BTreeSet,
-	env, fs,
-	io::{Seek, SeekFrom, Write},
-	path::{Path, PathBuf},
+	fs,
+	io::{Seek, Write},
+	path::Path,
 	process::Output,
 };
 
@@ -12,21 +11,20 @@ use serde_json::{Value, json};
 
 use super::invoke;
 
-const FIXTURE_DIRECTORY_ENV: &str = "DMGEZ_APFS_FIXTURES";
-const HARD_LINK_FIXTURE: &str = "sonoma-hard-link-blocks.bin";
+#[path = "../support/native_apfs.rs"]
+mod fixture;
+
+use fixture::{
+	HARD_LINK_CHECKPOINT_XID as CHECKPOINT_XID, HARD_LINK_FIXTURE,
+	HARD_LINK_VOLUME_OID as VOLUME_OID, HARD_LINK_VOLUME_UUID as VOLUME_UUID, NATIVE_BLOCK_BYTES,
+	NATIVE_VOLUME_BYTES, SPARSE_FIXTURE, materialize,
+};
+
 const PAYLOAD_FIXTURE: &str = "sonoma-payload-blocks.bin";
-const SPARSE_FIXTURE: &str = "sonoma-sparse-blocks.bin";
-const NATIVE_BLOCK_BYTES: usize = 4096;
-const NATIVE_VOLUME_BYTES: u64 = 64 << 20;
-const PACKED_ADDRESS_BYTES: usize = size_of::<u64>();
-const PACKED_RECORD_BYTES: usize = PACKED_ADDRESS_BYTES + NATIVE_BLOCK_BYTES;
 const RAW_APFS: &[&str] = &["--raw", "--filesystem", "apfs"];
 
 // Each fixture's sibling JSON ledger records data from the native oracle.
 const VOLUME_NAME: &str = "Pomologie APFS Hard Links";
-const VOLUME_UUID: &str = "D37600DC-3EF5-4393-8E07-31DBAA91E9B6";
-const VOLUME_OID: &str = "1026";
-const CHECKPOINT_XID: &str = "4";
 const UNRETAINED_XID: &str = "999999";
 const ABSENT_VOLUME_OID: &str = "999999";
 const HARD_LINK_INODE: &str = "17";
@@ -275,29 +273,6 @@ fn opens_native_apfs_from_a_bounded_compressed_udif_partition() {
 		HARD_LINK_RESOURCE.repeat(HARD_LINK_RESOURCE_REPETITIONS),
 	);
 	failure(invoke("volumes", &image, &["--partition", "2", "--json"]));
-}
-
-fn materialize(image: &Path, fixture: &str, prefix: &[u8]) {
-	let directory = env::var_os(FIXTURE_DIRECTORY_ENV).expect("composition supplies APFS fixtures");
-	let path = PathBuf::from(directory).join(fixture);
-	let packed = fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
-	let (records, remaining) = packed.as_chunks::<PACKED_RECORD_BYTES>();
-	assert!(remaining.is_empty());
-
-	let mut file = fs::File::create_new(image).unwrap();
-	file.set_len(prefix.len() as u64 + NATIVE_VOLUME_BYTES)
-		.unwrap();
-	file.write_all(prefix).unwrap();
-	let mut blocks = BTreeSet::new();
-	for record in records {
-		let (address, data) = record.split_first_chunk().unwrap();
-		let block = u64::from_le_bytes(*address);
-		assert!(blocks.insert(block));
-		assert!(block < NATIVE_VOLUME_BYTES / NATIVE_BLOCK_BYTES as u64);
-		let offset = prefix.len() as u64 + block * NATIVE_BLOCK_BYTES as u64;
-		file.seek(SeekFrom::Start(offset)).unwrap();
-		file.write_all(data).unwrap();
-	}
 }
 
 fn call(command: &str, image: &Path, path: &str, options: &[&str]) -> Output {

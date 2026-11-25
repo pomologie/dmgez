@@ -19,6 +19,7 @@ CLI_BINARY = "dmgez"
 CLI_TEST = "project_build_cli"
 VERIFY_TEST = "hfs_verify_cli"
 READ_TEST = "volume_cli"
+APFS_VERIFY_TEST = "apfs_verify_cli"
 EXTRACT_TEST = "extract_cli"
 DECMPFS_TEST = "hfs_decmpfs_cli"
 TOOLCHAIN = "rust-toolchain.toml"
@@ -216,6 +217,7 @@ def run_cli(cargo, directory, options, packages):
         if APFS_READER in packages:
             fixtures = packages[APFS_READER] / "tests" / "fixtures"
             environment.setdefault(APFS_FIXTURES_ENV, str(fixtures))
+            command.extend(("--test", APFS_VERIFY_TEST))
         if APFS_READER in packages or any(has_cli_feature(options, name) for name in READ_PROFILES):
             command.extend(("--test", READ_TEST))
         if HFSPLUS_READER in packages:
