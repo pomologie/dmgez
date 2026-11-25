@@ -314,6 +314,10 @@ fn run(command: Command) -> CliResult<ExitCode> {
 				(diff::HFSPLUS_CAPABILITY, diff::HFSPLUS_COMPILED),
 				(diff::APFS_CAPABILITY, diff::APFS_COMPILED),
 				(
+					diff::DIFF_HASH_FEATURE,
+					cfg!(feature = "diff-hash") && (diff::HFSPLUS_COMPILED || diff::APFS_COMPILED),
+				),
+				(
 					diff::FINDER_DIFF_FEATURE,
 					cfg!(feature = "finder-diff")
 						&& (diff::HFSPLUS_COMPILED || diff::APFS_COMPILED),

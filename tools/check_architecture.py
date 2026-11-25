@@ -14,6 +14,7 @@ PROFILES = {
     "conversion": (["--no-default-features", "--features", "convert"], {"dmgez-core", "dmgez-operations", "dmgez-udif", "flate2"}),
     "parallel_conversion": (["--no-default-features", "--features", "convert,parallel"], {"dmgez-core", "dmgez-operations", "dmgez-udif", "flate2", "rayon"}),
     "comparison": (["--no-default-features", "--features", "diff"], {"dmgez-core", "dmgez-diff", "dmgez-udif", "dmgez-vfs", "flate2", "serde_json"}),
+    "hash_comparison": (["--no-default-features", "--features", "diff-hash"], {"blake3", "dmgez-core", "dmgez-diff", "dmgez-udif", "dmgez-vfs", "flate2", "serde_json"}),
     "finder_comparison": (["--no-default-features", "--features", "finder-diff"], {"dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "serde_json"}),
     "layout_lint": (["--no-default-features", "--features", "lint"], {"dmgez-config", "dmgez-lint", "dmgez-preview", "serde_json"}),
     "appdmg_import": (["--no-default-features", "--features", "appdmg-import"], {"dmgez-config", "dmgez-core", "serde_json"}),
@@ -24,7 +25,7 @@ OUTSIDE_DEFAULT = {
     "hfsplus-reader", "lzfse_rust", "lzma-rust2", "notify",
     "reqwest", "rmcp", "tokio", "udif", "winfsp",
 }
-PROFILE_DEPS = {"dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-inspector", "dmgez-lint", "dmgez-operations", "dmgez-preview", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "rayon", "serde_json"}
+PROFILE_DEPS = {"blake3", "dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-inspector", "dmgez-lint", "dmgez-operations", "dmgez-preview", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "rayon", "serde_json"}
 
 
 def main():
@@ -50,7 +51,7 @@ def main():
             for feature in ("read", "write", "parallel", "zlib", "lzfse", "lzma"):
                 active = f'dmgez-udif feature "{feature}"' in features
                 expected_active = {
-                    "read": profile in ("inspection", "conversion", "parallel_conversion", "comparison", "finder_comparison"),
+                    "read": profile in ("inspection", "conversion", "parallel_conversion", "comparison", "hash_comparison", "finder_comparison"),
                     "write": profile in ("serial", "default", "conversion", "parallel_conversion"),
                     "parallel": profile in ("default", "parallel_conversion"),
                     "zlib": True, "lzfse": False, "lzma": False,

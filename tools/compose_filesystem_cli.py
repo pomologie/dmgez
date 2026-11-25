@@ -44,6 +44,7 @@ VERIFY_FEATURE = "hfsplus-verify"
 EXTRACT_FEATURE = "hfsplus-extract"
 DECMPFS_FEATURE = "hfsplus-decmpfs"
 DIFF_FEATURE = "diff"
+DIFF_HASH_FEATURE = "diff-hash"
 FINDER_DIFF_FEATURE = "finder-diff"
 READ_PROFILES = (READ_FEATURE, EXTRACT_FEATURE, DECMPFS_FEATURE)
 APFS_READER = "apfs-reader"
@@ -233,7 +234,7 @@ def run_cli(cargo, directory, options, packages):
         )
         if browse:
             command.extend(("--test", READ_TEST))
-            if any(has_cli_feature(options, name) for name in (DIFF_FEATURE, FINDER_DIFF_FEATURE)):
+            if any(has_cli_feature(options, name) for name in (DIFF_FEATURE, DIFF_HASH_FEATURE, FINDER_DIFF_FEATURE)):
                 command.extend(("--test", SEMANTIC_DIFF_TEST))
         if HFSPLUS_READER in packages:
             fixtures = packages[HFSPLUS_READER] / "tests" / "fixtures"

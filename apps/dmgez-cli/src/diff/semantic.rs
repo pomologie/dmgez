@@ -4,6 +4,8 @@ use std::{
 	process::ExitCode,
 };
 
+#[cfg(feature = "diff-hash")]
+use dmgez_diff::semantic::Contents;
 #[cfg(feature = "finder-diff")]
 use dmgez_diff::semantic::Field;
 use dmgez_diff::{
@@ -30,11 +32,15 @@ use crate::{
 	volume_input::with_apfs_view_for_comparison,
 };
 
+#[cfg(feature = "diff-hash")]
+use super::ContentsMode;
 use super::{Arguments, DIFFERENT_EXIT_CODE, require_regular_file, with_side};
 #[cfg(feature = "apfs-read")]
 use super::{LEFT_VOLUME_OPTION, RIGHT_VOLUME_OPTION};
 
 const FILESYSTEM_SPACE: &str = "filesystem";
+#[cfg(feature = "diff-hash")]
+const RENAME_CANDIDATE_LABEL: &str = "rename_candidate";
 
 #[cfg(feature = "hfsplus-read")]
 pub(super) fn hfsplus(arguments: &Arguments) -> CliResult<ExitCode> {
@@ -153,6 +159,15 @@ where
 	let mut options = Options::default();
 	options.xattrs = arguments.options.xattrs;
 	options.finder_info = arguments.options.finder_info;
+	#[cfg(feature = "diff-hash")]
+	{
+		options.contents = match arguments.options.contents.unwrap_or_default() {
+			ContentsMode::Exact => Contents::Exact,
+			ContentsMode::Blake3 => Contents::Blake3,
+			ContentsMode::Blake3Exact => Contents::Blake3Exact,
+		};
+		options.infer_renames = arguments.options.infer_renames;
+	}
 	#[cfg(feature = "finder-diff")]
 	{
 		options.finder_layout = arguments.options.finder_layout;
@@ -278,6 +293,14 @@ impl DiffReport {
 				write!(output, "\t{} = ", Field::FinderLayout.as_str())?;
 				write_json(output, &change.finder_layout)?;
 			}
+			writeln!(output)?;
+		}
+		#[cfg(feature = "diff-hash")]
+		for candidate in &self.comparison.rename_candidates {
+			write!(output, "{RENAME_CANDIDATE_LABEL}\t")?;
+			write_json(output, &candidate.from)?;
+			write!(output, "\t")?;
+			write_json(output, &candidate.to)?;
 			writeln!(output)?;
 		}
 		Ok(())

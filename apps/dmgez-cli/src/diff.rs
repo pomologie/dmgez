@@ -25,6 +25,7 @@ mod semantic;
 
 pub(super) const COMMAND: &str = "diff";
 pub(super) const FINDER_DIFF_FEATURE: &str = "finder-diff";
+pub(super) const DIFF_HASH_FEATURE: &str = "diff-hash";
 pub(super) const HFSPLUS_CAPABILITY: &str = "diff-hfsplus";
 pub(super) const APFS_CAPABILITY: &str = "diff-apfs";
 pub(super) const HFSPLUS_COMPILED: bool = cfg!(all(feature = "diff", feature = "hfsplus-read"));
@@ -42,7 +43,7 @@ pub(super) struct Arguments {
 	right: PathBuf,
 	#[arg(long, value_enum, default_value_t)]
 	mode: Mode,
-	/// Maximum paired bytes compared from each input.
+	/// Maximum bytes charged to the comparison budget.
 	#[arg(long)]
 	max_bytes: Option<u64>,
 	/// Write a versioned JSON report.
@@ -60,11 +61,25 @@ enum Mode {
 	Semantic,
 }
 
+#[derive(Clone, Copy, Default, ValueEnum)]
+enum ContentsMode {
+	#[default]
+	Exact,
+	Blake3,
+	Blake3Exact,
+}
+
 #[derive(Args)]
 struct SemanticOptions {
 	/// Select a filesystem for both inputs in semantic mode. HFS+ includes HFSX.
 	#[arg(long = FILESYSTEM_OPTION, value_enum)]
 	filesystem: Option<Filesystem>,
+	/// Compare regular-file forks by exact bytes (default), BLAKE3, or BLAKE3 with exact confirmation.
+	#[arg(long, value_enum)]
+	contents: Option<ContentsMode>,
+	/// Report unique rename candidates among otherwise added and removed files.
+	#[arg(long)]
+	infer_renames: bool,
 	/// Include supported extended attributes in the semantic comparison.
 	#[arg(long)]
 	xattrs: bool,
@@ -128,6 +143,12 @@ pub(super) fn run(_arguments: &Arguments) -> CliResult<ExitCode> {
 pub(super) fn run(arguments: &Arguments) -> CliResult<ExitCode> {
 	match arguments.mode {
 		Mode::Semantic => run_semantic(arguments),
+		_ if arguments.options.contents.is_some() => {
+			Err(invalid("--contents requires --mode semantic").into())
+		}
+		_ if arguments.options.infer_renames => {
+			Err(invalid("--infer-renames requires --mode semantic").into())
+		}
 		_ if arguments.options.xattrs => Err(invalid("--xattrs requires --mode semantic").into()),
 		_ if arguments.options.finder_info => {
 			Err(invalid("--finder-info requires --mode semantic").into())
@@ -152,6 +173,19 @@ fn run_semantic(arguments: &Arguments) -> CliResult<ExitCode> {
 	#[cfg(not(feature = "finder-diff"))]
 	if arguments.options.finder_layout {
 		return Err(format!("feature not compiled: {FINDER_DIFF_FEATURE}").into());
+	}
+	#[cfg(not(feature = "diff-hash"))]
+	if arguments.options.infer_renames
+		|| arguments
+			.options
+			.contents
+			.is_some_and(|mode| !matches!(mode, ContentsMode::Exact))
+	{
+		return Err(std::io::Error::new(
+			std::io::ErrorKind::Unsupported,
+			format!("feature not compiled: {DIFF_HASH_FEATURE}"),
+		)
+		.into());
 	}
 	match filesystem {
 		Filesystem::Hfsplus => {
