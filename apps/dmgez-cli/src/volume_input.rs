@@ -81,6 +81,24 @@ pub(super) fn with_hfs_view_verified<T>(
 	})
 }
 
+#[cfg(all(
+	feature = "project-release",
+	feature = "signing-native",
+	feature = "hfsplus-install",
+	target_os = "macos"
+))]
+pub(super) fn with_hfs_file_verified<T>(
+	file: &std::fs::File,
+	read: impl FnOnce(
+		&mut HfsView<'_, '_, &mut dyn LogicalDisk>,
+		&dyn Fn() -> io::Result<()>,
+	) -> CliResult<T>,
+) -> CliResult<T> {
+	with_verified_file(file, |source, verify_source| {
+		with_source(source, false, None, |view, _| read(view, verify_source))
+	})
+}
+
 #[cfg(feature = "hfsplus-read")]
 fn with_source<T>(
 	source: &FileSource,
@@ -260,9 +278,25 @@ fn with_verified_source<T>(
 	read: impl FnOnce(&FileSource, &dyn Fn() -> io::Result<()>) -> CliResult<T>,
 ) -> CliResult<T> {
 	let file = std::fs::File::open(image)?;
+	with_verified_file(&file, read)
+}
+
+#[cfg(all(
+	any(
+		feature = "hfsplus-extract",
+		feature = "apfs-extract",
+		feature = "hfsplus-install",
+		feature = "apfs-install"
+	),
+	any(target_os = "linux", target_os = "macos")
+))]
+fn with_verified_file<T>(
+	file: &std::fs::File,
+	read: impl FnOnce(&FileSource, &dyn Fn() -> io::Result<()>) -> CliResult<T>,
+) -> CliResult<T> {
 	let source = FileSource::new(file.try_clone()?)?;
 	let verify_source = || {
-		dmgez_operations::extract::host::check_source_quarantine(&file)?;
+		dmgez_operations::extract::host::check_source_quarantine(file)?;
 		source.check_unchanged().map_err(io::Error::other)
 	};
 	verify_source()?;

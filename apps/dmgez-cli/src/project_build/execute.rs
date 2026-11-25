@@ -103,11 +103,7 @@ pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> CliResult
 	}
 	#[cfg(feature = "project-release")]
 	if let Some(release) = release {
-		let output = prepared
-			.prepared()
-			.output_path()
-			.ok_or("missing release destination")?;
-		return release.run(sealed, output, arguments.json, |event| {
+		return release.run(sealed, prepared.prepared(), arguments.json, |event| {
 			progress.update(event)
 		});
 	}

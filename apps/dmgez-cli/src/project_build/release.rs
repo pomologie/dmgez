@@ -4,12 +4,15 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-use dmgez_builder::{execution::StagedRelease, preflight::ReleaseIntent, progress::BuildProgress};
+use dmgez_builder::{
+	execution::StagedRelease, planning::PreparedBuild, preflight::ReleaseIntent,
+	progress::BuildProgress,
+};
 use dmgez_config::Project;
 use dmgez_hfsplus::HfsImage;
 use dmgez_signing::release_plan::{
-	NotaryOutcome, ReleaseAction, ReleaseError, ReleaseReceipt, ReleaseReport, ReleaseRun,
-	ReleaseStage, StageFailure, StageStatus,
+	NotaryOutcome, ReleaseAction, ReleaseApplications, ReleaseError, ReleaseReceipt, ReleaseReport,
+	ReleaseRun, ReleaseStage, StageFailure, StageStatus,
 };
 use serde::Serialize;
 
@@ -27,6 +30,13 @@ const ARTIFACT_DIRECTORY_PREFIX: &str = ".dmgez-release-";
 const SIGNED_IMAGE: &str = "signed.dmg";
 const STAPLED_IMAGE: &str = "stapled.dmg";
 const STAGE_MISSING: &str = "release stage is missing its input image";
+const APPLICATION_STAGE_MISSING: &str =
+	"release stage is missing the prepared application inventory";
+const APPLICATION_VERIFICATION_AVAILABLE: bool = cfg!(all(
+	feature = "signing-native",
+	feature = "hfsplus-install",
+	target_os = "macos"
+));
 
 pub(super) struct ReleaseRequest<'input> {
 	settings: ReleaseSettings<'input>,
@@ -51,7 +61,7 @@ impl<'input> ReleaseRequest<'input> {
 			ReleaseIntent::Release,
 			arguments.identifier.as_deref(),
 			ReleaseCapabilities {
-				application_verification: false,
+				application_verification: APPLICATION_VERIFICATION_AVAILABLE,
 				disk_signing: native_signing,
 				notarization: cfg!(all(target_os = "macos", feature = "notarization-native")),
 				native_assessment: native_signing,
@@ -72,11 +82,15 @@ impl<'input> ReleaseRequest<'input> {
 	pub(super) fn run(
 		self,
 		image: HfsImage<'_>,
-		output: &Path,
+		prepared: &PreparedBuild,
 		json: bool,
 		progress: impl Fn(BuildProgress),
 	) -> CliResult {
-		let output = fresh_destination(output)?;
+		let output = fresh_destination(
+			prepared
+				.output_path()
+				.ok_or("missing release destination")?,
+		)?;
 		let record = self.record.as_deref().map(fresh_destination).transpose()?;
 		if record.as_ref() == Some(&output) {
 			return Err(
@@ -85,15 +99,13 @@ impl<'input> ReleaseRequest<'input> {
 		}
 		let mut run = self.settings.plan.start()?;
 		let mut artifacts = Artifacts::default();
-		let result = drive(
-			&mut run,
-			&mut artifacts,
-			image,
-			&self.settings,
-			record.as_deref(),
-			&output,
-			progress,
-		);
+		let inputs = Inputs {
+			prepared,
+			settings: &self.settings,
+			record: record.as_deref(),
+			output: &output,
+		};
+		let result = drive(&mut run, &mut artifacts, image, &inputs, progress);
 		let published =
 			run.report().steps.iter().any(|step| {
 				step.stage == ReleaseStage::Publish && step.status == StageStatus::Passed
@@ -113,6 +125,9 @@ impl<'input> ReleaseRequest<'input> {
 		write_report(json, &report, |writer| {
 			for step in &report.stages.steps {
 				writeln!(writer, "{:?} = {:?}", step.stage, step.status)?;
+			}
+			if let Some(verification) = &report.stages.verified_applications {
+				writeln!(writer, "verified applications = {}", verification.count)?;
 			}
 			if let Some(path) = &report.published_path {
 				writeln!(writer, "published = {}", EscapedText(path))?;
@@ -148,6 +163,7 @@ struct Artifacts<'build> {
 	current: Option<PathBuf>,
 	private: Option<tempfile::TempDir>,
 	retained_path: Option<PathBuf>,
+	applications: Option<Vec<dmgez_config::VirtualPath>>,
 }
 
 impl Artifacts<'_> {
@@ -199,13 +215,18 @@ impl Artifacts<'_> {
 	}
 }
 
+struct Inputs<'run, 'project> {
+	prepared: &'run PreparedBuild,
+	settings: &'run ReleaseSettings<'project>,
+	record: Option<&'run Path>,
+	output: &'run Path,
+}
+
 fn drive<'build>(
 	run: &mut ReleaseRun,
 	artifacts: &mut Artifacts<'build>,
 	image: HfsImage<'build>,
-	settings: &ReleaseSettings<'_>,
-	record: Option<&Path>,
-	output: &Path,
+	inputs: &Inputs<'_, '_>,
 	progress: impl Fn(BuildProgress),
 ) -> CliResult {
 	let mut image = Some(image);
@@ -218,9 +239,7 @@ fn drive<'build>(
 		let Some(action) = run.begin(observed.as_ref())? else {
 			return Ok(());
 		};
-		let receipt = match execute(
-			action, artifacts, &mut image, settings, record, output, &progress,
-		) {
+		let receipt = match execute(action, artifacts, &mut image, inputs, &progress) {
 			Ok(receipt) => receipt,
 			Err(error) => {
 				let failure = error
@@ -245,12 +264,22 @@ fn execute<'build>(
 	action: ReleaseAction<'_>,
 	artifacts: &mut Artifacts<'build>,
 	image: &mut Option<HfsImage<'build>>,
-	settings: &ReleaseSettings<'_>,
-	record: Option<&Path>,
-	output: &Path,
+	inputs: &Inputs<'_, '_>,
 	progress: &impl Fn(BuildProgress),
 ) -> CliResult<ReleaseReceipt> {
+	let Inputs {
+		prepared,
+		settings,
+		record,
+		output,
+	} = *inputs;
 	match action {
+		ReleaseAction::PrepareApplications(ReleaseApplications::Verify(backend)) => {
+			artifacts.applications = Some(release_native::prepare_applications(prepared, backend)?);
+			Ok(ReleaseReceipt::ApplicationsPrepared(
+				ReleaseApplications::Verify(backend),
+			))
+		}
 		ReleaseAction::BuildUnsigned => {
 			let stage = image
 				.take()
@@ -266,6 +295,26 @@ fn execute<'build>(
 				return Err(ReleaseError::ArtifactChanged.into());
 			}
 			Ok(ReleaseReceipt::UnsignedVerified(identity.clone()))
+		}
+		ReleaseAction::VerifyApplications { backend, input } => {
+			artifacts.validate_sources()?;
+			let applications = artifacts
+				.applications
+				.as_deref()
+				.ok_or(APPLICATION_STAGE_MISSING)?;
+			let count = release_native::verify_applications(
+				artifacts.path()?,
+				input,
+				prepared,
+				applications,
+				backend,
+			)?;
+			artifacts.validate_sources()?;
+			Ok(ReleaseReceipt::ApplicationsVerified {
+				backend,
+				input: input.clone(),
+				count,
+			})
 		}
 		ReleaseAction::SignImage { backend, input } => {
 			artifacts.validate_sources()?;
@@ -349,9 +398,7 @@ fn execute<'build>(
 			release_artifact::publish(artifacts.path()?, identity, output)?;
 			Ok(ReleaseReceipt::Published(identity.clone()))
 		}
-		ReleaseAction::PrepareApplications(_)
-		| ReleaseAction::VerifyApplications { .. }
-		| ReleaseAction::Poll { .. } => {
+		ReleaseAction::PrepareApplications(_) | ReleaseAction::Poll { .. } => {
 			Err("release stage is unavailable in this build".into())
 		}
 	}

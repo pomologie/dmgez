@@ -6,11 +6,22 @@ from io import StringIO
 from pathlib import Path, PureWindowsPath
 import sys
 from tempfile import TemporaryDirectory
+import tomllib
 from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 import compose_filesystem_cli as compose
+
+
+class ReleaseCompositionTests(unittest.TestCase):
+    def test_release_forwards_install_only_when_the_hfsplus_reader_is_present(self):
+        manifest = (compose.ROOT / compose.CLI / compose.MANIFEST).read_text(encoding="utf-8")
+        for reader in (False, True):
+            with self.subTest(reader=reader):
+                text = compose.compose_cli_manifest(manifest, reader=reader, build=True, apfs=False)
+                features = tomllib.loads(text)["features"]
+                self.assertEqual(compose.INSTALL_FEATURE in features[compose.PROJECT_RELEASE_FEATURE], reader)
 
 
 class WindowsCompositionTests(unittest.TestCase):

@@ -28,7 +28,11 @@ const CHECKSUMS_MISSING: &str = "the release image is missing required CRC32 che
 
 /// Bind an observation to every byte of a held, finite release file.
 pub(super) fn observe(path: &Path) -> io::Result<ImageIdentity> {
-	let source = CapturedFile::new(open_regular(path)?).map_err(io::Error::other)?;
+	observe_file(open_regular(path)?)
+}
+
+pub(super) fn observe_file(file: File) -> io::Result<ImageIdentity> {
+	let source = CapturedFile::new(file).map_err(io::Error::other)?;
 	let identity = hash_image(source.reader(), source.len())?;
 	source.validate().map_err(io::Error::other)?;
 	Ok(identity)
@@ -109,7 +113,7 @@ fn verify_payload(image: &mut Image<impl ReadAt>) -> io::Result<()> {
 	Ok(())
 }
 
-fn open_regular(path: &Path) -> io::Result<File> {
+pub(super) fn open_regular(path: &Path) -> io::Result<File> {
 	let path_metadata = fs::symlink_metadata(path)?;
 	if !path_metadata.is_file() {
 		return Err(invalid("release artifact must be a regular file"));

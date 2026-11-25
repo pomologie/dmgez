@@ -89,3 +89,77 @@ fn rejects_a_requested_unavailable_backend_and_an_implicit_overwrite() {
 	assert_eq!(fs::metadata(image).unwrap_err().kind(), ErrorKind::NotFound);
 	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
 }
+
+#[cfg(all(
+	target_os = "macos",
+	feature = "signing-native",
+	feature = "hfsplus-install"
+))]
+#[test]
+fn explicitly_verifies_empty_application_inventory_and_reports_bound_digest() {
+	let directory = tempfile::tempdir().unwrap();
+	let manifest = directory.path().join(MANIFEST_NAME);
+	fs::write(manifest, format!("{PROJECT}\n[signing]\nenabled = true\n")).unwrap();
+	let output = run(directory.path(), &[]);
+	assert!(
+		output.status.success(),
+		"{}",
+		String::from_utf8_lossy(&output.stderr)
+	);
+	let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+	assert_eq!(report["verified_applications"]["backend"], "native");
+	assert_eq!(report["verified_applications"]["count"], 0);
+	assert_eq!(report["verified_applications"]["input"], report["unsigned"]);
+	assert_eq!(report["unsigned"], report["artifact"]);
+	assert!(directory.path().join(OUTPUT_NAME).is_file());
+}
+
+#[cfg(all(
+	target_os = "macos",
+	feature = "signing-native",
+	feature = "hfsplus-install"
+))]
+#[test]
+fn rejects_an_unsigned_application_before_building_or_publishing() {
+	use std::os::unix::fs::PermissionsExt;
+
+	const APP_PROJECT: &str = r#"
+schema_version = 1
+[image]
+name = "Release Fixture"
+output = "release.dmg"
+format = "udro"
+[metadata]
+policy = "report"
+preserve_timestamps = false
+preserve_extended_attributes = false
+preserve_finder_info = false
+[[contents]]
+source = "Unsigned.app"
+destination = "/Unsigned.app"
+[signing]
+enabled = true
+"#;
+	let directory = tempfile::tempdir().unwrap();
+	let root = directory.path();
+	let app = root.join("Unsigned.app");
+	let executable = app.join("Contents/MacOS/Witness");
+	fs::create_dir_all(executable.parent().unwrap()).unwrap();
+	fs::write(&executable, b"#!/bin/false\n").unwrap();
+	fs::set_permissions(executable, fs::Permissions::from_mode(0o755)).unwrap();
+	fs::write(
+		app.join("Contents/Info.plist"),
+		br#"<plist><dict><key>CFBundleExecutable</key><string>Witness</string></dict></plist>"#,
+	)
+	.unwrap();
+	fs::write(root.join(MANIFEST_NAME), APP_PROJECT).unwrap();
+	let output = run(root, &[]);
+	assert!(!output.status.success(), "{output:?}");
+	let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+	assert_eq!(report["steps"][0]["stage"], "applications");
+	assert_eq!(report["steps"][0]["status"], "failed");
+	assert!(report["unsigned"].is_null());
+	assert!(report["verified_applications"].is_null());
+	assert!(report["published_path"].is_null());
+	assert_eq!(fs::read_dir(root).unwrap().count(), 2);
+}

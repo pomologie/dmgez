@@ -12,6 +12,61 @@ use dmgez_signing::{
 
 use super::release_settings::{NativeDiskSigning, NativeNotarization};
 
+#[cfg(all(
+	feature = "signing-native",
+	feature = "hfsplus-install",
+	target_os = "macos"
+))]
+pub(super) use super::release_applications::{
+	prepare as prepare_applications, verify_unsigned as verify_applications,
+};
+
+#[cfg(not(all(
+	feature = "signing-native",
+	feature = "hfsplus-install",
+	target_os = "macos"
+)))]
+pub(super) use unavailable::{prepare_applications, verify_applications};
+
+#[cfg(not(all(
+	feature = "signing-native",
+	feature = "hfsplus-install",
+	target_os = "macos"
+)))]
+mod unavailable {
+	use dmgez_builder::planning::PreparedBuild;
+	use dmgez_config::VirtualPath;
+	use dmgez_signing::release_plan::ImageIdentity;
+
+	use crate::CliResult;
+
+	use super::{Backend, NativeReleaseError, Path, ResolvedBackend, SignError};
+
+	pub(in crate::project_build) fn prepare_applications(
+		_prepared: &PreparedBuild,
+		_backend: ResolvedBackend,
+	) -> CliResult<Vec<VirtualPath>> {
+		Err(unavailable())
+	}
+
+	pub(in crate::project_build) fn verify_applications(
+		_path: &Path,
+		_expected: &ImageIdentity,
+		_prepared: &PreparedBuild,
+		_applications: &[VirtualPath],
+		_backend: ResolvedBackend,
+	) -> CliResult<usize> {
+		Err(unavailable())
+	}
+
+	fn unavailable() -> Box<dyn std::error::Error> {
+		NativeReleaseError::Signing(SignError::BackendUnavailable {
+			backend: Backend::Native,
+		})
+		.into()
+	}
+}
+
 pub(super) fn sign_image(
 	source: &Path,
 	destination: &Path,

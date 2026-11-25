@@ -130,6 +130,8 @@ def compose_cli_manifest(manifest, reader, build, apfs):
         additions[INSTALL_FEATURE] = [
             READ_FEATURE, "dep:dmgez-config", "dep:dmgez-operations", "dmgez-operations/install",
         ]
+        if build:
+            additions[PROJECT_RELEASE_FEATURE] = [*additions[PROJECT_RELEASE_FEATURE], INSTALL_FEATURE]
         dependencies_to_add.append(READ_ADAPTER)
     if apfs:
         additions[APFS_FEATURE] = ["inspect", f"dep:{APFS_ADAPTER}"]
@@ -319,7 +321,9 @@ def main():
         options.features.append(APFS_FEATURE)
     if options.target_dir is None:
         options.target_dir = ROOT / "target" / ("apfs-cli" if use_apfs else "hfsplus-cli")
-    reader = any(has_cli_feature(options, name) for name in (*READ_PROFILES, VERIFY_FEATURE))
+    reader = any(has_cli_feature(options, name) for name in (*READ_PROFILES, VERIFY_FEATURE)) or (
+        use_hfsplus and sys.platform == "darwin" and has_cli_feature(options, PROJECT_RELEASE_FEATURE)
+    )
     if sys.platform == "win32":
         if use_apfs or reader:
             parser.error("Windows composition supports HFS+ project builds only")
