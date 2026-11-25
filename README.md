@@ -186,6 +186,8 @@ target/hfsplus-cli/debug/dmgez install installer.dmg --app /Example.app --destin
 
 The [native desktop app](apps/dmgez/README.md) opens TOML projects for layout editing and disk images for container and partition inspection. Launch it with `cargo run --locked -p dmgez-gui`.
 
+Run `dmgez open installer.dmg` when `dmgez-gui` is installed beside the CLI. Use `dmgez open dmg.toml --gui /path/to/dmgez-gui` to select another installation. On Windows, select the desktop `.exe`. The CLI returns once the desktop process starts and reports missing installations on stderr.
+
 The [local stdio MCP server](apps/dmgez-mcp/README.md) exposes capabilities and validates TOML manifests inside an explicitly authorized project directory on macOS and Linux.
 
 See the [architecture](docs/architecture/ARCHITECTURE.md), [roadmap](docs/architecture/ROADMAP.md), and [UDIF evidence](docs/reference/UDIF_EVIDENCE.md) for the implemented profile and its verification limits.

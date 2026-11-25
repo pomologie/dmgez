@@ -4,6 +4,8 @@
 pub mod appdmg;
 #[cfg(feature = "compare")]
 pub mod compare;
+#[cfg(feature = "desktop-open")]
+pub mod desktop;
 #[cfg(feature = "image")]
 pub mod disk;
 #[cfg(any(feature = "image-edit", feature = "project-edit"))]

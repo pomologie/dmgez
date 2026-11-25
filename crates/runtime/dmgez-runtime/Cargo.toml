@@ -33,6 +33,7 @@ stage-verification = [
 
 # Project inputs and presentation
 appdmg-import = ["project-input", "dmgez-config/appdmg-import", "dep:dmgez-core", "dmgez-core/staging"]
+desktop-open = ["dep:thiserror"]
 installer-lint = ["lint", "dmgez-lint/installer"]
 lint = ["project-input", "dep:dmgez-lint", "dep:dmgez-preview"]
 project-input = ["dep:dmgez-config", "dep:thiserror"]

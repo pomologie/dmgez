@@ -26,6 +26,7 @@ PROFILES = {
     "finder_comparison": (["--no-default-features", "--features", "finder-diff"], {"dmgez-config", "dmgez-core", "dmgez-runtime", "dmgez-diff", "dmgez-finder", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "serde_json"}),
     "layout_lint": (["--no-default-features", "--features", "lint"], {"dmgez-config", "dmgez-runtime", "dmgez-lint", "dmgez-preview", "serde_json"}),
     "design_preview": (["--no-default-features", "--features", "preview"], {"dmgez-config", "dmgez-runtime", "dmgez-core", "dmgez-preview", "epaint", "flate2", "png"}),
+    "desktop_open": (["--no-default-features", "--features", "desktop-open"], {"dmgez-runtime"}),
     "installer_lint": (["--no-default-features", "--features", "installer-lint"], {"dmgez-builder", "dmgez-config", "dmgez-runtime", "dmgez-core", "dmgez-lint", "dmgez-preview", "dmgez-udif", "serde_json"}),
     "appdmg_import": (["--no-default-features", "--features", "appdmg-import"], {"dmgez-config", "dmgez-runtime", "dmgez-core", "serde_json"}),
     "rust_signing": (["--no-default-features", "--features", "signing-rust"], RUST_SIGNING_DEPS),

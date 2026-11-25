@@ -4,7 +4,8 @@
   "default": [
     "build",
     "parallel",
-    "signing-rust"
+    "signing-rust",
+    "desktop-open"
   ],
   "target_default_additions": {},
   "features": {
@@ -48,6 +49,7 @@
     "preview": [
       "image-processing"
     ],
+    "desktop-open": [],
     "actual-preview": [
       "preview",
       "inspect",

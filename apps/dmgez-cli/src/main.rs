@@ -21,6 +21,7 @@ mod lint;
 mod mount_command;
 mod native_assessment;
 mod notarize;
+mod open;
 #[cfg(feature = "convert")]
 mod optimize;
 mod preview;
@@ -97,6 +98,8 @@ enum Command {
 	Build(project_build::Arguments),
 	/// Render a project design or actual disk image as a PNG.
 	Preview(preview::Arguments),
+	/// Open a local document in the separately installed desktop app.
+	Open(open::Arguments),
 	/// Apply a typed edit batch to a project and rebuild to a new image.
 	Edit(project_edit::Arguments),
 	/// Apply a typed edit batch to an existing HFS+ image and publish a fresh image.
@@ -315,6 +318,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		#[cfg(not(feature = "project-build"))]
 		Command::Build(_) => Err("project building requires an HFS+ composed CLI".into()),
 		Command::Preview(arguments) => preview::run(&arguments),
+		Command::Open(arguments) => open::run(&arguments),
 		Command::Edit(arguments) => project_edit::run(&arguments),
 		Command::EditImage(arguments) => image_edit::run(&arguments),
 		#[cfg(feature = "build")]
