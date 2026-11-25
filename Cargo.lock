@@ -990,6 +990,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dmgez-diff"
+version = "0.1.0"
+dependencies = [
+ "dmgez-udif",
+ "dmgez-vfs",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "dmgez-finder"
 version = "0.1.0"
 dependencies = [

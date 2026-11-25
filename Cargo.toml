@@ -10,6 +10,7 @@ members = [
 	"crates/presentation/dmgez-finder",
 	"crates/presentation/dmgez-preview",
 	"crates/services/dmgez-builder",
+	"crates/services/dmgez-diff",
 	"crates/services/dmgez-inspector",
 	"crates/services/dmgez-operations",
 ]
