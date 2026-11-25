@@ -227,6 +227,40 @@ fn accessible_file_controls_request_volume_pages_and_folder_navigation() {
 	}
 }
 
+#[test]
+fn catalog_details_controls_share_a_column_on_separate_rows() {
+	let mut tab = wrap(&fixture(CATALOG));
+	tab.browser.showing = true;
+	tab.browser.page = Some(page(&tab, Location::root(VolumeId::WholeDisk), 0));
+	let context = egui::Context::default();
+	context.enable_accesskit();
+	let viewport = egui::Rect::from_min_size(egui::Pos2::ZERO, crate::INITIAL_SIZE.into());
+	let mut output = context.run_ui(
+		egui::RawInput {
+			screen_rect: Some(viewport),
+			..Default::default()
+		},
+		|ui| assert!(inspector::show(ui, &tab, true).is_none()),
+	);
+	let controls: Vec<_> = output
+		.platform_output
+		.accesskit_update
+		.take()
+		.unwrap()
+		.nodes
+		.iter()
+		.filter(|(_, node)| node.label() == Some("Details"))
+		.filter_map(|(_, node)| node.bounds())
+		.take(2)
+		.collect();
+	output.drop_without_applying_deltas();
+	let [first, second] = controls.as_slice() else {
+		panic!("expected details controls for two catalog entries");
+	};
+	assert!((first.x0 - second.x0).abs() < 1.0, "{first:?}, {second:?}");
+	assert!((first.y0 - second.y0).abs() >= 1.0, "{first:?}, {second:?}");
+}
+
 fn activate(tab: &ImageTab, title: &str) -> Action {
 	let context = egui::Context::default();
 	context.enable_accesskit();

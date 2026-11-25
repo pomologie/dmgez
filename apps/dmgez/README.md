@@ -27,6 +27,8 @@ Add `--features lzfse,lzma` to enable ULFO and ULMO decoding for verification an
 
 Add `--test` to the composer command to run the desktop suite with the sibling reader’s fixtures. The macOS suite exercised an Apple partition map, exact decomposed HFS+ names, separate case-sensitive HFSX entries, pagination, cancellation, and a modified source. An AccessKit simulation opened the Files view and navigated the paged catalog. [Volume tests](src/image/browse/tests.rs)
 
+On arm64 macOS 14.7.2 (23H311), the composed desktop opened a UDRO image of the sibling reader’s synthetic catalog fixture through the file picker. The live Files view showed vertically aligned rows on pages 1–64 and 65–97. Opening `Nested` showed the stored decomposed name `Résumé.txt` with its mode, owner and catalog ID in **Details**. The fixture’s SHA-256 matched before and after browsing.
+
 ### Desktop smoke checks
 
 The desktop tests cover bounded project input, native GPT fixture inspection, copy publication and no-clobber behavior, cancelled or failed opens, and grouped position edits with undo and redo. Tests for the run navigation portion of D-GUI-03 cover bounded pages, preservation of the open source, simulated accessibility activation, and cancellation. Verification tests use the native UDZO fixture and a copy with a changed payload byte.

@@ -9,6 +9,8 @@ use super::{Action, field};
 
 const VOLUME_MENU_HEIGHT: f32 = 280.0;
 const DETAILS_WIDTH: f32 = 220.0;
+const FOLDER_CELL: &str = "folder";
+const DETAILS_CELL: &str = "details";
 
 pub(super) fn navigation(ui: &mut Ui, browser: &Browser, idle: bool) -> Option<Action> {
 	ui.add_enabled_ui(idle, |ui| {
@@ -204,32 +206,30 @@ fn show_folder(ui: &mut Ui, page: &Page) -> Option<Request> {
 		.show(ui, |ui| {
 			let mut request = None;
 			for (index, entry) in page.entries.iter().enumerate() {
-				ui.push_id(index, |ui| {
-					let name = label(&entry.name);
-					if entry.kind == NodeKind::Directory {
-						let child = page.location.child(&entry.name);
-						if ui
-							.add_enabled(child.is_some(), egui::Button::new(name.as_str()))
-							.clicked()
-						{
-							request = child.map(Request::first);
-						}
-					} else {
-						ui.label(name.as_str());
+				let name = label(&entry.name);
+				if entry.kind == NodeKind::Directory {
+					let child = page.location.child(&entry.name);
+					let open = ui.push_id((index, FOLDER_CELL), |ui| {
+						ui.add_enabled(child.is_some(), egui::Button::new(name.as_str()))
+					});
+					if open.inner.clicked() {
+						request = child.map(Request::first);
 					}
-					ui.label(kind_label(entry.kind));
-					if ui
-						.button("Details")
+				} else {
+					ui.label(name.as_str());
+				}
+				ui.label(kind_label(entry.kind));
+				let details = ui.push_id((index, DETAILS_CELL), |ui| {
+					ui.button("Details")
 						.on_hover_text(format!("Inspect {name}"))
-						.clicked()
-					{
-						request = Some(Request::Details {
-							folder: page.location.clone(),
-							name: entry.name.clone(),
-						});
-					}
-					ui.end_row();
 				});
+				if details.inner.clicked() {
+					request = Some(Request::Details {
+						folder: page.location.clone(),
+						name: entry.name.clone(),
+					});
+				}
+				ui.end_row();
 			}
 			request
 		})
