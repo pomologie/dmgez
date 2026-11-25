@@ -6,6 +6,7 @@ Run the development adapter with Python 3, the dmgez toolchain, and a populated 
 python3 tests/compatibility/volume-read/run.py --dmgez . --hfsplus /path/to/hfsplus
 python3 tests/compatibility/volume-read/run.py --dmgez . --hfsplus-packages /path/to/unpacked
 python3 tests/compatibility/volume-read/run.py --dmgez . --apfs /path/to/apfs
+python3 tests/compatibility/volume-read/run.py --dmgez . --apfs-packages /path/to/unpacked
 ```
 
 The package mode uses unpacked `hfsplus-core`, `hfsplus-format`, `hfsplus-reader`, and `hfsplus-builder` archives at version 0.1.0. Use a set that includes clean-journal support and the [pinned test fixtures](hfsplus/fixtures.json). Cargo path overrides apply inside the temporary project. The adapter stays outside the application workspace until the filesystem dependency is ready for production registration.
@@ -24,7 +25,9 @@ The fixture bytes cover selected recorded ranges. The tests reconstruct the disk
 
 The adapter opens the selected APFS partition, then a volume and checkpoint through the APFS reader. It uses exact stored UTF-8 names. It keeps each hard-link entry distinct from its shared inode and lends data and resource streams independently. Symbolic links expose their exact target bytes.
 
-The tests passed against dmgez `1edf143` and APFS `a210ad5`. They stream a synthetic MBR and [pinned blocks](apfs/fixtures.json) from native APFS fixtures through UDZO. They exercise directory page recovery, separate hard-link and storage identities, both forks, absent and empty streams, foreign handle refusal, and an inline symlink. The fixture source refuses reads outside the captured APFS blocks. APFS qualification currently uses the sibling source checkout.
+The tests passed against dmgez `1edf143` and APFS `a210ad5`. They stream a synthetic MBR and [pinned blocks](apfs/fixtures.json) from native APFS fixtures through UDZO. They exercise directory page recovery, separate hard-link and storage identities, both forks, absent and empty streams, foreign handle refusal, and an inline symlink. The fixture source refuses reads outside the captured APFS blocks.
+
+The adapter also passed with unpacked `apfs-core`, `apfs-format`, `apfs-container`, and `apfs-reader` 0.1.0 archives from APFS `dd2e61a`. The runner verifies the pinned native blocks from the selected reader package before compiling.
 
 ## Extraction name preflight
 

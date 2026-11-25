@@ -34,6 +34,7 @@ ENGINE_PACKAGES = {
 }
 PACKAGE_PATCHES = {
     "hfsplus": ("hfsplus-core", "hfsplus-format"),
+    "apfs": ("apfs-core", "apfs-format", "apfs-container"),
 }
 
 
