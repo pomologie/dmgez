@@ -20,6 +20,7 @@ CLI_TEST = "project_build_cli"
 VERIFY_TEST = "hfs_verify_cli"
 READ_TEST = "volume_cli"
 EXTRACT_TEST = "extract_cli"
+DECMPFS_TEST = "hfs_decmpfs_cli"
 TOOLCHAIN = "rust-toolchain.toml"
 MANIFEST = "Cargo.toml"
 LOCK = "Cargo.lock"
@@ -38,7 +39,8 @@ READ_ADAPTER = "dmgez-hfsplus-read"
 READ_FEATURE = "hfsplus-read"
 VERIFY_FEATURE = "hfsplus-verify"
 EXTRACT_FEATURE = "hfsplus-extract"
-READ_PROFILES = (READ_FEATURE, EXTRACT_FEATURE)
+DECMPFS_FEATURE = "hfsplus-decmpfs"
+READ_PROFILES = (READ_FEATURE, EXTRACT_FEATURE, DECMPFS_FEATURE)
 SOURCE_DIRS = ("apps", "crates", "tests")
 FEATURE_ADDITIONS = {
     "project-build": ["dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config"],
@@ -96,6 +98,7 @@ def compose_cli_manifest(manifest, reader, build):
         additions[READ_FEATURE] = ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse"]
         additions[VERIFY_FEATURE] = ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/verify"]
         additions[EXTRACT_FEATURE] = [READ_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract"]
+        additions[DECMPFS_FEATURE] = [READ_FEATURE, f"{READ_ADAPTER}/decmpfs-zlib"]
         dependencies_to_add.append(READ_ADAPTER)
     if features.keys() & additions.keys():
         raise ValueError("CLI manifest already has HFS+ composition features")
@@ -199,6 +202,7 @@ def run_cli(cargo, directory, options, hfsplus):
                 command.extend(("--test", VERIFY_TEST))
             if any(has_cli_feature(options, name) for name in READ_PROFILES):
                 command.extend(("--test", READ_TEST))
+                command.extend(("--test", DECMPFS_TEST))
             if has_cli_feature(options, EXTRACT_FEATURE):
                 command.extend(("--test", EXTRACT_TEST))
         if HFSPLUS_BUILDER in hfsplus:

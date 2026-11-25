@@ -10,6 +10,7 @@ description = "Read-only HFS+ and HFSX browsing and structural verification for 
 [features]
 default = []
 browse = ["dep:dmgez-vfs"]
+decmpfs-zlib = ["hfsplus-reader/decmpfs-zlib"]
 verify = []
 
 [dependencies]
