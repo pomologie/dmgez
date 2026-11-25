@@ -6,6 +6,54 @@ use crate::{PolicyAssessment, ResolvedBackend};
 
 use super::{Error, Id};
 
+/// Result of checking the embedded ticket of an existing disk image.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+#[non_exhaustive]
+pub enum TicketStatus {
+	/// The image has no embedded ticket slot.
+	Missing,
+	/// The native validator reported invalid or revoked ticket data.
+	Invalid,
+	/// The native validator verified the embedded ticket.
+	Verified,
+	/// Native validation is unavailable on this platform or installation.
+	Unavailable,
+}
+
+impl TicketStatus {
+	pub const fn as_str(self) -> &'static str {
+		match self {
+			Self::Missing => "missing",
+			Self::Invalid => "invalid",
+			Self::Verified => "verified",
+			Self::Unavailable => "unavailable",
+		}
+	}
+}
+
+/// Checks an existing embedded disk-image ticket without modifying the image.
+///
+/// On macOS this checks ticket presence locally before invoking the native
+/// validator, which can contact Apple's ticket service. Keep the path and
+/// its containing directory stable during the check. Signature and Gatekeeper
+/// checks remain separate.
+///
+/// # Errors
+/// Fails for an unsuitable image, image changes, or native validation failures
+/// that do not establish a ticket outcome.
+pub fn check_ticket(image: &Path) -> Result<TicketStatus, Error> {
+	#[cfg(target_os = "macos")]
+	{
+		crate::native::staple_image::check_ticket(image)
+	}
+	#[cfg(not(target_os = "macos"))]
+	{
+		let _ = image;
+		Ok(TicketStatus::Unavailable)
+	}
+}
+
 /// Publication details for an image with a validated stapled ticket.
 #[derive(Clone, Debug, Serialize)]
 #[non_exhaustive]

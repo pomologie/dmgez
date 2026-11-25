@@ -1,9 +1,9 @@
-use std::{cell::Cell, fs};
+use std::{cell::Cell, fs, os::unix::process::ExitStatusExt, process::ExitStatus};
 
 use dmgez_udif::TRAILER_BYTES;
 use sha2::{Digest, Sha256};
 
-use crate::native::disk::image::encode_hex;
+use crate::{native::disk::image::encode_hex, notarization::TicketStatus};
 
 use super::*;
 
@@ -23,6 +23,9 @@ const DIRECTORY_SLOT: u32 = 0;
 const TICKET_SLOT: u32 = 0x0001_0002;
 const SUPERBLOB_HEADER: usize = 12;
 const INDEX_ROW: usize = 8;
+const REJECTED_DATA: i32 = 65;
+const REVOKED_TICKET: i32 = 77;
+const UNEXPECTED_SERVICE_RESPONSE: i32 = 68;
 
 #[test]
 fn validates_exact_staged_bytes_before_publishing_a_ticket_copy() {
@@ -125,6 +128,92 @@ fn withholds_output_if_native_ticket_validation_fails() {
 	assert!(matches!(result, Err(Error::Io(_))));
 	assert!(!output.exists());
 	assert_eq!(fs::read(&source).unwrap(), input);
+}
+
+#[test]
+fn reports_unsigned_and_unstapled_images_as_missing_without_native_validation() {
+	let directory = tempfile::tempdir().unwrap();
+	let source = directory.path().join(SOURCE);
+	for bytes in [UNSIGNED_FIXTURE.to_vec(), fixture(false)] {
+		fs::write(&source, &bytes).unwrap();
+		let artifact = open_image(&source).unwrap();
+		assert_eq!(
+			inspection::check(&artifact, |_| panic!("no ticket to validate")).unwrap(),
+			TicketStatus::Missing
+		);
+		assert_eq!(check_ticket(&source).unwrap(), TicketStatus::Missing);
+		assert_eq!(fs::read(&source).unwrap(), bytes);
+	}
+	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn admits_present_ticket_for_native_validation_and_distinguishes_outcomes() {
+	let directory = tempfile::tempdir().unwrap();
+	let source = directory.path().join(SOURCE);
+	let bytes = fixture(true);
+	fs::write(&source, &bytes).unwrap();
+	let artifact = open_image(&source).unwrap();
+	for (native, expected) in [
+		(Ok(()), TicketStatus::Verified),
+		(
+			Err(stapler::Error::Validate(exit(REJECTED_DATA))),
+			TicketStatus::Invalid,
+		),
+		(
+			Err(stapler::Error::Validate(exit(REVOKED_TICKET))),
+			TicketStatus::Invalid,
+		),
+		(Err(stapler::Error::Unavailable), TicketStatus::Unavailable),
+	] {
+		let actual = inspection::check(&artifact, |path| {
+			assert_eq!(path, source.canonicalize().unwrap());
+			assert_eq!(fs::read(path).unwrap(), bytes);
+			native
+		});
+		assert_eq!(actual.unwrap(), expected);
+	}
+	let failure = inspection::check(&artifact, |_| {
+		Err(stapler::Error::Validate(exit(UNEXPECTED_SERVICE_RESPONSE)))
+	});
+	assert!(matches!(
+		failure,
+		Err(Error::Tool(stapler::Error::Validate(status)))
+			if status.code() == Some(UNEXPECTED_SERVICE_RESPONSE)
+	));
+	assert_eq!(fs::read(&source).unwrap(), bytes);
+	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn rejects_malformed_signature_frames_and_images_rebound_during_validation() {
+	let directory = tempfile::tempdir().unwrap();
+	let source = directory.path().join(SOURCE);
+	let mut malformed = fixture(true);
+	malformed[UNSIGNED_FIXTURE.len() - TRAILER_BYTES] ^= 1;
+	fs::write(&source, malformed).unwrap();
+	let artifact = open_image(&source).unwrap();
+	assert!(matches!(
+		inspection::check(&artifact, |_| panic!("invalid signature frame")),
+		Err(Error::Format(_))
+	));
+
+	let bytes = fixture(true);
+	fs::write(&source, &bytes).unwrap();
+	let artifact = open_image(&source).unwrap();
+	let result = inspection::check(&artifact, |path| {
+		fs::rename(path, directory.path().join(OUTPUT)).unwrap();
+		fs::write(path, &bytes).unwrap();
+		Ok(())
+	});
+	assert!(matches!(
+		result,
+		Err(Error::Artifact(crate::Error::ArtifactChanged { .. }))
+	));
+}
+
+fn exit(code: i32) -> ExitStatus {
+	ExitStatus::from_raw(code << 8)
 }
 
 fn accepted(bytes: &[u8]) -> AcceptedImage {

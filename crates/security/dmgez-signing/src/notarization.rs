@@ -19,7 +19,7 @@ mod store;
 pub(crate) use flow::{Receipt, Service, Submission};
 #[cfg(target_os = "macos")]
 pub(crate) use staple::AcceptedImage;
-pub use staple::{StapleReport, staple};
+pub use staple::{StapleReport, TicketStatus, check_ticket, staple};
 
 #[cfg(target_os = "macos")]
 const REPORT_VERSION: u16 = 1;
@@ -218,6 +218,8 @@ pub enum Error {
 	AcceptanceRequired,
 	#[error("could not staple and publish the disk image")]
 	Staple(#[source] Box<dyn std::error::Error + Send + Sync>),
+	#[error("could not check the disk image's stapled ticket")]
+	TicketValidation(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// Reserve a new private record, then submit an exact copy of the signed DMG.

@@ -79,7 +79,7 @@ impl Input {
 	}
 }
 
-fn signature_buffer(range: &Range<u64>) -> Result<Vec<u8>, Error> {
+pub(super) fn signature_buffer(range: &Range<u64>) -> Result<Vec<u8>, Error> {
 	let size = range.end - range.start;
 	if size > MAX_SIGNATURE_BYTES {
 		return Err(Error::Size);

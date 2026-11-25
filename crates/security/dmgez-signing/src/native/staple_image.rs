@@ -11,7 +11,10 @@ use super::{
 	stapler,
 };
 
+mod inspection;
 mod snapshot;
+
+pub(crate) use inspection::check_ticket;
 
 #[cfg(test)]
 mod tests;
