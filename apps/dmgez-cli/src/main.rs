@@ -128,7 +128,7 @@ enum Command {
 		#[arg(long)]
 		json: bool,
 	},
-	/// Inspect or verify a code signature, or sign a disk image.
+	/// Inspect or verify a code signature, or sign an application or disk image.
 	Sign {
 		#[command(subcommand)]
 		action: signing::Action,

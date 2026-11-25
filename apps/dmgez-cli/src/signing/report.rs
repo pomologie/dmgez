@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use dmgez_signing::{DiskSigningReport, Report};
+use dmgez_signing::{AppSigningReport, DiskSigningReport, Report};
 
 use crate::{
 	CliResult,
@@ -26,6 +26,27 @@ pub(super) fn write_disk_signing(report: &DiskSigningReport, json: bool) -> CliR
 		)?;
 		writeln!(output, "unsigned_sha256 = {}", report.unsigned_sha256)?;
 		writeln!(output, "signed_sha256 = {}", report.signed_sha256)
+	})
+}
+
+pub(super) fn write_app_signing(report: &AppSigningReport, json: bool) -> CliResult {
+	write_report(json, report, |output| {
+		writeln!(output, "schema_version = {}", report.schema_version)?;
+		writeln!(output, "backend = {}", report.backend.as_str())?;
+		writeln!(output, "assessment = {}", report.assessment.as_str())?;
+		writeln!(output, "source = \"{}\"", EscapedText(&report.source))?;
+		writeln!(output, "output = \"{}\"", EscapedText(&report.output))?;
+		writeln!(output, "identity = \"{}\"", EscapedText(&report.identity))?;
+		for item in &report.items {
+			writeln!(
+				output,
+				"item = \"{}\" hardened_runtime = {} entitlements = {}",
+				EscapedText(&item.item),
+				item.hardened_runtime,
+				item.entitlements,
+			)?;
+		}
+		Ok(())
 	})
 }
 
