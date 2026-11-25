@@ -8,20 +8,20 @@ use ds_parser::{DSStore, FieldKey, IconLocation, PropertyList, Record, layout::B
 
 use crate::{Error, LayoutItem, layout::Layout};
 
-const CURRENT_FOLDER: &str = ".";
+pub(super) const CURRENT_FOLDER: &str = ".";
 const PARENT_FOLDER: &str = "..";
-const STORE_VERSION: u32 = 1;
+pub(super) const STORE_VERSION: u32 = 1;
 const MAX_CATALOG_NAME_BYTES: usize = 255;
 const PRINTABLE_ASCII: std::ops::RangeInclusive<u8> = b' '..=b'~';
 const NAME_SEPARATORS: [char; 2] = ['/', ':'];
 const UTF16_UNIT_BYTES: usize = size_of::<u16>();
-const LENGTH_BYTES: usize = size_of::<u32>();
+pub(super) const LENGTH_BYTES: usize = size_of::<u32>();
 const FOUR_CC_BYTES: usize = size_of::<[u8; 4]>();
 const RECORD_HEADER_BYTES: usize = LENGTH_BYTES + 2 * FOUR_CC_BYTES;
 const SCALAR_BYTES: usize = size_of::<u32>();
 const LOCATION_TRAILING_BYTES: usize = size_of::<[u8; 8]>();
-const LOCATION_BYTES: usize = 2 * SCALAR_BYTES + LOCATION_TRAILING_BYTES;
-const LEAF_HEADER_BYTES: usize = 2 * SCALAR_BYTES;
+pub(super) const LOCATION_BYTES: usize = 2 * SCALAR_BYTES + LOCATION_TRAILING_BYTES;
+pub(super) const LEAF_HEADER_BYTES: usize = 2 * SCALAR_BYTES;
 
 pub(super) struct Store {
 	records: Vec<Record>,
@@ -118,7 +118,7 @@ impl Store {
 		// Names have already been restricted to ASCII, so each byte is one
 		// UTF-16 unit. Plist values are measured with the same plist serializer
 		// the dependency writes. Exclude the unqualified multi-leaf writer.
-		let record_bytes = RECORD_HEADER_BYTES + name.len() * UTF16_UNIT_BYTES + payload_bytes;
+		let record_bytes = record_wire_bytes(name.len(), payload_bytes);
 		self.used_bytes += record_bytes;
 		if self.used_bytes > BTreeMaster::PAGE_SIZE.as_usize() {
 			return Err(Error::StoreBudget);
@@ -134,7 +134,11 @@ fn plist_payload_size(plist: &PropertyList) -> Result<usize, Error> {
 	Ok(LENGTH_BYTES + bytes.len())
 }
 
-fn validate_item_name(name: &str) -> Result<(), Error> {
+pub(super) const fn record_wire_bytes(name_units: usize, payload_bytes: usize) -> usize {
+	RECORD_HEADER_BYTES + name_units * UTF16_UNIT_BYTES + payload_bytes
+}
+
+pub(super) fn validate_item_name(name: &str) -> Result<(), Error> {
 	if name.is_empty()
 		|| name.len() > MAX_CATALOG_NAME_BYTES
 		|| name == CURRENT_FOLDER

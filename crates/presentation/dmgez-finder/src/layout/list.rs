@@ -82,6 +82,12 @@ fn column_spec(column: Column) -> Result<&'static ColumnSpec, Error> {
 		.ok_or(Error::ListColumn(column))
 }
 
+pub(crate) fn known_column(identifier: &str) -> bool {
+	COLUMN_SPECS
+		.iter()
+		.any(|spec| spec.identifier == identifier)
+}
+
 pub(crate) struct ListRecords {
 	pub keyed: PropertyList,
 	pub ordered: PropertyList,

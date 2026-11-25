@@ -6,6 +6,10 @@ use thiserror::Error;
 
 use crate::inspection::{ReadError, ReadLimits, RecordValue, visit_records};
 
+mod catalog;
+
+pub use catalog::{EditableStore, IconLocationRecord, StoreEditError};
+
 const COORDINATE_BYTES: usize = size_of::<u32>();
 
 /// Replacement coordinates for one existing icon location in the store.
@@ -69,12 +73,13 @@ pub fn edit_icon_positions(
 
 	let mut replacements = Vec::new();
 	replacements.try_reserve_exact(edits.len())?;
-	visit_records(store, limits, |record, offset| {
+	visit_records(store, limits, |record, _, offset| {
 		if matches!(record.value, RecordValue::IconPosition { .. })
 			&& let Some(coordinates) = pending.remove(record.name.as_str())
 		{
 			replacements.push((offset, coordinates));
 		}
+		Ok::<(), EditError>(())
 	})?;
 	if let Some(edit) = edits.iter().find(|edit| pending.contains_key(edit.name)) {
 		return Err(EditError::MissingPosition(edit.name.to_owned()));

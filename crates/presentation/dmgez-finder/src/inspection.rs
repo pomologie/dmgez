@@ -209,15 +209,18 @@ pub fn inspect(bytes: &[u8], limits: ReadLimits) -> Result<Report, ReadError> {
 	let leaf = admitted_leaf(bytes, limits)?;
 	let mut records = Vec::new();
 	records.try_reserve_exact(leaf.record_count)?;
-	visit_leaf(leaf, limits, |record, _| records.push(record))?;
+	visit_leaf(leaf, limits, |record, _, _| {
+		records.push(record);
+		Ok::<(), ReadError>(())
+	})?;
 	Ok(Report { records })
 }
 
-pub(crate) fn visit_records(
+pub(crate) fn visit_records<E: From<ReadError>>(
 	bytes: &[u8],
 	limits: ReadLimits,
-	visit: impl FnMut(Record, usize),
-) -> Result<(), ReadError> {
+	visit: impl FnMut(Record, &[u8], usize) -> Result<(), E>,
+) -> Result<(), E> {
 	visit_leaf(admitted_leaf(bytes, limits)?, limits, visit)
 }
 
@@ -235,13 +238,15 @@ fn admitted_leaf(bytes: &[u8], limits: ReadLimits) -> Result<leaf::Leaf<'_>, Rea
 	Ok(leaf)
 }
 
-fn visit_leaf(
+fn visit_leaf<E: From<ReadError>>(
 	leaf: leaf::Leaf<'_>,
 	limits: ReadLimits,
-	mut visit: impl FnMut(Record, usize),
-) -> Result<(), ReadError> {
+	mut visit: impl FnMut(Record, &[u8], usize) -> Result<(), E>,
+) -> Result<(), E> {
 	let mut names = HashSet::new();
-	names.try_reserve(leaf.record_count)?;
+	names
+		.try_reserve(leaf.record_count)
+		.map_err(ReadError::from)?;
 	let mut input = Cursor::new(leaf.records);
 	for _ in 0..leaf.record_count {
 		let name = read_name(&mut input, limits.name_units)?;
@@ -255,7 +260,7 @@ fn visit_leaf(
 			name.clone()
 		};
 		if !names.insert((identity_name, field)) {
-			return Err(ReadError::DuplicateRecord);
+			return Err(ReadError::DuplicateRecord.into());
 		}
 		let payload = read_payload(&mut input, tag)?;
 		let value = report_value(
@@ -273,8 +278,9 @@ fn visit_leaf(
 				data_type,
 				value,
 			},
+			payload,
 			payload_offset,
-		);
+		)?;
 	}
 	Ok(())
 }

@@ -21,11 +21,11 @@ const DEFAULT_GRID_SPACING: f64 = 80.0;
 const DEFAULT_ICON_SIZE: f64 = 128.0;
 const DEFAULT_TEXT_SIZE: f64 = 16.0;
 const DEFAULT_BACKGROUND_RGB: (f64, f64, f64) = (1.0, 1.0, 1.0);
-const DEFAULT_BACKGROUND_TYPE: i64 = 0;
-const SOLID_BACKGROUND_TYPE: i64 = 1;
+pub(super) const DEFAULT_BACKGROUND_TYPE: i64 = 0;
+pub(super) const SOLID_BACKGROUND_TYPE: i64 = 1;
 pub(super) const IMAGE_BACKGROUND_TYPE: i64 = 2;
 pub(super) const BACKGROUND_IMAGE_ALIAS: &str = "backgroundImageAlias";
-const VIEW_OPTIONS_VERSION: i64 = 1;
+pub(super) const VIEW_OPTIONS_VERSION: i64 = 1;
 const PREVIEW_PANE_VISIBILITY: &str = "PreviewPaneVisibility";
 const SCROLL_POSITION_X: &str = "scrollPositionX";
 const SCROLL_POSITION_Y: &str = "scrollPositionY";
@@ -38,6 +38,21 @@ const ARRANGE_BY_DATE_LAST_OPENED: &str = "dateLastOpened";
 const ARRANGE_BY_SIZE: &str = "size";
 const ARRANGE_BY_KIND: &str = "kind";
 const ARRANGE_BY_LABEL: &str = "label";
+
+pub(super) fn known_arrangement(name: &str) -> bool {
+	matches!(
+		name,
+		MANUAL_ARRANGEMENT
+			| ARRANGE_BY_NAME
+			| ARRANGE_BY_DATE_MODIFIED
+			| ARRANGE_BY_DATE_CREATED
+			| ARRANGE_BY_DATE_ADDED
+			| ARRANGE_BY_DATE_LAST_OPENED
+			| ARRANGE_BY_SIZE
+			| ARRANGE_BY_KIND
+			| ARRANGE_BY_LABEL
+	)
+}
 
 pub(super) struct Layout<'a> {
 	pub window: BrowserWindowSettings,
