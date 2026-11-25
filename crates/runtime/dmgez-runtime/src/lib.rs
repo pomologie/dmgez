@@ -47,6 +47,8 @@ pub mod project_edit;
 pub mod project_input;
 #[cfg(feature = "project-release")]
 pub mod project_release;
+#[cfg(feature = "project-save")]
+pub mod project_save;
 #[cfg(any(
 	feature = "image-edit",
 	feature = "project-edit",

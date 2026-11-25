@@ -36,6 +36,14 @@ appdmg-import = ["project-input", "dmgez-config/appdmg-import", "dep:dmgez-core"
 installer-lint = ["lint", "dmgez-lint/installer"]
 lint = ["project-input", "dep:dmgez-lint", "dep:dmgez-preview"]
 project-input = ["dep:dmgez-config", "dep:thiserror"]
+project-save = [
+	"dep:dmgez-config",
+	"dmgez-config/project-edit",
+	"dep:dmgez-core",
+	"dmgez-core/native-directory-privacy",
+	"dmgez-core/staging",
+	"dep:thiserror",
+]
 preview = [
 	"project-input",
 	"dep:dmgez-core",

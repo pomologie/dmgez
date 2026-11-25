@@ -9,6 +9,7 @@ use dmgez_config::{
 	project_edit::{ProjectDocument, ProjectEditError},
 };
 use dmgez_core::output::{PublishError, publish_new};
+use dmgez_runtime::project_save::FileRevision;
 use thiserror::Error;
 
 use crate::{image::ImageTab, project::ProjectTab};
@@ -68,12 +69,16 @@ fn open_document(path: PathBuf, is_project: bool) -> Result<Opened, Error> {
 		return Err(Error::NotFile);
 	}
 	let input = File::open(&canonical_path)?;
-	if !input.metadata()?.is_file() {
+	let metadata = input.metadata()?;
+	if !metadata.is_file() {
 		return Err(Error::NotFile);
 	}
 	let document = if is_project {
 		let document = read_project(input)?;
-		Document::Project(Box::new(ProjectTab::new(document)))
+		let file_revision = FileRevision::from_metadata(&metadata);
+		Document::Project(Box::new(
+			ProjectTab::new(document).with_file_revision(file_revision),
+		))
 	} else {
 		Document::Image(Box::new(ImageTab::open(input)?))
 	};
@@ -94,7 +99,11 @@ fn read_project(input: impl Read) -> Result<ProjectDocument, Error> {
 	Ok(ProjectDocument::open(&source)?)
 }
 
-pub(crate) fn save_copy(path: &Path, filename: &str, source: &str) -> Result<PathBuf, Error> {
+pub(crate) fn save_copy(
+	path: &Path,
+	filename: &str,
+	source: &str,
+) -> Result<(PathBuf, FileRevision), Error> {
 	let filename = Path::new(filename);
 	let mut components = filename.components();
 	if !matches!(components.next(), Some(Component::Normal(_)))
@@ -108,12 +117,18 @@ pub(crate) fn save_copy(path: &Path, filename: &str, source: &str) -> Result<Pat
 	}
 	let parent = path.parent().ok_or(Error::CopyName)?;
 	let destination = parent.join(filename);
+	let mut revision = None;
 	publish_new(
 		&destination,
 		|file| file.write_all(source.as_bytes()),
-		|_, _| Ok::<_, io::Error>(()),
+		|file, ()| {
+			revision = Some(FileRevision::from_metadata(&file.metadata()?));
+			Ok(())
+		},
 	)?;
-	Ok(destination)
+	let revision =
+		revision.ok_or_else(|| io::Error::other("the saved copy has no file revision"))?;
+	Ok((destination, revision))
 }
 
 #[cfg(test)]
@@ -134,7 +149,7 @@ mod tests {
 			panic!("expected project")
 		};
 		assert_eq!(project.document.source(), MANIFEST);
-		let copy = save_copy(&path, COPY_NAME, project.document.source()).unwrap();
+		let (copy, _) = save_copy(&path, COPY_NAME, project.document.source()).unwrap();
 		assert_eq!(copy.parent(), path.parent());
 		assert_eq!(fs::read_to_string(&copy).unwrap(), MANIFEST);
 		assert!(matches!(

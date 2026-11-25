@@ -4,9 +4,10 @@ use std::{
 };
 
 use dmgez_config::project_edit::{ProjectEdit, RevisionId};
+use dmgez_runtime::project_save::{Error as ProjectSaveError, FileRevision};
 use dmgez_udif::Cancellation;
 use eframe::egui::{
-	self, Color32, Context, Id, Key, Modifiers, Panel, RichText, TextEdit, Ui, ViewportCommand,
+	self, Color32, Context, Id, Key, Modifiers, Panel, RichText, Ui, ViewportCommand,
 };
 
 use crate::document::{self, Document, IMAGE_EXTENSION, Opened, PROJECT_EXTENSION};
@@ -16,6 +17,7 @@ mod image_exports;
 mod image_tasks;
 #[cfg(test)]
 mod import_tests;
+mod project_save;
 #[cfg(feature = "project-build")]
 mod project_tasks;
 mod worker;
@@ -23,7 +25,6 @@ mod worker;
 use image_tasks::ImageCompletion;
 use worker::Worker;
 
-const PROJECT_COPY: &str = "project-copy.toml";
 const INK: Color32 = Color32::from_rgb(26, 42, 48);
 const WORKSPACE: Color32 = Color32::from_rgb(250, 252, 252);
 const FOCUS: Color32 = Color32::from_rgb(0, 109, 107);
@@ -55,6 +56,8 @@ enum Completion {
 	Saved {
 		path: PathBuf,
 		revision: RevisionId,
+		source: String,
+		file: FileRevision,
 	},
 	Added {
 		revision: RevisionId,
@@ -65,6 +68,7 @@ enum Completion {
 	Build(project_tasks::BuildCompletion),
 	Cancelled,
 	Failed(document::Error),
+	SaveFailed(ProjectSaveError),
 }
 
 impl Completion {
@@ -159,16 +163,22 @@ impl App {
 			}
 			Completion::Cancelled => {}
 			Completion::Failed(error) => self.error = Some(error.to_string()),
+			Completion::SaveFailed(error) => self.error = Some(error.to_string()),
 			Completion::Image(result) => self.finish_image(ctx, result),
 			#[cfg(feature = "project-build")]
 			Completion::Build(result) => self.build.finish(result),
-			Completion::Saved { path, revision } => {
+			Completion::Saved {
+				path,
+				revision,
+				source,
+				file,
+			} => {
 				if let Some(Opened {
 					document: Document::Project(project),
 					path: current,
 				}) = &mut self.opened
 				{
-					project.mark_saved(revision);
+					project.mark_saved(revision, source, Some(file));
 					*current = path;
 				}
 			}
@@ -238,31 +248,6 @@ impl App {
 		matches!(&self.opened, Some(Opened { document: Document::Project(project), .. }) if project.is_dirty())
 	}
 
-	fn open_save_dialog(&mut self) {
-		self.copy_name.clear();
-		self.copy_name.push_str(PROJECT_COPY);
-		self.save_copy = true;
-	}
-
-	fn write_copy(&mut self, ctx: &Context) {
-		if let Some(Opened {
-			path,
-			document: Document::Project(project),
-		}) = &self.opened
-		{
-			let path = path.clone();
-			let filename = self.copy_name.clone();
-			let revision = project.document.revision();
-			let source = project.document.source().to_owned();
-			self.start(ctx, move || {
-				match document::save_copy(&path, &filename, &source) {
-					Ok(path) => Completion::Saved { path, revision },
-					Err(error) => Completion::Failed(error),
-				}
-			});
-		}
-	}
-
 	fn toolbar(&mut self, ui: &mut Ui) {
 		Panel::top("document_toolbar").show(ui, |ui| {
 			ui.horizontal_wrapped(|ui| {
@@ -280,9 +265,7 @@ impl App {
 						if ui.button("Add files…").clicked() {
 							self.add_files(ui.ctx(), import::pick_files);
 						}
-						if ui.button("Save copy…").clicked() {
-							self.open_save_dialog();
-						}
+						self.save_actions(ui);
 						#[cfg(feature = "project-build")]
 						self.build_actions(ui);
 						if let Some(Opened {
@@ -362,26 +345,7 @@ impl App {
 				self.confirm = None;
 			}
 		}
-		if self.save_copy {
-			let modal = egui::Modal::new(Id::unique("save_project_copy")).show(ctx, |ui| {
-				ui.heading("Save a project copy");
-				ui.label("The copy is saved beside the source project.");
-				ui.add(TextEdit::singleline(&mut self.copy_name).hint_text("Filename"));
-				ui.horizontal(|ui| {
-					let cancel = ui.button("Cancel").clicked();
-					let save = ui.button("Save copy").clicked();
-					(cancel, save)
-				})
-				.inner
-			});
-			let (cancel, save) = modal.inner;
-			if save {
-				self.save_copy = false;
-				self.write_copy(ctx);
-			} else if cancel || modal.should_close() {
-				self.save_copy = false;
-			}
-		}
+		self.save_copy_modal(ctx);
 	}
 
 	fn shortcuts(&mut self, ctx: &Context) {
@@ -390,6 +354,9 @@ impl App {
 		}
 		if ctx.input_mut(|input| input.consume_key(Modifiers::COMMAND, FILE_OPEN_KEY)) {
 			self.ask_open(ctx);
+			return;
+		}
+		if self.save_shortcut(ctx) {
 			return;
 		}
 		if ctx.text_edit_focused() {

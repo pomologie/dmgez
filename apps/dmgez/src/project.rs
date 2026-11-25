@@ -9,6 +9,7 @@ use dmgez_config::{
 use dmgez_preview::{
 	DeclaredTree, DeclaredTreeError, Drag, FolderPoint, PositionSource, ProjectFolder,
 };
+use dmgez_runtime::project_save::FileRevision;
 use eframe::egui::{self, Button, DragValue, Panel, ScrollArea, TextEdit, Ui};
 
 use crate::layout_lint::LayoutLint;
@@ -33,6 +34,8 @@ const DETAILS_WIDTH: f32 = 226.0;
 pub(crate) struct ProjectTab {
 	pub document: ProjectDocument,
 	saved: RevisionId,
+	saved_source: String,
+	saved_file: Option<FileRevision>,
 	tree: Result<DeclaredTree, DeclaredTreeError>,
 	folder: VirtualPath,
 	selected: BTreeSet<VirtualPath>,
@@ -57,6 +60,8 @@ impl ProjectTab {
 		let project = document.project();
 		Self {
 			saved: document.revision(),
+			saved_source: document.source().to_owned(),
+			saved_file: None,
 			tree: DeclaredTree::from_project(project),
 			folder: IMAGE_ROOT.parse().expect("root is a valid virtual path"),
 			selected: BTreeSet::new(),
@@ -76,8 +81,25 @@ impl ProjectTab {
 		self.document.revision() != self.saved
 	}
 
-	pub(crate) fn mark_saved(&mut self, revision: RevisionId) {
+	pub(crate) fn with_file_revision(mut self, file: FileRevision) -> Self {
+		self.saved_file = Some(file);
+		self
+	}
+
+	pub(crate) fn saved_file(&self) -> Option<(FileRevision, &str)> {
+		self.saved_file
+			.map(|file| (file, self.saved_source.as_str()))
+	}
+
+	pub(crate) fn mark_saved(
+		&mut self,
+		revision: RevisionId,
+		source: String,
+		file: Option<FileRevision>,
+	) {
 		self.saved = revision;
+		self.saved_source = source;
+		self.saved_file = file;
 	}
 
 	pub(crate) fn folder(&self) -> &VirtualPath {

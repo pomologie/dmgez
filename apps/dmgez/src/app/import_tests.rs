@@ -66,7 +66,7 @@ fn one_worker_selection_adds_multiple_files_with_grouped_history_and_stable_path
 	project.redo();
 	assert_eq!(project.document.project().contents.len(), 2);
 
-	let copy = document::save_copy(&path, COPY_NAME, project.document.source()).unwrap();
+	let (copy, _) = document::save_copy(&path, COPY_NAME, project.document.source()).unwrap();
 	let reopened = ProjectDocument::open(&fs::read_to_string(&copy).unwrap()).unwrap();
 	assert!(reopened.source().starts_with("# original comment"));
 	for (content, expected) in reopened.project().contents.iter().zip([internal, external]) {

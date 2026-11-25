@@ -20,7 +20,7 @@ fn navigates_implied_folder_and_undoes_a_saved_position() {
 	assert!(!tab.is_dirty());
 	tab.redo();
 	let revision = tab.document.revision();
-	tab.mark_saved(revision);
+	tab.mark_saved(revision, tab.document.source().to_owned(), None);
 	assert!(!tab.is_dirty());
 	assert_eq!(tab.layout().unwrap().items()[0].center.y(), 65.0);
 
