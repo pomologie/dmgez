@@ -7,7 +7,7 @@ use apfs_core::{ByteOffset, ReadAt};
 use apfs_format::object::ObjectId;
 use apfs_reader::{
 	DirectoryCursor, DirectoryEntry as NativeEntry, Error as NativeError, FileData, FileKind,
-	InodeCount, InodeId, NameError, NameProfile, VolumeView as NativeView, XattrData,
+	InodeId, NameError, NameProfile, VolumeView as NativeView, XattrData,
 };
 use dmgez_vfs::volume::{
 	DirectoryEntry, DirectoryPage, DirectoryReader, FinderInfo, ForkKind, ForkReader, HardLink,
@@ -37,10 +37,6 @@ pub enum AdapterError<E: StdError + 'static> {
 	NameEncoding,
 	#[error("could not derive an APFS native name key")]
 	NameKey(#[from] NameError),
-	#[error("APFS directory entry changed or could not be revalidated")]
-	DirectoryEntry,
-	#[error("APFS sibling is outside the checked hard-link group")]
-	LinkIdentity,
 	#[error("APFS fork selection is unsupported")]
 	ForkKind,
 	#[error("could not allocate the checked directory page")]
@@ -140,43 +136,19 @@ where
 	}
 
 	fn stat(&mut self, node: Node) -> Result<Option<Metadata<u64>>, Self::Error> {
-		let Some(inode) = self.view.stat(node.inode)? else {
-			return Ok(None);
-		};
-		let kind = node_kind(inode.kind);
-		let needs_link = node.sibling.is_some()
-			|| (kind == NodeKind::RegularFile
-				&& matches!(inode.count, InodeCount::Links(n) if n > 1));
-		let hard_link = if needs_link {
-			let InodeCount::Links(count) = inode.count else {
-				return Err(AdapterError::LinkIdentity);
-			};
-			let count = NonZeroU32::new(count).ok_or(AdapterError::LinkIdentity)?;
-			let sibling = node.sibling.ok_or(AdapterError::LinkIdentity)?;
-			let group = self
-				.view
-				.hard_links(node.inode)?
-				.ok_or(AdapterError::LinkIdentity)?;
-			if !group
-				.iter()
-				.any(|link| link.sibling.as_raw() == sibling.0 && Some(link.parent) == node.parent)
-			{
-				return Err(AdapterError::LinkIdentity);
-			}
-			Some(HardLink {
-				storage: inode.id.as_raw(),
-				count,
-			})
-		} else {
-			None
-		};
-		Ok(Some(Metadata {
-			kind,
-			mode: inode.mode,
-			uid: inode.owner,
-			gid: inode.group,
-			hard_link,
-		}))
+		Ok(self
+			.view
+			.stat_entry(node.inode, node.parent, node.sibling)?
+			.map(|entry| Metadata {
+				kind: node_kind(entry.inode.kind),
+				mode: entry.inode.mode,
+				uid: entry.inode.owner,
+				gid: entry.inode.group,
+				hard_link: entry.hard_link_count.map(|count| HardLink {
+					storage: entry.inode.id.as_raw(),
+					count,
+				}),
+			}))
 	}
 
 	fn finder_info(&mut self, node: Node) -> Result<FinderInfo, Self::Error> {
@@ -254,23 +226,18 @@ where
 	type Error = AdapterError<S::Error>;
 
 	fn next_page(&mut self, limit: NonZeroU16) -> Result<DirectoryPage<Node>, Self::Error> {
-		let page = self.view.read_dir(self.directory, self.cursor, limit)?;
+		let page = self
+			.view
+			.read_checked_dir(self.directory, self.cursor, limit)?;
 		let mut entries = Vec::new();
 		entries
 			.try_reserve_exact(page.entries.len())
 			.map_err(|_| AdapterError::Allocation)?;
-		for entry in page.entries {
-			// Native paging supplies stored directory records. Check their targets
-			// before binding opaque handles, just as in the one-name lookup path.
-			if self
-				.view
-				.lookup_stored_name(self.directory, &entry.name)?
-				.as_ref() != Some(&entry)
-			{
-				return Err(AdapterError::DirectoryEntry);
-			}
-			entries.push(directory_entry(self.directory, entry));
-		}
+		entries.extend(
+			page.entries
+				.into_iter()
+				.map(|entry| directory_entry(self.directory, entry)),
+		);
 		self.cursor = page.next;
 		Ok(DirectoryPage {
 			entries,
