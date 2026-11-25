@@ -280,9 +280,9 @@ fn finder_validates_explicit_options_and_duplicate_positions_before_resolution()
 		preflight(&background, options).unwrap().finder(),
 		FinderPlan::IconView
 	);
-	let list_view = project("[finder]\ndefault_view = 'list-view'\n");
+	let column_view = project("[finder]\ndefault_view = 'column-view'\n");
 	assert!(matches!(
-		preflight(&list_view, options),
+		preflight(&column_view, options),
 		Err(PreflightError::Finder(dmgez_finder::Error::View(_)))
 	));
 	let duplicate = project(
@@ -301,4 +301,42 @@ fn finder_validates_explicit_options_and_duplicate_positions_before_resolution()
 		preflight(&duplicate_folder, options),
 		Err(PreflightError::DuplicateFinderFolder { index: 1 })
 	));
+}
+
+#[test]
+fn preflights_only_the_opt_in_prebuilt_volume_icon_profile_without_reading_sources() {
+	let mut options = options();
+	options.capabilities.finder_volume_icon = Availability::Available;
+	let source = project("[volume_icon]\nsource = 'absent.icns'\n");
+	if cfg!(feature = "volume-icon") {
+		let admitted = preflight(&source, options).unwrap();
+		assert_eq!(
+			admitted.volume_icon_source().unwrap().as_path(),
+			std::path::Path::new("absent.icns")
+		);
+		assert_eq!(admitted.finder(), FinderPlan::NoStore);
+		options.capabilities.finder_volume_icon = Availability::Unavailable;
+		assert!(matches!(
+			preflight(&source, options),
+			Err(PreflightError::BackendUnavailable(
+				BuildFeature::FinderVolumeIcon
+			))
+		));
+	} else {
+		assert!(matches!(
+			preflight(&source, options),
+			Err(PreflightError::FeatureNotCompiled(
+				BuildFeature::FinderVolumeIcon
+			))
+		));
+	}
+	for unsupported in [
+		"[volume_icon]\nbadge = 'badge.png'\n",
+		"[volume_icon.images]\n'16' = 'icon.png'\n",
+	] {
+		assert!(matches!(
+			preflight(&project(unsupported), options),
+			Err(PreflightError::UnsupportedFinder(FinderSetting::VolumeIcon))
+		));
+	}
 }

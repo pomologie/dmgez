@@ -9,7 +9,7 @@ use thiserror::Error;
 mod finder;
 mod profile;
 
-use finder::finder_plan;
+use finder::{finder_plan, volume_icon_source};
 pub use profile::{ExecutionProfile, ResourceLimits};
 
 const PRINTABLE_ASCII: RangeInclusive<u8> = b' '..=b'~';
@@ -44,6 +44,8 @@ pub struct BuildCapabilities {
 	pub hfsplus_unicode: Availability,
 	/// Finder metadata store writing for the icon-view profile.
 	pub finder_icon_view: Availability,
+	/// Preservation of a prebuilt ICNS and its root catalog custom-icon flag.
+	pub finder_volume_icon: Availability,
 	/// Application of explicit hidden and hide-extension filesystem flags.
 	pub finder_flags: Availability,
 	/// Independent container and filesystem verification before publication.
@@ -70,6 +72,8 @@ pub enum BuildFeature {
 	Parallel,
 	#[error("Finder icon layout")]
 	FinderLayout,
+	#[error("prebuilt Finder volume icon")]
+	FinderVolumeIcon,
 	#[error("Finder entry flags")]
 	FinderFlags,
 	#[error("output verification")]
@@ -175,7 +179,7 @@ pub enum Resource {
 #[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 #[non_exhaustive]
 pub enum FinderSetting {
-	#[error("volume icon")]
+	#[error("volume icon representation")]
 	VolumeIcon,
 	#[error("custom item icon")]
 	CustomIcon,
@@ -275,6 +279,7 @@ pub fn preflight(
 	let output = output_plan(project, options)?;
 	let release = release_plan(project, options)?;
 	let finder = finder_plan(project, capabilities)?;
+	let volume_icon_source = volume_icon_source(project, capabilities)?;
 	if project.license.is_some() {
 		return Err(PreflightError::FeatureNotCompiled(BuildFeature::License));
 	}
@@ -294,6 +299,7 @@ pub fn preflight(
 		verify_output: project.build.verify_output,
 		release,
 		finder,
+		volume_icon_source,
 		limits,
 		reproducible: project.build.reproducible,
 		source_date_epoch: project.build.source_date_epoch,

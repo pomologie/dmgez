@@ -13,6 +13,7 @@ finder-write = ["dep:dmgez-finder"]
 lzfse = ["dmgez-udif/lzfse"]
 lzma = ["dmgez-udif/lzma"]
 parallel = ["dmgez-udif/parallel"]
+volume-icon = ["finder-write", "dmgez-finder/volume-icon"]
 zlib = ["dmgez-udif/zlib"]
 
 [dependencies]

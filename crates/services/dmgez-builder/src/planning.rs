@@ -18,6 +18,9 @@ use crate::{
 #[cfg(feature = "finder-write")]
 use crate::presentation::{self, GeneratedAsset};
 
+#[cfg(feature = "volume-icon")]
+use presentation::volume_icon::{FINDER_INFO_BYTES, RootFinderInfo, prepare_asset};
+
 /// Source manifest and generated assets ready for the selected filesystem engine.
 /// Capacity remains subject to the filesystem's layout and allocation checks.
 #[derive(Debug)]
@@ -27,6 +30,8 @@ pub struct PreparedBuild {
 	output_path: Option<PathBuf>,
 	#[cfg(feature = "finder-write")]
 	finder_assets: Vec<GeneratedAsset>,
+	#[cfg(feature = "volume-icon")]
+	root_finder_info: RootFinderInfo,
 }
 
 impl PreparedBuild {
@@ -50,6 +55,12 @@ impl PreparedBuild {
 	#[must_use]
 	pub fn finder_assets(&self) -> &[GeneratedAsset] {
 		&self.finder_assets
+	}
+
+	/// Merges the admitted volume icon's flag into the root catalog folder metadata.
+	#[cfg(feature = "volume-icon")]
+	pub fn apply_root_finder_info(&self, finder_info: &mut [u8; FINDER_INFO_BYTES]) {
+		self.root_finder_info.apply(finder_info);
 	}
 }
 
@@ -141,8 +152,41 @@ pub fn prepare_with_progress(
 	if profile.write_options().cancellation.is_cancelled() {
 		return Err(Error::Cancelled);
 	}
-	#[cfg(feature = "finder-write")]
+	#[cfg(feature = "volume-icon")]
+	let (manifest, volume_icon) = {
+		let mut manifest = manifest;
+		let source = profile
+			.volume_icon_source()
+			.map(|input| {
+				manifest.capture_auxiliary_regular(
+					input,
+					&config_dir,
+					path,
+					limits.max_metadata_bytes as u64,
+				)
+			})
+			.transpose()?;
+		(manifest, source)
+	};
+	#[cfg(all(feature = "finder-write", not(feature = "volume-icon")))]
 	let finder_assets = presentation::generate(project, &manifest, &profile)?;
+	#[cfg(feature = "volume-icon")]
+	let (finder_assets, root_finder_info) = {
+		let mut budget = presentation::AssetBudget::new(&manifest, &profile)?;
+		let mut assets = presentation::generate_stores(project, &manifest, &profile, &mut budget)?;
+		let mut root_finder_info = RootFinderInfo::default();
+		if let Some(index) = volume_icon {
+			let source = manifest.auxiliary_source(index);
+			let (asset, flags) = prepare_asset(source, &manifest, &profile, &mut budget)?;
+			assets
+				.try_reserve_exact(1)
+				.map_err(presentation::Error::from)?;
+			assets.push(asset);
+			assets.sort_unstable_by(|left, right| left.path.cmp(&right.path));
+			root_finder_info = flags;
+		}
+		(assets, root_finder_info)
+	};
 	#[cfg(feature = "finder-write")]
 	if !finder_assets.is_empty() {
 		progress(BuildProgress::FinderAssetsPrepared {
@@ -158,6 +202,8 @@ pub fn prepare_with_progress(
 		output_path: path.map(|path| path.resolve(&config_dir)),
 		#[cfg(feature = "finder-write")]
 		finder_assets,
+		#[cfg(feature = "volume-icon")]
+		root_finder_info,
 	})
 }
 

@@ -54,6 +54,7 @@ impl Default for Limits {
 #[derive(Debug)]
 pub struct Manifest {
 	entries: Vec<Entry>,
+	auxiliary_sources: Vec<SourceSnapshot>,
 	regular_payload_bytes: u64,
 	metadata_bytes: u64,
 }
@@ -77,6 +78,62 @@ impl Manifest {
 	#[must_use]
 	pub fn metadata_bytes(&self) -> u64 {
 		self.metadata_bytes
+	}
+
+	pub(crate) fn sources(&self) -> impl Iterator<Item = &SourceSnapshot> {
+		self.entries
+			.iter()
+			.filter_map(|entry| entry.source.as_ref())
+			.chain(&self.auxiliary_sources)
+	}
+
+	#[cfg(feature = "volume-icon")]
+	pub(crate) fn auxiliary_source(&self, index: usize) -> &SourceSnapshot {
+		&self.auxiliary_sources[index]
+	}
+
+	#[cfg(feature = "volume-icon")]
+	pub(crate) fn capture_auxiliary_regular(
+		&mut self,
+		input: &LocalPath,
+		config_dir: &Path,
+		output: Option<&LocalPath>,
+		max_metadata_bytes: u64,
+	) -> Result<usize, Error> {
+		#[cfg(not(unix))]
+		{
+			let _ = (input, config_dir, output, max_metadata_bytes);
+			Err(Error::UnsupportedHost)
+		}
+		#[cfg(unix)]
+		{
+			let path = input.resolve(config_dir);
+			let anchor = host::Anchor::new()?;
+			let leaf = anchor.locate(&path)?;
+			let snapshot = anchor.snapshot(leaf.directory, leaf.name, path.clone())?;
+			if snapshot.kind != rustix::fs::FileType::RegularFile {
+				return Err(Error::RegularSourceRequired { path });
+			}
+			if let Some(output) = output {
+				anchor
+					.probe_output(&output.resolve(config_dir))?
+					.check(&snapshot)?;
+			}
+			let delta = std::mem::size_of::<SourceSnapshot>()
+				.checked_add(path.as_os_str().len())
+				.and_then(|bytes| u64::try_from(bytes).ok())
+				.ok_or(Error::Limit(Budget::Metadata))?;
+			let next = self
+				.metadata_bytes
+				.checked_add(delta)
+				.filter(|&bytes| bytes <= max_metadata_bytes)
+				.ok_or(Error::Limit(Budget::Metadata))?;
+			self.auxiliary_sources.try_reserve_exact(1)?;
+			let index = self.auxiliary_sources.len();
+			self.auxiliary_sources.push(snapshot);
+			self.metadata_bytes = next;
+			Ok(index)
+		}
 	}
 }
 
@@ -161,6 +218,11 @@ pub struct SourceSnapshot {
 }
 
 impl SourceSnapshot {
+	#[cfg(any(target_os = "linux", target_os = "macos"))]
+	pub(crate) fn is_directory(&self) -> bool {
+		self.kind == rustix::fs::FileType::Directory
+	}
+
 	/// Returns the diagnostic path supplied by discovery.
 	#[must_use]
 	pub fn path(&self) -> &Path {
@@ -224,7 +286,7 @@ pub enum Error {
 	RegularSourceRequired { path: PathBuf },
 	#[error("source changed since discovery: {path:?}")]
 	SourceChanged { path: PathBuf },
-	#[error("output aliases a copied source or is inside a copied directory: {path:?}")]
+	#[error("output aliases a captured source or is inside a copied directory: {path:?}")]
 	OutputSourceAlias { path: PathBuf },
 	#[error("output path is not a regular file: {path:?}")]
 	UnsupportedOutput { path: PathBuf },

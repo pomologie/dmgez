@@ -1,4 +1,4 @@
-use dmgez_config::Capacity;
+use dmgez_config::{Capacity, LocalPath};
 use dmgez_udif::writer::{Cancellation, WriteOptions};
 
 use super::{FilesystemProfile, FinderPlan, OutputPlan, PreflightError, ReleasePlan, Resource};
@@ -25,6 +25,7 @@ pub struct ExecutionProfile {
 	pub(super) verify_output: bool,
 	pub(super) release: ReleasePlan,
 	pub(super) finder: FinderPlan,
+	pub(super) volume_icon_source: Option<LocalPath>,
 	pub(super) limits: ResourceLimits,
 	pub(super) reproducible: bool,
 	pub(super) source_date_epoch: Option<u64>,
@@ -66,6 +67,12 @@ impl ExecutionProfile {
 	#[must_use]
 	pub const fn finder(&self) -> FinderPlan {
 		self.finder
+	}
+
+	/// Returns the admitted prebuilt icon asset path, relative to the project if applicable.
+	#[must_use]
+	pub fn volume_icon_source(&self) -> Option<&LocalPath> {
+		self.volume_icon_source.as_ref()
 	}
 
 	#[must_use]

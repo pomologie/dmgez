@@ -214,6 +214,7 @@ impl Catalog {
 		}));
 		Ok(Manifest {
 			entries,
+			auxiliary_sources: Vec::new(),
 			regular_payload_bytes: self.regular_payload_bytes,
 			metadata_bytes: self.metadata_bytes,
 		})

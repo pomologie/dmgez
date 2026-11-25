@@ -243,15 +243,10 @@ fn authorize_replacement(
 	};
 	let destination = target.existing.map(source_identity);
 	let directory = source_identity(target.directory);
-	for entry in manifest.entries() {
+	for source in manifest.sources() {
 		check_cancellation(profile)?;
-		let Some(source) = &entry.source else {
-			continue;
-		};
 		let identity = source.metadata().identity;
-		if destination == Some(identity)
-			|| (matches!(entry.kind, manifest::EntryKind::Directory) && directory == identity)
-		{
+		if destination == Some(identity) || (source.is_directory() && directory == identity) {
 			return Err(manifest::Error::OutputSourceAlias {
 				path: source.path().into(),
 			}
@@ -262,11 +257,9 @@ fn authorize_replacement(
 }
 
 fn validate_sources(manifest: &Manifest, profile: &ExecutionProfile) -> Result<(), ImageError> {
-	for entry in manifest.entries() {
+	for source in manifest.sources() {
 		check_cancellation(profile)?;
-		if let Some(source) = &entry.source {
-			source.validate()?;
-		}
+		source.validate()?;
 	}
 	check_cancellation(profile)
 }

@@ -1,4 +1,4 @@
-use dmgez_config::Project;
+use dmgez_config::{LocalPath, Project, VolumeIcon};
 
 use super::{
 	Availability, BuildCapabilities, BuildFeature, FinderPlan, FinderSetting, PreflightError,
@@ -8,9 +8,6 @@ pub(super) fn finder_plan(
 	project: &Project,
 	capabilities: BuildCapabilities,
 ) -> Result<FinderPlan, PreflightError> {
-	if project.volume_icon.is_some() {
-		return Err(PreflightError::UnsupportedFinder(FinderSetting::VolumeIcon));
-	}
 	if project
 		.contents
 		.iter()
@@ -41,6 +38,27 @@ pub(super) fn finder_plan(
 		.finder_icon_view
 		.require(BuildFeature::FinderLayout)?;
 	admit_layout(project)
+}
+
+pub(super) fn volume_icon_source(
+	project: &Project,
+	capabilities: BuildCapabilities,
+) -> Result<Option<LocalPath>, PreflightError> {
+	match &project.volume_icon {
+		None => Ok(None),
+		Some(VolumeIcon::Source(source)) => {
+			if !cfg!(feature = "volume-icon") {
+				return Err(PreflightError::FeatureNotCompiled(
+					BuildFeature::FinderVolumeIcon,
+				));
+			}
+			capabilities
+				.finder_volume_icon
+				.require(BuildFeature::FinderVolumeIcon)?;
+			Ok(Some(source.clone()))
+		}
+		Some(_) => Err(PreflightError::UnsupportedFinder(FinderSetting::VolumeIcon)),
+	}
 }
 
 #[cfg(not(feature = "finder-write"))]

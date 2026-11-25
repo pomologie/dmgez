@@ -1,4 +1,4 @@
-//! Pure planning of Finder metadata for a resolved image tree.
+//! Planning of Finder metadata and auxiliary assets for a resolved image tree.
 
 use std::{
 	borrow::Cow,
@@ -15,19 +15,22 @@ use crate::{
 	preflight::{ExecutionProfile, FinderPlan},
 };
 
+#[cfg(feature = "volume-icon")]
+pub(crate) mod volume_icon;
+
 const IMAGE_ROOT: &str = "/";
 const PATH_SEPARATOR: char = '/';
 
-/// A reserved image path and its generated Finder store payload.
+/// A reserved image path and its prepared Finder asset payload.
 #[derive(Debug, Eq, PartialEq)]
 pub struct GeneratedAsset {
 	/// Path to reserve in the image draft.
 	pub path: VirtualPath,
-	/// Store data to bind to the reserved file.
+	/// Exact data to bind to the reserved file.
 	pub bytes: Vec<u8>,
 }
 
-/// The Finder stores could not be generated for the resolved image tree.
+/// Finder assets could not be prepared for the resolved image tree.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum Error {
@@ -59,6 +62,21 @@ pub enum Error {
 	},
 	#[error("Finder metadata generation was cancelled")]
 	Cancelled,
+	#[cfg(feature = "volume-icon")]
+	#[error("content conflicts with the reserved volume icon: {path:?}")]
+	VolumeIconCollision { path: VirtualPath },
+	#[cfg(feature = "volume-icon")]
+	#[error("volume icon validation exceeds the available working memory")]
+	VolumeIconMemory,
+	#[cfg(feature = "volume-icon")]
+	#[error("volume icon source failed its identity checks")]
+	VolumeIconSource(#[from] crate::manifest::Error),
+	#[cfg(feature = "volume-icon")]
+	#[error("could not read the captured volume icon")]
+	VolumeIconRead(#[from] dmgez_core::source::SourceError),
+	#[cfg(feature = "volume-icon")]
+	#[error("could not admit the prebuilt volume icon")]
+	VolumeIcon(#[from] dmgez_finder::volume_icon::Error),
 }
 
 /// Generates Finder stores without opening host paths or consulting host identities.
@@ -80,23 +98,24 @@ pub fn generate(
 	if profile.finder() == FinderPlan::NoStore {
 		return Ok(Vec::new());
 	}
+	let mut budget = AssetBudget::new(manifest, profile)?;
+	generate_stores(project, manifest, profile, &mut budget)
+}
+
+pub(crate) fn generate_stores(
+	project: &Project,
+	manifest: &Manifest,
+	profile: &ExecutionProfile,
+	budget: &mut AssetBudget,
+) -> Result<Vec<GeneratedAsset>, Error> {
+	if profile.finder() == FinderPlan::NoStore {
+		return Ok(Vec::new());
+	}
 	check_cancelled(profile)?;
 
-	let limits = profile.limits();
-	let entry_budget = limits
-		.max_entries
-		.checked_sub(manifest.entries().len())
-		.ok_or(Error::EntryBudget)?;
-	let mut metadata_budget = limits
-		.max_metadata_bytes
-		.checked_sub(usize::try_from(manifest.metadata_bytes()).map_err(|_| Error::MetadataBudget)?)
-		.ok_or(Error::MetadataBudget)?;
 	let root_options = project.finder.as_ref().map(|finder| &finder.options);
-	let mut folders = layout_folders(project, manifest, profile, entry_budget)?;
-	let asset_bytes = size_of::<GeneratedAsset>()
-		.checked_mul(folders.len())
-		.ok_or(Error::MetadataBudget)?;
-	charge(&mut metadata_budget, asset_bytes)?;
+	let mut folders = layout_folders(project, manifest, profile, budget.entries)?;
+	budget.reserve_assets(folders.len())?;
 	assign_children(manifest, profile, &mut folders)?;
 	let inherited = root_options
 		.filter(|_| folders.len() > 1)
@@ -106,7 +125,7 @@ pub fn generate(
 	for (path, folder) in folders {
 		check_cancelled(profile)?;
 		let store = store_path(path)?;
-		charge(&mut metadata_budget, store.as_str().len())?;
+		budget.charge(store.as_str().len())?;
 		let options = if path == IMAGE_ROOT {
 			root_options.map(Cow::Borrowed)
 		} else {
@@ -117,10 +136,50 @@ pub fn generate(
 				folder: path.to_owned(),
 				source,
 			})?;
-		charge(&mut metadata_budget, bytes.capacity())?;
+		budget.charge(bytes.capacity())?;
 		generated.push(GeneratedAsset { path: store, bytes });
 	}
 	Ok(generated)
+}
+
+pub(crate) struct AssetBudget {
+	entries: usize,
+	metadata_bytes: usize,
+}
+
+impl AssetBudget {
+	pub(crate) fn new(manifest: &Manifest, profile: &ExecutionProfile) -> Result<Self, Error> {
+		let limits = profile.limits();
+		let entries = limits
+			.max_entries
+			.checked_sub(manifest.entries().len())
+			.ok_or(Error::EntryBudget)?;
+		let used = usize::try_from(manifest.metadata_bytes()).map_err(|_| Error::MetadataBudget)?;
+		let metadata_bytes = limits
+			.max_metadata_bytes
+			.checked_sub(used)
+			.ok_or(Error::MetadataBudget)?;
+		Ok(Self {
+			entries,
+			metadata_bytes,
+		})
+	}
+
+	fn reserve_assets(&mut self, count: usize) -> Result<(), Error> {
+		self.entries = self.entries.checked_sub(count).ok_or(Error::EntryBudget)?;
+		let bytes = size_of::<GeneratedAsset>()
+			.checked_mul(count)
+			.ok_or(Error::MetadataBudget)?;
+		self.charge(bytes)
+	}
+
+	fn charge(&mut self, bytes: usize) -> Result<(), Error> {
+		self.metadata_bytes = self
+			.metadata_bytes
+			.checked_sub(bytes)
+			.ok_or(Error::MetadataBudget)?;
+		Ok(())
+	}
 }
 
 #[derive(Default)]
@@ -166,8 +225,7 @@ fn layout_folders<'a>(
 			};
 			if requests
 				.insert(path.to_ascii_lowercase(), request)
-				.is_some()
-				|| folder.path.is_root()
+				.is_some() || folder.path.is_root()
 			{
 				return Err(Error::AmbiguousFolder {
 					folder: path.to_owned(),
@@ -280,11 +338,6 @@ fn check_cancelled(profile: &ExecutionProfile) -> Result<(), Error> {
 	if profile.write_options().cancellation.is_cancelled() {
 		return Err(Error::Cancelled);
 	}
-	Ok(())
-}
-
-fn charge(remaining: &mut usize, bytes: usize) -> Result<(), Error> {
-	*remaining = remaining.checked_sub(bytes).ok_or(Error::MetadataBudget)?;
 	Ok(())
 }
 
