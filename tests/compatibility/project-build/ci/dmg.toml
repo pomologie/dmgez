@@ -1,0 +1,30 @@
+schema_version = 1
+
+[image]
+name = "Pomologie CI"
+output = "installer.dmg"
+format = "udzo"
+size = "4MiB"
+
+[[contents]]
+source = "release nôtes.bin"
+destination = "/Documentation/Release Nôtes.bin"
+
+[[contents]]
+type = "symlink"
+destination = "/Applications"
+target = "/Applications"
+
+[metadata]
+policy = "report"
+preserve_permissions = false
+preserve_ownership = false
+preserve_timestamps = false
+preserve_extended_attributes = false
+preserve_resource_forks = false
+preserve_finder_info = false
+preserve_hard_links = false
+
+[build]
+reproducible = true
+source_date_epoch = 1700000000
