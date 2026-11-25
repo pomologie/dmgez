@@ -1,0 +1,485 @@
+{
+  "dmgez_revision": "414d65e0eaff2bd1f759575334ec2f9e98c30e1d",
+  "hfsplus_revision": "fb11b353f6cacdcb41923ca74fce404995502d71",
+  "macos_version": "14.7.2",
+  "macos_build": "23H311",
+  "architecture": "arm64",
+  "filesystems": {
+    "hfsplus": {
+      "image_digests": {
+        "initial.dmg": "140074b1185f9620cd26879da4caf527d908bbde13fc9a811d2f6886c2f915d1",
+        "revised.dmg": "8fab1b42e18dda98aa8bb283d7c7024ed2e6f48bffdaaad0d136b2235bd19222"
+      },
+      "native_udzo_verification": {
+        "initial.dmg": [
+          "Checksumming whole disk (Apple_HFS : 0)…",
+          "          whole disk (Apple_HFS : 0): verified   CRC32 $66C9EB8D",
+          "verified   CRC32 $8FF40FB6"
+        ],
+        "revised.dmg": [
+          "Checksumming whole disk (Apple_HFS : 0)…",
+          "          whole disk (Apple_HFS : 0): verified   CRC32 $1B42E423",
+          "verified   CRC32 $4D3711B6"
+        ]
+      },
+      "facts": {
+        "initial.dmg": {
+          "directory": "Étage",
+          "file": "Report.txt",
+          "file_payload": "4265666f72650a",
+          "stable_payload": "53616d652064617461000a",
+          "alternate_spelling_resolves": true
+        },
+        "revised.dmg": {
+          "directory": "éTAGE",
+          "file": "rePORT.txt",
+          "file_payload": "416c746572210a",
+          "stable_payload": "53616d652064617461000a",
+          "alternate_spelling_resolves": true
+        }
+      },
+      "exact": {
+        "address_space": "filesystem",
+        "filesystem": "hfsplus",
+        "left": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "hfs_signature": "hfsplus"
+        },
+        "right": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "hfs_signature": "hfsplus"
+        },
+        "schema_version": 1,
+        "outcome": "different",
+        "policy": {
+          "paths": "exact_stored_text",
+          "contents": "exact_bytes",
+          "compared": [
+            "kind",
+            "mode",
+            "uid",
+            "gid",
+            "hard_link_topology",
+            "data_fork",
+            "resource_fork",
+            "symlink_target"
+          ],
+          "excluded": [
+            "timestamps",
+            "extended_attributes_except_resource_fork",
+            "access_control_lists",
+            "filesystem_flags",
+            "quarantine",
+            "finder_metadata",
+            "native_object_ids",
+            "filesystem_allocation",
+            "physical_container_layout",
+            "signatures",
+            "rename_inference"
+          ]
+        },
+        "limits": {
+          "max_entries": 16384,
+          "max_depth": 128,
+          "max_path_bytes": 4194304,
+          "max_bytes": "34359738368"
+        },
+        "left_entries": 4,
+        "right_entries": 4,
+        "compared_bytes": "0",
+        "changes": [
+          {
+            "path": [
+              "Étage"
+            ],
+            "kind": "removed",
+            "fields": []
+          },
+          {
+            "path": [
+              "Étage",
+              "Report.txt"
+            ],
+            "kind": "removed",
+            "fields": []
+          },
+          {
+            "path": [
+              "Étage",
+              "Stable.bin"
+            ],
+            "kind": "removed",
+            "fields": []
+          },
+          {
+            "path": [
+              "éTAGE"
+            ],
+            "kind": "added",
+            "fields": []
+          },
+          {
+            "path": [
+              "éTAGE",
+              "Stable.bin"
+            ],
+            "kind": "added",
+            "fields": []
+          },
+          {
+            "path": [
+              "éTAGE",
+              "rePORT.txt"
+            ],
+            "kind": "added",
+            "fields": []
+          }
+        ]
+      },
+      "native": {
+        "address_space": "filesystem",
+        "filesystem": "hfsplus",
+        "left": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "hfs_signature": "hfsplus"
+        },
+        "right": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "hfs_signature": "hfsplus"
+        },
+        "schema_version": 1,
+        "outcome": "different",
+        "policy": {
+          "paths": "native",
+          "native_name_profile": "hfs_unicode_folded",
+          "contents": "exact_bytes",
+          "compared": [
+            "kind",
+            "mode",
+            "uid",
+            "gid",
+            "hard_link_topology",
+            "data_fork",
+            "resource_fork",
+            "symlink_target"
+          ],
+          "excluded": [
+            "timestamps",
+            "extended_attributes_except_resource_fork",
+            "access_control_lists",
+            "filesystem_flags",
+            "quarantine",
+            "finder_metadata",
+            "native_object_ids",
+            "filesystem_allocation",
+            "physical_container_layout",
+            "signatures",
+            "rename_inference"
+          ]
+        },
+        "limits": {
+          "max_entries": 16384,
+          "max_depth": 128,
+          "max_path_bytes": 4194304,
+          "max_bytes": "34359738368"
+        },
+        "left_entries": 4,
+        "right_entries": 4,
+        "compared_bytes": "18",
+        "changes": [
+          {
+            "path": [
+              "Étage",
+              "Report.txt"
+            ],
+            "right_path": [
+              "éTAGE",
+              "rePORT.txt"
+            ],
+            "kind": "changed",
+            "fields": [
+              "data_fork"
+            ]
+          }
+        ],
+        "equivalent_path_spellings": [
+          {
+            "left": [
+              "Étage"
+            ],
+            "right": [
+              "éTAGE"
+            ]
+          },
+          {
+            "left": [
+              "Étage",
+              "Stable.bin"
+            ],
+            "right": [
+              "éTAGE",
+              "Stable.bin"
+            ]
+          }
+        ]
+      },
+      "input_images_unchanged": true
+    },
+    "hfsx": {
+      "image_digests": {
+        "initial.dmg": "51be2999ef319bf67b33b1710df7d2c06dd46dcd6584fd52e90686d3f268de40",
+        "revised.dmg": "05fefca01706342c91104fbd280e8751c1af9655737839b3fc3430a2a17b3863"
+      },
+      "native_udzo_verification": {
+        "initial.dmg": [
+          "Checksumming whole disk (Apple_HFSX : 0)…",
+          "         whole disk (Apple_HFSX : 0): verified   CRC32 $42CB1996",
+          "verified   CRC32 $0FCFA962"
+        ],
+        "revised.dmg": [
+          "Checksumming whole disk (Apple_HFSX : 0)…",
+          "         whole disk (Apple_HFSX : 0): verified   CRC32 $F1595EE1",
+          "verified   CRC32 $8FC619D5"
+        ]
+      },
+      "facts": {
+        "initial.dmg": {
+          "directory": "Étage",
+          "file": "Report.txt",
+          "file_payload": "4265666f72650a",
+          "stable_payload": "53616d652064617461000a",
+          "alternate_spelling_resolves": false
+        },
+        "revised.dmg": {
+          "directory": "éTAGE",
+          "file": "rePORT.txt",
+          "file_payload": "416c746572210a",
+          "stable_payload": "53616d652064617461000a",
+          "alternate_spelling_resolves": false
+        }
+      },
+      "exact": {
+        "address_space": "filesystem",
+        "filesystem": "hfsplus",
+        "left": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "hfs_signature": "hfsx"
+        },
+        "right": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "hfs_signature": "hfsx"
+        },
+        "schema_version": 1,
+        "outcome": "different",
+        "policy": {
+          "paths": "exact_stored_text",
+          "contents": "exact_bytes",
+          "compared": [
+            "kind",
+            "mode",
+            "uid",
+            "gid",
+            "hard_link_topology",
+            "data_fork",
+            "resource_fork",
+            "symlink_target"
+          ],
+          "excluded": [
+            "timestamps",
+            "extended_attributes_except_resource_fork",
+            "access_control_lists",
+            "filesystem_flags",
+            "quarantine",
+            "finder_metadata",
+            "native_object_ids",
+            "filesystem_allocation",
+            "physical_container_layout",
+            "signatures",
+            "rename_inference"
+          ]
+        },
+        "limits": {
+          "max_entries": 16384,
+          "max_depth": 128,
+          "max_path_bytes": 4194304,
+          "max_bytes": "34359738368"
+        },
+        "left_entries": 4,
+        "right_entries": 4,
+        "compared_bytes": "0",
+        "changes": [
+          {
+            "path": [
+              "Étage"
+            ],
+            "kind": "removed",
+            "fields": []
+          },
+          {
+            "path": [
+              "Étage",
+              "Report.txt"
+            ],
+            "kind": "removed",
+            "fields": []
+          },
+          {
+            "path": [
+              "Étage",
+              "Stable.bin"
+            ],
+            "kind": "removed",
+            "fields": []
+          },
+          {
+            "path": [
+              "éTAGE"
+            ],
+            "kind": "added",
+            "fields": []
+          },
+          {
+            "path": [
+              "éTAGE",
+              "Stable.bin"
+            ],
+            "kind": "added",
+            "fields": []
+          },
+          {
+            "path": [
+              "éTAGE",
+              "rePORT.txt"
+            ],
+            "kind": "added",
+            "fields": []
+          }
+        ]
+      },
+      "native": {
+        "address_space": "filesystem",
+        "filesystem": "hfsplus",
+        "left": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "hfs_signature": "hfsx"
+        },
+        "right": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "hfs_signature": "hfsx"
+        },
+        "schema_version": 1,
+        "outcome": "different",
+        "policy": {
+          "paths": "native",
+          "native_name_profile": "hfsx_binary",
+          "contents": "exact_bytes",
+          "compared": [
+            "kind",
+            "mode",
+            "uid",
+            "gid",
+            "hard_link_topology",
+            "data_fork",
+            "resource_fork",
+            "symlink_target"
+          ],
+          "excluded": [
+            "timestamps",
+            "extended_attributes_except_resource_fork",
+            "access_control_lists",
+            "filesystem_flags",
+            "quarantine",
+            "finder_metadata",
+            "native_object_ids",
+            "filesystem_allocation",
+            "physical_container_layout",
+            "signatures",
+            "rename_inference"
+          ]
+        },
+        "limits": {
+          "max_entries": 16384,
+          "max_depth": 128,
+          "max_path_bytes": 4194304,
+          "max_bytes": "34359738368"
+        },
+        "left_entries": 4,
+        "right_entries": 4,
+        "compared_bytes": "0",
+        "changes": [
+          {
+            "path": [
+              "Étage"
+            ],
+            "kind": "removed",
+            "fields": []
+          },
+          {
+            "path": [
+              "Étage",
+              "Report.txt"
+            ],
+            "kind": "removed",
+            "fields": []
+          },
+          {
+            "path": [
+              "Étage",
+              "Stable.bin"
+            ],
+            "kind": "removed",
+            "fields": []
+          },
+          {
+            "path": [
+              "éTAGE"
+            ],
+            "kind": "added",
+            "fields": []
+          },
+          {
+            "path": [
+              "éTAGE",
+              "Stable.bin"
+            ],
+            "kind": "added",
+            "fields": []
+          },
+          {
+            "path": [
+              "éTAGE",
+              "rePORT.txt"
+            ],
+            "kind": "added",
+            "fields": []
+          }
+        ]
+      },
+      "input_images_unchanged": true
+    }
+  }
+}
