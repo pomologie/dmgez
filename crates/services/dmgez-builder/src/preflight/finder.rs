@@ -113,13 +113,10 @@ fn admit_options(
 	image_background: Availability,
 ) -> Result<(), PreflightError> {
 	if let Some(options) = options
-		&& let Some(dmgez_config::Background::Image { retina, .. }) = &options.background
-	{
-		if retina.is_some() {
-			return Err(PreflightError::UnsupportedFinder(
-				FinderSetting::BackgroundRetina,
-			));
-		}
+		&& matches!(
+			options.background,
+			Some(dmgez_config::Background::Image { .. })
+		) {
 		image_background.require(BuildFeature::FinderImageBackground)?;
 		dmgez_finder::validate_options_for_image_background(options)?;
 	} else {

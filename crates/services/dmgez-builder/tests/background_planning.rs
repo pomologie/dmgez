@@ -8,8 +8,8 @@ use dmgez_builder::{
 	manifest,
 	planning::{self, PreparedBuild},
 	preflight::{
-		Availability, BuildCapabilities, BuildFeature, FinderSetting, OutputIntent, PreflightError,
-		PreflightOptions, ReleaseIntent,
+		Availability, BuildCapabilities, BuildFeature, FinderPlan, OutputIntent, PreflightError,
+		PreflightOptions, ReleaseIntent, preflight,
 	},
 	presentation::{Error, ImageBackgroundIdentity},
 };
@@ -18,6 +18,8 @@ use dmgez_udif::writer::Cancellation;
 
 const PROJECT: &str = "schema_version = 1\n[image]\nname = 'Background test'\nformat = 'udro'\n";
 const ROOT_IMAGE: &str = "\n[finder]\nbackground = { kind = 'image', source = 'root.png' }\n";
+const RETINA_IMAGE: &str =
+	"\n[finder]\nbackground = { kind = 'image', source = 'root.png', retina = 'root-2x.png' }\n";
 const CONTENTS: &str = r#"
 [[contents]]
 type = "directory"
@@ -63,14 +65,20 @@ fn prepare(text: &str, base: &Path) -> Result<PreparedBuild, planning::Error> {
 	)
 }
 
-fn png(value: u8) -> Vec<u8> {
+fn square_png(value: u8, side: u32) -> Vec<u8> {
 	let mut bytes = Vec::new();
-	let mut encoder = png::Encoder::new(&mut bytes, 1, 1);
+	let mut encoder = png::Encoder::new(&mut bytes, side, side);
 	encoder.set_color(png::ColorType::Grayscale);
 	let mut writer = encoder.write_header().unwrap();
-	writer.write_image_data(&[value]).unwrap();
+	writer
+		.write_image_data(&vec![value; usize::try_from(side * side).unwrap()])
+		.unwrap();
 	writer.finish().unwrap();
 	bytes
+}
+
+fn png(value: u8) -> Vec<u8> {
+	square_png(value, 1)
 }
 
 #[test]
@@ -134,29 +142,106 @@ fn reserves_one_inherited_asset_and_distinct_override_before_store_binding() {
 }
 
 #[test]
-fn preflights_background_composer_capability_and_retina_before_source_access() {
-	let project = Project::parse(&format!("{PROJECT}output = 'output.dmg'\n{ROOT_IMAGE}")).unwrap();
-	let missing = Path::new("missing relative working directory");
-	let result = planning::prepare(
-		&project,
-		missing,
-		options(Availability::NotCompiled),
-		Cancellation::default(),
+fn preflights_both_background_forms_before_source_access() {
+	for background in [ROOT_IMAGE, RETINA_IMAGE] {
+		let project =
+			Project::parse(&format!("{PROJECT}output = 'output.dmg'\n{background}")).unwrap();
+		let missing = Path::new("missing relative working directory");
+		let result = planning::prepare(
+			&project,
+			missing,
+			options(Availability::NotCompiled),
+			Cancellation::default(),
+		);
+		assert!(matches!(
+			result,
+			Err(planning::Error::Preflight(
+				PreflightError::FeatureNotCompiled(BuildFeature::FinderImageBackground)
+			))
+		));
+		assert_eq!(
+			preflight(&project, options(Availability::Available))
+				.unwrap()
+				.finder(),
+			FinderPlan::IconView,
+		);
+	}
+}
+
+#[test]
+fn distinguishes_retina_pairs_and_single_sources_and_binds_their_final_paths() {
+	const RETINA_FOLDERS: &str = r#"
+[[finder.folders]]
+path = "/Docs"
+[[finder.folders]]
+path = "/Help"
+background = { kind = "image", source = "root.png", retina = "help-2x.png" }
+[[finder.folders]]
+path = "/Text"
+background = { kind = "image", source = "root.png" }
+"#;
+	let base = tempfile::tempdir().unwrap();
+	let original = png(17);
+	fs::write(base.path().join("root.png"), &original).unwrap();
+	fs::write(base.path().join("root-2x.png"), square_png(42, 2)).unwrap();
+	fs::write(base.path().join("help-2x.png"), square_png(81, 2)).unwrap();
+	let plan = prepare(
+		&format!("{PROJECT}output = 'output.dmg'\n{CONTENTS}{RETINA_IMAGE}{RETINA_FOLDERS}"),
+		base.path(),
+	)
+	.unwrap();
+	let assets = plan.finder_assets();
+	assert_eq!(
+		assets
+			.iter()
+			.map(|asset| asset.path.as_str())
+			.collect::<Vec<_>>(),
+		[
+			"/.background/background-0.tiff",
+			"/.background/background-1.tiff",
+			"/.background/background-2.png",
+		],
 	);
+	assert_eq!(assets[2].bytes, original);
+	assert_ne!(assets[0].bytes, assets[1].bytes);
+	let stores = plan.deferred_finder_stores();
+	for (store, asset) in stores
+		.iter()
+		.zip([&assets[0], &assets[0], &assets[1], &assets[2]])
+	{
+		assert_eq!(store.background_path(), &asset.path);
+	}
+	assert_eq!(stores.len(), 4);
+}
+
+#[test]
+fn rejects_an_output_alias_of_the_retina_source() {
+	let base = tempfile::tempdir().unwrap();
+	fs::write(base.path().join("root.png"), png(17)).unwrap();
+	fs::write(base.path().join("root-2x.png"), square_png(42, 2)).unwrap();
+	let alias = format!("{PROJECT}output = 'root-2x.png'\n{RETINA_IMAGE}");
 	assert!(matches!(
-		result,
-		Err(planning::Error::Preflight(
-			PreflightError::FeatureNotCompiled(BuildFeature::FinderImageBackground)
-		))
+		prepare(&alias, base.path()),
+		Err(planning::Error::Presentation(Error::BackgroundSource(
+			manifest::Error::OutputSourceAlias { .. }
+		)))
 	));
-	let retina = format!(
-		"{PROJECT}output = 'output.dmg'\n\n[finder]\nbackground = {{ kind = 'image', source = 'root.png', retina = 'root-2x.png' }}\n"
-	);
+}
+
+#[test]
+fn generated_retina_tiff_must_fit_the_build_metadata_limit() {
+	let base = tempfile::tempdir().unwrap();
+	let standard = square_png(17, 256);
+	let retina = square_png(42, 512);
+	fs::write(base.path().join("root.png"), &standard).unwrap();
+	fs::write(base.path().join("root-2x.png"), &retina).unwrap();
+	let project = format!("{PROJECT}output = 'output.dmg'\n{RETINA_IMAGE}");
+	let plan = prepare(&project, base.path()).unwrap();
+	assert!(plan.finder_assets()[0].bytes.len() > standard.len() + retina.len());
+	let limited = format!("{project}\n[performance]\nmax_metadata_bytes = '96KiB'\n");
 	assert!(matches!(
-		prepare(&retina, missing),
-		Err(planning::Error::Preflight(
-			PreflightError::UnsupportedFinder(FinderSetting::BackgroundRetina)
-		))
+		prepare(&limited, base.path()),
+		Err(planning::Error::Presentation(Error::MetadataBudget))
 	));
 }
 

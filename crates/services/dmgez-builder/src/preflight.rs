@@ -191,6 +191,7 @@ pub enum FinderSetting {
 	VolumeIcon,
 	#[error("custom item icon")]
 	CustomIcon,
+	/// Legacy diagnostic retained for callers of the initial image background profile.
 	#[error("separate Retina background asset")]
 	BackgroundRetina,
 }
