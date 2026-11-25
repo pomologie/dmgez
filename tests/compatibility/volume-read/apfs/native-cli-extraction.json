@@ -1,0 +1,56 @@
+{
+  "dmgez_revision": "c3150e1d72d7ab5388f3a2b41266af4038a43f38",
+  "apfs_revision": "a8a0348cde041c875d20981c65a96a47fc38df78",
+  "macos_version": "14.7.2",
+  "macos_build": "23H311",
+  "architecture": "arm64",
+  "raw_sha256": "33202f8e6874efa8d7f166a346b6141198ef3ba876efc84dffbcf0116ae52d75",
+  "udzo_sha256": "e8f21f50e16698d93e7f21f997bbf35b356684aeffbad6fd44561392c5b1cce2",
+  "fsck_stdout": [
+    "** Checking the container superblock.",
+    "   Checking the checkpoint with transaction ID 4.",
+    "** Checking the space manager.",
+    "** Checking the space manager free queue trees.",
+    "** Checking the object map.",
+    "** Checking volume <temporary directory>/source.raw.cdrs1.",
+    "** Checking the APFS volume superblock.",
+    "   The volume Pomologie APFS Extraction was formatted by newfs_apfs (2236.141.1) and last modified by apfs_kext (2236.141.1).",
+    "** Checking the object map.",
+    "** Checking the snapshot metadata tree.",
+    "** Checking the snapshot metadata.",
+    "** Checking the fsroot tree.",
+    "** Checking the extent ref tree.",
+    "** Verifying volume object map space.",
+    "** The volume <temporary directory>/source.raw.cdrs1 with UUID A8529D8D-3B54-4F28-8145-F4CE98C83039 appears to be OK.",
+    "** Verifying allocated space.",
+    "** The container <temporary directory>/source.raw.cdr appears to be OK."
+  ],
+  "fsck_stderr": [
+    "warning: <temporary directory>/source.raw.cdr: not a valid disk name/path"
+  ],
+  "udzo_verify_stdout": [
+    "Checksumming whole disk (Apple_APFS : 0)…",
+    "         whole disk (Apple_APFS : 0): verified   CRC32 $1B0FA659",
+    "verified   CRC32 $47EABA80"
+  ],
+  "udzo_verify_stderr": [
+    "hdiutil: verify: checksum of \"<temporary directory>/source-udzo.dmg\" is VALID"
+  ],
+  "volume": {
+    "uuid": "a8529d8d-3b54-4f28-8145-f4ce98c83039",
+    "object_id": "1026",
+    "name": "Pomologie APFS Extraction",
+    "role": "unspecified"
+  },
+  "checkpoint_xid": "4",
+  "data_sha256": "6bedb286773a8c1033e274959e699b77ead16f3fb2bc517b6357e34c045992a5",
+  "resource_sha256": "e5d77df595b526001d4fc223ef29af4fc824b46f97a29c3871796d9f19124bda",
+  "projected_files": 2,
+  "projected_helper_mode": "0o600",
+  "refusals": {
+    "selected_alias_ancestor": "the selected source or a tree entry is quarantined",
+    "selected_file": "the selected source or a tree entry is quarantined",
+    "tree_member": "the selected source or a tree entry is quarantined",
+    "outer_image": "extraction cannot preserve source image quarantine"
+  }
+}
