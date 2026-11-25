@@ -83,6 +83,8 @@ pub enum Error {
 	#[error(transparent)]
 	Attributes(#[from] AttributeReadError<SourceError>),
 	#[error(transparent)]
+	CatalogAttributes(hfsplus_reader::catalog::CatalogAttributeError<SourceError>),
+	#[error(transparent)]
 	Allocation(#[from] TryReserveError),
 	#[error("unsupported HFS+ lookup encoding")]
 	LookupEncoding,

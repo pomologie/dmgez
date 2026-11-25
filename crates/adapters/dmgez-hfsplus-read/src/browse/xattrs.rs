@@ -1,11 +1,10 @@
 use std::num::NonZeroU32;
 
 use hfsplus_format::attributes::MAX_NAME_UNITS;
-use hfsplus_reader::attributes::AttributeReadError;
+use hfsplus_reader::{attributes::AttributeReadError, catalog::CatalogAttributeError};
 
 use super::{
-	CatalogId, Error, ForkReader, HfsBackend, LogicalDisk, LookupName, NodeKind, RawName, ReadFork,
-	node_kind,
+	CatalogId, Error, ForkReader, HfsBackend, LogicalDisk, LookupName, RawName, ReadFork, SourceError,
 };
 
 impl<S: LogicalDisk> HfsBackend<'_, '_, S> {
@@ -14,25 +13,15 @@ impl<S: LogicalDisk> HfsBackend<'_, '_, S> {
 		node: CatalogId,
 		limit: NonZeroU32,
 	) -> Result<Vec<RawName>, Error> {
-		let inode = self.separate_inode(node)?;
 		let mut limits = self.limits.logical_data.attributes;
 		let requested = usize::try_from(limit.get()).unwrap_or(usize::MAX);
 		limits.max_entries = limits.max_entries.min(requested);
-		let attributes = self.volume.attributes(limits)?;
-		let mut names = attributes.list_attrs(node)?;
-		if let Some(inode) = inode {
-			let inode_names = attributes.list_attrs(inode)?;
-			names.try_reserve(inode_names.len())?;
-			names.extend(inode_names);
-			names.sort_unstable_by(|left, right| left.name.cmp(&right.name));
-			names.dedup_by(|left, right| left.name == right.name);
-			if names.len() > limits.max_entries {
-				return Err(AttributeReadError::EntryLimit.into());
-			}
-		}
+		let names = self
+			.catalog
+			.list_entry_attribute_names(node, self.limits.hard_links, limits)?;
 		Ok(names
 			.into_iter()
-			.map(|entry| RawName::Utf16(entry.name))
+			.map(RawName::Utf16)
 			.collect())
 	}
 
@@ -48,31 +37,27 @@ impl<S: LogicalDisk> HfsBackend<'_, '_, S> {
 			LookupName::StoredUtf16(units) => units,
 			_ => return Err(Error::LookupEncoding),
 		};
-		let inode = self.separate_inode(node)?;
-		let attributes = self
-			.volume
-			.attributes(self.limits.logical_data.attributes)?;
-		let visible = attributes.open_attribute(node, units)?;
-		let stored = inode
-			.map(|owner| attributes.open_attribute(owner, units))
-			.transpose()?
-			.flatten();
-		if visible.is_some() && stored.is_some() {
-			return Err(Error::AmbiguousAttributeOwner);
-		}
-		Ok(visible.or(stored).map(|value| read(&mut ReadFork(value))))
+		let attribute = self.catalog.open_entry_attribute(
+			node,
+			units,
+			self.limits.hard_links,
+			self.limits.logical_data.attributes,
+		)?;
+		Ok(attribute.map(|value| read(&mut ReadFork(value))))
 	}
+}
 
-	fn separate_inode(&self, node: CatalogId) -> Result<Option<CatalogId>, Error> {
-		let entry = self
-			.catalog
-			.entry(node)?
-			.ok_or(Error::MissingAttributeOwner)?;
-		if node_kind(&entry) != NodeKind::RegularFile {
-			return Ok(None);
+	impl From<CatalogAttributeError<SourceError>> for Error {
+	fn from(error: CatalogAttributeError<SourceError>) -> Self {
+		match error {
+			CatalogAttributeError::Catalog(error) => Self::Catalog(error),
+			CatalogAttributeError::HardLink(error) => Self::HardLink(error),
+			CatalogAttributeError::Attributes(error) => Self::Attributes(error),
+			CatalogAttributeError::MissingOwner(_) => Self::MissingAttributeOwner,
+			CatalogAttributeError::MissingRegularFile(_) => Self::MissingRegularFile,
+			CatalogAttributeError::AmbiguousOwner { .. } => Self::AmbiguousAttributeOwner,
+			other => Self::CatalogAttributes(other),
 		}
-		let inode = self.regular_file(node)?.inode_id();
-		Ok((inode != node).then_some(inode))
 	}
 }
 
