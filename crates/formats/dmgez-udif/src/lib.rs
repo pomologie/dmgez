@@ -23,6 +23,7 @@ mod lzma;
 mod resource;
 #[cfg(any(feature = "read", feature = "write"))]
 mod trailer;
+mod trailer_header;
 #[cfg(any(feature = "read", all(test, feature = "write"), kani))]
 mod validation;
 
@@ -33,6 +34,7 @@ pub mod writer;
 
 pub use error::Error;
 pub use geometry::SECTOR_BYTES;
+pub use trailer_header::{TRAILER_BYTES, check_trailer_header};
 
 #[cfg(kani)]
 #[path = "../verification/kani/checked_range.rs"]

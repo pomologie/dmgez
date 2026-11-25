@@ -1,12 +1,15 @@
 #[cfg(feature = "read")]
 use std::ops::Range;
 
+#[cfg(feature = "write")]
+use crate::trailer_header::write_trailer_header;
 #[cfg(feature = "read")]
-use crate::{Error, SECTOR_BYTES, binary, checksum::Checksum, validation::checked_range};
+use crate::{
+	Error, SECTOR_BYTES, binary, check_trailer_header, checksum::Checksum,
+	validation::checked_range,
+};
 
-pub(crate) const BYTES: usize = 512;
-const SIGNATURE: &[u8; 4] = b"koly";
-const VERSION: u32 = 4;
+pub(crate) use crate::TRAILER_BYTES as BYTES;
 const FLAG_FLATTENED: u32 = 1;
 const SINGLE_SEGMENT_NUMBER: u32 = 1;
 const SINGLE_SEGMENT_COUNT: u32 = 1;
@@ -14,8 +17,6 @@ const SINGLE_SEGMENT_COUNT: u32 = 1;
 const DEVICE_IMAGE: u32 = 1;
 pub(crate) const PARTITION_IMAGE: u32 = 2;
 
-const VERSION_OFFSET: usize = 4;
-const HEADER_LENGTH_OFFSET: usize = 8;
 const FLAGS_OFFSET: usize = 12;
 #[cfg(feature = "read")]
 const RUNNING_DATA_FORK_OFFSET: usize = 16;
@@ -62,15 +63,7 @@ pub(crate) fn has_plain_checksums(bytes: &[u8; BYTES]) -> bool {
 #[cfg(feature = "read")]
 impl Trailer {
 	pub fn decode(bytes: &[u8; BYTES], body_len: u64) -> Result<Self, Error> {
-		if &bytes[..SIGNATURE.len()] != SIGNATURE {
-			return Err(Error::InvalidFormat("missing koly trailer"));
-		}
-		if binary::u32_at(bytes, VERSION_OFFSET)? != VERSION {
-			return Err(Error::Unsupported("koly version"));
-		}
-		if binary::u32_at(bytes, HEADER_LENGTH_OFFSET)? != BYTES as u32 {
-			return Err(Error::Corrupt("koly header length"));
-		}
+		check_trailer_header(bytes)?;
 		if binary::u32_at(bytes, FLAGS_OFFSET)? != FLAG_FLATTENED {
 			return Err(Error::Unsupported("koly flags"));
 		}
@@ -148,9 +141,7 @@ pub(crate) fn encode(
 	use crate::{binary, checksum};
 
 	let mut bytes = [0; BYTES];
-	bytes[..SIGNATURE.len()].copy_from_slice(SIGNATURE);
-	binary::put_u32(&mut bytes, VERSION_OFFSET, VERSION);
-	binary::put_u32(&mut bytes, HEADER_LENGTH_OFFSET, BYTES as u32);
+	write_trailer_header(&mut bytes);
 	binary::put_u32(&mut bytes, FLAGS_OFFSET, FLAG_FLATTENED);
 	binary::put_u64(&mut bytes, DATA_FORK_LENGTH_OFFSET, data_len);
 	binary::put_u32(&mut bytes, SEGMENT_NUMBER_OFFSET, SINGLE_SEGMENT_NUMBER);
