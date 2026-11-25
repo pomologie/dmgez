@@ -3,16 +3,21 @@ use serde::Serialize;
 
 use super::{
 	COMPARED_FIELDS, COMPARED_FIELDS_WITH_XATTRS, ChangeKind, ContentComparison, Field, Policy,
-	UNCOMPARED_FIELDS, UNCOMPARED_FIELDS_WITH_XATTRS, Uncompared,
+	UNCOMPARED_FIELDS, UNCOMPARED_FIELDS_WITH_XATTRS, Uncompared, replace_finder_exclusion,
+	with_field,
 };
 
-const COMPARED_WITH_LAYOUT: [Field; COMPARED_FIELDS.len() + 1] = with_layout(&COMPARED_FIELDS);
-const COMPARED_WITH_LAYOUT_AND_XATTRS: [Field; COMPARED_FIELDS_WITH_XATTRS.len() + 1] =
-	with_layout(&COMPARED_FIELDS_WITH_XATTRS);
+pub(super) const COMPARED_WITH_LAYOUT: [Field; COMPARED_FIELDS.len() + 1] =
+	with_field(&COMPARED_FIELDS, Field::FinderLayout);
+pub(super) const COMPARED_WITH_LAYOUT_AND_XATTRS: [Field; COMPARED_FIELDS_WITH_XATTRS.len() + 1] =
+	with_field(&COMPARED_FIELDS_WITH_XATTRS, Field::FinderLayout);
 const EXCLUDED_WITH_LAYOUT: [Uncompared; UNCOMPARED_FIELDS.len()] =
-	with_finder_info_excluded(UNCOMPARED_FIELDS);
+	replace_finder_exclusion(UNCOMPARED_FIELDS, Uncompared::PerObjectFinderInfo);
 const EXCLUDED_WITH_LAYOUT_AND_XATTRS: [Uncompared; UNCOMPARED_FIELDS_WITH_XATTRS.len()] =
-	with_finder_info_excluded(UNCOMPARED_FIELDS_WITH_XATTRS);
+	replace_finder_exclusion(
+		UNCOMPARED_FIELDS_WITH_XATTRS,
+		Uncompared::PerObjectFinderInfo,
+	);
 const EXCLUDED_LAYOUT_VALUES: &[FinderLayoutUncompared] = &[
 	FinderLayoutUncompared::OpaqueRecordValues,
 	FinderLayoutUncompared::UnreportedSettingValues,
@@ -20,23 +25,6 @@ const EXCLUDED_LAYOUT_VALUES: &[FinderLayoutUncompared] = &[
 	FinderLayoutUncompared::AllocatorLayout,
 	FinderLayoutUncompared::AliasResolution,
 ];
-
-const fn with_layout<const N: usize>(base: &[Field]) -> [Field; N] {
-	let mut fields = [Field::FinderLayout; N];
-	fields.split_at_mut(base.len()).0.copy_from_slice(base);
-	fields
-}
-
-const fn with_finder_info_excluded<const N: usize>(mut fields: [Uncompared; N]) -> [Uncompared; N] {
-	let mut index = 0;
-	while index < fields.len() {
-		if matches!(fields[index], Uncompared::FinderMetadata) {
-			fields[index] = Uncompared::PerObjectFinderInfo;
-		}
-		index += 1;
-	}
-	fields
-}
 
 /// Scope and per-store limits for comparing admitted Finder stores.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -74,7 +62,7 @@ pub struct FinderRecordChange {
 }
 
 impl Policy {
-	pub(in crate::semantic) fn with_finder_layout(mut self) -> Self {
+	pub(super) fn with_finder_layout(mut self) -> Self {
 		let limits = ReadLimits::default();
 		self.contents = ContentComparison::ExactBytesWithFinderLayout;
 		self.finder_layout = Some(FinderLayoutPolicy {

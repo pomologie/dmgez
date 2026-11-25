@@ -4,7 +4,7 @@ use serde::Serialize;
 
 use crate::{DEFAULT_COMPARE_BYTES, bytes::decimal};
 
-use super::xattrs::POLICY as XATTR_POLICY;
+use super::{Options, xattrs::POLICY as XATTR_POLICY};
 
 const DEFAULT_MAX_ENTRIES: usize = 16_384;
 const DEFAULT_MAX_DEPTH: usize = 128;
@@ -87,6 +87,7 @@ pub enum Field {
 	ResourceFork,
 	SymlinkTarget,
 	ExtendedAttributes,
+	FinderInfo,
 	#[cfg(feature = "finder-layout")]
 	FinderLayout,
 }
@@ -104,6 +105,7 @@ impl Field {
 			Self::ResourceFork => "resource_fork",
 			Self::SymlinkTarget => "symlink_target",
 			Self::ExtendedAttributes => "extended_attributes",
+			Self::FinderInfo => "finder_info",
 			#[cfg(feature = "finder-layout")]
 			Self::FinderLayout => "finder_layout",
 		}
@@ -122,6 +124,7 @@ pub enum Uncompared {
 	Quarantine,
 	QuarantineAssessment,
 	FinderMetadata,
+	FinderLayout,
 	#[cfg(feature = "finder-layout")]
 	PerObjectFinderInfo,
 	NativeObjectIds,
@@ -142,14 +145,8 @@ const COMPARED_FIELDS: [Field; 8] = [
 	Field::SymlinkTarget,
 ];
 
-const COMPARED_FIELDS_WITH_XATTRS: [Field; COMPARED_FIELDS.len() + 1] = {
-	let mut fields = [Field::ExtendedAttributes; COMPARED_FIELDS.len() + 1];
-	fields
-		.split_at_mut(COMPARED_FIELDS.len())
-		.0
-		.copy_from_slice(&COMPARED_FIELDS);
-	fields
-};
+const COMPARED_FIELDS_WITH_XATTRS: [Field; COMPARED_FIELDS.len() + 1] =
+	with_field(&COMPARED_FIELDS, Field::ExtendedAttributes);
 
 const UNCOMPARED_FIELDS: [Uncompared; 11] = [
 	Uncompared::Timestamps,
@@ -178,6 +175,26 @@ const UNCOMPARED_FIELDS_WITH_XATTRS: [Uncompared; 10] = [
 	Uncompared::RenameInference,
 ];
 
+const fn with_field<const N: usize>(base: &[Field], field: Field) -> [Field; N] {
+	let mut fields = [field; N];
+	fields.split_at_mut(base.len()).0.copy_from_slice(base);
+	fields
+}
+
+const fn replace_finder_exclusion<const N: usize>(
+	mut fields: [Uncompared; N],
+	replacement: Uncompared,
+) -> [Uncompared; N] {
+	let mut index = 0;
+	while index < fields.len() {
+		if matches!(fields[index], Uncompared::FinderMetadata) {
+			fields[index] = replacement;
+		}
+		index += 1;
+	}
+	fields
+}
+
 /// Scope and metadata limits for stored attribute comparison.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[non_exhaustive]
@@ -198,13 +215,34 @@ pub struct Policy {
 	pub excluded: &'static [Uncompared],
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub xattrs: Option<XattrPolicy>,
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub finder_info: Option<FinderInfoPolicy>,
 	#[cfg(feature = "finder-layout")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub finder_layout: Option<FinderLayoutPolicy>,
 }
 
 impl Policy {
-	pub(super) fn with_xattrs() -> Self {
+	pub(super) fn for_options(options: Options) -> Self {
+		let policy = if options.xattrs {
+			Self::with_xattrs()
+		} else {
+			Self::default()
+		};
+		#[cfg(feature = "finder-layout")]
+		let policy = if options.finder_layout {
+			policy.with_finder_layout()
+		} else {
+			policy
+		};
+		if options.finder_info {
+			policy.with_finder_info()
+		} else {
+			policy
+		}
+	}
+
+	fn with_xattrs() -> Self {
 		Self {
 			compared: &COMPARED_FIELDS_WITH_XATTRS,
 			excluded: &UNCOMPARED_FIELDS_WITH_XATTRS,
@@ -222,11 +260,15 @@ impl Default for Policy {
 			compared: &COMPARED_FIELDS,
 			excluded: &UNCOMPARED_FIELDS,
 			xattrs: None,
+			finder_info: None,
 			#[cfg(feature = "finder-layout")]
 			finder_layout: None,
 		}
 	}
 }
+
+pub use finder_info::{FinderInfoComparison, FinderInfoPolicy};
+mod finder_info;
 
 #[cfg(feature = "finder-layout")]
 pub use finder_layout::{FinderLayoutPolicy, FinderLayoutUncompared, FinderRecordChange};
@@ -305,8 +347,8 @@ pub struct Report {
 	pub left_entries: usize,
 	/// Number of paths scanned, including the root.
 	pub right_entries: usize,
-	/// Paired fork and attribute chunks counted once. Whole link targets and
-	/// Finder stores are charged the larger of the two input lengths.
+	/// Paired fork and attribute chunks counted once. Whole link targets,
+	/// Finder stores, and FinderInfo are charged the larger of the two input lengths.
 	#[serde(serialize_with = "decimal")]
 	pub compared_bytes: u64,
 	/// Differences in lexicographic component order.

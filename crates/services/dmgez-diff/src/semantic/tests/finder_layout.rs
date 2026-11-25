@@ -4,11 +4,15 @@ use dmgez_finder::{
 	write_store,
 };
 
-use super::{ChangeKind, Error, Field, Limits, Outcome, TestNode, TestTree, compare, view};
-use crate::semantic::{
-	ContentComparison, FinderLayoutError, Uncompared, compare_with_finder_layout,
+use super::{
+	ChangeKind, Error, Field, Limits, Outcome, TestNode, TestTree, compare, view,
+	view_with_metadata,
 };
-use dmgez_vfs::volume::VolumeView;
+use crate::semantic::{
+	ContentComparison, FinderLayoutError, Options, Uncompared, compare_with_finder_layout,
+	compare_with_options,
+};
+use dmgez_vfs::volume::{FINDER_INFO_BYTES, FinderInfo, VolumeView};
 
 const STORE_VERSION_TAG: [u8; 4] = *b"vSrn";
 const LONG_TYPE_TAG: [u8; 4] = *b"long";
@@ -49,6 +53,44 @@ fn compares_reported_records_independently_of_unused_store_bytes() {
 			.contains(&Uncompared::PerObjectFinderInfo)
 	);
 	assert_eq!(report.policy.finder_layout.unwrap().store_name, STORE_NAME);
+}
+
+#[test]
+fn independently_composes_both_finder_scopes_and_stored_attributes() {
+	let root_finder_info = FinderInfo::Present([0x5a; FINDER_INFO_BYTES]);
+	let mut left = view([]);
+	let mut right = view_with_metadata([], true, root_finder_info);
+	for xattrs in [false, true] {
+		let report = compare_with_options(
+			&mut left,
+			&mut right,
+			Limits::default(),
+			Options {
+				xattrs,
+				finder_layout: true,
+				finder_info: true,
+			},
+			|| false,
+		)
+		.unwrap();
+		assert_eq!(report.changes[0].fields, [Field::FinderInfo]);
+		assert!(report.policy.finder_layout.is_some());
+		assert!(report.policy.finder_info.is_some());
+		assert_eq!(report.policy.xattrs.is_some(), xattrs);
+		assert!(report.policy.compared.contains(&Field::FinderLayout));
+		assert!(report.policy.compared.contains(&Field::FinderInfo));
+		assert_eq!(
+			report.policy.compared.contains(&Field::ExtendedAttributes),
+			xattrs
+		);
+		for field in [
+			Uncompared::FinderLayout,
+			Uncompared::PerObjectFinderInfo,
+			Uncompared::FinderMetadata,
+		] {
+			assert!(!report.policy.excluded.contains(&field));
+		}
+	}
 }
 
 #[test]

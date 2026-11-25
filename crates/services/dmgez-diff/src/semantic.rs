@@ -8,6 +8,7 @@ use thiserror::Error;
 use crate::{SCHEMA_VERSION, Side};
 
 mod catalog;
+mod finder_info;
 #[cfg(feature = "finder-layout")]
 mod finder_layout;
 mod links;
@@ -19,11 +20,12 @@ mod xattrs;
 mod tests;
 
 pub use catalog::CatalogError;
+pub use finder_info::FinderInfoError;
 #[cfg(feature = "finder-layout")]
 pub use finder_layout::FinderLayoutError;
 pub use report::{
-	Change, ChangeKind, ContentComparison, Field, Limits, Outcome, PathMatching, Policy, Report,
-	Uncompared, XattrChange, XattrPolicy,
+	Change, ChangeKind, ContentComparison, Field, FinderInfoComparison, FinderInfoPolicy, Limits,
+	Outcome, PathMatching, Policy, Report, Uncompared, XattrChange, XattrPolicy,
 };
 #[cfg(feature = "finder-layout")]
 pub use report::{FinderLayoutPolicy, FinderLayoutUncompared, FinderRecordChange};
@@ -66,6 +68,18 @@ pub enum Error<L: StdError + 'static, R: StdError + 'static> {
 		#[source]
 		source: XattrError<R>,
 	},
+	#[error("could not compare the left FinderInfo at {path:?}")]
+	LeftFinderInfo {
+		path: Vec<String>,
+		#[source]
+		source: FinderInfoError<L>,
+	},
+	#[error("could not compare the right FinderInfo at {path:?}")]
+	RightFinderInfo {
+		path: Vec<String>,
+		#[source]
+		source: FinderInfoError<R>,
+	},
 	#[cfg(feature = "finder-layout")]
 	#[error("could not compare the left Finder layout at {path:?}")]
 	LeftFinderLayout {
@@ -94,6 +108,19 @@ pub enum Error<L: StdError + 'static, R: StdError + 'static> {
 	Cancelled,
 }
 
+/// Independent opt-in scopes for a semantic comparison.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[non_exhaustive]
+pub struct Options {
+	/// Compare the supported stored extended attributes.
+	pub xattrs: bool,
+	/// Compare effective per-object FinderInfo on common paths of the same kind.
+	pub finder_info: bool,
+	/// Decode matched regular Finder store data forks.
+	#[cfg(feature = "finder-layout")]
+	pub finder_layout: bool,
+}
+
 /// Compares the visible root and descendants of two admitted filesystem views.
 ///
 /// Paths match exact stored Unicode text. Regular file forks and symbolic link
@@ -118,7 +145,7 @@ where
 	L::Id: Eq + Hash,
 	R::Id: Eq + Hash,
 {
-	compare_with_scope(left, right, limits, Policy::default(), cancelled)
+	compare_with_options(left, right, limits, Options::default(), cancelled)
 }
 
 /// Compares the visible trees and the supported stored extended attributes.
@@ -143,7 +170,16 @@ where
 	L::Id: Eq + Hash,
 	R::Id: Eq + Hash,
 {
-	compare_with_scope(left, right, limits, Policy::with_xattrs(), cancelled)
+	compare_with_options(
+		left,
+		right,
+		limits,
+		Options {
+			xattrs: true,
+			..Options::default()
+		},
+		cancelled,
+	)
 }
 
 /// Compares the visible trees, decoding the data forks of matched regular Finder stores.
@@ -169,19 +205,34 @@ where
 	L::Id: Eq + Hash,
 	R::Id: Eq + Hash,
 {
-	let policy = if xattrs {
-		Policy::with_xattrs()
-	} else {
-		Policy::default()
-	};
-	compare_with_scope(left, right, limits, policy.with_finder_layout(), cancelled)
+	compare_with_options(
+		left,
+		right,
+		limits,
+		Options {
+			xattrs,
+			finder_layout: true,
+			..Options::default()
+		},
+		cancelled,
+	)
 }
 
-fn compare_with_scope<L, R>(
+/// Compares the visible trees under the requested independent scopes.
+///
+/// FinderInfo compares effective records of same-kind objects on common paths,
+/// including the volume root. A pair with at least one present record charges
+/// one record length to the shared logical payload budget. A symbolic link is
+/// compared as an object and is never followed.
+///
+/// # Errors
+/// Stops on the same failures as [`compare`] and on unsupported, unreadable or
+/// over-budget records in any enabled scope.
+pub fn compare_with_options<L, R>(
 	left: &mut VolumeView<L>,
 	right: &mut VolumeView<R>,
 	limits: Limits,
-	policy: Policy,
+	options: Options,
 	mut cancelled: impl FnMut() -> bool,
 ) -> Result<Report, Error<L::Error, R::Error>>
 where
@@ -190,6 +241,7 @@ where
 	L::Id: Eq + Hash,
 	R::Id: Eq + Hash,
 {
+	let policy = Policy::for_options(options);
 	let left_catalog = collect(left, limits, &mut cancelled).map_err(Error::LeftCatalog)?;
 	let right_catalog = collect(right, limits, &mut cancelled).map_err(Error::RightCatalog)?;
 	let topology = Topology::compare(&left_catalog, &right_catalog, &mut cancelled)?;
@@ -224,6 +276,16 @@ where
 		};
 		if !xattr_changes.is_empty() {
 			entry.fields.push(Field::ExtendedAttributes);
+		}
+		if options.finder_info
+			&& left_entry.metadata.kind == right_entry.metadata.kind
+			&& !finder_info::equivalent(
+				(left, &left_entry.node),
+				(right, &right_entry.node),
+				path,
+				&mut payloads,
+			)? {
+			entry.fields.push(Field::FinderInfo);
 		}
 		if !entry.fields.is_empty() {
 			let mut change = Change::new(path, ChangeKind::Changed, entry.fields);

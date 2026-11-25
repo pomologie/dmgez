@@ -7,13 +7,14 @@ use std::{
 use dmgez_vfs::{
 	VolumeId,
 	volume::{
-		DirectoryEntry, DirectoryPage, DirectoryReader, ForkKind, ForkReader, HardLink, LookupName,
-		Metadata, NodeKind, RawName, VolumeBackend, VolumeView,
+		DirectoryEntry, DirectoryPage, DirectoryReader, FinderInfo, ForkKind, ForkReader, HardLink,
+		LookupName, Metadata, NodeKind, RawName, VolumeBackend, VolumeView,
 	},
 };
 
 use super::{ChangeKind, Error, Field, Limits, Outcome, compare};
 
+mod finder_info;
 #[cfg(feature = "finder-layout")]
 mod finder_layout;
 mod xattrs;
@@ -150,6 +151,7 @@ struct TestNode<'data> {
 	hard_link: Option<HardLink<u64>>,
 	target: Option<&'static [u8]>,
 	xattrs: Vec<TestXattr>,
+	finder_info: FinderInfo,
 }
 
 impl TestNode<'_> {
@@ -163,6 +165,7 @@ impl TestNode<'_> {
 			hard_link: None,
 			target: None,
 			xattrs: Vec::new(),
+			finder_info: FinderInfo::Absent,
 		}
 	}
 
@@ -195,6 +198,14 @@ fn view_with_attributes<'data, const N: usize>(
 	children: [(&str, TestNode<'data>); N],
 	attributes_available: bool,
 ) -> VolumeView<TestTree<'data>> {
+	view_with_metadata(children, attributes_available, FinderInfo::Absent)
+}
+
+fn view_with_metadata<'data, const N: usize>(
+	children: [(&str, TestNode<'data>); N],
+	attributes_available: bool,
+	root_finder_info: FinderInfo,
+) -> VolumeView<TestTree<'data>> {
 	let mut entries = Vec::new();
 	let mut nodes = BTreeMap::new();
 	for (name, node) in children {
@@ -211,6 +222,7 @@ fn view_with_attributes<'data, const N: usize>(
 			entries,
 			nodes,
 			attributes_available,
+			root_finder_info,
 		},
 	)
 }
@@ -224,6 +236,7 @@ struct TestTree<'data> {
 	entries: Vec<DirectoryEntry<u32>>,
 	nodes: BTreeMap<u32, TestNode<'data>>,
 	attributes_available: bool,
+	root_finder_info: FinderInfo,
 }
 
 impl VolumeBackend for TestTree<'_> {
@@ -268,6 +281,14 @@ impl VolumeBackend for TestTree<'_> {
 	fn read_dir(&mut self, directory: u32) -> io::Result<Page<'_>> {
 		assert_eq!(directory, ROOT);
 		Ok(Page(&self.entries))
+	}
+
+	fn finder_info(&mut self, node: u32) -> io::Result<FinderInfo> {
+		Ok(if node == ROOT {
+			self.root_finder_info
+		} else {
+			self.nodes[&node].finder_info
+		})
 	}
 
 	fn with_fork<T>(
