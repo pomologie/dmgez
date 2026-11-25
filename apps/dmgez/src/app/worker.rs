@@ -5,9 +5,9 @@ use std::{
 };
 
 use dmgez_udif::Cancellation;
-use eframe::egui::Context;
+use eframe::egui::{Context, ViewportCommand};
 
-use super::Completion;
+use super::{App, Completion};
 
 const WORKER_NAME: &str = "dmgez document";
 
@@ -42,5 +42,18 @@ impl Drop for Worker {
 		if let Some(cancellation) = &self.cancellation {
 			cancellation.cancel();
 		}
+	}
+}
+
+impl App {
+	pub(super) fn defer_close_for_worker(&self, ctx: &Context) -> bool {
+		let Some(worker) = &self.worker else {
+			return false;
+		};
+		ctx.send_viewport_cmd(ViewportCommand::CancelClose);
+		if let Some(cancellation) = &worker.cancellation {
+			cancellation.cancel();
+		}
+		true
 	}
 }

@@ -384,17 +384,14 @@ impl eframe::App for App {
 
 	fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
 		let ctx = ui.ctx().clone();
-		if !self.closing && ctx.input(|input| input.viewport().close_requested()) {
-			if let Some(worker) = &self.worker {
-				ctx.send_viewport_cmd(ViewportCommand::CancelClose);
-				if let Some(cancellation) = &worker.cancellation {
-					cancellation.cancel();
-				}
-			} else if self.is_dirty() {
-				ctx.send_viewport_cmd(ViewportCommand::CancelClose);
-				self.confirm = Some(Pending::Close);
-				self.save_copy = false;
-			}
+		if !self.closing
+			&& ctx.input(|input| input.viewport().close_requested())
+			&& !self.defer_close_for_worker(&ctx)
+			&& self.is_dirty()
+		{
+			ctx.send_viewport_cmd(ViewportCommand::CancelClose);
+			self.confirm = Some(Pending::Close);
+			self.save_copy = false;
 		}
 		self.shortcuts(&ctx);
 		self.toolbar(ui);

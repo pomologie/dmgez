@@ -99,7 +99,7 @@ fn a_cancelled_build_does_not_publish_its_selected_destination() {
 		Some(wait.recv_timeout(WORKER_TIMEOUT).unwrap())
 	});
 	entered_picker.recv_timeout(WORKER_TIMEOUT).unwrap();
-	assert!(app.cancel_build_for_close(&ctx));
+	assert!(app.defer_close_for_worker(&ctx));
 	resume.send(destination.clone()).unwrap();
 	deliver(&mut app, &ctx, false);
 	assert!(app.build.completed.unwrap().outcome.unwrap().is_none());
