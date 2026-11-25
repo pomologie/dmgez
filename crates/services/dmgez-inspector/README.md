@@ -19,3 +19,5 @@ The `remote` library feature accepts an explicitly supplied `RangeTransport` for
 Enable `remote-http` for the concrete `remote::http::HttpTransport`. It accepts a user-selected HTTP or HTTPS endpoint and requires an explicit exact `Content-Length` for partial responses. It rejects redirects, environmental proxies and content decoding, and applies verified TLS for HTTPS. The remote inspection CLI uses this transport and revalidates the admitted revision before returning metadata. [CLI profile](../../../docs/features/ADVANCED.md#remote-reader)
 
 The in-process transport tests exercise the range semantics of D-OPS-03-T01/T02, including body transfer counts for inspection of a native UDZO fixture. Loopback tests exercise transport and deadline handling for D-OPS-03-T03. [Remote reader tests](tests/remote.rs) · [HTTP transport tests](src/remote/http/tests.rs)
+
+The D-V15 remote model checks endpoint and revision binding, request bounds, and final report revalidation. Deliberately weakened configurations witness acceptance of a changed revision and a redirect. The model covers the remote read profile. [Model and TLC evidence](verification/README.md)
