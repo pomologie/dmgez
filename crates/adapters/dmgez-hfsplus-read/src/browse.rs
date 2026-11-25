@@ -94,6 +94,8 @@ pub enum Error {
 	MissingAttributeOwner,
 	#[error("admitted HFS+ FinderInfo owner is missing")]
 	MissingFinderInfoOwner,
+	#[error(transparent)]
+	FinderInfo(hfsplus_reader::catalog::FinderInfoError<SourceError>),
 	#[error("the visible HFS+ hard link and its inode both own the same attribute name")]
 	AmbiguousAttributeOwner,
 	#[error("admitted regular file is missing")]
