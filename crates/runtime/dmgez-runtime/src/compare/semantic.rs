@@ -11,15 +11,16 @@ use dmgez_diff::{
 #[cfg(feature = "hfsplus-volume")]
 use dmgez_hfsplus::browse::{Error as HfsError, VolumeSignature};
 use dmgez_inspector::SelectedWindowId;
+use dmgez_udif::reader::{FileSource, ReadAt};
 use dmgez_vfs::{
 	LogicalDisk, VolumeId,
 	volume::{VolumeBackend, VolumeView},
 };
 use thiserror::Error;
 
-use super::{InputError, require_regular_file};
+use super::{InputError, capture_file};
 use crate::{
-	disk::{self, Encoding},
+	disk::{self, BorrowedSource, Encoding},
 	volume::{self, Error as VolumeError},
 };
 
@@ -32,11 +33,29 @@ pub struct Input<'a> {
 	pub partition: Option<NonZeroU32>,
 }
 
+/// Captured source and an optional one-based partition selector.
+#[derive(Debug)]
+pub struct DiskInput<S> {
+	pub source: S,
+	pub encoding: Encoding,
+	/// Otherwise requires a unique disk window.
+	pub partition: Option<NonZeroU32>,
+}
+
 /// APFS input with optional volume and checkpoint selectors.
 #[cfg(feature = "apfs-volume")]
 #[derive(Debug, Clone, Copy)]
 pub struct ApfsInput<'a> {
 	pub disk: Input<'a>,
+	pub volume: Option<VolumeSelector>,
+	pub checkpoint: Option<TransactionId>,
+}
+
+/// Captured APFS source with optional volume and checkpoint selectors.
+#[cfg(feature = "apfs-volume")]
+#[derive(Debug)]
+pub struct ApfsDiskInput<S> {
+	pub disk: DiskInput<S>,
 	pub volume: Option<VolumeSelector>,
 	pub checkpoint: Option<TransactionId>,
 }
@@ -82,10 +101,30 @@ pub fn hfsplus(
 	options: Options,
 	cancelled: impl FnMut() -> bool,
 ) -> Result<Report<VolumeSignature>, Error<HfsError>> {
-	check_paths(left, right)?;
-	let opened_left = with_input(left, Side::Left, |disk| {
+	hfsplus_sources(
+		left.capture(Side::Left)?,
+		right.capture(Side::Right)?,
+		limits,
+		options,
+		cancelled,
+	)
+}
+
+/// Compares HFS+ or HFSX volumes from two captured sources.
+///
+/// # Errors
+/// Returns a side-specific input error or a failed comparison.
+#[cfg(feature = "hfsplus-volume")]
+pub fn hfsplus_sources(
+	left: DiskInput<impl ReadAt>,
+	right: DiskInput<impl ReadAt>,
+	limits: Limits,
+	options: Options,
+	cancelled: impl FnMut() -> bool,
+) -> Result<Report<VolumeSignature>, Error<HfsError>> {
+	let opened_left = with_input(&left, Side::Left, |disk| {
 		volume::with_hfs_disk(disk, left.partition, |left_view, left_signature| {
-			with_input(right, Side::Right, |disk| {
+			with_input(&right, Side::Right, |disk| {
 				volume::with_hfs_disk(disk, right.partition, |right_view, right_signature| {
 					compare_open(
 						left_view,
@@ -116,7 +155,28 @@ pub fn apfs(
 	options: Options,
 	cancelled: impl FnMut() -> bool,
 ) -> Result<Report<VolumeInfo>, Error<AdapterError<SourceError>>> {
-	check_paths(left.disk, right.disk)?;
+	apfs_sources(
+		left.capture(Side::Left)?,
+		right.capture(Side::Right)?,
+		limits,
+		options,
+		cancelled,
+	)
+}
+
+/// Compares APFS volumes from two captured sources.
+///
+/// # Errors
+/// Returns a side-specific input error or a failed comparison. Checkpoint
+/// recovery diagnostics require explicit transaction selection on that input.
+#[cfg(feature = "apfs-volume")]
+pub fn apfs_sources(
+	left: ApfsDiskInput<impl ReadAt>,
+	right: ApfsDiskInput<impl ReadAt>,
+	limits: Limits,
+	options: Options,
+	cancelled: impl FnMut() -> bool,
+) -> Result<Report<VolumeInfo>, Error<AdapterError<SourceError>>> {
 	let opened_left = with_apfs_input(left, Side::Left, |left_view, left_info| {
 		with_apfs_input(right, Side::Right, |right_view, right_info| {
 			compare_open(
@@ -129,11 +189,11 @@ pub fn apfs(
 
 #[cfg(feature = "apfs-volume")]
 fn with_apfs_input<T>(
-	input: ApfsInput<'_>,
+	input: ApfsDiskInput<impl ReadAt>,
 	side: Side,
 	read: impl FnOnce(&mut volume::ApfsView<'_, '_, '_>, VolumeInfo) -> T,
 ) -> Result<T, InputError<VolumeError>> {
-	with_input(input.disk, side, |disk| {
+	with_input(&input.disk, side, |disk| {
 		volume::with_apfs_disk(
 			disk,
 			input.disk.partition,
@@ -151,21 +211,41 @@ fn with_apfs_input<T>(
 	})
 }
 
-fn check_paths(left: Input<'_>, right: Input<'_>) -> Result<(), InputError<VolumeError>> {
-	for (side, input) in [(Side::Left, left), (Side::Right, right)] {
-		require_regular_file(input.path).map_err(|source| InputError::new(side, source.into()))?;
+impl Input<'_> {
+	fn capture(self, side: Side) -> Result<DiskInput<FileSource>, InputError<VolumeError>> {
+		let source =
+			capture_file(self.path).map_err(|source| InputError::new(side, source.into()))?;
+		Ok(DiskInput {
+			source,
+			encoding: self.encoding,
+			partition: self.partition,
+		})
 	}
-	Ok(())
+}
+
+#[cfg(feature = "apfs-volume")]
+impl ApfsInput<'_> {
+	fn capture(self, side: Side) -> Result<ApfsDiskInput<FileSource>, InputError<VolumeError>> {
+		Ok(ApfsDiskInput {
+			disk: self.disk.capture(side)?,
+			volume: self.volume,
+			checkpoint: self.checkpoint,
+		})
+	}
 }
 
 fn with_input<T>(
-	input: Input<'_>,
+	input: &DiskInput<impl ReadAt>,
 	side: Side,
 	read: impl FnOnce(&mut dyn LogicalDisk) -> Result<T, VolumeError>,
 ) -> Result<T, InputError<VolumeError>> {
 	// Keep later comparison failures in T so this source is still revalidated.
-	disk::with_path(input.path, input.encoding, read)
-		.map_err(|source| InputError::new(side, source))
+	let result = disk::with_logical_disk(BorrowedSource(&input.source), input.encoding, read)
+		.and_then(|value| {
+			input.source.check_unchanged()?;
+			Ok(value)
+		});
+	result.map_err(|source| InputError::new(side, source))
 }
 
 fn selected<I, E: StdError + 'static>(

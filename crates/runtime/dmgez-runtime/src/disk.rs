@@ -27,11 +27,11 @@ pub enum SelectionError {
 	Disk(#[from] dmgez_vfs::Error),
 }
 
-/// Borrows a captured file for use with an owning logical disk reader.
+/// Borrows a captured source for use with an owning logical disk reader.
 #[derive(Debug)]
-pub struct BorrowedSource<'source>(pub &'source FileSource);
+pub struct BorrowedSource<'source, S = FileSource>(pub &'source S);
 
-impl ReadAt for BorrowedSource<'_> {
+impl<S: ReadAt> ReadAt for BorrowedSource<'_, S> {
 	fn len(&self) -> u64 {
 		self.0.len()
 	}

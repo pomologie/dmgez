@@ -1,11 +1,11 @@
-//! File-based workflows for bounded byte and filesystem comparison.
+//! Workflows for bounded byte and filesystem comparison.
 
 use std::{fs::File, path::Path};
 
 use dmgez_diff::{Report, Side, compare};
 use dmgez_udif::{
 	Error as ImageError,
-	reader::{FileSource, Image, Limits},
+	reader::{FileSource, Image, Limits, ReadAt},
 };
 use dmgez_vfs::Raw;
 use thiserror::Error;
@@ -61,8 +61,23 @@ pub fn files(
 	max_bytes_per_input: u64,
 	cancelled: impl FnMut() -> bool,
 ) -> Result<Report, ByteError> {
-	let left = open_file(left).map_err(|source| InputError::new(Side::Left, source))?;
-	let right = open_file(right).map_err(|source| InputError::new(Side::Right, source))?;
+	let left = capture_file(left).map_err(|source| InputError::new(Side::Left, source))?;
+	let right = capture_file(right).map_err(|source| InputError::new(Side::Right, source))?;
+	sources(left, right, address_space, max_bytes_per_input, cancelled)
+}
+
+/// Compares two captured sources without resolving or reopening their paths.
+///
+/// # Errors
+/// Returns a side-specific admission failure, a read error, cancellation, or
+/// exhaustion of the comparison budget.
+pub fn sources(
+	left: impl ReadAt,
+	right: impl ReadAt,
+	address_space: ByteSpace,
+	max_bytes_per_input: u64,
+	cancelled: impl FnMut() -> bool,
+) -> Result<Report, ByteError> {
 	let report = match address_space {
 		ByteSpace::Physical => compare(
 			&mut Raw(left),
@@ -81,7 +96,11 @@ pub fn files(
 	Ok(report)
 }
 
-fn open_file(path: &Path) -> Result<FileSource, ImageError> {
+/// Captures one regular comparison input as a read-only file source.
+///
+/// # Errors
+/// Returns an error if the path cannot be opened or the file is not regular.
+pub fn capture_file(path: &Path) -> Result<FileSource, ImageError> {
 	require_regular_file(path)?;
 	FileSource::new(File::open(path)?)
 }
