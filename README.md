@@ -88,6 +88,14 @@ target/apfs-cli/debug/dmgez cat image.raw /ReadMe.txt --raw --filesystem apfs
 
 `--apfs-packages PATH` selects the archives. Use `--partition` to select a disk partition and `--volume` to select an APFS volume by UUID or decimal object ID. Refer to `volumes` for those IDs. Add `--xid` to open an exact retained checkpoint. [APFS reader scope](docs/features/INSPECTION.md#browse-apfs)
 
+The same build checks reachable APFS metadata and reads logical file and attribute data within a budget. It reports `reachable_data` and exits with a partial verification result.
+
+```sh
+target/apfs-cli/debug/dmgez verify image.dmg --full --filesystem apfs --volume 1026 --json
+```
+
+[APFS verification scope](docs/features/INSPECTION.md#verify-apfs)
+
 ## Desktop app
 
 The [native desktop app](apps/dmgez/README.md) opens TOML projects for layout editing and disk images for container and partition inspection. Launch it with `cargo run --locked -p dmgez-gui`.

@@ -38,7 +38,7 @@ dmgez/
       dmgez-builder/             # manifest and image construction orchestration
       dmgez-hfsplus/             # compose the independent HFS+ builder and DMG publication
       dmgez-hfsplus-read/        # adapter for HFS+ browsing and structural verification
-      dmgez-apfs-read/           # adapter for APFS checkpoint and volume browsing
+      dmgez-apfs-read/           # adapter for APFS volume browsing and reachable verification
       dmgez-inspector/           # structured read-only reports / verification
       dmgez-operations/          # extraction, conversion, copy-on-write edits
       dmgez-diff/                # semantic and physical comparison, once substantial
@@ -72,7 +72,7 @@ Read arrows as `consumer -> dependency`.
 | `dmgez-builder` | core, config, udif writer, finder writer |
 | `dmgez-hfsplus` | dmgez-builder, core, config, udif writer, independent versioned HFS+ libraries |
 | `dmgez-hfsplus-read` | independent versioned HFS+ reader and format libraries, vfs for browsing |
-| `dmgez-apfs-read` | independent versioned APFS container, reader and format libraries, vfs for browsing |
+| `dmgez-apfs-read` | independent versioned APFS container, reader and format libraries, vfs for browsing and verification |
 | `dmgez-vfs` | core, udif reader, independent filesystem readers, partition adapters; no write service |
 | `dmgez-inspector` | core, vfs, udif reader, finder reader; metadata-only mode can avoid traversal |
 | `dmgez-operations` | core, vfs, writer/reader and builder when a requested operation needs them |

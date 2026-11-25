@@ -37,6 +37,8 @@ python3 -B tests/compatibility/volume-read/check_apfs_cli_multivolume.py target/
 
 On macOS 14.7.2 (23H311, arm64), the script generated a disposable 1 GiB APFS container with two volumes without mounting either one. Apple checked the detached raw image and both volumes with `fsck_apfs -n`, which emitted a disk-name warning for the regular image path. The CLI matched Apple's volume UUIDs in both the raw image and Apple's UDZO conversion. Each UUID and object ID resolved to its selected root at XID 3, and browsing without a selector refused the ambiguous container. [Native output and image digests](apfs/native-cli-multivolume.json)
 
+Pass `--verify` to also compare selected-volume verification. The native oracle runs `hdiutil verify` on the UDZO image, checks that both input types require a selector, and expects partial reachable coverage for each selected empty volume at the same checkpoint. It compares image digests before and after the checks. [Native verification reports](apfs/native-cli-verification.json)
+
 ## Extraction name preflight
 
 Both recipes call `dmgez_operations::extract::preflight_names` on the real filesystem adapter. The HFS+ fixture constructed with a non-UTF-8 relative symlink target yields a portable name plan containing the link object and its source handle. The native APFS hard-link fixture preserves `Écho.bin` in the exact UTF-8 plan. The portable profile rejects that name with a typed encoding error. The APFS payload fixture provides targeted symlink lookup evidence. A full name scan of that fixture reaches uncaptured catalog block 408.
