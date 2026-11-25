@@ -15,6 +15,7 @@ mod apm;
 mod discovery;
 mod gpt;
 mod mbr;
+pub mod volume;
 mod window;
 
 #[cfg(kani)]
