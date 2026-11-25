@@ -18,6 +18,7 @@ use thiserror::Error;
 use crate::VolumeInfo;
 
 mod quarantine;
+mod xattrs;
 
 /// Visible identity retains the APFS sibling ID and its admitted parent.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -41,6 +42,12 @@ pub enum AdapterError<E: StdError + 'static> {
 	ForkKind,
 	#[error("could not allocate the checked directory page")]
 	Allocation,
+	#[error("the admitted APFS attribute owner is missing")]
+	MissingAttributeOwner,
+	#[error("APFS attribute count exceeds the requested limit of {limit}")]
+	AttributeLimit { limit: NonZeroU32 },
+	#[error("could not allocate the checked APFS attribute list")]
+	AttributeAllocation,
 }
 
 /// VFS adapter for a checked APFS volume view.
@@ -168,10 +175,33 @@ where
 			ForkKind::Resource => self
 				.view
 				.open_resource_fork(node.inode)?
-				.map(ApfsFork::Resource),
+				.map(ApfsFork::Attribute),
 			_ => return Err(AdapterError::ForkKind),
 		};
 		Ok(fork.map(|mut stream| read(&mut stream)))
+	}
+
+	fn list_xattrs(
+		&mut self,
+		node: Node,
+		limit: NonZeroU32,
+	) -> Result<Option<Vec<RawName>>, Self::Error> {
+		self.attribute_names(node.inode, limit).map(Some)
+	}
+
+	fn with_xattr<T>(
+		&mut self,
+		node: Node,
+		name: LookupName<'_>,
+		read: impl FnOnce(&mut dyn ForkReader<Error = Self::Error>) -> T,
+	) -> Result<Option<T>, Self::Error> {
+		let LookupName::Utf8(name) = name else {
+			return Err(AdapterError::NameEncoding);
+		};
+		Ok(self
+			.view
+			.open_xattr(node.inode, name)?
+			.map(|value| read(&mut ApfsFork::Attribute(value))))
 	}
 
 	fn read_link(&mut self, node: Node) -> Result<Option<Vec<u8>>, Self::Error> {
@@ -221,7 +251,7 @@ where
 
 enum ApfsFork<'view, 'source, S> {
 	Data(FileData<'view, 'source, S>),
-	Resource(XattrData<'view, 'source, S>),
+	Attribute(XattrData<'view, 'source, S>),
 }
 
 impl<S> ForkReader for ApfsFork<'_, '_, S>
@@ -234,14 +264,14 @@ where
 	fn len(&self) -> u64 {
 		match self {
 			Self::Data(data) => data.len(),
-			Self::Resource(data) => data.len(),
+			Self::Attribute(data) => data.len(),
 		}
 	}
 
 	fn read_exact_at(&mut self, offset: u64, output: &mut [u8]) -> Result<(), Self::Error> {
 		match self {
 			Self::Data(data) => data.read_exact_at(ByteOffset(offset), output)?,
-			Self::Resource(data) => data.read_exact_at(ByteOffset(offset), output)?,
+			Self::Attribute(data) => data.read_exact_at(ByteOffset(offset), output)?,
 		}
 		Ok(())
 	}
