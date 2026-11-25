@@ -9,21 +9,21 @@ use dmgez_config::{
 };
 use thiserror::Error;
 
-const MAX_FILES: usize = 256;
+const MAX_ENTRIES: usize = 256;
 const IMAGE_SEPARATOR: char = '/';
 const DEFINE_START: &str = "${";
 
 #[derive(Debug, Error)]
 pub(crate) enum Error {
-	#[error("select at most {MAX_FILES} files at a time")]
-	FileCount,
-	#[error("the file picker returned a path without an absolute file location")]
+	#[error("select at most {MAX_ENTRIES} entries at a time")]
+	EntryCount,
+	#[error("a selected path has no absolute file location")]
 	Location,
 	#[error("selected paths must be representable as UTF-8 in a project")]
 	NonUnicode,
 	#[error("selected paths cannot contain the project variable marker {DEFINE_START:?}")]
 	VariableSyntax,
-	#[error("the selection includes an entry other than a file or symlink: {0:?}")]
+	#[error("the selection includes an entry other than a file, directory, or symlink: {0:?}")]
 	UnsupportedKind(PathBuf),
 	#[error("could not inspect selected path {path:?}: {source}")]
 	Inspect { path: PathBuf, source: io::Error },
@@ -38,24 +38,25 @@ pub(crate) fn pick_files(directory: &Path) -> Option<Vec<PathBuf>> {
 	rfd::FileDialog::new().set_directory(directory).pick_files()
 }
 
-/// Prepares one batch from an explicit picker selection. The worker reads
+/// Prepares one batch from a picker selection or native drop. The worker reads
 /// metadata only and preserves symlink leaves selected as project content.
 pub(crate) fn prepare(
 	project_directory: &Path,
 	folder: &VirtualPath,
-	picked: Vec<PathBuf>,
+	selected: impl IntoIterator<Item: AsRef<Path>, IntoIter: ExactSizeIterator>,
 ) -> Result<Vec<ProjectEdit>, Error> {
-	if picked.len() > MAX_FILES {
-		return Err(Error::FileCount);
+	let selected = selected.into_iter();
+	if selected.len() > MAX_ENTRIES {
+		return Err(Error::EntryCount);
 	}
 	let folder = if folder.is_root() {
 		""
 	} else {
 		folder.as_str()
 	};
-	picked
-		.into_iter()
+	selected
 		.map(|path| {
+			let path = path.as_ref();
 			let name = path.file_name().ok_or(Error::Location)?;
 			let parent = path
 				.parent()
@@ -64,15 +65,15 @@ pub(crate) fn prepare(
 			let name_text = name.to_str().ok_or(Error::NonUnicode)?;
 			let destination = format!("{folder}{IMAGE_SEPARATOR}{name_text}");
 			let inspect = |source| Error::Inspect {
-				path: path.clone(),
+				path: path.to_path_buf(),
 				source,
 			};
 			let source_path = parent.canonicalize().map_err(inspect)?.join(name);
 			let kind = fs::symlink_metadata(&source_path)
 				.map_err(inspect)?
 				.file_type();
-			if !(kind.is_file() || kind.is_symlink()) {
-				return Err(Error::UnsupportedKind(path));
+			if !(kind.is_file() || kind.is_dir() || kind.is_symlink()) {
+				return Err(Error::UnsupportedKind(path.to_path_buf()));
 			}
 			let source = source_path
 				.strip_prefix(project_directory)
@@ -81,9 +82,10 @@ pub(crate) fn prepare(
 			if source.contains(DEFINE_START) || destination.contains(DEFINE_START) {
 				return Err(Error::VariableSyntax);
 			}
-			let destination = destination
-				.parse()
-				.map_err(|source| Error::Destination { path, source })?;
+			let destination = destination.parse().map_err(|source| Error::Destination {
+				path: path.to_path_buf(),
+				source,
+			})?;
 			Ok(ProjectEdit::Add(ContentDraft::Copy {
 				source: source.to_owned(),
 				destination: Some(destination),
@@ -140,12 +142,12 @@ mod tests {
 		let base = scratch.path().canonicalize().unwrap();
 		let root = "/".parse().unwrap();
 		assert!(matches!(
-			prepare(&base, &root, vec![base.join("unused"); MAX_FILES + 1]),
-			Err(Error::FileCount)
+			prepare(&base, &root, vec![base.join("unused"); MAX_ENTRIES + 1]),
+			Err(Error::EntryCount)
 		));
 		assert!(matches!(
-			prepare(&base, &root, vec![base.clone()]),
-			Err(Error::UnsupportedKind(_))
+			prepare(&base, &root, [base.ancestors().last().unwrap()]),
+			Err(Error::Location)
 		));
 		let special = base.join("file-${NAME}.txt");
 		fs::write(&special, b"input").unwrap();

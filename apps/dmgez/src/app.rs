@@ -19,6 +19,7 @@ mod image_tasks;
 #[cfg(test)]
 mod import_tests;
 mod palette;
+mod project_import;
 mod project_save;
 #[cfg(feature = "project-build")]
 mod project_tasks;
@@ -236,32 +237,6 @@ impl App {
 		});
 	}
 
-	fn add_files(
-		&mut self,
-		ctx: &Context,
-		pick: impl FnOnce(&Path) -> Option<Vec<PathBuf>> + Send + 'static,
-	) {
-		if let Some(Opened {
-			path,
-			document: Document::Project(project),
-		}) = &self.opened
-			&& let Some(directory) = path.parent()
-		{
-			let directory = directory.to_path_buf();
-			let folder = project.folder().clone();
-			let revision = project.document.revision();
-			self.start(ctx, move || {
-				let Some(paths) = pick(&directory).filter(|paths| !paths.is_empty()) else {
-					return Completion::Cancelled;
-				};
-				Completion::Added {
-					revision,
-					edits: import::prepare(&directory, &folder, paths),
-				}
-			});
-		}
-	}
-
 	fn ask_open(&mut self, ctx: &Context) {
 		if self.is_dirty() {
 			self.confirm = Some(Pending::Open);
@@ -430,6 +405,7 @@ impl eframe::App for App {
 			self.save_copy = false;
 		}
 		self.shortcuts(&ctx);
+		self.import_dropped_files(&ctx);
 		self.toolbar(ui);
 		let idle = self.worker.is_none();
 		let image_action = match &mut self.opened {
