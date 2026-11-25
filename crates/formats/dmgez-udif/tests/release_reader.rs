@@ -79,6 +79,36 @@ fn admits_signed_layout_only_for_explicit_release_rebuild() {
 	));
 }
 
+#[cfg(feature = "write")]
+#[test]
+fn encodes_new_geometry_with_admitted_container_metadata() {
+	use dmgez_udif::{
+		SECTOR_BYTES,
+		writer::{WriteOptions, write_rebuilt_image},
+	};
+
+	let source = Image::open_release(SIGNED, Limits::default()).unwrap();
+	let original = source.rebuild_release_metadata().unwrap();
+	let edited = original.with_logical_bytes(SECTOR_BYTES);
+	assert_ne!(source.descriptor().logical_bytes, SECTOR_BYTES);
+	let payload = [0x53; SECTOR_BYTES as usize];
+	let mut output = Vec::new();
+	write_rebuilt_image(
+		payload.as_slice(),
+		&mut output,
+		&WriteOptions::default(),
+		edited,
+	)
+	.unwrap();
+	let mut rebuilt = Image::open(output.as_slice(), Limits::default()).unwrap();
+	assert!(edited.matches_preserved_fields(&rebuilt.rebuild_metadata().unwrap()));
+	assert!(!original.matches_preserved_fields(&edited));
+	assert_eq!(rebuilt.verify().unwrap().master, CheckStatus::Passed);
+	let mut observed = [0; SECTOR_BYTES as usize];
+	rebuilt.read_exact_at(0, &mut observed).unwrap();
+	assert_eq!(observed, payload);
+}
+
 #[test]
 fn bounds_the_signature_frame_before_attempting_a_read() {
 	let mut trailer = *SIGNED.last_chunk::<TRAILER_BYTES>().unwrap();

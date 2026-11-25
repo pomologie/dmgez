@@ -44,6 +44,14 @@ mod rebuild {
 			self.source_profile
 		}
 
+		/// Set the size of an edited logical disk while retaining its admitted
+		/// container fields. The writer validates the new size before encoding.
+		#[must_use]
+		pub const fn with_logical_bytes(mut self, logical_bytes: u64) -> Self {
+			self.logical_bytes = logical_bytes;
+			self
+		}
+
 		/// Compare the fields that must survive re-encoding. Codec and physical
 		/// block-map layout are deliberately excluded.
 		#[must_use]
@@ -52,8 +60,8 @@ mod rebuild {
 		}
 	}
 
-	/// Re-encode the exact logical geometry and admitted metadata of an image.
-	/// The caller supplies the original logical bytes as a finite reader.
+	/// Encode a finite logical disk at the admitted size and with the retained
+	/// container metadata. A conversion passes the original descriptor unchanged.
 	/// # Errors
 	/// Rejects unsupported target codecs, invalid lengths and failed I/O.
 	pub fn write_rebuilt_image(
