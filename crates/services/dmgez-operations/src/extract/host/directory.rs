@@ -115,9 +115,14 @@ pub enum HostError {
 	Inspect(#[source] io::Error),
 	#[error("could not create destination directory")]
 	CreateDirectory(#[source] io::Error),
+	#[error("created destination directory could not be admitted")]
+	CreatedDirectoryUnavailable {
+		#[source]
+		source: Box<HostError>,
+	},
 	#[error("could not create extraction staging file")]
 	CreateStage(#[source] io::Error),
-	#[error("staging file identity or size changed")]
+	#[error("staging file identity, size, or permissions changed")]
 	StageChanged,
 	#[error("the destination filesystem does not support the no-clobber rename")]
 	NoClobberUnavailable(#[source] io::Error),
@@ -131,8 +136,17 @@ impl<'root> DestinationDirectory<'root> {
 	///
 	/// # Errors
 	/// Reports existing names, detected namespace changes, depth limits
-	/// and filesystem failures.
+	/// and filesystem failures. [`HostError::CreatedDirectoryUnavailable`]
+	/// indicates creation succeeded before attachment could be confirmed.
 	pub fn create_child(&self, name: &HostName) -> Result<Self, HostError> {
+		self.create_child_with(name, || self.open_created_child(name))
+	}
+
+	pub(super) fn create_child_with(
+		&self,
+		name: &HostName,
+		open_created: impl FnOnce() -> Result<Self, HostError>,
+	) -> Result<Self, HostError> {
 		if self.chain.len() >= DEFAULT_MAX_DEPTH {
 			return Err(HostError::Depth);
 		}
@@ -143,6 +157,14 @@ impl<'root> DestinationDirectory<'root> {
 			Errno::EXIST => HostError::Conflict,
 			_ => HostError::CreateDirectory(error.into()),
 		})?;
+		open_created().map_err(|source| HostError::CreatedDirectoryUnavailable {
+			source: Box::new(source),
+		})
+	}
+
+	fn open_created_child(&self, name: &HostName) -> Result<Self, HostError> {
+		let name_path = name.as_str();
+		let parent = self.descriptor();
 		let observed =
 			fs::statat(parent, name_path, AtFlags::SYMLINK_NOFOLLOW).map_err(namespace_error)?;
 		let fd = fs::openat(parent, name_path, DIRECTORY_FLAGS, Mode::empty())
@@ -195,7 +217,14 @@ impl<'root> DestinationDirectory<'root> {
 		&self.root.path
 	}
 
-	pub(super) fn require_absent(&self, name: &HostName) -> Result<(), HostError> {
+	/// Checks that the admitted destination name is absent without following links.
+	///
+	/// This check leaves the namespace untouched and does not reserve the name.
+	///
+	/// # Errors
+	/// Reports a detached directory, an existing entry, or an inspection failure.
+	pub fn require_absent(&self, name: &HostName) -> Result<(), HostError> {
+		self.check_attachment()?;
 		if stat_entry(self.descriptor(), name.as_str().as_ref())
 			.map_err(inspect)?
 			.is_some()

@@ -8,6 +8,7 @@
 //! during extraction. The resulting file holds the selected fork's bytes.
 
 mod directory;
+mod quarantine;
 mod stage;
 
 use std::{error::Error as StdError, io, num::NonZeroUsize};
@@ -19,6 +20,7 @@ use super::HostName;
 use stage::Stage;
 
 pub use directory::{DestinationDirectory, HostError, StableDestination};
+pub use quarantine::check_source_quarantine;
 
 const MAX_CHUNK_BYTES: usize = 1 << 20;
 
@@ -28,6 +30,16 @@ pub struct ForkWriteLimits {
 	pub max_fork_bytes: u64,
 	/// Reusable read buffer size. A chunk can be at most 1 MiB.
 	pub chunk_bytes: NonZeroUsize,
+}
+
+/// Owner-only permissions for a published fork.
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+pub enum ForkMode {
+	/// Create with `0600` permissions, subject to the process umask.
+	#[default]
+	OwnerReadWrite,
+	/// Publish as `0700` after the full fork is staged.
+	OwnerExecutable,
 }
 
 /// Failure to publish the admitted fork.
@@ -50,8 +62,12 @@ pub enum ForkWriteError<E: StdError + 'static> {
 	},
 	#[error("could not write the staging file")]
 	Write(#[source] io::Error),
+	#[error("could not set owner permissions on the staging file")]
+	SetPermissions(#[source] io::Error),
 	#[error("could not sync the staging file")]
 	Sync(#[source] io::Error),
+	#[error("extraction source failed its final identity check")]
+	SourceIdentity(#[source] io::Error),
 }
 
 impl DestinationDirectory<'_> {
@@ -73,7 +89,43 @@ impl DestinationDirectory<'_> {
 		name: &HostName,
 		fork: &mut Fork<'_, E>,
 		limits: ForkWriteLimits,
+		cancelled: impl FnMut() -> bool,
+	) -> Result<u64, ForkWriteError<E>> {
+		self.publish_fork_with_mode(name, fork, limits, ForkMode::OwnerReadWrite, cancelled)
+	}
+
+	/// Writes a selected fork with the requested owner-only permissions.
+	///
+	/// The stage gains execute permission only after all bytes have been written.
+	///
+	/// # Errors
+	/// Returns the errors from [`Self::publish_fork`] and any failure to set permissions.
+	pub fn publish_fork_with_mode<E: StdError + 'static>(
+		&self,
+		name: &HostName,
+		fork: &mut Fork<'_, E>,
+		limits: ForkWriteLimits,
+		mode: ForkMode,
+		cancelled: impl FnMut() -> bool,
+	) -> Result<u64, ForkWriteError<E>> {
+		self.publish_fork_verified(name, fork, limits, mode, cancelled, || Ok(()))
+	}
+
+	/// Publishes a selected fork after a caller-supplied source identity check.
+	///
+	/// The check runs after syncing and validating the stage, before verifying
+	/// destination attachment again and attempting the no-clobber rename.
+	///
+	/// # Errors
+	/// Returns the errors from [`Self::publish_fork_with_mode`] and identity-check failures.
+	pub fn publish_fork_verified<E: StdError + 'static>(
+		&self,
+		name: &HostName,
+		fork: &mut Fork<'_, E>,
+		limits: ForkWriteLimits,
+		mode: ForkMode,
 		mut cancelled: impl FnMut() -> bool,
+		verify_source: impl FnOnce() -> io::Result<()>,
 	) -> Result<u64, ForkWriteError<E>> {
 		let length = fork.len();
 		let cap = limits.chunk_bytes.get();
@@ -85,12 +137,19 @@ impl DestinationDirectory<'_> {
 		let mut buffer = Vec::new();
 		buffer.try_reserve_exact(chunk)?;
 		buffer.resize(chunk, 0);
-		self.publish_with(name, length, &mut cancelled, |stage, cancelled| {
-			stream_fork(self, fork, &mut buffer, cancelled, |bytes| {
-				stage.verify_name()?;
-				stage.append(bytes).map_err(ForkWriteError::Write)
-			})
-		})?;
+		self.publish_with(
+			name,
+			length,
+			mode,
+			&mut cancelled,
+			verify_source,
+			|stage, cancelled| {
+				stream_fork(self, fork, &mut buffer, cancelled, |bytes| {
+					stage.verify_name()?;
+					stage.append(bytes).map_err(ForkWriteError::Write)
+				})
+			},
+		)?;
 		Ok(length)
 	}
 
@@ -98,18 +157,29 @@ impl DestinationDirectory<'_> {
 		&self,
 		name: &HostName,
 		length: u64,
+		mode: ForkMode,
 		cancelled: &mut dyn FnMut() -> bool,
+		verify_source: impl FnOnce() -> io::Result<()>,
 		write: impl FnOnce(&mut Stage<'_>, &mut dyn FnMut() -> bool) -> Result<(), ForkWriteError<E>>,
 	) -> Result<(), ForkWriteError<E>> {
 		check_cancel(cancelled)?;
-		self.check_attachment()?;
 		self.require_absent(name)?;
 		let mut stage = Stage::create(self.descriptor(), self.root_path(), name)?;
 		write(&mut stage, cancelled)?;
+		if mode == ForkMode::OwnerExecutable {
+			self.check_attachment()?;
+			stage.verify_name()?;
+			stage
+				.make_owner_executable()
+				.map_err(ForkWriteError::SetPermissions)?;
+		}
 		stage.sync().map_err(ForkWriteError::Sync)?;
 		check_cancel(cancelled)?;
-		stage.verify_length(length)?;
+		stage.verify_metadata(length, mode)?;
+		verify_source().map_err(ForkWriteError::SourceIdentity)?;
+		check_cancel(cancelled)?;
 		self.check_attachment()?;
+		stage.verify_metadata(length, mode)?;
 		stage.publish(name)?;
 		Ok(())
 	}
