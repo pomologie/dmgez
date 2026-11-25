@@ -1,16 +1,22 @@
 use dmgez_vfs::volume::RawName;
 use thiserror::Error;
 
-const CURRENT_DIRECTORY: &str = ".";
-const PARENT_DIRECTORY: &str = "..";
-const POSIX_SEPARATOR: char = '/';
-const NUL: char = '\0';
+use super::{NameBudget, NamePlanError, charge};
+
+#[cfg(kani)]
+#[path = "../../verification/kani/extract_names.rs"]
+mod extract_name_proofs;
+
+const CURRENT_DIRECTORY: &[u8] = b".";
+const PARENT_DIRECTORY: &[u8] = b"..";
+const POSIX_SEPARATOR: u8 = b'/';
+const NUL: u8 = b'\0';
 const WIN32_FORBIDDEN: &[u8] = b"<>:\"/\\|?*";
-const WIN32_LITERAL_DEVICES: [&str; 6] = ["CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$"];
-const NUMBERED_DEVICE_PREFIXES: [&str; 2] = ["COM", "LPT"];
-const EXTENSION_SEPARATOR: char = '.';
-const ASCII_SPACE: char = ' ';
-const PORTABLE_NAME_SUFFIXES: [char; 2] = [ASCII_SPACE, EXTENSION_SEPARATOR];
+const WIN32_LITERAL_DEVICES: [&[u8]; 6] = [b"CON", b"PRN", b"AUX", b"NUL", b"CONIN$", b"CONOUT$"];
+const NUMBERED_DEVICE_PREFIXES: [&[u8]; 2] = [b"COM", b"LPT"];
+const EXTENSION_SEPARATOR: u8 = b'.';
+const ASCII_SPACE: u8 = b' ';
+const PORTABLE_NAME_SUFFIXES: [u8; 2] = [ASCII_SPACE, EXTENSION_SEPARATOR];
 
 /// The destination comparison semantics qualified by the caller.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -43,32 +49,7 @@ impl HostName {
 			RawName::Utf16(units) => String::from_utf16(&units).map_err(|_| NameError::Encoding)?,
 			_ => return Err(NameError::Encoding),
 		};
-		if name.len() > max_bytes {
-			return Err(NameError::TooLong);
-		}
-		if name.is_empty()
-			|| matches!(name.as_str(), CURRENT_DIRECTORY | PARENT_DIRECTORY)
-			|| name.contains([POSIX_SEPARATOR, NUL])
-		{
-			return Err(NameError::NotComponent);
-		}
-		if profile == NameProfile::PortableAscii {
-			if !name.is_ascii() {
-				return Err(NameError::Encoding);
-			}
-			if name
-				.bytes()
-				.any(|byte| byte.is_ascii_control() || WIN32_FORBIDDEN.contains(&byte))
-			{
-				return Err(NameError::ForbiddenCharacter);
-			}
-			if name.starts_with(ASCII_SPACE) || name.ends_with(PORTABLE_NAME_SUFFIXES) {
-				return Err(NameError::TrimmedName);
-			}
-			if is_device_name(&name) {
-				return Err(NameError::DeviceName);
-			}
-		}
+		validate_component(name.as_bytes(), profile, max_bytes)?;
 		Ok(Self(name))
 	}
 
@@ -78,6 +59,18 @@ impl HostName {
 			NameProfile::PosixUtf8 => self.0.clone(),
 		}
 	}
+}
+
+// Charge a separator only when the child follows another path component.
+pub(super) fn charge_child_path<E: std::error::Error + 'static>(
+	parent_bytes: usize,
+	has_parent: bool,
+	name_bytes: usize,
+	limit: usize,
+) -> Result<usize, NamePlanError<E>> {
+	let budget = NameBudget::RelativePathBytes;
+	let prefix = charge(parent_bytes, usize::from(has_parent), limit, budget)?;
+	charge(prefix, name_bytes, limit, budget)
 }
 
 /// The stored component cannot be preserved by the selected destination profile.
@@ -98,21 +91,63 @@ pub enum NameError {
 	DeviceName,
 }
 
-fn is_device_name(name: &str) -> bool {
-	let stem = name
-		.split_once(EXTENSION_SEPARATOR)
-		.map_or(name, |(stem, _)| stem)
-		.trim_end_matches(ASCII_SPACE);
+fn validate_component(
+	name: &[u8],
+	profile: NameProfile,
+	max_bytes: usize,
+) -> Result<(), NameError> {
+	if name.len() > max_bytes {
+		return Err(NameError::TooLong);
+	}
+	if name.is_empty()
+		|| name == CURRENT_DIRECTORY
+		|| name == PARENT_DIRECTORY
+		|| name
+			.iter()
+			.any(|&byte| matches!(byte, POSIX_SEPARATOR | NUL))
+	{
+		return Err(NameError::NotComponent);
+	}
+	if profile == NameProfile::PortableAscii {
+		if !name.is_ascii() {
+			return Err(NameError::Encoding);
+		}
+		if name
+			.iter()
+			.any(|byte| byte.is_ascii_control() || WIN32_FORBIDDEN.contains(byte))
+		{
+			return Err(NameError::ForbiddenCharacter);
+		}
+		if name.first() == Some(&ASCII_SPACE)
+			|| name
+				.last()
+				.is_some_and(|byte| PORTABLE_NAME_SUFFIXES.contains(byte))
+		{
+			return Err(NameError::TrimmedName);
+		}
+		if is_device_name(name) {
+			return Err(NameError::DeviceName);
+		}
+	}
+	Ok(())
+}
+
+fn is_device_name(name: &[u8]) -> bool {
+	let stem_end = name
+		.iter()
+		.position(|&byte| byte == EXTENSION_SEPARATOR)
+		.unwrap_or(name.len());
+	let mut stem = &name[..stem_end];
+	while let [prefix @ .., ASCII_SPACE] = stem {
+		stem = prefix;
+	}
 	WIN32_LITERAL_DEVICES
 		.iter()
 		.any(|reserved| stem.eq_ignore_ascii_case(reserved))
-		|| stem
-			.as_bytes()
-			.split_last()
-			.is_some_and(|(&number, family)| {
-				number.is_ascii_digit()
-					&& NUMBERED_DEVICE_PREFIXES
-						.iter()
-						.any(|prefix| family.eq_ignore_ascii_case(prefix.as_bytes()))
-			})
+		|| stem.split_last().is_some_and(|(&number, family)| {
+			number.is_ascii_digit()
+				&& NUMBERED_DEVICE_PREFIXES
+					.iter()
+					.any(|prefix| family.eq_ignore_ascii_case(prefix))
+		})
 }

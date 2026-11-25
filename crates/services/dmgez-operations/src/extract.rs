@@ -202,18 +202,11 @@ where
 					limits.max_total_name_bytes,
 					NameBudget::TotalNameBytes,
 				)?;
-				let relative_limit = limits.max_relative_path_bytes;
-				let prefix_bytes = charge(
+				let path_bytes = names::charge_child_path(
 					parent.path_bytes,
-					usize::from(parent.entry.is_some()),
-					relative_limit,
-					NameBudget::RelativePathBytes,
-				)?;
-				let path_bytes = charge(
-					prefix_bytes,
+					parent.entry.is_some(),
 					name_bytes,
-					relative_limit,
-					NameBudget::RelativePathBytes,
+					limits.max_relative_path_bytes,
 				)?;
 				if let Some(first) = names.insert(name.comparison_key(profile), id) {
 					return Err(NamePlanError::Collision {
