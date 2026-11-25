@@ -15,7 +15,8 @@ path = "src/main.rs"
 [features]
 default = ["build", "parallel"]
 build = ["dep:dmgez-core", "dmgez-core/source", "dep:dmgez-udif", "dmgez-udif/write", "dmgez-udif/zlib"]
-parallel = ["dmgez-udif?/parallel"]
+convert = ["dep:dmgez-operations", "dmgez-operations/convert", "dep:dmgez-udif"]
+parallel = ["dmgez-udif?/parallel", "dmgez-operations?/parallel"]
 lzfse = ["dmgez-udif?/lzfse"]
 lzma = ["dmgez-udif?/lzma"]
 inspect = ["dep:dmgez-core", "dep:dmgez-inspector", "dmgez-inspector/zlib", "dep:dmgez-udif", "dmgez-udif/read", "dep:dmgez-vfs", "dep:serde", "dep:serde_json"]
@@ -24,6 +25,7 @@ inspect = ["dep:dmgez-core", "dep:dmgez-inspector", "dmgez-inspector/zlib", "dep
 clap.workspace = true
 dmgez-core = { workspace = true, optional = true, features = ["staging"] }
 dmgez-inspector = { workspace = true, optional = true }
+dmgez-operations = { workspace = true, optional = true }
 dmgez-udif = { workspace = true, optional = true }
 dmgez-vfs = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }

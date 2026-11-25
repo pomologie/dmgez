@@ -2,6 +2,8 @@ use std::{error::Error, fmt::Display, num::NonZeroU32, path::PathBuf, process::E
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+#[cfg(feature = "convert")]
+mod convert;
 #[cfg(feature = "inspect")]
 mod inspect;
 #[cfg(feature = "build")]
@@ -10,6 +12,7 @@ mod wrap;
 const WRAP_RAW_COMMAND: &str = "wrap-raw";
 const INSPECT_COMMAND: &str = "inspect";
 const ANALYZE_COMMAND: &str = "analyze";
+const CONVERT_COMMAND: &str = "convert";
 const UNWRAP_RAW_COMMAND: &str = "unwrap-raw";
 const THREADS_ARG_ID: &str = "threads";
 const THREADS_VALUE_NAME: &str = "THREADS";
@@ -41,12 +44,19 @@ enum Command {
 		output: PathBuf,
 		#[arg(long, value_enum, default_value_t)]
 		format: Format,
-		/// Encode on the calling thread even when parallel support is available.
-		#[arg(long, conflicts_with = THREADS_ARG_ID)]
-		serial: bool,
-		/// Select a worker count. Zero selects a bounded automatic count.
-		#[arg(long, id = THREADS_ARG_ID, value_name = THREADS_VALUE_NAME)]
-		threads: Option<usize>,
+		#[command(flatten)]
+		encoding: EncodingFlags,
+	},
+	/// Convert a qualified unsigned image between UDRO and UDZO.
+	#[command(name = CONVERT_COMMAND)]
+	Convert {
+		image: PathBuf,
+		#[arg(short, long)]
+		output: PathBuf,
+		#[arg(long, value_enum)]
+		format: ConversionFormat,
+		#[command(flatten)]
+		encoding: EncodingFlags,
 	},
 	/// Show UDIF metadata and optionally probe the decoded partition map.
 	#[command(name = INSPECT_COMMAND)]
@@ -114,6 +124,41 @@ enum Format {
 	Ulmo,
 }
 
+#[derive(Debug, Clone, Copy, ValueEnum)]
+enum ConversionFormat {
+	Udro,
+	Udzo,
+}
+
+#[derive(Args)]
+struct EncodingFlags {
+	/// Encode on the calling thread even when parallel support is available.
+	#[arg(long, conflicts_with = THREADS_ARG_ID)]
+	serial: bool,
+	/// Select a worker count. Zero selects a bounded automatic count.
+	#[arg(long, id = THREADS_ARG_ID, value_name = THREADS_VALUE_NAME)]
+	threads: Option<usize>,
+}
+
+#[cfg(any(feature = "build", feature = "convert"))]
+impl EncodingFlags {
+	fn execution(&self) -> Result<dmgez_udif::writer::Execution, dmgez_udif::Error> {
+		use dmgez_udif::{Error, writer::Execution};
+
+		const SERIAL_WORKER_COUNT: usize = 1;
+		match (self.serial, cfg!(feature = "parallel"), self.threads) {
+			(true, _, _)
+			| (false, false, None | Some(Execution::AUTO_WORKERS | SERIAL_WORKER_COUNT)) => {
+				Ok(Execution::Serial)
+			}
+			(false, false, Some(_)) => Err(Error::FeatureNotCompiled(PARALLEL_FEATURE)),
+			(false, true, workers) => Ok(Execution::Parallel {
+				workers: workers.unwrap_or(Execution::AUTO_WORKERS),
+			}),
+		}
+	}
+}
+
 type CliResult = Result<(), Box<dyn Error>>;
 
 fn main() -> ExitCode {
@@ -138,7 +183,10 @@ fn run(command: Command) -> CliResult {
 				(WRAP_RAW_COMMAND, cfg!(feature = "build")),
 				(
 					PARALLEL_FEATURE,
-					cfg!(all(feature = "build", feature = "parallel")),
+					cfg!(all(
+						any(feature = "build", feature = "convert"),
+						feature = "parallel"
+					)),
 				),
 				(
 					LZFSE_FEATURE,
@@ -156,6 +204,7 @@ fn run(command: Command) -> CliResult {
 				),
 				(INSPECT_COMMAND, cfg!(feature = "inspect")),
 				(ANALYZE_COMMAND, cfg!(feature = "inspect")),
+				(CONVERT_COMMAND, cfg!(feature = "convert")),
 				(VERIFY_CONTAINER_CAPABILITY, cfg!(feature = "inspect")),
 				(UNWRAP_RAW_COMMAND, cfg!(feature = "inspect")),
 			] {
@@ -168,11 +217,19 @@ fn run(command: Command) -> CliResult {
 			source,
 			output,
 			format,
-			serial,
-			threads,
-		} => wrap::run(&source, &output, format, serial, threads),
+			encoding,
+		} => wrap::run(&source, &output, format, &encoding),
 		#[cfg(not(feature = "build"))]
 		Command::WrapRaw { .. } => Err("feature not compiled: build".into()),
+		#[cfg(feature = "convert")]
+		Command::Convert {
+			image,
+			output,
+			format,
+			encoding,
+		} => convert::run(&image, &output, format, &encoding),
+		#[cfg(not(feature = "convert"))]
+		Command::Convert { .. } => Err(format!("feature not compiled: {CONVERT_COMMAND}").into()),
 		#[cfg(feature = "inspect")]
 		Command::Inspect {
 			image,

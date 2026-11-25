@@ -6,19 +6,16 @@ use dmgez_core::{
 };
 use dmgez_udif::{
 	Error,
-	writer::{self, Execution, Profile, WriteOptions},
+	writer::{self, Profile, WriteOptions},
 };
 
-use crate::{CliResult, Format, LZFSE_FEATURE, LZMA_FEATURE, PARALLEL_FEATURE};
-
-const SERIAL_WORKER_COUNT: usize = 1;
+use crate::{CliResult, EncodingFlags, Format, LZFSE_FEATURE, LZMA_FEATURE};
 
 pub(crate) fn run(
 	input: &Path,
 	destination: &Path,
 	format: Format,
-	serial: bool,
-	threads: Option<usize>,
+	encoding: &EncodingFlags,
 ) -> CliResult {
 	let profile = match format {
 		Format::Udro => Profile::Udro,
@@ -28,14 +25,7 @@ pub(crate) fn run(
 		Format::Ulmo if cfg!(feature = "lzma") => Profile::Ulmo,
 		Format::Ulmo => return Err(Error::FeatureNotCompiled(LZMA_FEATURE).into()),
 	};
-	let execution = match (serial, cfg!(feature = "parallel"), threads) {
-		(true, _, _)
-		| (false, false, None | Some(Execution::AUTO_WORKERS | SERIAL_WORKER_COUNT)) => Execution::Serial,
-		(false, false, Some(_)) => return Err(Error::FeatureNotCompiled(PARALLEL_FEATURE).into()),
-		(false, true, workers) => Execution::Parallel {
-			workers: workers.unwrap_or(Execution::AUTO_WORKERS),
-		},
-	};
+	let execution = encoding.execution()?;
 	let input = CapturedFile::new(File::open(input)?)?;
 	let options = WriteOptions {
 		profile,

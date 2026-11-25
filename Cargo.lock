@@ -962,6 +962,7 @@ dependencies = [
  "clap",
  "dmgez-core",
  "dmgez-inspector",
+ "dmgez-operations",
  "dmgez-udif",
  "dmgez-vfs",
  "serde",

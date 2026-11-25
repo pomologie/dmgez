@@ -17,9 +17,12 @@ cargo run --locked --features inspect -- verify volume.dmg
 cargo run --locked --features inspect -- verify volume.dmg --quick --json
 cargo run --locked --features inspect -- unwrap-raw volume.dmg -o exported.raw
 cargo run --locked --features inspect -- unwrap-raw volume.dmg --partition 2 -o partition.raw
+cargo run --locked --no-default-features --features convert -- convert volume.dmg --format udro -o uncompressed.dmg
 ```
 
 The CLI stages outputs in the destination directory and refuses to replace existing files. `unwrap-raw --partition` takes a one-based slot reported by `inspect --partitions` and exports that slot's complete logical extent. The default writer uses bounded parallel compression. A serial-only CLI can be built with `--no-default-features --features build`.
+
+The optional `convert` command rebuilds qualified unsigned UDRO and UDZO containers. It verifies the source and compares the staged output's decoded data and admitted metadata before publication. It refuses inputs carrying opaque resources, signatures, or unqualified block maps.
 
 The [project-build compatibility runner](tests/compatibility/project-build/README.md) builds version-one TOML projects using the HFS+ builder from a sibling checkout or unpacked packages. File-tree builds in the default CLI require a resolvable versioned HFS+ dependency.
 
