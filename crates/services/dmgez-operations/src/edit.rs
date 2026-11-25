@@ -1,4 +1,7 @@
-//! Plan project-backed copy-on-write rebuilds (D-OPS-01).
+//! Plan copy-on-write rebuilds (D-OPS-01).
+
+#[cfg(feature = "image-edit")]
+pub mod image_source;
 
 use std::{
 	collections::BTreeMap,

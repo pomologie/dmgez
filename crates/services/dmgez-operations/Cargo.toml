@@ -12,6 +12,7 @@ default = []
 convert = ["dep:dmgez-core", "dep:dmgez-udif", "dep:thiserror"]
 edit = ["dep:dmgez-builder", "dep:dmgez-config", "dmgez-builder/zlib", "dmgez-config/project-edit", "dep:thiserror"]
 extract = ["dep:dmgez-vfs", "dep:rustix", "dep:serde", "dep:tempfile", "dep:thiserror"]
+image-edit = ["edit", "dep:dmgez-udif", "dmgez-udif/signature-integrity", "dep:dmgez-vfs", "dep:rustix", "dep:sha2"]
 install = ["extract", "dep:dmgez-config", "dep:plist", "dep:quick-xml"]
 parallel = ["dmgez-udif?/parallel"]
 
@@ -22,6 +23,9 @@ dmgez-config = { workspace = true, optional = true }
 dmgez-core = { workspace = true, features = ["staging"], optional = true }
 dmgez-udif = { workspace = true, features = ["read", "write", "zlib"], optional = true }
 dmgez-vfs = { workspace = true, optional = true }
+
+# Hashes and checksums
+sha2 = { workspace = true, optional = true }
 
 # Serialization
 plist = { workspace = true, optional = true, features = ["enable_unstable_features_that_may_break_with_minor_version_bumps"] }

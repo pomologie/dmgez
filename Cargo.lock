@@ -1204,6 +1204,7 @@ dependencies = [
  "quick-xml 0.42.0",
  "rustix 1.1.6",
  "serde",
+ "sha2",
  "tempfile",
  "thiserror 2.0.21",
 ]
