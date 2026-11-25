@@ -44,12 +44,39 @@ pub struct CopySource {
 	pub exclude: Vec<Text>,
 }
 
+impl CopySource {
+	/// Describes an unfiltered recursive copy from a literal local path.
+	/// An omitted destination uses the source basename at the image root.
+	/// # Errors
+	/// Rejects invalid local paths, reserved destinations, and an omitted
+	/// destination when the source basename cannot be an image path.
+	pub fn recursive_to(
+		source: &str,
+		destination: Option<&VirtualPath>,
+	) -> Result<(Self, VirtualPath), ContentError> {
+		let source = LocalPath::parse_literal(source).map_err(|_| ContentError::InvalidSource)?;
+		let destination = copy_destination(&source, destination.cloned())?;
+		validate_destination(&destination)?;
+		Ok((
+			Self {
+				source,
+				recursive: true,
+				include: Vec::new(),
+				exclude: Vec::new(),
+			},
+			destination,
+		))
+	}
+}
+
 /// Invalid settings for a content declaration.
 #[derive(Clone, Debug, Eq, Error, PartialEq)]
 #[non_exhaustive]
 pub enum ContentError {
 	#[error("copy entries require a source")]
 	SourceRequired,
+	#[error("copy source must be a nonempty local path without NUL")]
+	InvalidSource,
 	#[error("a source with no usable basename requires an explicit destination")]
 	Basename,
 	#[error("directory and symlink entries require a destination")]
@@ -116,10 +143,7 @@ impl TryFrom<RawContent> for Content {
 				}
 				let include = patterns(raw.include)?;
 				let exclude = patterns(raw.exclude)?;
-				let destination = match raw.destination {
-					Some(destination) => destination,
-					None => default_destination(&source)?,
-				};
+				let destination = copy_destination(&source, raw.destination)?;
 				(
 					destination,
 					Payload::Copy(CopySource {
@@ -152,17 +176,7 @@ impl TryFrom<RawContent> for Content {
 				(destination, payload)
 			}
 		};
-		match destination.components().next() {
-			None => return Err(ContentError::RootDestination),
-			Some(root)
-				if RESERVED_ROOT_NAMES
-					.iter()
-					.any(|name| root.eq_ignore_ascii_case(name)) =>
-			{
-				return Err(ContentError::ReservedDestination);
-			}
-			Some(_) => {}
-		}
+		validate_destination(&destination)?;
 		Ok(Self {
 			destination,
 			payload,
@@ -174,7 +188,27 @@ impl TryFrom<RawContent> for Content {
 	}
 }
 
-fn default_destination(source: &LocalPath) -> Result<VirtualPath, ContentError> {
+fn validate_destination(destination: &VirtualPath) -> Result<(), ContentError> {
+	let root = destination
+		.components()
+		.next()
+		.ok_or(ContentError::RootDestination)?;
+	if RESERVED_ROOT_NAMES
+		.iter()
+		.any(|name| root.eq_ignore_ascii_case(name))
+	{
+		return Err(ContentError::ReservedDestination);
+	}
+	Ok(())
+}
+
+fn copy_destination(
+	source: &LocalPath,
+	destination: Option<VirtualPath>,
+) -> Result<VirtualPath, ContentError> {
+	if let Some(destination) = destination {
+		return Ok(destination);
+	}
 	let basename = source
 		.as_path()
 		.file_name()

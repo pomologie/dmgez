@@ -152,11 +152,16 @@ impl Text {
 impl<'de> Deserialize<'de> for Text {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
 		let value = String::deserialize(deserializer)?;
-		if value.is_empty() || value.contains('\0') {
-			return Err(de::Error::custom("expected nonempty text without NUL"));
-		}
+		validate_text(&value).map_err(de::Error::custom)?;
 		Ok(Self(value))
 	}
+}
+
+fn validate_text(value: &str) -> Result<(), &'static str> {
+	if value.is_empty() || value.contains('\0') {
+		return Err("expected nonempty text without NUL");
+	}
+	Ok(())
 }
 
 /// A host-local path as written by the user. It is never opened by this crate.
@@ -164,6 +169,11 @@ impl<'de> Deserialize<'de> for Text {
 pub struct LocalPath(PathBuf);
 
 impl LocalPath {
+	pub(crate) fn parse_literal(value: &str) -> Result<Self, &'static str> {
+		validate_local_path(value)?;
+		Ok(Self(value.into()))
+	}
+
 	/// Borrows the original host path.
 	#[must_use]
 	pub fn as_path(&self) -> &Path {
@@ -184,12 +194,18 @@ impl LocalPath {
 
 impl<'de> Deserialize<'de> for LocalPath {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-		let text = Text::deserialize(deserializer)?;
-		if text.as_str().contains(URI_AUTHORITY) {
-			return Err(de::Error::custom("expected a local path, not a URL"));
-		}
-		Ok(Self(PathBuf::from(text.0)))
+		let value = String::deserialize(deserializer)?;
+		validate_local_path(&value).map_err(de::Error::custom)?;
+		Ok(Self(PathBuf::from(value)))
 	}
+}
+
+fn validate_local_path(value: &str) -> Result<(), &'static str> {
+	validate_text(value)?;
+	if value.contains(URI_AUTHORITY) {
+		return Err("expected a local path, not a URL");
+	}
+	Ok(())
 }
 
 /// An absolute slash-delimited path within an image. It has no host path semantics.

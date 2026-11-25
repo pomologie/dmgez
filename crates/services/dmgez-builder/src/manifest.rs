@@ -6,10 +6,11 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-use dmgez_config::{Content, Coordinate, LocalPath, Payload, Project, VirtualPath};
+use dmgez_config::{Content, ContentError, Coordinate, LocalPath, Payload, Project, VirtualPath};
 use thiserror::Error;
 
 mod catalog;
+mod copies;
 #[cfg(unix)]
 mod host;
 #[cfg(windows)]
@@ -22,6 +23,7 @@ mod signed_bundle;
 mod walk;
 
 use catalog::{Body, Catalog, Origin};
+pub use copies::{CopyInput, discover_copies};
 pub use inspection::{AssetInspector, discover_for_inspection, inspect_tree};
 
 const PATH_SEPARATOR: char = '/';
@@ -85,6 +87,13 @@ impl Manifest {
 	#[must_use]
 	pub fn metadata_bytes(&self) -> u64 {
 		self.metadata_bytes
+	}
+
+	/// Rechecks every captured source path and its observed filesystem metadata.
+	/// # Errors
+	/// Returns the first source that changed or can no longer be observed.
+	pub fn validate_sources(&self) -> Result<(), Error> {
+		self.sources().try_for_each(SourceSnapshot::validate)
 	}
 
 	pub(crate) fn sources(&self) -> impl Iterator<Item = &SourceSnapshot> {
@@ -314,6 +323,12 @@ pub enum Error {
 	UnsupportedSource { path: PathBuf },
 	#[error("unsupported content declaration")]
 	UnsupportedContent,
+	#[error("invalid host copy declaration {index}")]
+	InvalidCopyInput {
+		index: usize,
+		#[source]
+		source: ContentError,
+	},
 	#[error("source path cannot be represented in the virtual tree: {path:?}")]
 	InvalidSourceName { path: PathBuf },
 	#[error("a content declaration cannot replace the image root")]
@@ -423,7 +438,7 @@ pub(crate) fn discover_for_output(
 	}
 	let mut catalog = Catalog::new(limits);
 	#[cfg(any(unix, windows))]
-	let mut walker = walk::Walker::new(config_dir, output);
+	let mut walker = walk::Walker::new(config_dir, output.map(|path| path.resolve(config_dir)));
 	#[cfg(not(any(unix, windows)))]
 	let _ = output;
 	for content in &project.contents {

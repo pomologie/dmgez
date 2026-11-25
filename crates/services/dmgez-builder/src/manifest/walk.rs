@@ -3,7 +3,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-use dmgez_config::{CopySource, LocalPath, Text, VirtualPath};
+use dmgez_config::{CopySource, Text, VirtualPath};
 use globset::{GlobBuilder, GlobSet, GlobSetBuilder};
 
 use super::{
@@ -66,10 +66,10 @@ pub(super) fn inspect_tree(
 }
 
 impl<'a> Walker<'a> {
-	pub(super) fn new(config_dir: &'a Path, output: Option<&LocalPath>) -> Self {
+	pub(super) fn new(config_dir: &'a Path, output: Option<PathBuf>) -> Self {
 		Self {
 			config_dir,
-			output: output.map(|path| path.resolve(config_dir)),
+			output,
 			host: None,
 			visited: 0,
 		}
