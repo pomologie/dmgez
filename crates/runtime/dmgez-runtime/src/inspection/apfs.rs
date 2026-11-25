@@ -1,32 +1,41 @@
-use std::error::Error;
+use std::{error::Error, num::NonZeroU32};
 
 use dmgez_apfs_read::{
-	CheckData, CheckFailureKind, CheckpointDiagnostic, VerificationEvidence, check, probe,
+	CheckData, CheckFailureKind, CheckpointDiagnostic, TransactionId, VerificationEvidence,
+	VolumeSelector, check, probe,
 };
 use dmgez_inspector::{
 	FilesystemCheckError, FilesystemCheckpointId, FilesystemEvidence, FilesystemObjectId,
 	FilesystemOptions, FilesystemProbe, FilesystemScope, FilesystemSource, FilesystemUuid,
-	VerificationReport,
 };
-use dmgez_udif::reader::Limits;
+use dmgez_udif::reader::ReadAt;
 use dmgez_vfs::Filesystem;
 
-use crate::{CliResult, verify_command::Arguments};
+use crate::disk::Encoding;
 
-pub(super) fn verify(
-	arguments: &Arguments,
-) -> CliResult<(VerificationReport, Option<Box<dyn Error>>)> {
-	let selector = arguments.selection.apfs_volume()?;
-	let xid = arguments.selection.apfs_checkpoint();
-	let source = super::open_source(&arguments.image)?;
+use super::{PayloadBudget, Verification};
+
+/// Verifies reachable data in a selected APFS volume and records checkpoint evidence.
+///
+/// UDIF container checks run first for container inputs. A raw input has
+/// no UDIF checksums, and the report records that distinction.
+#[must_use]
+pub fn verify_apfs(
+	source: impl ReadAt,
+	encoding: Encoding,
+	partition: Option<NonZeroU32>,
+	selector: Option<VolumeSelector>,
+	xid: Option<TransactionId>,
+	budget: PayloadBudget,
+) -> Verification {
 	let data = CheckData::Read {
-		max_bytes: arguments.max_payload_bytes(),
+		max_bytes: budget.bytes(),
 	};
 	let mut filesystem_cause = None;
 	let mut probe_cause = None;
 	let recognizer = FilesystemProbe::new(
 		Filesystem::Apfs,
-		arguments.partition,
+		partition,
 		|window: &mut dyn FilesystemSource| {
 			probe(window.len(), |offset, output| {
 				window.read_exact_at(offset, output)
@@ -59,18 +68,18 @@ pub(super) fn verify(
 		})
 	};
 	let filesystem = FilesystemOptions::default();
-	let report = if arguments.raw {
-		dmgez_inspector::verify_raw_filesystem(source, filesystem, recognizer, checker)
-	} else {
-		dmgez_inspector::verify_filesystem_with_probe(
-			source,
-			Limits::default(),
-			filesystem,
-			recognizer,
-			checker,
-		)
+	let report = match encoding {
+		Encoding::Raw => {
+			dmgez_inspector::verify_raw_filesystem(source, filesystem, recognizer, checker)
+		}
+		Encoding::Udif(limits) => dmgez_inspector::verify_filesystem_with_probe(
+			source, limits, filesystem, recognizer, checker,
+		),
 	};
-	Ok((report, filesystem_cause.or(probe_cause)))
+	Verification {
+		report,
+		filesystem_cause: filesystem_cause.or(probe_cause),
+	}
 }
 
 fn evidence(result: VerificationEvidence) -> FilesystemEvidence {

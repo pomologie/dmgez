@@ -1,42 +1,39 @@
 use std::{
-	hash::Hash,
 	io::{self, Write},
 	process::ExitCode,
 };
 
+#[cfg(feature = "apfs-read")]
+use dmgez_diff::Side;
 #[cfg(feature = "diff-hash")]
 use dmgez_diff::semantic::Contents;
 #[cfg(feature = "finder-diff")]
 use dmgez_diff::semantic::Field;
-use dmgez_diff::{
-	Side,
-	semantic::{Limits, Options, Outcome, PathMatching, Report, compare_with_options},
-};
+use dmgez_diff::semantic::{Limits, Options, Outcome, PathMatching, Report};
 use dmgez_inspector::SelectedWindowId;
-use dmgez_vfs::{
-	VolumeId,
-	volume::{VolumeBackend, VolumeView},
+#[cfg(feature = "apfs-read")]
+use dmgez_runtime::volume::Error as VolumeError;
+use dmgez_runtime::{
+	compare::semantic::{self, ComparedInput},
+	disk::Encoding,
 };
 use serde::Serialize;
 
-#[cfg(feature = "hfsplus-read")]
-use crate::volume_input::with_hfs_view_with_signature;
+#[cfg(feature = "apfs-read")]
+use crate::volume_commands::{
+	VolumeIdentity, checkpoint, volume_selector, with_named_selector_guidance,
+};
 use crate::{
 	CliResult,
 	report_output::{write_json, write_report},
 	volume_commands::Filesystem,
 };
-#[cfg(feature = "apfs-read")]
-use crate::{
-	volume_commands::{VolumeIdentity, checkpoint, volume_selector, with_named_selector_guidance},
-	volume_input::with_apfs_view_for_comparison,
-};
 
 #[cfg(feature = "diff-hash")]
 use super::ContentsMode;
-use super::{Arguments, DIFFERENT_EXIT_CODE, PathMode, require_regular_file, with_side};
+use super::{Arguments, DIFFERENT_EXIT_CODE, PathMode};
 #[cfg(feature = "apfs-read")]
-use super::{LEFT_VOLUME_OPTION, RIGHT_VOLUME_OPTION};
+use super::{LEFT_VOLUME_OPTION, RIGHT_VOLUME_OPTION, with_side};
 
 const FILESYSTEM_SPACE: &str = "filesystem";
 const EQUIVALENT_PATH_SPELLING_LABEL: &str = "equivalent_path_spelling";
@@ -46,33 +43,13 @@ const RENAME_CANDIDATE_LABEL: &str = "rename_candidate";
 
 #[cfg(feature = "hfsplus-read")]
 pub(super) fn hfsplus(arguments: &Arguments) -> CliResult<ExitCode> {
-	require_regular_inputs(arguments)?;
-	let options = &arguments.options;
-	let attempt = with_hfs_view_with_signature(
-		&arguments.left,
-		options.left_raw,
-		options.left_partition,
-		|left, left_signature| {
-			let right = with_hfs_view_with_signature(
-				&arguments.right,
-				options.right_raw,
-				options.right_partition,
-				|right, right_signature| {
-					Ok(compare_open(
-						arguments,
-						Filesystem::Hfsplus,
-						left,
-						right,
-						Volume::HfsSignature(left_signature.into()),
-						Volume::HfsSignature(right_signature.into()),
-					))
-				},
-			);
-			Ok(with_side(right, Side::Right))
-		},
-	);
-	let comparison = with_side(attempt, Side::Left)??;
-	comparison?.write(arguments.json)
+	let (left, right) = inputs(arguments);
+	let (limits, options) = comparison_policy(arguments);
+	let report = semantic::hfsplus(left, right, limits, options, || false)?;
+	DiffReport::new(arguments, Filesystem::Hfsplus, report, |signature| {
+		Volume::HfsSignature(signature.into())
+	})
+	.write(arguments.json)
 }
 
 #[cfg(feature = "apfs-read")]
@@ -94,70 +71,67 @@ pub(super) fn apfs(arguments: &Arguments) -> CliResult<ExitCode> {
 			.transpose(),
 		Side::Right,
 	)?;
-	require_regular_inputs(arguments)?;
-	let attempt = with_apfs_view_for_comparison(
-		&arguments.left,
-		options.left_raw,
-		options.left_partition,
-		left_volume,
-		checkpoint(options.left_xid),
-		|left, left_identity| {
-			let right = with_apfs_view_for_comparison(
-				&arguments.right,
-				options.right_raw,
-				options.right_partition,
-				right_volume,
-				checkpoint(options.right_xid),
-				|right, right_identity| {
-					Ok(compare_open(
-						arguments,
-						Filesystem::Apfs,
-						left,
-						right,
-						Volume::ApfsVolume(left_identity.into()),
-						Volume::ApfsVolume(right_identity.into()),
-					))
-				},
-			)
-			.map_err(|error| with_named_selector_guidance(error, RIGHT_VOLUME_OPTION));
-			Ok(with_side(right, Side::Right))
+	let (left, right) = inputs(arguments);
+	let left = semantic::ApfsInput {
+		disk: left,
+		volume: left_volume,
+		checkpoint: checkpoint(options.left_xid),
+	};
+	let right = semantic::ApfsInput {
+		disk: right,
+		volume: right_volume,
+		checkpoint: checkpoint(options.right_xid),
+	};
+	let (limits, options) = comparison_policy(arguments);
+	let report = match semantic::apfs(left, right, limits, options, || false) {
+		Err(semantic::Error::Input(input)) => {
+			let option = if input.side == Side::Left {
+				LEFT_VOLUME_OPTION
+			} else {
+				RIGHT_VOLUME_OPTION
+			};
+			let error = match input.source {
+				VolumeError::Apfs(error) => with_named_selector_guidance(error.into(), option),
+				error => error.into(),
+			};
+			with_side(Err(error), input.side)?
+		}
+		result => result?,
+	};
+	DiffReport::new(arguments, Filesystem::Apfs, report, |info| {
+		Volume::ApfsVolume((&info).into())
+	})
+	.write(arguments.json)
+}
+
+fn inputs(arguments: &Arguments) -> (semantic::Input<'_>, semantic::Input<'_>) {
+	let options = &arguments.options;
+	let encoding = |raw| {
+		if raw {
+			Encoding::Raw
+		} else {
+			Encoding::Udif(Default::default())
+		}
+	};
+	(
+		semantic::Input {
+			path: &arguments.left,
+			encoding: encoding(options.left_raw),
+			partition: options.left_partition,
+		},
+		semantic::Input {
+			path: &arguments.right,
+			encoding: encoding(options.right_raw),
+			partition: options.right_partition,
 		},
 	)
-	.map_err(|error| with_named_selector_guidance(error, LEFT_VOLUME_OPTION));
-	let comparison = with_side(attempt, Side::Left)??;
-	comparison?.write(arguments.json)
 }
 
-fn require_regular_inputs(arguments: &Arguments) -> CliResult {
-	with_side(require_regular_file(&arguments.left), Side::Left)?;
-	with_side(require_regular_file(&arguments.right), Side::Right)?;
-	Ok(())
-}
-
-fn compare_open<L: VolumeBackend, R: VolumeBackend>(
-	arguments: &Arguments,
-	filesystem: Filesystem,
-	left: &mut VolumeView<L>,
-	right: &mut VolumeView<R>,
-	left_volume: Volume,
-	right_volume: Volume,
-) -> CliResult<DiffReport>
-where
-	L::Id: Eq + Hash,
-	R::Id: Eq + Hash,
-{
+fn comparison_policy(arguments: &Arguments) -> (Limits, Options) {
 	let mut limits = Limits::default();
 	if let Some(max_bytes) = arguments.max_bytes {
 		limits.max_bytes = max_bytes;
 	}
-	let left_input = with_side(
-		Input::new(left.partition(), arguments.options.left_raw, left_volume),
-		Side::Left,
-	)?;
-	let right_input = with_side(
-		Input::new(right.partition(), arguments.options.right_raw, right_volume),
-		Side::Right,
-	)?;
 	let mut options = Options::default();
 	options.paths = match arguments.options.paths.unwrap_or_default() {
 		PathMode::Exact => PathMatching::ExactStoredText,
@@ -178,14 +152,7 @@ where
 	{
 		options.finder_layout = arguments.options.finder_layout;
 	}
-	let comparison = compare_with_options(left, right, limits, options, || false)?;
-	Ok(DiffReport {
-		address_space: FILESYSTEM_SPACE,
-		filesystem: filesystem.as_str(),
-		left: left_input,
-		right: right_input,
-		comparison,
-	})
+	(limits, options)
 }
 
 #[derive(Serialize)]
@@ -197,21 +164,16 @@ struct Input {
 }
 
 impl Input {
-	fn new(window: VolumeId, raw: bool, volume: Volume) -> io::Result<Self> {
-		Ok(Self {
+	fn new<I>(input: ComparedInput<I>, raw: bool, volume: &impl Fn(I) -> Volume) -> Self {
+		Self {
 			input: if raw {
 				InputFormat::Raw
 			} else {
 				InputFormat::Udif
 			},
-			window: SelectedWindowId::from_volume(window).ok_or_else(|| {
-				io::Error::new(
-					io::ErrorKind::Unsupported,
-					"unsupported selected disk window",
-				)
-			})?,
-			volume,
-		})
+			window: input.window,
+			volume: volume(input.identity),
+		}
 	}
 }
 
@@ -262,6 +224,21 @@ struct DiffReport {
 }
 
 impl DiffReport {
+	fn new<I>(
+		arguments: &Arguments,
+		filesystem: Filesystem,
+		report: semantic::Report<I>,
+		volume: impl Fn(I) -> Volume,
+	) -> Self {
+		Self {
+			address_space: FILESYSTEM_SPACE,
+			filesystem: filesystem.as_str(),
+			left: Input::new(report.left, arguments.options.left_raw, &volume),
+			right: Input::new(report.right, arguments.options.right_raw, &volume),
+			comparison: report.comparison,
+		}
+	}
+
 	fn write(&self, json: bool) -> CliResult<ExitCode> {
 		write_report(json, self, |output| self.write_text(output))?;
 		Ok(if self.comparison.outcome == Outcome::Equal {

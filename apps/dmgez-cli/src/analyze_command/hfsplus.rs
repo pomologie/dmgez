@@ -2,15 +2,10 @@ use std::io::{self, Write};
 
 use dmgez_hfsplus_read::analysis::{self, MAX_LARGEST_FILES};
 use dmgez_inspector::{AnalysisReport, SelectedWindowId};
-use dmgez_udif::reader::{Image, Limits as ImageLimits, ReadAt};
-use dmgez_vfs::{Disk, Limits as DiskLimits};
+use dmgez_runtime::inspection::{HfsAnalysisError, analyze_hfsplus};
 use serde::Serialize;
 
-use crate::{
-	CliResult, inspect,
-	report_output::write_report,
-	volume_input::{BorrowedSource, select},
-};
+use crate::{CliResult, inspect, report_output::write_report};
 
 use super::Arguments;
 
@@ -38,39 +33,26 @@ struct Report {
 }
 
 pub(super) fn run(arguments: &Arguments) -> CliResult {
-	let mut limits = analysis::Limits::default();
-	if let Some(largest) = arguments.largest {
-		let largest = largest.get();
-		if largest > MAX_LARGEST_FILES {
-			return Err(io::Error::new(
-				io::ErrorKind::InvalidInput,
-				format!("--largest must be at most {MAX_LARGEST_FILES}"),
-			)
-			.into());
-		}
-		limits.largest_files = largest;
-	}
-	let source = inspect::open_source(&arguments.image)?;
-	let mut image = Image::open_release(BorrowedSource(&source), ImageLimits::default())?;
-	let container = dmgez_inspector::analyze(&image);
-	let mut disk = Disk::discover(&mut image, DiskLimits::default())?;
-	let selected = select(&disk, arguments.partition)?;
-	let volume = SelectedWindowId::from_volume(selected).ok_or_else(|| {
-		io::Error::new(
-			io::ErrorKind::InvalidInput,
-			"unsupported HFS+ analysis window",
-		)
-	})?;
-	let filesystem = analysis::analyze(&mut disk, selected, limits)?;
-	source.check_unchanged()?;
+	let analysis = analyze_hfsplus(&arguments.image, arguments.partition, arguments.largest)
+		.map_err(analysis_error)?;
 	let report = Report {
-		container,
-		volume,
-		filesystem,
+		container: analysis.container,
+		volume: analysis.volume,
+		filesystem: analysis.filesystem,
 	};
 	write_report(arguments.json, &report, |output| {
 		write_text(output, &report)
 	})
+}
+
+fn analysis_error(error: HfsAnalysisError) -> Box<dyn std::error::Error> {
+	match error {
+		HfsAnalysisError::LargestFiles => Box::new(io::Error::new(
+			io::ErrorKind::InvalidInput,
+			format!("--largest must be at most {MAX_LARGEST_FILES}"),
+		)),
+		error => Box::new(error),
+	}
 }
 
 fn write_text(output: &mut impl Write, report: &Report) -> io::Result<()> {

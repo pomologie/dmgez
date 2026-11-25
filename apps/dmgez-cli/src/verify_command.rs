@@ -11,6 +11,9 @@ use crate::volume_commands::{PARTITION_SLOT_VALUE_NAME, Selection};
 use std::io;
 
 #[cfg(feature = "inspect")]
+use dmgez_runtime::inspection::{MAX_FILESYSTEM_PAYLOAD_BYTES, PayloadBudget};
+
+#[cfg(feature = "inspect")]
 use crate::{
 	CliResult, inspect,
 	volume_commands::{APFS_FILESYSTEM_VALUE, FILESYSTEM_OPTION, Filesystem},
@@ -18,8 +21,6 @@ use crate::{
 
 const FULL_ARG: &str = "full";
 const PAYLOAD_BYTES_OPTION: &str = "max-payload-bytes";
-#[cfg(feature = "inspect")]
-const MAX_FILESYSTEM_PAYLOAD_BYTES: u64 = 1 << 30;
 
 #[derive(Args)]
 pub(super) struct Arguments {
@@ -56,14 +57,6 @@ struct Scope {
 	full: bool,
 }
 
-#[cfg(any(feature = "apfs-read", feature = "hfsplus-verify"))]
-impl Arguments {
-	pub(super) fn max_payload_bytes(&self) -> u64 {
-		self.max_payload_bytes
-			.map_or(MAX_FILESYSTEM_PAYLOAD_BYTES, NonZeroU64::get)
-	}
-}
-
 #[cfg(feature = "inspect")]
 pub(super) fn run(arguments: &Arguments) -> CliResult {
 	use dmgez_inspector::VerificationMode;
@@ -83,16 +76,15 @@ pub(super) fn run(arguments: &Arguments) -> CliResult {
 		))
 		.into());
 	}
-	if arguments
-		.max_payload_bytes
-		.is_some_and(|bytes| bytes.get() > MAX_FILESYSTEM_PAYLOAD_BYTES)
-	{
-		return Err(invalid(format!(
-			"--{PAYLOAD_BYTES_OPTION} must be at most {MAX_FILESYSTEM_PAYLOAD_BYTES}"
-		))
-		.into());
-	}
-	inspect::verify(arguments, mode)
+	let budget = match arguments.max_payload_bytes {
+		Some(bytes) => PayloadBudget::new(bytes).ok_or_else(|| {
+			invalid(format!(
+				"--{PAYLOAD_BYTES_OPTION} must be at most {MAX_FILESYSTEM_PAYLOAD_BYTES}"
+			))
+		})?,
+		None => PayloadBudget::default(),
+	};
+	inspect::verify(arguments, mode, budget)
 }
 
 #[cfg(feature = "inspect")]

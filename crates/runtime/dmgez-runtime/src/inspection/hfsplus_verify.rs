@@ -3,16 +3,17 @@ use std::{error::Error, num::NonZeroU32};
 use dmgez_hfsplus_read::CheckFailureKind;
 use dmgez_inspector::{
 	FilesystemCheckError, FilesystemEvidence, FilesystemOptions, FilesystemProbe, FilesystemSource,
-	VerificationReport,
 };
-use dmgez_udif::reader::{FileSource, Limits};
+use dmgez_udif::reader::{Limits, ReadAt};
 use dmgez_vfs::Filesystem;
 
+use super::Verification;
+
 pub(super) fn verify(
-	source: FileSource,
+	source: impl ReadAt,
 	partition: Option<NonZeroU32>,
 	max_payload_bytes: u64,
-) -> (VerificationReport, Option<Box<dyn Error>>) {
+) -> Verification {
 	let options = FilesystemOptions::default();
 	let limits = Limits::default();
 	let mut cause = None;
@@ -39,7 +40,10 @@ pub(super) fn verify(
 	} else {
 		dmgez_inspector::verify_filesystem(source, limits, options, check)
 	};
-	(report, cause)
+	Verification {
+		report,
+		filesystem_cause: cause,
+	}
 }
 
 fn classify(kind: CheckFailureKind) -> FilesystemCheckError {

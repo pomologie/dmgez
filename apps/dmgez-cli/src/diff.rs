@@ -6,10 +6,10 @@ use std::{
 
 use clap::{Args, ValueEnum};
 
-#[cfg(feature = "diff")]
+#[cfg(all(feature = "diff", feature = "apfs-read"))]
 use dmgez_diff::Side;
-#[cfg(feature = "diff")]
-use std::{error::Error as StdError, fmt, path::Path};
+#[cfg(all(feature = "diff", feature = "apfs-read"))]
+use std::{error::Error as StdError, fmt};
 
 use crate::{
 	CliResult,
@@ -234,17 +234,7 @@ fn invalid(message: &'static str) -> std::io::Error {
 	std::io::Error::new(std::io::ErrorKind::InvalidInput, message)
 }
 
-#[cfg(feature = "diff")]
-fn require_regular_file(path: &Path) -> Result<(), dmgez_udif::Error> {
-	if !path.metadata()?.is_file() {
-		return Err(dmgez_udif::Error::InvalidFormat(
-			"comparison input is not a regular file",
-		));
-	}
-	Ok(())
-}
-
-#[cfg(feature = "diff")]
+#[cfg(all(feature = "diff", feature = "apfs-read"))]
 fn with_side<T, E: Into<Box<dyn StdError>>>(
 	result: Result<T, E>,
 	side: Side,
@@ -255,21 +245,21 @@ fn with_side<T, E: Into<Box<dyn StdError>>>(
 	})
 }
 
-#[cfg(feature = "diff")]
+#[cfg(all(feature = "diff", feature = "apfs-read"))]
 #[derive(Debug)]
 struct InputError {
 	side: Side,
 	error: Box<dyn StdError>,
 }
 
-#[cfg(feature = "diff")]
+#[cfg(all(feature = "diff", feature = "apfs-read"))]
 impl fmt::Display for InputError {
 	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(formatter, "could not admit the {} input", self.side)
 	}
 }
 
-#[cfg(feature = "diff")]
+#[cfg(all(feature = "diff", feature = "apfs-read"))]
 impl StdError for InputError {
 	fn source(&self) -> Option<&(dyn StdError + 'static)> {
 		Some(self.error.as_ref())

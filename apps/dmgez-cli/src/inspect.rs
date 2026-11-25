@@ -10,17 +10,15 @@ use dmgez_inspector::{
 	CheckStatus, ChecksumDeclaration, DiagnosticDetail, DiskLimits, DiskReport, MAX_RUN_PAGE_SIZE,
 	RunWindow, VerificationMode, VerificationOutcome, VerificationReport,
 };
+#[cfg(feature = "apfs-read")]
+use dmgez_runtime::disk::Encoding;
 pub(super) use dmgez_runtime::image::open_file as open_source;
 use dmgez_runtime::image::{ImageSession, InspectionScope, MetadataBudget, export_raw};
+use dmgez_runtime::inspection::{self, PayloadBudget, Verification};
 use dmgez_udif::reader::{Limits, ReadAt};
 use serde::Serialize;
 
 use crate::{CliResult, inspect_command::Arguments, verify_command, volume_commands::Filesystem};
-
-#[cfg(feature = "apfs-read")]
-mod apfs;
-#[cfg(feature = "hfsplus-verify")]
-mod hfsplus;
 
 const FORMAT_KEY: &str = "format";
 const PHYSICAL_BYTES_KEY: &str = "physical_bytes";
@@ -193,12 +191,7 @@ fn show_disk(disk: &DiskReport) {
 }
 
 pub(crate) fn analyze(path: &Path, json: bool) -> CliResult {
-	let image = ImageSession::open(
-		open_source(path)?,
-		Limits::default(),
-		MetadataBudget::ReaderLimits,
-	)?;
-	let report = image.analyze()?;
+	let report = inspection::analyze(open_source(path)?)?;
 	if json {
 		return print_json(&report);
 	}
@@ -261,24 +254,55 @@ pub(super) fn write_analysis(
 	)
 }
 
-pub(super) fn verify(arguments: &verify_command::Arguments, mode: VerificationMode) -> CliResult {
+pub(super) fn verify(
+	arguments: &verify_command::Arguments,
+	mode: VerificationMode,
+	budget: PayloadBudget,
+) -> CliResult {
 	#[cfg(not(feature = "apfs-read"))]
 	if arguments.raw {
 		let feature = crate::volume_commands::APFS_READ_FEATURE;
 		return Err(format!("feature not compiled: {feature}").into());
 	}
 
-	let (report, filesystem_cause) = match arguments.selection.filesystem() {
-		Filesystem::Hfsplus => verify_hfsplus(arguments, mode)?,
-		#[cfg(feature = "apfs-read")]
-		Filesystem::Apfs => apfs::verify(arguments)?,
-		#[cfg(not(feature = "apfs-read"))]
-		Filesystem::Apfs => (
-			dmgez_inspector::verify(open_source(&arguments.image)?, Limits::default(), mode),
-			None,
+	let result = match arguments.selection.filesystem() {
+		Filesystem::Hfsplus => inspection::verify_hfsplus(
+			open_source(&arguments.image)?,
+			mode,
+			arguments.partition,
+			budget,
 		),
+		#[cfg(feature = "apfs-read")]
+		Filesystem::Apfs => {
+			let selector = arguments.selection.apfs_volume()?;
+			let xid = arguments.selection.apfs_checkpoint();
+			let encoding = if arguments.raw {
+				Encoding::Raw
+			} else {
+				Encoding::Udif(Limits::default())
+			};
+			inspection::verify_apfs(
+				open_source(&arguments.image)?,
+				encoding,
+				arguments.partition,
+				selector,
+				xid,
+				budget,
+			)
+		}
+		#[cfg(not(feature = "apfs-read"))]
+		Filesystem::Apfs => inspection::verify_container(open_source(&arguments.image)?, mode),
 	};
-	if arguments.json {
+	write_verification(result, arguments.json)
+}
+
+fn write_verification(result: Verification, json: bool) -> CliResult {
+	let Verification {
+		report,
+		filesystem_cause,
+		..
+	} = result;
+	if json {
 		print_json(&report)?;
 	} else {
 		if let Some(checks) = &report.checksums {
@@ -305,24 +329,6 @@ pub(super) fn verify(arguments: &verify_command::Arguments, mode: VerificationMo
 		report,
 		filesystem_cause,
 	}))
-}
-
-fn verify_hfsplus(
-	arguments: &verify_command::Arguments,
-	mode: VerificationMode,
-) -> CliResult<(VerificationReport, Option<Box<dyn Error>>)> {
-	let source = open_source(&arguments.image)?;
-	#[cfg(feature = "hfsplus-verify")]
-	if mode == VerificationMode::Full {
-		return Ok(hfsplus::verify(
-			source,
-			arguments.partition,
-			arguments.max_payload_bytes(),
-		));
-	}
-	let mut report = dmgez_inspector::verify(source, Limits::default(), mode);
-	report.capabilities.filesystem = cfg!(feature = "hfsplus-verify");
-	Ok((report, None))
 }
 
 fn show_filesystem_coverage(report: &VerificationReport) {

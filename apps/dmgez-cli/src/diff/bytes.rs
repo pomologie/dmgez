@@ -1,21 +1,15 @@
 use std::{
-	fs::File,
 	io::{self, Write},
-	path::Path,
 	process::ExitCode,
 };
 
-use dmgez_diff::{DEFAULT_COMPARE_BYTES, Outcome, Report, Side, compare};
-use dmgez_udif::{
-	Error as UdifError,
-	reader::{FileSource, Image, Limits},
-};
-use dmgez_vfs::Raw;
+use dmgez_diff::{DEFAULT_COMPARE_BYTES, Outcome, Report};
+use dmgez_runtime::compare::{self, ByteSpace};
 use serde::Serialize;
 
 use crate::CliResult;
 
-use super::{Arguments, DIFFERENT_EXIT_CODE, require_regular_file, with_side};
+use super::{Arguments, DIFFERENT_EXIT_CODE};
 
 const LOGICAL_SPACE: &str = "logical_disk";
 const PHYSICAL_SPACE: &str = "physical_file";
@@ -28,23 +22,18 @@ struct DiffReport {
 }
 
 pub(super) fn run(arguments: &Arguments, logical: bool) -> CliResult<ExitCode> {
-	let left = with_side(open_file(&arguments.left), Side::Left)?;
-	let right = with_side(open_file(&arguments.right), Side::Right)?;
-	let max_bytes = arguments.max_bytes.unwrap_or(DEFAULT_COMPARE_BYTES);
-	let (address_space, comparison) = if logical {
-		let limits = Limits::default();
-		let mut left = with_side(Image::open_release(left, limits), Side::Left)?;
-		let mut right = with_side(Image::open_release(right, limits), Side::Right)?;
-		(
-			LOGICAL_SPACE,
-			compare(&mut left, &mut right, max_bytes, || false)?,
-		)
+	let (address_space, space) = if logical {
+		(LOGICAL_SPACE, ByteSpace::Logical(Default::default()))
 	} else {
-		(
-			PHYSICAL_SPACE,
-			compare(&mut Raw(left), &mut Raw(right), max_bytes, || false)?,
-		)
+		(PHYSICAL_SPACE, ByteSpace::Physical)
 	};
+	let comparison = compare::files(
+		&arguments.left,
+		&arguments.right,
+		space,
+		arguments.max_bytes.unwrap_or(DEFAULT_COMPARE_BYTES),
+		|| false,
+	)?;
 	let mut stdout = io::stdout().lock();
 	if arguments.json {
 		serde_json::to_writer(
@@ -72,9 +61,4 @@ pub(super) fn run(arguments: &Arguments, logical: bool) -> CliResult<ExitCode> {
 		ExitCode::from(DIFFERENT_EXIT_CODE)
 	};
 	Ok(code)
-}
-
-fn open_file(path: &Path) -> Result<FileSource, UdifError> {
-	require_regular_file(path)?;
-	FileSource::new(File::open(path)?)
 }
