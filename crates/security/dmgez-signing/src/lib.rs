@@ -7,6 +7,7 @@ mod assessment;
 mod native;
 #[cfg(feature = "notarization-native")]
 pub mod notarization;
+pub mod release_plan;
 mod report;
 mod signature;
 mod signing;

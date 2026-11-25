@@ -5,7 +5,10 @@ use std::{fmt, path::Path, str::FromStr};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use crate::ResolvedBackend;
+use crate::{ResolvedBackend, release_plan::valid_submission_id};
+
+#[cfg(target_os = "macos")]
+pub(crate) use crate::release_plan::valid_digest;
 
 #[cfg(target_os = "macos")]
 mod flow;
@@ -20,8 +23,6 @@ pub use staple::{StapleReport, staple};
 
 #[cfg(target_os = "macos")]
 const REPORT_VERSION: u16 = 1;
-const UUID_LENGTH: usize = 36;
-const UUID_SEPARATORS: [usize; 4] = [8, 13, 18, 23];
 
 /// Validated UUID assigned by the Apple notary service.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -32,14 +33,7 @@ impl FromStr for Id {
 	type Err = Error;
 
 	fn from_str(value: &str) -> Result<Self, Error> {
-		if value.len() != UUID_LENGTH
-			|| !value.bytes().enumerate().all(|(index, byte)| {
-				if UUID_SEPARATORS.contains(&index) {
-					byte == b'-'
-				} else {
-					byte.is_ascii_hexdigit()
-				}
-			}) {
+		if !valid_submission_id(value) {
 			return Err(Error::InvalidId);
 		}
 		Ok(Self(value.to_ascii_lowercase()))
@@ -179,12 +173,6 @@ impl Report {
 			&& self.digest_verified == self.status.terminal()
 			&& self.log.is_some() == self.status.terminal()
 	}
-}
-
-#[cfg(target_os = "macos")]
-pub(crate) fn valid_digest(value: &str) -> bool {
-	const SHA256_HEX_LENGTH: usize = 64;
-	value.len() == SHA256_HEX_LENGTH && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 #[cfg(target_os = "macos")]
