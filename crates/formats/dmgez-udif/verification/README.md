@@ -1,6 +1,12 @@
 # UDIF verification
 
-The checked-range Kani harness covers the arithmetic portion of D-V01. It calls the production range check with arbitrary `u64` offsets, lengths, and limits. A `u128` reference checks admission and both range endpoints. Binary-layout checks and native evidence for D-V01 remain tracked in the repository obligation registry.
+The checked-range Kani harness covers offset and length arithmetic for D-V01. It calls the production range check with arbitrary `u64` offsets, lengths, and limits. A `u128` reference checks admission and both range endpoints.
+
+The [binary geometry tests](binary_geometry.rs) check fixed-width fields using a bytewise oracle on windows up to 64 bytes. They compare the block-map size calculation with widened arithmetic and exhaust all combinations of count and budget up to eight records and input lengths through one byte beyond a complete eight-record table. For the trailer, they vary the physical ranges and sector count in an exact 512-byte footer from the native UDRO fixture. The `u128` oracle checks the profile's range ordering, endpoint bounds and sector conversion. An explicit witness places a two-byte data range at `u64::MAX` so unchecked addition would place its end inside the image body.
+
+Run these properties with `PROPTEST_CASES=4096 cargo test --locked -p dmgez-udif --all-features --lib geometry_properties`. The property tests exercise the production decoders and leave the remaining Kani coverage for binary layouts open in D-V01.
+
+Two isolated mutations confirmed test sensitivity. Replacing the physical endpoint's checked addition with wrapping addition failed the trailer witness. Rejecting a record count equal to the budget failed the one-record case at the exact encoded length.
 
 The D-V02 Kani harnesses call the production `TableAdmission` transitions from `normalize` and the production `order_runs` index builder. Table admission covers up to eight records plus the terminator, up to 16 logical sectors, and the classic UDRO/UDZO run types. The proof checks exact logical and physical windows, one run per admitted sector, original record order, exclusion of comments, and preservation of the distinct zero and ignore kinds. The multi-record check uses `u16` record offsets and stored lengths with a full-width data window and table base. A separate compressed-run harness checks an arbitrary full-width physical origin, end, base, offset, and length against a `u128` oracle. Both assume the ordered data-fork endpoints established by trailer admission. The terminator harness varies all fields of a terminal record on a one-sector table.
 

@@ -1,6 +1,10 @@
 #[cfg(feature = "read")]
 use crate::Error;
 
+#[cfg(all(test, feature = "read"))]
+#[path = "../verification/binary_geometry.rs"]
+mod geometry_properties;
+
 #[cfg(feature = "read")]
 pub(crate) fn field<const N: usize>(bytes: &[u8], offset: usize) -> Result<[u8; N], Error> {
 	bytes
