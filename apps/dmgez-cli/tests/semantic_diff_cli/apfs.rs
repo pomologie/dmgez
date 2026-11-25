@@ -14,7 +14,7 @@ use super::{
 		NATIVE_BLOCK_BYTES, NATIVE_VOLUME_BYTES, SPARSE_FIXTURE, materialize,
 	},
 	native_apfs_mutations::{advertise_incomplete_checkpoint, edit_object, replace_field},
-	report, semantic_diff,
+	report, semantic_command, semantic_diff,
 };
 
 const APFS: &str = "apfs";
@@ -24,10 +24,10 @@ const DATA_BLOCK: u64 = 201;
 const RESOURCE_BLOCK: u64 = 204;
 const DATA_PATTERN: &[u8] = b"APFS shared data fork\n";
 const RESOURCE_PATTERN: &[u8] = b"APFS shared resource fork\n";
+const RESOURCE_FIELD: &str = "resource_fork";
+const RESOURCE_ATTRIBUTE: &str = "com.apple.ResourceFork";
 const MARKER: &str = "com.pomologie.marker";
-const MARKER_RENAMED: &str = "com.pomologie.markez";
-const MARKER_BYTES: &[u8; 21] = b"com.pomologie.marker\0";
-const MARKER_RENAMED_BYTES: &[u8; 21] = b"com.pomologie.markez\0";
+const MARKER_RENAMED: &str = "com.pomologie.marke\x1b";
 
 #[test]
 fn same_native_volume_compares_equal_across_disk_layouts() {
@@ -121,7 +121,7 @@ fn distinguishes_one_changed_fork_on_each_shared_alias() {
 	materialize(&left, HARD_LINK_FIXTURE, &[]);
 	for (block, original, field) in [
 		(DATA_BLOCK, DATA_PATTERN, "data_fork"),
-		(RESOURCE_BLOCK, RESOURCE_PATTERN, "resource_fork"),
+		(RESOURCE_BLOCK, RESOURCE_PATTERN, RESOURCE_FIELD),
 	] {
 		let right = root.path().join(field).with_extension("raw");
 		materialize(&right, HARD_LINK_FIXTURE, &[]);
@@ -144,7 +144,7 @@ fn distinguishes_one_changed_fork_on_each_shared_alias() {
 				"missing {path}: {baseline:#}",
 			);
 		}
-		if field == "resource_fork" {
+		if field == RESOURCE_FIELD {
 			let with_attributes = report(
 				&semantic_diff(&left, &right, APFS, RAW_WITH_XATTRS),
 				DIFFERENT,
@@ -154,7 +154,7 @@ fn distinguishes_one_changed_fork_on_each_shared_alias() {
 				with_attributes["policy"]["xattrs"]["excluded_names"]
 					.as_array()
 					.unwrap()
-					.contains(&json!("com.apple.ResourceFork"))
+					.contains(&json!(RESOURCE_ATTRIBUTE))
 			);
 		}
 	}
@@ -167,8 +167,8 @@ fn compares_a_shared_inode_attribute_without_reporting_its_values() {
 	let root = tempfile::tempdir().unwrap();
 	let left = root.path().join("left.raw");
 	let right = root.path().join("right.raw");
-	shared_marker_image(&left, MARKER_BYTES, OLD_VALUE);
-	shared_marker_image(&right, MARKER_BYTES, NEW_VALUE);
+	shared_marker_image(&left, MARKER, OLD_VALUE);
+	shared_marker_image(&right, MARKER, NEW_VALUE);
 
 	let baseline = report(&semantic_diff(&left, &right, APFS, BOTH_RAW), EQUAL);
 	assert_eq!(baseline["changes"], json!([]));
@@ -201,26 +201,32 @@ fn compares_a_shared_inode_attribute_without_reporting_its_values() {
 }
 
 #[test]
-fn reports_present_empty_attributes_when_the_exact_name_changes() {
+fn reports_exact_empty_attribute_names_and_escapes_terminal_controls() {
 	let root = tempfile::tempdir().unwrap();
 	let left = root.path().join("left.raw");
 	let right = root.path().join("right.raw");
-	shared_marker_image(&left, MARKER_BYTES, b"");
-	shared_marker_image(&right, MARKER_RENAMED_BYTES, b"");
+	shared_marker_image(&left, MARKER, b"");
+	shared_marker_image(&right, MARKER_RENAMED, b"");
 
 	let equal = report(&semantic_diff(&left, &left, APFS, RAW_WITH_XATTRS), EQUAL);
 	assert_eq!(equal["changes"], json!([]));
-	let changed = report(
-		&semantic_diff(&left, &right, APFS, RAW_WITH_XATTRS),
-		DIFFERENT,
-	);
+	let output = semantic_diff(&left, &right, APFS, RAW_WITH_XATTRS);
+	assert!(!output.stdout.contains(&0x1b));
+	let changed = report(&output, DIFFERENT);
 	assert_shared_marker_changes(
 		&changed,
 		json!([
-			{ "name": MARKER, "kind": "removed" },
-			{ "name": MARKER_RENAMED, "kind": "added" }
+			{ "name": MARKER_RENAMED, "kind": "added" },
+			{ "name": MARKER, "kind": "removed" }
 		]),
 	);
+	let text = semantic_command(&left, &right, APFS)
+		.args(RAW_WITH_XATTRS)
+		.output()
+		.unwrap();
+	assert_eq!(text.status.code(), Some(DIFFERENT), "{text:?}");
+	assert!(!text.stdout.contains(&0x1b));
+	assert!(String::from_utf8(text.stdout).unwrap().contains(r"\u001b"));
 }
 
 fn assert_shared_marker_changes(actual: &serde_json::Value, attributes: serde_json::Value) {
@@ -250,14 +256,14 @@ fn assert_shared_marker_changes(actual: &serde_json::Value, attributes: serde_js
 	);
 }
 
-fn shared_marker_image(image: &Path, name: &[u8; 21], value: &[u8]) {
+fn shared_marker_image(image: &Path, name: &str, value: &[u8]) {
 	const FSROOT_BLOCK: u64 = 206;
 	const KEY_NAME_AT: usize = 499;
 	const VALUE_AT: usize = 3491;
 	const SLOT_VALUE_LENGTH_AT: usize = 166;
 	const INLINE_HEADER_BYTES: usize = 2 * size_of::<u16>();
 	const ORIGINAL_VALUE_BYTES: usize = 11;
-	const PROVENANCE: [u8; 21] = *b"com.apple.provenance\0";
+	const PROVENANCE: [u8; 20] = *b"com.apple.provenance";
 	const INLINE: u16 = 2;
 
 	assert!(value.is_empty() || value.len() == ORIGINAL_VALUE_BYTES);
@@ -265,7 +271,13 @@ fn shared_marker_image(image: &Path, name: &[u8; 21], value: &[u8]) {
 	edit_object(image, FSROOT_BLOCK, |block| {
 		// The three hard links share this inode and its single inline record.
 		// Both replacement names preserve its field width and key ordering.
-		replace_field(block, KEY_NAME_AT, PROVENANCE, *name);
+		replace_field(
+			block,
+			KEY_NAME_AT,
+			PROVENANCE,
+			name.as_bytes().try_into().unwrap(),
+		);
+		assert_eq!(block[KEY_NAME_AT + PROVENANCE.len()], 0);
 		assert_eq!(block[VALUE_AT..][..size_of::<u16>()], INLINE.to_le_bytes());
 		let old_length = u16::try_from(ORIGINAL_VALUE_BYTES).unwrap();
 		let new_length = u16::try_from(value.len()).unwrap();

@@ -28,14 +28,22 @@ mod native_apfs_mutations;
 mod native_hfsplus;
 
 fn semantic_diff(left: &Path, right: &Path, filesystem: &str, options: &[&str]) -> Output {
-	Command::new(BINARY)
-		.arg("diff")
-		.arg(left)
-		.arg(right)
-		.args(["--mode", "semantic", "--filesystem", filesystem, "--json"])
+	semantic_command(left, right, filesystem)
+		.arg("--json")
 		.args(options)
 		.output()
 		.unwrap()
+}
+
+fn semantic_command(left: &Path, right: &Path, filesystem: &str) -> Command {
+	let mut command = Command::new(BINARY);
+	command.arg("diff").arg(left).arg(right).args([
+		"--mode",
+		"semantic",
+		"--filesystem",
+		filesystem,
+	]);
+	command
 }
 
 #[cfg(all(feature = "diff", any(feature = "hfsplus-read", feature = "apfs-read")))]

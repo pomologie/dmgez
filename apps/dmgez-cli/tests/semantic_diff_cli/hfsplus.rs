@@ -32,17 +32,18 @@ fn native_hfsx_distinguishes_the_two_case_sensitive_file_names() {
 	let mut bytes = materialize_sparse(&hfsplus_fixture(HFSX_FIXTURE), HFSX_VOLUME_BYTES);
 	fs::write(&left, &bytes).unwrap();
 
-	let output = semantic_diff(&left, &left, HFSPLUS, BOTH_RAW);
+	let output = semantic_diff(&left, &left, HFSPLUS, RAW_WITH_XATTRS);
 	let equal = report(&output, EQUAL);
 	assert_eq!(equal["outcome"], "equal", "{equal:#}");
 	assert_eq!(equal["left"]["hfs_signature"], "hfsx");
 	assert_eq!(equal["right"]["hfs_signature"], "hfsx");
+	assert!(equal["policy"]["xattrs"].is_object());
 
 	let fork = &mut bytes[UPPERCASE_FILE_OFFSET..][..UPPERCASE_FILE_DATA.len()];
 	assert_eq!(fork, UPPERCASE_FILE_DATA);
 	fork[0] ^= 1;
 	fs::write(&right, bytes).unwrap();
-	let output = semantic_diff(&left, &right, HFSPLUS, BOTH_RAW);
+	let output = semantic_diff(&left, &right, HFSPLUS, RAW_WITH_XATTRS);
 	let changed = report(&output, DIFFERENT);
 	assert_eq!(
 		changed["changes"],
