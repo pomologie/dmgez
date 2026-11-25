@@ -10,6 +10,6 @@ mod verification;
 #[cfg(feature = "verify")]
 pub use error::{CheckError, CheckFailureKind};
 #[cfg(feature = "verify")]
-pub use hfsplus_reader::check::StructuralReport;
+pub use hfsplus_reader::check::{ReachableDataReport, StructuralReport};
 #[cfg(feature = "verify")]
-pub use verification::check;
+pub use verification::{check, check_reachable_data};

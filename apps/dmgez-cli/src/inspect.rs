@@ -53,6 +53,7 @@ const CHECKPOINT_XID_KEY: &str = "checkpoint_xid";
 const CHECKPOINT_REJECTED_DESCRIPTORS_KEY: &str = "checkpoint_rejected_descriptors";
 const ADVERTISED_CHECKPOINT_XID_KEY: &str = "advertised_checkpoint_xid";
 const LOGICAL_PAYLOAD_BYTES_READ_KEY: &str = "logical_payload_bytes_read";
+const STORED_PAYLOAD_BYTES_READ_KEY: &str = "stored_payload_bytes_read";
 const UDIF_V4: &str = "UDIF v4";
 const CRC32: &str = "crc32";
 const UNKNOWN: &str = "unknown";
@@ -232,10 +233,7 @@ pub(super) fn verify(arguments: &verify_command::Arguments, mode: VerificationMo
 	}
 
 	let (report, filesystem_cause) = match arguments.selection.filesystem() {
-		Filesystem::Hfsplus => (
-			verify_hfsplus(open_source(&arguments.image)?, mode, arguments.partition),
-			None,
-		),
+		Filesystem::Hfsplus => verify_hfsplus(arguments, mode)?,
 		#[cfg(feature = "apfs-read")]
 		Filesystem::Apfs => apfs::verify(arguments)?,
 		#[cfg(not(feature = "apfs-read"))]
@@ -273,19 +271,21 @@ pub(super) fn verify(arguments: &verify_command::Arguments, mode: VerificationMo
 }
 
 fn verify_hfsplus(
-	source: FileSource,
+	arguments: &verify_command::Arguments,
 	mode: VerificationMode,
-	partition: Option<NonZeroU32>,
-) -> VerificationReport {
+) -> CliResult<(VerificationReport, Option<Box<dyn Error>>)> {
+	let source = open_source(&arguments.image)?;
 	#[cfg(feature = "hfsplus-verify")]
 	if mode == VerificationMode::Full {
-		return hfsplus::verify(source, partition);
+		return Ok(hfsplus::verify(
+			source,
+			arguments.partition,
+			arguments.max_payload_bytes(),
+		));
 	}
-	#[cfg(not(feature = "hfsplus-verify"))]
-	let _ = partition;
 	let mut report = dmgez_inspector::verify(source, Limits::default(), mode);
 	report.capabilities.filesystem = cfg!(feature = "hfsplus-verify");
-	report
+	Ok((report, None))
 }
 
 fn show_filesystem_coverage(report: &VerificationReport) {
@@ -308,6 +308,9 @@ fn show_filesystem_coverage(report: &VerificationReport) {
 	}
 	if let Some(bytes) = evidence.logical_payload_bytes_read {
 		report_field(LOGICAL_PAYLOAD_BYTES_READ_KEY, bytes);
+	}
+	if let Some(bytes) = evidence.stored_payload_bytes_read {
+		report_field(STORED_PAYLOAD_BYTES_READ_KEY, bytes);
 	}
 	if let Some(checkpoints) = evidence.checkpoint_diagnostics {
 		report_field(

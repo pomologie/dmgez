@@ -43,7 +43,7 @@ fn full_verification_reports_native_apm_scope_or_unavailable_backend() {
 	let text = String::from_utf8(text.stdout).unwrap();
 	assert_eq!(
 		text.lines()
-			.any(|line| line == "filesystem_scope = reachable_structure"),
+			.any(|line| line == "filesystem_scope = reachable_stored_data"),
 		cfg!(feature = "hfsplus-verify")
 	);
 
@@ -81,10 +81,13 @@ fn full_verification_reports_native_apm_scope_or_unavailable_backend() {
 fn assert_reachable(report: &Value) -> &Value {
 	assert_eq!(report["coverage"]["filesystem"], "partial", "{report:#}");
 	let check = &report["filesystem_check"];
-	assert_eq!(check["evidence"]["scope"], "reachable_structure");
+	let evidence = &check["evidence"];
+	assert_eq!(evidence["scope"], "reachable_stored_data");
+	let stored = decimal(&evidence["stored_payload_bytes_read"]);
+	assert!(evidence.get("logical_payload_bytes_read").is_none());
 	assert_eq!(check["all_filesystems_checked"], false);
 	assert!(decimal(&check["charged_read_requests"]) > 0);
-	assert!(decimal(&check["charged_read_bytes"]) > 0);
+	assert!(decimal(&check["charged_read_bytes"]) > stored);
 	check
 }
 
@@ -93,10 +96,15 @@ fn decimal(value: &Value) -> u64 {
 }
 
 fn verify(image: &Path, mode: &str, success: bool) -> Value {
+	verify_with(image, mode, &[], success)
+}
+
+fn verify_with(image: &Path, mode: &str, options: &[&str], success: bool) -> Value {
 	let output = Command::new(env!("CARGO_BIN_EXE_dmgez"))
 		.arg("verify")
 		.arg(image)
 		.args([mode, "--json"])
+		.args(options)
 		.output()
 		.unwrap();
 	assert_status(&output, success);
@@ -122,7 +130,7 @@ const CASE_FOLDED_PROVENANCE: &str = "native-hfsx-case-folded.json";
 
 #[cfg(all(feature = "build", feature = "hfsplus-verify"))]
 #[test]
-fn checks_reachable_structure_on_native_hfs_plus_and_hfsx() {
+fn checks_reachable_stored_data_on_native_hfs_plus_and_hfsx() {
 	let directory = tempfile::tempdir().unwrap();
 	let catalog = fixture(HFS_CATALOG_FIXTURE);
 	let case_folded = materialize_case_folded_hfsx(&catalog);
@@ -143,6 +151,31 @@ fn checks_reachable_structure_on_native_hfs_plus_and_hfsx() {
 			volume.len() as u64
 		);
 	}
+}
+
+#[cfg(all(feature = "build", feature = "hfsplus-verify"))]
+#[test]
+fn stored_payload_reads_honor_the_exact_byte_budget() {
+	const MAX_PAYLOAD_BYTES: &str = "--max-payload-bytes";
+	let directory = tempfile::tempdir().unwrap();
+	let image = wrap(directory.path(), "budget", &fixture(HFS_CATALOG_FIXTURE));
+	let report = verify(&image, "--full", false);
+	let stored = decimal(&assert_reachable(&report)["evidence"]["stored_payload_bytes_read"]);
+	assert!(stored > 1);
+	let exact = stored.to_string();
+	let at_limit = verify_with(&image, "--full", &[MAX_PAYLOAD_BYTES, &exact], false);
+	assert_eq!(
+		assert_reachable(&at_limit)["evidence"]["stored_payload_bytes_read"],
+		exact,
+	);
+
+	let below = (stored - 1).to_string();
+	let failure = verify_with(&image, "--full", &[MAX_PAYLOAD_BYTES, &below], false);
+	assert_eq!(failure["outcome"], "partial");
+	assert_eq!(failure["coverage"]["payload"], "passed");
+	assert_eq!(failure["diagnostic"]["stage"], "filesystem");
+	assert_eq!(failure["diagnostic"]["category"], "resource_limit");
+	assert!(failure["filesystem_check"].get("evidence").is_none());
 }
 
 #[cfg(all(feature = "build", feature = "hfsplus-verify"))]

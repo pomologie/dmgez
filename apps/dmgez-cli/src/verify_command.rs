@@ -19,7 +19,7 @@ use crate::{
 const FULL_ARG: &str = "full";
 const PAYLOAD_BYTES_OPTION: &str = "max-payload-bytes";
 #[cfg(feature = "inspect")]
-const MAX_APFS_PAYLOAD_BYTES: u64 = 1 << 30;
+const MAX_FILESYSTEM_PAYLOAD_BYTES: u64 = 1 << 30;
 
 #[derive(Args)]
 pub(super) struct Arguments {
@@ -37,7 +37,7 @@ pub(super) struct Arguments {
 	/// Select a one-based partition slot for filesystem verification.
 	#[arg(long, requires = FULL_ARG, value_name = PARTITION_SLOT_VALUE_NAME)]
 	pub(super) partition: Option<NonZeroU32>,
-	/// Limit logical APFS payload reads to this many bytes, up to 1 GiB.
+	/// Limit HFS+ stored or APFS logical payload reads to this many bytes, up to 1 GiB.
 	#[arg(long = PAYLOAD_BYTES_OPTION, requires = FULL_ARG)]
 	max_payload_bytes: Option<NonZeroU64>,
 }
@@ -56,11 +56,11 @@ struct Scope {
 	full: bool,
 }
 
-#[cfg(feature = "apfs-read")]
+#[cfg(any(feature = "apfs-read", feature = "hfsplus-verify"))]
 impl Arguments {
 	pub(super) fn max_payload_bytes(&self) -> u64 {
 		self.max_payload_bytes
-			.map_or(MAX_APFS_PAYLOAD_BYTES, NonZeroU64::get)
+			.map_or(MAX_FILESYSTEM_PAYLOAD_BYTES, NonZeroU64::get)
 	}
 }
 
@@ -77,20 +77,18 @@ pub(super) fn run(arguments: &Arguments) -> CliResult {
 		return Err(invalid(format!("filesystem selection requires --{FULL_ARG}")).into());
 	}
 	arguments.selection.validate()?;
-	if (arguments.raw || arguments.max_payload_bytes.is_some())
-		&& matches!(arguments.selection.filesystem(), Filesystem::Hfsplus)
-	{
+	if arguments.raw && matches!(arguments.selection.filesystem(), Filesystem::Hfsplus) {
 		return Err(invalid(format!(
-			"--raw and --{PAYLOAD_BYTES_OPTION} require --{FILESYSTEM_OPTION} {APFS_FILESYSTEM_VALUE}"
+			"--raw requires --{FILESYSTEM_OPTION} {APFS_FILESYSTEM_VALUE}"
 		))
 		.into());
 	}
 	if arguments
 		.max_payload_bytes
-		.is_some_and(|bytes| bytes.get() > MAX_APFS_PAYLOAD_BYTES)
+		.is_some_and(|bytes| bytes.get() > MAX_FILESYSTEM_PAYLOAD_BYTES)
 	{
 		return Err(invalid(format!(
-			"--{PAYLOAD_BYTES_OPTION} must be at most {MAX_APFS_PAYLOAD_BYTES}"
+			"--{PAYLOAD_BYTES_OPTION} must be at most {MAX_FILESYSTEM_PAYLOAD_BYTES}"
 		))
 		.into());
 	}

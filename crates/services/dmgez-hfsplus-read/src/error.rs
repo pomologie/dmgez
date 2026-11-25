@@ -17,6 +17,8 @@ pub enum CheckError<E> {
 	Open(#[source] VolumeError<E>),
 	#[error("could not verify HFS-family structure")]
 	Structure(#[source] StructureError<E>),
+	#[error("could not verify HFS-family reachable data")]
+	ReachableData(#[source] StructureError<E>),
 }
 
 /// Category for verification reports that represent engine errors uniformly.
@@ -36,7 +38,7 @@ impl<E> CheckError<E> {
 	pub fn kind(&self) -> CheckFailureKind {
 		match self {
 			Self::Open(error) => volume_error(error),
-			Self::Structure(error) => match error {
+			Self::Structure(error) | Self::ReachableData(error) => match error {
 				StructureError::Allocation(error) => match error {
 					AllocationError::Read(error) => volume_error(error),
 					AllocationError::Fork { error, .. } => overflow_error(error),
@@ -68,6 +70,7 @@ impl<E> CheckError<E> {
 					_ => Corrupt,
 				},
 				StructureError::Fork { error, .. } => overflow_error(error),
+				StructureError::PayloadRead { error, .. } => volume_error(error),
 				StructureError::Limit(_) | StructureError::Memory(_) => ResourceLimit,
 				_ => Corrupt,
 			},

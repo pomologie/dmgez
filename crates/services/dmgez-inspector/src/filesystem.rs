@@ -186,6 +186,8 @@ pub enum FilesystemScope {
 	ReachableStructure,
 	/// Reachable structure and logical payload reads completed.
 	ReachableData,
+	/// Reachable structure and stored payload reads completed.
+	ReachableStoredData,
 	/// Volume structure was checked. File payloads and other full checks may be absent.
 	VolumeStructure,
 	/// All required filesystem checks passed within the reported scope.
@@ -199,6 +201,7 @@ impl FilesystemScope {
 		match self {
 			Self::ReachableStructure => "reachable_structure",
 			Self::ReachableData => "reachable_data",
+			Self::ReachableStoredData => "reachable_stored_data",
 			Self::VolumeStructure => "volume_structure",
 			Self::FullVolume => "full_volume",
 		}
@@ -269,6 +272,12 @@ pub struct FilesystemEvidence {
 		serialize_with = "crate::schema::optional_decimal"
 	)]
 	pub logical_payload_bytes_read: Option<u64>,
+	/// Stored fork bytes inspected by the checker, excluding allocation slack.
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		serialize_with = "crate::schema::optional_decimal"
+	)]
+	pub stored_payload_bytes_read: Option<u64>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub checkpoint_diagnostics: Option<FilesystemCheckpointDiagnostics>,
 }
@@ -283,7 +292,17 @@ impl FilesystemEvidence {
 			checkpoint_xid: None,
 			volume_uuid: None,
 			logical_payload_bytes_read: None,
+			stored_payload_bytes_read: None,
 			checkpoint_diagnostics: None,
+		}
+	}
+
+	/// Covers reachable structure and stored fork reads in the selected window.
+	#[must_use]
+	pub const fn stored_window(bytes_read: u64) -> Self {
+		Self {
+			stored_payload_bytes_read: Some(bytes_read),
+			..Self::window(FilesystemScope::ReachableStoredData)
 		}
 	}
 
@@ -306,12 +325,11 @@ impl FilesystemEvidence {
 		logical_payload_bytes_read: Option<u64>,
 	) -> Self {
 		Self {
-			scope,
 			volume_object_id: Some(id),
 			checkpoint_xid: Some(checkpoint_xid),
 			volume_uuid: Some(volume_uuid),
 			logical_payload_bytes_read,
-			checkpoint_diagnostics: None,
+			..Self::window(scope)
 		}
 	}
 
