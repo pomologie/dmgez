@@ -17,10 +17,11 @@ impl<'build> HfsImage<'build> {
 		progress: impl Fn(BuildProgress),
 	) -> Result<StagedRelease<'build>, Error> {
 		let output = self.prepared.output_path().ok_or(Error::OutputPath)?;
+		let envelope = self.envelope()?;
 		let build = BuildPlan::new(
 			self.prepared.profile(),
 			self.prepared.manifest(),
-			self.image.reader(),
+			envelope.reader(self.image.reader()),
 			self.logical_bytes(),
 		)?;
 		Ok(build.stage_release(output, verifier, progress)?)

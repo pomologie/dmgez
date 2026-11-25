@@ -8,6 +8,8 @@ use dmgez_config::{
 use dmgez_udif::writer::{Execution, Profile, WriteOptions};
 use thiserror::Error;
 
+use crate::partition::Layout;
+
 mod capabilities;
 mod finder;
 mod profile;
@@ -137,6 +139,13 @@ pub enum PreflightError {
 	Format(ImageFormat),
 	#[error("unsupported partition layout: {0:?}")]
 	Partition(Partition),
+	#[error("partition layout {partition:?} requires UDRO or UDZO, received {format:?}")]
+	PartitionFormat {
+		partition: Partition,
+		format: ImageFormat,
+	},
+	#[error("logical disk size is outside the supported partition geometry")]
+	PartitionGeometry,
 	#[error("volume label requires an unsupported name profile")]
 	VolumeLabel,
 	#[error("content entry {index} requires an unsupported name profile")]
@@ -205,9 +214,7 @@ pub fn preflight(
 		return Err(PreflightError::Filesystem(project.image.filesystem));
 	}
 	let filesystem = filesystem_profile(capabilities)?;
-	if project.image.partition != Partition::None {
-		return Err(PreflightError::Partition(project.image.partition));
-	}
+	let partition = partition_layout(project.image.partition, project.image.format)?;
 	let profile = match project.image.format {
 		ImageFormat::Udro | ImageFormat::Udrw => Profile::Udro,
 		ImageFormat::Udzo => Profile::Udzo,
@@ -262,10 +269,18 @@ pub fn preflight(
 	}
 
 	let limits = limits(project)?;
-	let writer = writer_options(project, profile, limits, options.host_threads, cache)?;
+	let writer = writer_options(
+		project,
+		profile,
+		limits,
+		options.host_threads,
+		cache,
+		partition,
+	)?;
 	let result = ExecutionProfile {
 		filesystem,
 		format: project.image.format,
+		partition,
 		capacity: project.image.capacity(),
 		free_space_bytes: project.image.free_space.get(),
 		output,
@@ -280,10 +295,32 @@ pub fn preflight(
 		fail_on_metadata_loss: project.build.fail_on_metadata_loss(&project.metadata),
 		writer,
 	};
-	if let Capacity::Exact(bytes) = result.capacity {
-		result.validate_logical_bytes(bytes.get())?;
+	match result.capacity {
+		Capacity::Exact(bytes) => result.validate_logical_bytes(bytes.get())?,
+		Capacity::ShrinkWithin(bytes) if bytes.get() <= partition.overhead_bytes() => {
+			return Err(PreflightError::PartitionGeometry);
+		}
+		_ => {}
 	}
 	Ok(result)
+}
+
+fn partition_layout(partition: Partition, format: ImageFormat) -> Result<Layout, PreflightError> {
+	let layout = match partition {
+		Partition::None => return Ok(Layout::Partitionless),
+		Partition::Apm => Layout::Apm,
+		Partition::Gpt => Layout::Gpt,
+		_ => return Err(PreflightError::Partition(partition)),
+	};
+	if !cfg!(feature = "partition-write") {
+		return Err(PreflightError::FeatureNotCompiled(
+			BuildFeature::PartitionWrite,
+		));
+	}
+	if !matches!(format, ImageFormat::Udro | ImageFormat::Udzo) {
+		return Err(PreflightError::PartitionFormat { partition, format });
+	}
+	Ok(layout)
 }
 
 fn filesystem_profile(
@@ -417,6 +454,7 @@ fn writer_options(
 	limits: ResourceLimits,
 	host_threads: NonZeroUsize,
 	cache: Option<&CompressionCache>,
+	partition: Layout,
 ) -> Result<WriteOptions, PreflightError> {
 	if project.image.format == ImageFormat::Udrw {
 		return Ok(udrw::writer_options(limits));
@@ -439,7 +477,9 @@ fn writer_options(
 	let mut writer = WriteOptions {
 		profile,
 		execution,
-		max_buffer_bytes: limits.memory_bytes - limits.max_metadata_bytes,
+		max_buffer_bytes: (limits.memory_bytes - limits.max_metadata_bytes)
+			.checked_sub(partition.work_bytes())
+			.ok_or(PreflightError::ResourceLimit(Resource::Memory))?,
 		..WriteOptions::default()
 	};
 	if let Some(chunk) = project.compression.block_size {

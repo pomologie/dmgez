@@ -25,6 +25,8 @@ pub enum Error {
 	#[error(transparent)]
 	Profile(#[from] PreflightError),
 	#[error(transparent)]
+	Partition(#[from] dmgez_builder::partition::Error),
+	#[error(transparent)]
 	Execute(#[from] ExecuteError),
 	#[cfg(feature = "finder-write")]
 	#[error(transparent)]

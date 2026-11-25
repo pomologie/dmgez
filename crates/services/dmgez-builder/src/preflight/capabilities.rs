@@ -58,6 +58,8 @@ pub enum BuildFeature {
 	Lzfse,
 	#[error("LZMA2 encoding")]
 	Lzma,
+	#[error("partitioned image writing (partition-write)")]
+	PartitionWrite,
 	#[error("parallel encoding")]
 	Parallel,
 	#[error("compression cache (compression-cache)")]

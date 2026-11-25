@@ -3,9 +3,11 @@ use std::{io::Write, mem::size_of, path::Path};
 use dmgez_builder::{
 	execution::{BuildPlan, BuildReport, OutputVerifier},
 	metadata::{Attribute, policy},
+	partition::Envelope,
 	planning::{self, PreparedBuild},
 	preflight::{
-		Availability, BuildCapabilities, ExecutionProfile, FilesystemProfile, PreflightOptions,
+		Availability, BuildCapabilities, ExecutionProfile, FilesystemProfile, PreflightError,
+		PreflightOptions,
 	},
 	progress::BuildProgress,
 };
@@ -63,6 +65,7 @@ pub struct PreparedHfsBuild<'project> {
 pub struct HfsImage<'build> {
 	prepared: &'build PreparedBuild,
 	image: SealedPlan<Payload<'build>>,
+	logical_bytes: u64,
 	metadata_losses: Vec<MetadataLoss<'build>>,
 }
 
@@ -149,10 +152,10 @@ impl PreparedHfsBuild<'_> {
 }
 
 impl<'build> HfsImage<'build> {
-	/// Exact raw volume length, independent of final compression.
+	/// Exact logical disk length, including any partition map and alignment padding.
 	#[must_use]
-	pub fn logical_bytes(&self) -> u64 {
-		self.image.image_len().0
+	pub const fn logical_bytes(&self) -> u64 {
+		self.logical_bytes
 	}
 
 	#[must_use]
@@ -181,8 +184,12 @@ impl<'build> HfsImage<'build> {
 		progress: impl Fn(BuildProgress),
 	) -> Result<HfsBuildReport<'build>, Error> {
 		let output = self.prepared.output_path().ok_or(Error::OutputPath)?;
-		let build =
-			BuildPlan::from_prepared(self.prepared, self.image.reader(), self.logical_bytes())?;
+		let envelope = self.envelope()?;
+		let build = BuildPlan::from_prepared(
+			self.prepared,
+			envelope.reader(self.image.reader()),
+			self.logical_bytes(),
+		)?;
 		let report = build.publish_with_progress(output, verifier, progress)?;
 		Ok(HfsBuildReport {
 			report,
@@ -195,13 +202,27 @@ impl<'build> HfsImage<'build> {
 	/// # Errors
 	/// Fails on invalid output intent, source mutation, cancellation, or I/O.
 	pub fn write_to(self, sink: impl Write) -> Result<HfsBuildReport<'build>, Error> {
-		let build =
-			BuildPlan::from_prepared(self.prepared, self.image.reader(), self.logical_bytes())?;
+		let envelope = self.envelope()?;
+		let build = BuildPlan::from_prepared(
+			self.prepared,
+			envelope.reader(self.image.reader()),
+			self.logical_bytes(),
+		)?;
 		let report = build.write_to(sink)?;
 		Ok(HfsBuildReport {
 			report,
 			metadata_losses: self.metadata_losses,
 		})
+	}
+
+	fn envelope(&self) -> Result<Envelope, Error> {
+		let profile = self.prepared.profile();
+		Ok(Envelope::from_volume(
+			profile.partition(),
+			self.image.image_len().0,
+			|| self.image.reader(),
+			&profile.write_options().cancellation,
+		)?)
 	}
 }
 
@@ -364,12 +385,17 @@ fn seal<'build>(
 		}
 	}
 	let image = draft.seal_with_capacity(capacity(profile)?)?;
-	profile.validate_logical_bytes(image.image_len().0)?;
+	let logical_bytes = profile
+		.partition()
+		.disk_bytes(image.image_len().0)
+		.ok_or(PreflightError::PartitionGeometry)?;
+	profile.validate_logical_bytes(logical_bytes)?;
 	check_cancelled(cancellation)?;
 	losses.sort_unstable_by(|left, right| left.path.as_str().cmp(right.path.as_str()));
 	Ok(HfsImage {
 		prepared,
 		image,
+		logical_bytes,
 		metadata_losses: losses,
 	})
 }
@@ -377,18 +403,24 @@ fn seal<'build>(
 fn capacity(profile: &ExecutionProfile) -> Result<CapacityPolicy, Error> {
 	let free_space = ByteLen(profile.free_space_bytes());
 	let writer_max = profile.max_logical_bytes();
+	let volume_bound = |disk_bytes: u64| {
+		disk_bytes
+			.checked_sub(profile.partition().overhead_bytes())
+			.map(ByteLen)
+			.ok_or(PreflightError::PartitionGeometry)
+	};
 
 	Ok(match profile.capacity() {
 		Capacity::Auto { .. } => CapacityPolicy::ShrinkWithin {
-			max_bytes: ByteLen(writer_max),
+			max_bytes: volume_bound(writer_max)?,
 			free_space,
 		},
 		Capacity::Exact(bytes) => CapacityPolicy::Exact {
-			bytes: ByteLen(bytes.get()),
+			bytes: volume_bound(bytes.get())?,
 			free_space,
 		},
 		Capacity::ShrinkWithin(bytes) => CapacityPolicy::ShrinkWithin {
-			max_bytes: ByteLen(bytes.get().min(writer_max)),
+			max_bytes: volume_bound(bytes.get().min(writer_max))?,
 			free_space,
 		},
 		_ => return Err(Error::UnsupportedProfile),

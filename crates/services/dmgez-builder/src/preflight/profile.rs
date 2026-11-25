@@ -7,6 +7,7 @@ use dmgez_udif::{
 };
 
 use super::{FilesystemProfile, FinderPlan, OutputPlan, PreflightError, ReleasePlan, Resource};
+use crate::partition::Layout;
 
 /// Effective per-build working limits. Byte limits specify owned allocations,
 /// not a process RSS guarantee.
@@ -25,6 +26,7 @@ pub struct ResourceLimits {
 pub struct ExecutionProfile {
 	pub(super) filesystem: FilesystemProfile,
 	pub(super) format: ImageFormat,
+	pub(super) partition: Layout,
 	pub(super) capacity: Capacity,
 	pub(super) free_space_bytes: u64,
 	pub(super) output: OutputPlan,
@@ -50,6 +52,12 @@ impl ExecutionProfile {
 	#[must_use]
 	pub const fn format(&self) -> ImageFormat {
 		self.format
+	}
+
+	/// The partition layout selected for the entire logical disk.
+	#[must_use]
+	pub const fn partition(&self) -> Layout {
+		self.partition
 	}
 
 	#[must_use]
@@ -141,7 +149,7 @@ impl ExecutionProfile {
 		&self.writer
 	}
 
-	/// Maximum logical length available to the filesystem planner.
+	/// Maximum logical length of the disk, including any partition maps.
 	#[must_use]
 	pub fn max_logical_bytes(&self) -> u64 {
 		if self.format == ImageFormat::Udrw {
@@ -152,14 +160,16 @@ impl ExecutionProfile {
 		}
 		let max_runs = self.limits.max_runs.min(WriteOptions::MAX_DATA_RUNS);
 		let run_bound = (max_runs as u64).saturating_mul(self.writer.chunk_bytes as u64);
-		run_bound.min(self.writer.max_logical_bytes)
+		run_bound
+			.min(self.writer.max_logical_bytes)
+			.min(self.partition.max_disk_bytes())
 	}
 
 	pub(crate) fn set_cancellation(&mut self, cancellation: Cancellation) {
 		self.writer.cancellation = cancellation;
 	}
 
-	/// Checks the logical size selected by the filesystem planner before starting a write.
+	/// Checks the full logical disk size before starting a write.
 	///
 	/// # Errors
 	///
@@ -174,6 +184,14 @@ impl ExecutionProfile {
 				return Err(PreflightError::Capacity);
 			}
 			_ => {}
+		}
+		if self.partition != Layout::Partitionless
+			&& logical_bytes
+				.checked_sub(self.partition.overhead_bytes())
+				.and_then(|bytes| self.partition.disk_bytes(bytes))
+				!= Some(logical_bytes)
+		{
+			return Err(PreflightError::PartitionGeometry);
 		}
 		if self.format == ImageFormat::Udrw {
 			if logical_bytes == 0

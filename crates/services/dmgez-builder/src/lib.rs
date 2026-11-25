@@ -3,6 +3,7 @@
 pub mod execution;
 pub mod manifest;
 pub mod metadata;
+pub mod partition;
 pub mod planning;
 pub mod preflight;
 #[cfg(feature = "finder-write")]

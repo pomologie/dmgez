@@ -29,6 +29,9 @@ lzma = ["dmgez-builder/lzma"]
 compression-cache = ["dmgez-builder/compression-cache"]
 parallel = ["dmgez-builder/parallel"]
 
+# Partitioned disk output
+partition-write = ["dmgez-builder/partition-write"]
+
 [target.'cfg(any(target_os = "linux", target_os = "macos", windows))'.dependencies]
 # Workspace formats
 dmgez-macho = { version = "=0.1.0", path = "../../formats/dmgez-macho", optional = true }

@@ -22,6 +22,9 @@ lzma = ["dmgez-udif/lzma"]
 compression-cache = ["zlib", "dep:dmgez-cache", "dmgez-udif/write-cache"]
 parallel = ["dmgez-udif/parallel"]
 
+# Partitioned disk output
+partition-write = ["dep:gpt", "dep:part-tables", "dep:sha2", "dep:uuid"]
+
 [dependencies]
 # Workspace formats
 dmgez-macho = { workspace = true, optional = true }
@@ -43,6 +46,12 @@ flate2 = { workspace = true, optional = true }
 # Image codecs
 png = { version = "=0.18.1", optional = true }
 tiff = { workspace = true, optional = true }
+
+# Partition maps and identity
+gpt = { workspace = true, optional = true }
+part-tables = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+uuid = { version = "=1.29.3", default-features = false, optional = true }
 
 # Diagnostics
 thiserror.workspace = true
