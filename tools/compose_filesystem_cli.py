@@ -43,6 +43,7 @@ HFSPLUS_PACKAGES = {
 ADAPTER = "dmgez-hfsplus"
 READ_ADAPTER = "dmgez-hfsplus-read"
 READ_FEATURE = "hfsplus-read"
+HFS_ANALYSIS_FEATURE = "hfsplus-analysis"
 VERIFY_FEATURE = "hfsplus-verify"
 EXTRACT_FEATURE = "hfsplus-extract"
 DECMPFS_FEATURE = "hfsplus-decmpfs"
@@ -51,7 +52,7 @@ INSTALLER_TEST_FEATURE = "installer-test"
 DIFF_FEATURE = "diff"
 DIFF_HASH_FEATURE = "diff-hash"
 FINDER_DIFF_FEATURE = "finder-diff"
-READ_PROFILES = (READ_FEATURE, EXTRACT_FEATURE, DECMPFS_FEATURE, INSTALL_FEATURE)
+READ_PROFILES = (READ_FEATURE, HFS_ANALYSIS_FEATURE, EXTRACT_FEATURE, DECMPFS_FEATURE, INSTALL_FEATURE)
 APFS_READER = "apfs-reader"
 APFS_PACKAGES = {
     "apfs-core": "crates/foundation/apfs-core",
@@ -134,6 +135,7 @@ def compose_cli_manifest(manifest, reader, build, apfs):
         dependencies_to_add.extend(("dmgez-builder", ADAPTER))
     if reader:
         additions[READ_FEATURE] = ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse"]
+        additions[HFS_ANALYSIS_FEATURE] = [READ_FEATURE, f"{READ_ADAPTER}/analysis"]
         features[INSTALLER_TEST_FEATURE].append(READ_FEATURE)
         additions[VERIFY_FEATURE] = ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/verify"]
         additions[EXTRACT_FEATURE] = [READ_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract"]
@@ -344,7 +346,7 @@ def main():
     for feature in APFS_PROFILES:
         if has_cli_feature(options, feature) and not use_apfs:
             parser.error(f"{feature} requires --apfs or --apfs-packages")
-    for feature in (INSTALL_FEATURE, PROJECT_EDIT_FEATURE, IMAGE_EDIT_FEATURE):
+    for feature in (HFS_ANALYSIS_FEATURE, INSTALL_FEATURE, PROJECT_EDIT_FEATURE, IMAGE_EDIT_FEATURE):
         if has_cli_feature(options, feature) and not use_hfsplus:
             parser.error(f"{feature} requires --hfsplus or --hfsplus-packages")
     if use_apfs and not any(has_cli_feature(options, feature) for feature in APFS_PROFILES):

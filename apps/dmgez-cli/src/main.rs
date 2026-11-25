@@ -2,6 +2,7 @@ use std::{error::Error, num::NonZeroU32, path::PathBuf, process::ExitCode};
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+mod analyze_command;
 mod capabilities;
 #[cfg(feature = "convert")]
 mod convert;
@@ -188,13 +189,9 @@ enum Command {
 		#[arg(long, id = RUN_LIMIT_ARG)]
 		run_limit: Option<usize>,
 	},
-	/// Measure stored and logical byte counts from a disk image's run map.
+	/// Measure run space and optionally check HFS+ allocation and file sizes.
 	#[command(name = ANALYZE_COMMAND)]
-	Analyze {
-		image: PathBuf,
-		#[arg(long)]
-		json: bool,
-	},
+	Analyze(analyze_command::Arguments),
 	/// Check container integrity and, when requested, filesystem integrity.
 	Verify(verify_command::Arguments),
 	/// Test the finished installer image and explicitly requested release checks.
@@ -421,8 +418,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 			run_offset,
 			run_limit,
 		} => inspect::show(&image, json, partitions, run_offset.unwrap_or(0), run_limit),
-		#[cfg(feature = "inspect")]
-		Command::Analyze { image, json } => inspect::analyze(&image, json),
+		Command::Analyze(arguments) => analyze_command::run(&arguments),
 		#[cfg(feature = "inspect")]
 		Command::Verify(arguments) => verify_command::run(&arguments),
 		Command::Ls(arguments) => volume_commands::run(volume_commands::Query::List(&arguments)),
@@ -440,10 +436,9 @@ fn run(command: Command) -> CliResult<ExitCode> {
 			partition,
 		} => inspect::unwrap(&image, &output, partition),
 		#[cfg(not(feature = "inspect"))]
-		Command::Inspect { .. }
-		| Command::Analyze { .. }
-		| Command::Verify(_)
-		| Command::UnwrapRaw { .. } => Err("feature not compiled: inspect".into()),
+		Command::Inspect { .. } | Command::Verify(_) | Command::UnwrapRaw { .. } => {
+			Err("feature not compiled: inspect".into())
+		}
 	};
 	result.map(|()| ExitCode::SUCCESS)
 }

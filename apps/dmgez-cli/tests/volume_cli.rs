@@ -5,6 +5,9 @@ use std::{
 
 const BINARY: &str = env!("CARGO_BIN_EXE_dmgez");
 
+#[path = "volume_cli/analysis.rs"]
+mod analysis;
+
 #[cfg(feature = "apfs-read")]
 #[path = "volume_cli/apfs.rs"]
 mod apfs;

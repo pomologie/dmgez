@@ -193,18 +193,40 @@ pub(crate) fn analyze(path: &Path, json: bool) -> CliResult {
 	if json {
 		return print_json(&report);
 	}
-	report_field(PHYSICAL_BYTES_KEY, report.container_bytes);
-	report_field(LOGICAL_BYTES_KEY, report.runs.logical_bytes);
-	report_field(OUTSIDE_DATA_FORK_KEY, report.outside_data_fork_bytes);
-	report_field(UNMAPPED_DATA_FORK_KEY, report.unmapped_data_fork_bytes);
-	report_field(
-		MAPPED_STORAGE_RATIO_KEY,
-		format_args!("{}/{}", report.runs.stored_bytes, report.runs.logical_bytes),
-	);
-	report_field(
-		CONTAINER_STORAGE_RATIO_KEY,
-		format_args!("{}/{}", report.container_bytes, report.runs.logical_bytes),
-	);
+	write_analysis(&mut io::stdout().lock(), &report)?;
+	Ok(())
+}
+
+pub(super) fn write_analysis(
+	output: &mut impl Write,
+	report: &dmgez_inspector::AnalysisReport,
+) -> io::Result<()> {
+	writeln!(output, "{PHYSICAL_BYTES_KEY} = {}", report.container_bytes)?;
+	writeln!(
+		output,
+		"{LOGICAL_BYTES_KEY} = {}",
+		report.runs.logical_bytes
+	)?;
+	writeln!(
+		output,
+		"{OUTSIDE_DATA_FORK_KEY} = {}",
+		report.outside_data_fork_bytes
+	)?;
+	writeln!(
+		output,
+		"{UNMAPPED_DATA_FORK_KEY} = {}",
+		report.unmapped_data_fork_bytes
+	)?;
+	writeln!(
+		output,
+		"{MAPPED_STORAGE_RATIO_KEY} = {}/{}",
+		report.runs.stored_bytes, report.runs.logical_bytes,
+	)?;
+	writeln!(
+		output,
+		"{CONTAINER_STORAGE_RATIO_KEY} = {}/{}",
+		report.container_bytes, report.runs.logical_bytes,
+	)?;
 	let groups = report.by_encoding;
 	for (encoding, group) in [
 		(RAW_ENCODING, groups.raw),
@@ -216,17 +238,18 @@ pub(crate) fn analyze(path: &Path, json: bool) -> CliResult {
 		(OTHER_ENCODING, groups.other),
 	] {
 		if group.count > 0 {
-			report_field(
-				encoding,
-				format_args!(
-					"{} runs, {} logical bytes, {} stored bytes",
-					group.count, group.logical_bytes, group.stored_bytes
-				),
-			);
+			writeln!(
+				output,
+				"{encoding} = {} runs, {} logical bytes, {} stored bytes",
+				group.count, group.logical_bytes, group.stored_bytes,
+			)?;
 		}
 	}
-	report_field(VERIFICATION_KEY, report.coverage.payload.as_str());
-	Ok(())
+	writeln!(
+		output,
+		"{VERIFICATION_KEY} = {}",
+		report.coverage.payload.as_str()
+	)
 }
 
 pub(super) fn verify(arguments: &verify_command::Arguments, mode: VerificationMode) -> CliResult {

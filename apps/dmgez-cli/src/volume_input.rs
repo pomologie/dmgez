@@ -14,7 +14,7 @@ use dmgez_vfs::{Filesystem, volume::VolumeView};
 
 use crate::{CliResult, inspect::open_source};
 
-struct BorrowedSource<'source>(&'source FileSource);
+pub(super) struct BorrowedSource<'source>(pub(super) &'source FileSource);
 
 impl ReadAt for BorrowedSource<'_> {
 	fn len(&self) -> u64 {
@@ -345,7 +345,10 @@ fn with_logical_disk<T>(
 	read(logical)
 }
 
-fn select(disk: &Disk<impl LogicalDisk>, slot: Option<NonZeroU32>) -> CliResult<VolumeId> {
+pub(super) fn select(
+	disk: &Disk<impl LogicalDisk>,
+	slot: Option<NonZeroU32>,
+) -> CliResult<VolumeId> {
 	let Some(slot) = slot else {
 		return Ok(disk.select_volume(None)?);
 	};

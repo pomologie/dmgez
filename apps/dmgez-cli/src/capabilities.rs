@@ -7,6 +7,8 @@ use super::{
 	image_edit, install, installer_test, notarize, project_edit, signing, volume_commands,
 };
 
+const HFSPLUS_ANALYSIS_CAPABILITY: &str = "hfsplus-analysis";
+
 pub(super) fn write() {
 	let report_field = |name: &str, value: &str| println!("{name} = {value}");
 	for (name, compiled) in [
@@ -57,6 +59,10 @@ pub(super) fn write() {
 		(install::APFS_FEATURE, install::APFS_COMPILED),
 		(installer_test::FEATURE, installer_test::COMPILED),
 		(ANALYZE_COMMAND, cfg!(feature = "inspect")),
+		(
+			HFSPLUS_ANALYSIS_CAPABILITY,
+			cfg!(feature = "hfsplus-analysis"),
+		),
 		(CONVERT_COMMAND, cfg!(feature = "convert")),
 		(OPTIMIZE_COMMAND, cfg!(feature = "convert")),
 		(diff::COMMAND, cfg!(feature = "diff")),
