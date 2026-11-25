@@ -3,6 +3,13 @@ use crate::Error;
 /// Size in bytes of the UDIF v4 trailer.
 pub const TRAILER_BYTES: usize = 512;
 
+pub(super) const DATA_FORK_OFFSET: usize = 24;
+pub(super) const DATA_FORK_LENGTH_OFFSET: usize = 32;
+pub(super) const RESOURCE_FORK_OFFSET: usize = 40;
+pub(super) const RESOURCE_FORK_LENGTH_OFFSET: usize = 48;
+pub(super) const XML_OFFSET: usize = 216;
+pub(super) const XML_LENGTH_OFFSET: usize = 224;
+
 const SIGNATURE: &[u8; 4] = b"koly";
 const VERSION: u32 = 4;
 const VERSION_OFFSET: usize = 4;

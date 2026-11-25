@@ -1,6 +1,12 @@
 use std::ops::Range;
 
-use crate::{Error, TRAILER_BYTES, check_trailer_header};
+use crate::{
+	Error, TRAILER_BYTES, check_trailer_header,
+	trailer_header::{
+		DATA_FORK_LENGTH_OFFSET, DATA_FORK_OFFSET, RESOURCE_FORK_LENGTH_OFFSET,
+		RESOURCE_FORK_OFFSET, XML_LENGTH_OFFSET, XML_OFFSET,
+	},
+};
 
 const SIGNATURE_OFFSET_FIELD: usize = 296;
 const SIGNATURE_LENGTH_FIELD: usize = SIGNATURE_OFFSET_FIELD + size_of::<u64>();
@@ -43,7 +49,7 @@ pub fn validate_signature_append(
 	signed_length: u64,
 ) -> Result<Range<u64>, Error> {
 	validate_unsigned_signature_fields(unsigned_trailer)?;
-	check_trailer_header(signed_trailer)?;
+	let range = signed_signature_range(signed_trailer, signed_length)?;
 	if unsigned_trailer[..SIGNATURE_OFFSET_FIELD] != signed_trailer[..SIGNATURE_OFFSET_FIELD]
 		|| unsigned_trailer[SIGNATURE_FIELDS_END..] != signed_trailer[SIGNATURE_FIELDS_END..]
 	{
@@ -56,30 +62,96 @@ pub fn validate_signature_append(
 		.checked_sub(TRAILER_BYTES as u64)
 		.filter(|&offset| offset != 0)
 		.ok_or(Error::Corrupt("unsigned UDIF body is missing"))?;
-	let signed_trailer_offset = signed_length
-		.checked_sub(TRAILER_BYTES as u64)
-		.ok_or(Error::Corrupt("signed UDIF trailer is truncated"))?;
-	let signature_offset = signature_field(signed_trailer, SIGNATURE_OFFSET_FIELD)?;
-	let signature_length = signature_field(signed_trailer, SIGNATURE_LENGTH_FIELD)?;
-	let signature_end = signature_offset
-		.checked_add(signature_length)
-		.ok_or(Error::Corrupt("UDIF signature range overflows"))?;
-	if signature_length == 0
-		|| signature_offset != original_trailer_offset
-		|| signature_end != signed_trailer_offset
-	{
+	if range.start != original_trailer_offset {
 		return Err(Error::Corrupt(
 			"UDIF signature range does not span the append",
 		));
 	}
+	Ok(range)
+}
+
+/// Returns the embedded signature range immediately before a UDIF v4 trailer.
+///
+/// This checks the trailer header and physical range, including that the data
+/// fork, resource fork and XML range end before the signature. The caller
+/// supplies the file length including the trailer and reads the trailer from
+/// the file end.
+///
+/// # Errors
+///
+/// Returns an error for an invalid header, an absent signature, or an
+/// inconsistent range.
+pub fn signed_signature_range(
+	trailer: &[u8; TRAILER_BYTES],
+	length: u64,
+) -> Result<Range<u64>, Error> {
+	check_trailer_header(trailer)?;
+	let trailer_offset = length
+		.checked_sub(TRAILER_BYTES as u64)
+		.ok_or(Error::Corrupt("signed UDIF trailer is truncated"))?;
+	let signature_offset = trailer_word(trailer, SIGNATURE_OFFSET_FIELD)?;
+	let signature_length = trailer_word(trailer, SIGNATURE_LENGTH_FIELD)?;
+	let signature_end = signature_offset
+		.checked_add(signature_length)
+		.ok_or(Error::Corrupt("UDIF signature range overflows"))?;
+	if signature_offset == 0 || signature_length == 0 || signature_end != trailer_offset {
+		return Err(Error::Corrupt(
+			"UDIF signature range does not precede the trailer",
+		));
+	}
+	for (offset_field, length_field) in [
+		(DATA_FORK_OFFSET, DATA_FORK_LENGTH_OFFSET),
+		(RESOURCE_FORK_OFFSET, RESOURCE_FORK_LENGTH_OFFSET),
+		(XML_OFFSET, XML_LENGTH_OFFSET),
+	] {
+		let offset = trailer_word(trailer, offset_field)?;
+		let length = trailer_word(trailer, length_field)?;
+		if offset
+			.checked_add(length)
+			.is_none_or(|end| end > signature_offset)
+		{
+			return Err(Error::Corrupt(
+				"UDIF trailer range crosses into the signature",
+			));
+		}
+	}
 	Ok(signature_offset..signature_end)
 }
 
-fn signature_field(trailer: &[u8; TRAILER_BYTES], offset: usize) -> Result<u64, Error> {
+/// Checks that stapling changed only the embedded signature length in the UDIF
+/// trailer and that the signature area grew without moving its start.
+///
+/// The caller supplies both trailers and their complete file lengths. Checking
+/// the body bytes, signature slots and ticket validity requires separate checks.
+///
+/// # Errors
+///
+/// Returns an error for a malformed signed trailer, a change to any other
+/// trailer field, or a signature that did not grow.
+pub fn validate_staple_layout(
+	before: &[u8; TRAILER_BYTES],
+	before_length: u64,
+	after: &[u8; TRAILER_BYTES],
+	after_length: u64,
+) -> Result<(), Error> {
+	let before_range = signed_signature_range(before, before_length)?;
+	let after_range = signed_signature_range(after, after_length)?;
+	if before[..SIGNATURE_LENGTH_FIELD] != after[..SIGNATURE_LENGTH_FIELD]
+		|| before[SIGNATURE_FIELDS_END..] != after[SIGNATURE_FIELDS_END..]
+	{
+		return Err(Error::Corrupt("stapling changed other UDIF trailer fields"));
+	}
+	if after_range.end <= before_range.end {
+		return Err(Error::Corrupt("stapled UDIF signature did not grow"));
+	}
+	Ok(())
+}
+
+fn trailer_word(trailer: &[u8; TRAILER_BYTES], offset: usize) -> Result<u64, Error> {
 	trailer
 		.get(offset..)
 		.and_then(<[u8]>::first_chunk::<{ size_of::<u64>() }>)
 		.copied()
 		.map(u64::from_be_bytes)
-		.ok_or(Error::Corrupt("truncated UDIF signature trailer field"))
+		.ok_or(Error::Corrupt("truncated UDIF trailer field"))
 }

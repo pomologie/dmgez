@@ -3,9 +3,12 @@ use std::ops::Range;
 
 #[cfg(feature = "write")]
 use crate::trailer_header::write_trailer_header;
+use crate::trailer_header::{DATA_FORK_LENGTH_OFFSET, XML_LENGTH_OFFSET, XML_OFFSET};
 #[cfg(feature = "read")]
 use crate::{
-	Error, SECTOR_BYTES, binary, check_trailer_header, checksum::Checksum,
+	Error, SECTOR_BYTES, binary, check_trailer_header,
+	checksum::Checksum,
+	trailer_header::{DATA_FORK_OFFSET, RESOURCE_FORK_LENGTH_OFFSET, RESOURCE_FORK_OFFSET},
 	validation::checked_range,
 };
 
@@ -20,20 +23,11 @@ pub(crate) const PARTITION_IMAGE: u32 = 2;
 const FLAGS_OFFSET: usize = 12;
 #[cfg(feature = "read")]
 const RUNNING_DATA_FORK_OFFSET: usize = 16;
-#[cfg(feature = "read")]
-const DATA_FORK_OFFSET: usize = 24;
-const DATA_FORK_LENGTH_OFFSET: usize = 32;
-#[cfg(feature = "read")]
-const RESOURCE_FORK_OFFSET: usize = 40;
-#[cfg(feature = "read")]
-const RESOURCE_FORK_LENGTH_OFFSET: usize = 48;
 const SEGMENT_NUMBER_OFFSET: usize = 56;
 const SEGMENT_COUNT_OFFSET: usize = 60;
 const SEGMENT_ID_OFFSET: usize = 64;
 pub(crate) const SEGMENT_ID_BYTES: usize = 16;
 const DATA_CHECKSUM_OFFSET: usize = 80;
-const XML_OFFSET: usize = 216;
-const XML_LENGTH_OFFSET: usize = 224;
 #[cfg(feature = "read")]
 const RESERVED_BEFORE_MASTER_CHECKSUM_OFFSET: usize = 232;
 const MASTER_CHECKSUM_OFFSET: usize = 352;
