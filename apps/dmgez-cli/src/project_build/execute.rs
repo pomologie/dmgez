@@ -11,11 +11,11 @@ use dmgez_runtime::project_build::{
 	BuildError, BuildEvent, BuildMode, BuildOutcome, BuildProject, PlanSummary, ProjectRequest,
 };
 
-use crate::{CliResult, project_input};
+use crate::{CliResult, project_input, report_output::EscapedText};
 
-use super::Arguments;
 #[cfg(feature = "project-release")]
 use super::release;
+use super::{Arguments, report};
 
 const MAX_LOSS_DETAILS: usize = 20;
 const READ_PROGRESS_STEPS: u64 = 10;
@@ -62,34 +62,28 @@ pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> CliResult
 	if arguments.release {
 		return release::run(&project, &arguments, working_directory, mode, observe);
 	}
-	let (report, losses) = match project.run(mode, Default::default(), observe)? {
+	let (build, output, format, losses) = match project.run(mode, Default::default(), observe)? {
 		BuildOutcome::Planned(summary) => {
-			write_dry_run(io::stdout().lock(), &summary)?;
-			return Ok(());
+			return report::plan(&summary, arguments.json);
 		}
 		BuildOutcome::Published {
 			report,
+			output,
+			format,
 			metadata_losses,
-		} => (report, metadata_losses),
+		} => (report, output, format, metadata_losses),
 	};
-	if report.release == ReleasePlan::ConfiguredStagesDeferred {
+	if build.release == ReleasePlan::ConfiguredStagesDeferred {
 		writeln!(io::stderr().lock(), "{RELEASE_DEFERRED}")?;
 	}
 	#[cfg(feature = "compression-cache")]
-	if let Some(cache) = report.cache {
+	if let Some(cache) = build.cache {
 		let mut output = io::stderr().lock();
 		writeln!(output, "cache_hits={}", cache.hits)?;
 		writeln!(output, "cache_misses={}", cache.misses)?;
 		writeln!(output, "cache_rejected={}", cache.rejected)?;
 	}
-	let image = report.image;
-	writeln!(
-		io::stdout().lock(),
-		"{} logical bytes, {} physical bytes, {losses} metadata losses",
-		image.logical_bytes,
-		image.physical_bytes,
-	)?;
-	Ok(())
+	report::published(&build, output.as_deref(), format, losses, arguments.json)
 }
 
 pub(super) fn write_dry_run(mut output: impl Write, summary: &PlanSummary) -> io::Result<()> {
@@ -133,7 +127,7 @@ pub(crate) fn report_losses(entries: &[MetadataLoss<'_>]) -> usize {
 		let _ = writeln!(
 			stderr,
 			"Metadata loss at {:?} ({} other aliases), {:?} ({:?})",
-			entry.path.as_str(),
+			EscapedText(entry.path.as_str()),
 			entry.aliases.len(),
 			loss.field,
 			loss.reason,

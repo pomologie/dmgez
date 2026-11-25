@@ -33,6 +33,7 @@ mod project_input;
 	feature = "apfs-read",
 	feature = "signing-rust",
 	feature = "signing-native",
+	feature = "project-build",
 	feature = "project-release",
 	feature = "project-edit",
 	feature = "image-edit",

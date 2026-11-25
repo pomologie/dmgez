@@ -93,6 +93,8 @@ pub enum BuildOutcome {
 	Planned(PlanSummary),
 	Published {
 		report: BuildReport,
+		output: Option<PathBuf>,
+		format: ImageFormat,
 		metadata_losses: usize,
 	},
 }
@@ -181,10 +183,14 @@ impl BuildProject {
 				&image,
 			))),
 			BuildMode::Publish => {
+				let output = prepared.prepared().output_path().map(Path::to_owned);
+				let format = prepared.prepared().profile().format();
 				let published = image.publish_with_progress(None, progress)?;
 				let metadata_losses = metadata_loss_count(&published.metadata_losses);
 				Ok(BuildOutcome::Published {
 					report: published.report,
+					output,
+					format,
 					metadata_losses,
 				})
 			}

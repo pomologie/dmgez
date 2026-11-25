@@ -24,6 +24,7 @@ VOLUME_NAME = "Pomologie CI"
 PAYLOAD_PATH = f"{VOLUME_NAME}/Documentation/Release Nôtes.bin"
 APPLICATIONS_PATH = f"{VOLUME_NAME}/Applications"
 APPLICATIONS_TARGET = b"/Applications"
+BUILD_REPORT_SCHEMA_VERSION = 1
 
 
 def build(cli, directory, preview):
@@ -31,16 +32,34 @@ def build(cli, directory, preview):
     shutil.copyfile(PROJECT, directory / PROJECT.name)
     (directory / SOURCE_NAME).write_bytes(PAYLOAD)
     image = directory / IMAGE_NAME
-    command = (cli, "build", PROJECT.name)
+    command = (cli, "build", PROJECT.name, "--json")
+    expected = {
+        "schema_version": BUILD_REPORT_SCHEMA_VERSION,
+        "operation": "build",
+        "format": "udzo",
+        "release": "configured_stages_deferred",
+        "logical_bytes": str(LOGICAL_BYTES),
+    }
     if preview:
-        plan = subprocess.check_output([*command, "--dry-run"], cwd=directory, encoding="utf-8")
-        expected = {
-            "mode=dry-run", "format=Udzo", "filesystem=HfsplusUnicode", "finder=IconView",
-            f"logical_bytes={LOGICAL_BYTES}", f"source_payload_bytes={len(PAYLOAD)}",
+        plan = json.loads(subprocess.check_output([*command, "--dry-run"], cwd=directory))
+        planned = {
+            **expected,
+            "mode": "dry_run",
+            "filesystem": "hfsplus_unicode",
+            "finder": "icon_view",
+            "physical_bytes": None,
+            "source_payload_bytes": str(len(PAYLOAD)),
         }
-        if expected.difference(plan.splitlines()) or image.exists():
-            raise RuntimeError(f"unexpected dry-run result:\n{plan}")
-    subprocess.run(command, cwd=directory, check=True)
+        if not planned.items() <= plan.items() or image.exists():
+            raise RuntimeError(f"unexpected dry-run result: {plan}")
+    report = json.loads(subprocess.check_output(command, cwd=directory))
+    published = {
+        **expected,
+        "mode": "published",
+        "physical_bytes": str(image.stat().st_size),
+    }
+    if not published.items() <= report.items() or not Path(report["output"]).samefile(image):
+        raise RuntimeError(f"unexpected unsigned publication result: {report}")
     return image
 
 

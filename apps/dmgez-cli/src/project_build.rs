@@ -6,6 +6,8 @@ use clap::Args;
 mod execute;
 #[cfg(feature = "project-release")]
 mod release;
+#[cfg(feature = "project-build")]
+mod report;
 
 #[cfg(feature = "project-build")]
 pub(crate) use execute::build;
@@ -41,7 +43,7 @@ pub(crate) struct Arguments {
 	/// New local notarization record for this submission.
 	#[arg(long, requires = RELEASE_ARG)]
 	notary_record: Option<PathBuf>,
-	/// Emit the release stage report as JSON.
-	#[arg(long, requires = RELEASE_ARG, conflicts_with = "dry_run")]
+	/// Emit a versioned build plan, publication report, or release report as JSON.
+	#[arg(long)]
 	json: bool,
 }

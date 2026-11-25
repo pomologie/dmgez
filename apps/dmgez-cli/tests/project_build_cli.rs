@@ -13,6 +13,9 @@ mod compression_cache;
 ))]
 #[path = "project_build/finder_flags.rs"]
 mod finder_flags;
+#[cfg(feature = "project-build")]
+#[path = "project_build/json.rs"]
+mod json;
 #[cfg(all(
 	feature = "project-build",
 	feature = "partition-write",

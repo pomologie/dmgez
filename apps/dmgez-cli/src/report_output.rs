@@ -33,6 +33,12 @@ pub(super) fn write_json(
 
 pub(super) struct EscapedText<'a>(pub &'a str);
 
+impl fmt::Debug for EscapedText<'_> {
+	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+		fmt::Debug::fmt(self.0, formatter)
+	}
+}
+
 impl fmt::Display for EscapedText<'_> {
 	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(formatter, "{}", self.0.escape_debug())

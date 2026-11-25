@@ -17,6 +17,12 @@ The canonical external document is `dmg.toml`, `schema_version=1` (draft until r
 
 The current macOS and Linux `build` command shares the HFS+ preparation, sealing, and publication service with the compatibility runner. Its CLI tests exercise the dry-run and publication paths under D-BUILD-01 and D-BUILD-05. The local composition tool resolves exact versioned HFS+ packages from explicitly supplied sources and compiles a standalone binary. The ordinary workspace can link the same service when the HFS+ packages are available from the release registry. See the [local build instructions](../../README.md#build-from-a-toml-project) and [CLI tests](../../apps/dmgez-cli/tests/project_build_cli.rs).
 
+### Read the build report in CI
+
+Use `dmgez build dmg.toml --dry-run --json` to get the admitted plan or `dmgez build dmg.toml --json` for the unsigned publication report. Both emit one JSON document on stdout with `schema_version: 1`, `operation: "build"`, and a `mode` of `"dry_run"` or `"published"`. The `output` field is the resolved host path in display form. Byte counts use decimal strings. `physical_bytes` is `null` when the plan cannot predict the final byte count and always has a value after publication. Both modes report metadata-loss counts and release policy. The dry run also reports the filesystem, Finder layout, and publication policy. In a publication report, `verified` records whether the requested staged image check completed.
+
+Build progress and diagnostics go to stderr. Failed unsigned builds return a nonzero exit code with no success report on stdout. A dry run with `--release` reports the planned release policy. Executed releases emit the [release report](RELEASE.md). The composed CLI regression exercises planning, publication, and refusal to replace an occupied destination for D-BUILD-01 and D-BUILD-05 and covers the unsigned report interface required by D-CI-03. [JSON build regression](../../apps/dmgez-cli/tests/project_build/json.rs)
+
 With `finder-write` enabled, `hidden` and `hide_extension` apply to file, directory and symlink catalog records after host metadata capture. Set either option to `false` to clear its bit. Omit an option to preserve the captured value. Hard-link aliases share FinderInfo, so conflicting explicit values are rejected. The builder checks affected paths and sources for signing-sensitive content before applying display overrides. [Apple code-signing restrictions](https://developer.apple.com/library/archive/qa/qa1940/_index.html)
 
 ### Write an APM or GPT disk layout

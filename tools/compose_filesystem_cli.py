@@ -90,7 +90,7 @@ RUNTIME = Path("crates/runtime/dmgez-runtime")
 PROJECT_FEATURES = {
     "project-build": [
         "dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config", "dep:dmgez-udif",
-        "dmgez-runtime/project-build",
+        "dep:serde", "dep:serde_json", "dmgez-runtime/project-build",
     ],
     PROJECT_RELEASE_FEATURE: [
         "project-build", "inspect", "dep:dmgez-signing", "dep:sha2", "dep:tempfile",

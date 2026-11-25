@@ -12,7 +12,7 @@ use crate::{
 	report_output::{EscapedText, write_report},
 };
 
-use super::{Arguments, execute::write_dry_run};
+use super::{Arguments, report};
 
 const IDENTIFIER_REQUIRED: &str = "disk image signing requires signing.identifier or --identifier";
 const NOTARY_RECORD_REQUIRED: &str = "configured notarization requires --notary-record";
@@ -38,7 +38,7 @@ pub(super) fn run(
 	)
 	.map_err(command_error)?;
 	match outcome {
-		ReleaseOutcome::Planned(summary) => write_dry_run(io::stdout().lock(), &summary)?,
+		ReleaseOutcome::Planned(summary) => report::plan(&summary, arguments.json)?,
 		ReleaseOutcome::Executed(execution) => {
 			let report = CommandReport {
 				stages: &execution.report,

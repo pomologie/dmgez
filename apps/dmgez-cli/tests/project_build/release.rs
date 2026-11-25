@@ -28,6 +28,25 @@ fn run(directory: &Path, additional: &[&str]) -> Output {
 }
 
 #[test]
+fn release_dry_run_uses_the_build_plan_report_without_publishing() {
+	let directory = tempfile::tempdir().unwrap();
+	fs::write(directory.path().join(MANIFEST_NAME), PROJECT).unwrap();
+	let output = run(directory.path(), &["--dry-run"]);
+	assert!(
+		output.status.success(),
+		"{}",
+		String::from_utf8_lossy(&output.stderr),
+	);
+	let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+	assert_eq!(report["schema_version"], 1);
+	assert_eq!(report["operation"], "build");
+	assert_eq!(report["mode"], "dry_run");
+	assert_eq!(report["release"], "requested");
+	assert!(report.get("steps").is_none());
+	assert!(!directory.path().join(OUTPUT_NAME).exists());
+}
+
+#[test]
 fn publishes_a_verified_unsigned_release_and_binds_the_report_to_its_bytes() {
 	let directory = tempfile::tempdir().unwrap();
 	let manifest = directory.path().join(MANIFEST_NAME);
