@@ -10,6 +10,11 @@ const EQUAL: i32 = 0;
 #[cfg(all(feature = "diff", any(feature = "hfsplus-read", feature = "apfs-read")))]
 const DIFFERENT: i32 = 1;
 const XATTR_OPTION: &str = "--xattrs";
+const FINDER_INFO_OPTION: &str = "--finder-info";
+#[cfg(all(feature = "diff", any(feature = "hfsplus-read", feature = "apfs-read")))]
+const FINDER_INFO_FIELD: &str = "finder_info";
+#[cfg(all(feature = "diff", any(feature = "hfsplus-read", feature = "apfs-read")))]
+const FINDER_INFO_BYTES: usize = 32;
 #[cfg(feature = "diff")]
 const FINDER_LAYOUT_OPTION: &str = "--finder-layout";
 
@@ -98,7 +103,7 @@ fn byte_diff_rejects_semantic_options_before_opening_inputs() {
 	let directory = tempfile::tempdir().unwrap();
 	let absent = directory.path().join("unused.dmg");
 	for mode in ["logical", "physical"] {
-		for option in [XATTR_OPTION, FINDER_LAYOUT_OPTION] {
+		for option in [XATTR_OPTION, FINDER_LAYOUT_OPTION, FINDER_INFO_OPTION] {
 			let output = Command::new(BINARY)
 				.arg("diff")
 				.arg(&absent)
@@ -149,7 +154,7 @@ fn unavailable_semantic_backend_refuses_before_opening_inputs() {
 		} else {
 			String::from("feature not compiled: diff")
 		};
-		for options in [&[][..], &[XATTR_OPTION][..]] {
+		for options in [&[][..], &[XATTR_OPTION][..], &[FINDER_INFO_OPTION][..]] {
 			let output = semantic_diff(&left, &right, filesystem, options);
 			assert_error(&output, &expected);
 		}

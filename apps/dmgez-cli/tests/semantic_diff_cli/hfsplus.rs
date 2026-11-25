@@ -11,7 +11,7 @@ use serde_json::json;
 #[cfg(feature = "project-build")]
 use super::BINARY;
 use super::{
-	DIFFERENT, EQUAL, XATTR_OPTION,
+	DIFFERENT, EQUAL, FINDER_INFO_BYTES, FINDER_INFO_FIELD, FINDER_INFO_OPTION, XATTR_OPTION,
 	native_hfsplus::{hfsplus_fixture, materialize_sparse, overlay_sparse},
 	report, semantic_diff,
 };
@@ -23,6 +23,11 @@ const HFSX_FIXTURE: &str = "native-hfsx.bin";
 const HFSX_VOLUME_BYTES: usize = 24 * (1 << 20);
 const UPPERCASE_FILE_DATA: &[u8] = b"capital\0\x01\xff\n";
 const UPPERCASE_FILE_OFFSET: usize = 4_530_176;
+const CATALOG_FINDER_INFO_OFFSET: usize = 48;
+const CATALOG_RECORD_KIND_BYTES: usize = size_of::<u16>();
+const CATALOG_FILE: u16 = 2;
+const CATALOG_FOLDER: u16 = 1;
+const FINDER_TYPE_AND_CREATOR: [u8; 8] = *b"TEXTTEST";
 
 #[test]
 fn native_hfsx_distinguishes_the_two_case_sensitive_file_names() {
@@ -50,6 +55,96 @@ fn native_hfsx_distinguishes_the_two_case_sensitive_file_names() {
 		json!([{"path": ["Cases", "Case.txt"], "kind": "changed", "fields": ["data_fork"]}]),
 		"{changed:#}"
 	);
+}
+
+#[test]
+fn finder_info_compares_file_and_directory_catalog_fields_but_ignores_private_generation() {
+	// Record starts in the captured nonjournaled HFSX catalog leaf.
+	const CASES_FOLDER: usize = 2_376_166;
+	const UPPERCASE_FILE: usize = 2_376_816;
+	const LOWERCASE_FILE: usize = 2_377_356;
+	const FOLDER_FINDER_FLAGS_OFFSET: usize = 8;
+	const FINDER_INVISIBLE: u16 = 1 << 14;
+	const WRITE_GENERATION_OFFSET: usize = 28;
+	const NATIVE_WRITE_GENERATION: u32 = 2;
+	const REVISED_WRITE_GENERATION: u32 = NATIVE_WRITE_GENERATION + 1;
+
+	let root = tempfile::tempdir().unwrap();
+	let left = root.path().join("original.raw");
+	let right = root.path().join("finder-info.raw");
+	let mut bytes = materialize_sparse(&hfsplus_fixture(HFSX_FIXTURE), HFSX_VOLUME_BYTES);
+	fs::write(&left, &bytes).unwrap();
+	let folder = catalog_finder_info(&mut bytes, CASES_FOLDER, CATALOG_FOLDER);
+	let flags = &mut folder[FOLDER_FINDER_FLAGS_OFFSET..][..size_of::<u16>()];
+	assert_eq!(flags, 0_u16.to_be_bytes());
+	flags.copy_from_slice(&FINDER_INVISIBLE.to_be_bytes());
+	let file = catalog_finder_info(&mut bytes, UPPERCASE_FILE, CATALOG_FILE);
+	let fields = &mut file[..FINDER_TYPE_AND_CREATOR.len()];
+	assert_eq!(fields, [0; FINDER_TYPE_AND_CREATOR.len()]);
+	fields.copy_from_slice(&FINDER_TYPE_AND_CREATOR);
+	let file = catalog_finder_info(&mut bytes, LOWERCASE_FILE, CATALOG_FILE);
+	let generation = &mut file[WRITE_GENERATION_OFFSET..][..size_of::<u32>()];
+	assert_eq!(generation, NATIVE_WRITE_GENERATION.to_be_bytes());
+	generation.copy_from_slice(&REVISED_WRITE_GENERATION.to_be_bytes());
+	fs::write(&right, bytes).unwrap();
+
+	for options in [BOTH_RAW, RAW_WITH_XATTRS] {
+		let baseline = report(&semantic_diff(&left, &right, HFSPLUS, options), EQUAL);
+		assert_eq!(baseline["changes"], json!([]));
+		assert!(baseline["policy"].get(FINDER_INFO_FIELD).is_none());
+	}
+	for options in [BOTH_RAW, RAW_WITH_XATTRS] {
+		let options = [options, &[FINDER_INFO_OPTION]].concat();
+		let changed = report(&semantic_diff(&left, &right, HFSPLUS, &options), DIFFERENT);
+		assert_eq!(
+			changed["policy"][FINDER_INFO_FIELD]["record_bytes"],
+			FINDER_INFO_BYTES
+		);
+		assert_eq!(
+			changed["changes"],
+			json!([
+				{"path": ["Cases"], "kind": "changed", "fields": [FINDER_INFO_FIELD]},
+				{"path": ["Cases", "Case.txt"], "kind": "changed", "fields": [FINDER_INFO_FIELD]},
+			]),
+			"{changed:#}"
+		);
+	}
+}
+
+#[test]
+fn finder_info_reports_effective_hfsplus_hard_link_metadata_on_each_visible_alias() {
+	const CHAINED_HARD_LINKS: &str = "native-chained-hardlinks.bin";
+	const VOLUME_BYTES: usize = 16 * (1 << 20);
+	const SHARED_INODE_RECORD: usize = 1_586_642;
+
+	let root = tempfile::tempdir().unwrap();
+	let left = root.path().join("original.raw");
+	let right = root.path().join("finder-info.raw");
+	let mut bytes = materialize_sparse(&hfsplus_fixture(CHAINED_HARD_LINKS), VOLUME_BYTES);
+	fs::write(&left, &bytes).unwrap();
+	let stored = catalog_finder_info(&mut bytes, SHARED_INODE_RECORD, CATALOG_FILE);
+	let fields = &mut stored[..FINDER_TYPE_AND_CREATOR.len()];
+	assert_eq!(fields, [0; FINDER_TYPE_AND_CREATOR.len()]);
+	fields.copy_from_slice(&FINDER_TYPE_AND_CREATOR);
+	fs::write(&right, bytes).unwrap();
+
+	let options = [BOTH_RAW, &[FINDER_INFO_OPTION]].concat();
+	let changed = report(&semantic_diff(&left, &right, HFSPLUS, &options), DIFFERENT);
+	assert_eq!(
+		changed["changes"],
+		json!([
+			{"path": ["nested", "three"], "kind": "changed", "fields": [FINDER_INFO_FIELD]},
+			{"path": ["one"], "kind": "changed", "fields": [FINDER_INFO_FIELD]},
+			{"path": ["two"], "kind": "changed", "fields": [FINDER_INFO_FIELD]},
+		]),
+		"{changed:#}"
+	);
+}
+
+fn catalog_finder_info(image: &mut [u8], start: usize, kind: u16) -> &mut [u8] {
+	let record = &mut image[start..];
+	assert_eq!(record[..CATALOG_RECORD_KIND_BYTES], kind.to_be_bytes());
+	&mut record[CATALOG_FINDER_INFO_OFFSET..][..FINDER_INFO_BYTES]
 }
 
 #[test]

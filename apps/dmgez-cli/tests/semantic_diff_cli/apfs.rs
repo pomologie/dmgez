@@ -29,6 +29,9 @@ const RESOURCE_ATTRIBUTE: &str = "com.apple.ResourceFork";
 const MARKER: &str = "com.pomologie.marker";
 const MARKER_RENAMED: &str = "com.pomologie.marke\x1b";
 
+#[path = "apfs/finder_info.rs"]
+mod finder_info;
+
 #[test]
 fn same_native_volume_compares_equal_across_disk_layouts() {
 	let root = tempfile::tempdir().unwrap();

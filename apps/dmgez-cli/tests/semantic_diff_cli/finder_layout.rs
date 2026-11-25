@@ -7,7 +7,8 @@ use std::{
 use serde_json::json;
 
 use super::{
-	BINARY, DIFFERENT, EQUAL, FINDER_LAYOUT_OPTION, XATTR_OPTION, assert_error,
+	BINARY, DIFFERENT, EQUAL, FINDER_INFO_FIELD, FINDER_INFO_OPTION, FINDER_LAYOUT_OPTION,
+	XATTR_OPTION, assert_error,
 	hfsplus::{BOTH_RAW, HFSPLUS, build},
 	report, semantic_command, semantic_diff,
 };
@@ -25,7 +26,7 @@ const HEADER_PADDING_OFFSET: usize = 5 * size_of::<u32>();
 const FILL_BYTE: u8 = 0xa5;
 
 #[test]
-fn reports_the_decoded_icon_change_alongside_xattr_policy() {
+fn reports_the_decoded_icon_change_alongside_xattr_and_finder_info_policies() {
 	let root = tempfile::tempdir().unwrap();
 	let left = build_layout(root.path(), "left", INITIAL_X);
 	let right = build_layout(root.path(), "right", MOVED_X);
@@ -57,21 +58,25 @@ fn reports_the_decoded_icon_change_alongside_xattr_policy() {
 		"{decoded:#}"
 	);
 
-	let both = report(
+	let combined = report(
 		&semantic_diff(
 			&left,
 			&right,
 			HFSPLUS,
-			&[XATTR_OPTION, FINDER_LAYOUT_OPTION],
+			&[XATTR_OPTION, FINDER_LAYOUT_OPTION, FINDER_INFO_OPTION],
 		),
 		DIFFERENT,
 	);
-	assert_eq!(both["changes"], decoded["changes"], "{both:#}");
+	assert_eq!(combined["changes"], decoded["changes"], "{combined:#}");
 	assert_eq!(
-		both["policy"]["finder_layout"],
+		combined["policy"]["finder_layout"],
 		decoded["policy"]["finder_layout"]
 	);
-	assert!(both["policy"]["xattrs"].is_object(), "{both:#}");
+	assert!(combined["policy"]["xattrs"].is_object(), "{combined:#}");
+	assert!(
+		combined["policy"][FINDER_INFO_FIELD].is_object(),
+		"{combined:#}"
+	);
 
 	let text = semantic_command(&left, &right, HFSPLUS)
 		.arg(FINDER_LAYOUT_OPTION)
