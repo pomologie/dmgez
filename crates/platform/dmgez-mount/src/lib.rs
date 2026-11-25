@@ -1,4 +1,6 @@
 //! Explicit read-only host mount sessions.
 
+#[cfg(all(feature = "system", target_os = "macos"))]
+pub mod session;
 #[cfg(feature = "system")]
 pub mod system;
