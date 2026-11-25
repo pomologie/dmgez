@@ -18,6 +18,12 @@ use thiserror::Error;
 
 use super::{PublishError, StagedReader, prepare_stage};
 
+#[cfg(any(target_os = "linux", feature = "native-directory-privacy"))]
+mod incumbent;
+
+#[cfg(any(target_os = "linux", feature = "native-directory-privacy"))]
+pub use incumbent::publish_replace_existing;
+
 const DIRECTORY_FLAGS: OFlags = OFlags::RDONLY
 	.union(OFlags::DIRECTORY)
 	.union(OFlags::NOFOLLOW)
@@ -68,11 +74,13 @@ pub enum ReplaceError<E> {
 	DestinationType,
 	#[error("replacement destination changed before commit")]
 	DestinationChanged,
+	#[error("replacement cannot preserve the destination's access metadata")]
+	DestinationMetadata,
 	#[error("output directory changed before commit")]
 	DirectoryChanged,
 	#[error("staging entry changed before commit")]
 	StageChanged,
-	#[error("replacement did not pass the source-alias check")]
+	#[error("replacement destination did not pass authorization")]
 	Authorize(#[source] E),
 	#[error(transparent)]
 	Stage(#[from] PublishError<E>),
@@ -108,6 +116,35 @@ pub fn publish_replace<T, E>(
 	write: impl FnOnce(&mut dyn Write) -> Result<T, E>,
 	validate: impl FnOnce(StagedReader<'_>, &T) -> Result<(), E>,
 ) -> Result<T, ReplaceError<E>> {
+	publish_replacement(
+		destination,
+		|_, _, target, _| {
+			authorize(target).map_err(ReplaceError::Authorize)?;
+			Ok(None)
+		},
+		write,
+		validate,
+	)
+	.map(|(report, _)| report)
+}
+
+struct AccessMode {
+	owner: u32,
+	group: u32,
+	mode: Mode,
+}
+
+fn publish_replacement<T, E>(
+	destination: &Path,
+	authorize: impl FnOnce(
+		&OwnedFd,
+		&OsStr,
+		TargetIdentity,
+		Option<&Stat>,
+	) -> Result<Option<AccessMode>, ReplaceError<E>>,
+	write: impl FnOnce(&mut dyn Write) -> Result<T, E>,
+	validate: impl FnOnce(StagedReader<'_>, &T) -> Result<(), E>,
+) -> Result<(T, EntryIdentity), ReplaceError<E>> {
 	let path_bytes = destination.as_os_str().as_bytes();
 	match path_bytes.rsplit(|&byte| byte == PATH_SEPARATOR).next() {
 		Some(b"" | CURRENT_DIRECTORY | PARENT_DIRECTORY) | None => {
@@ -133,16 +170,34 @@ pub fn publish_replace<T, E>(
 	if original.as_ref().is_some_and(|stat| !is_regular(stat)) {
 		return Err(ReplaceError::DestinationType);
 	}
-	authorize(TargetIdentity {
+	let target = TargetIdentity {
 		directory: directory_id,
 		existing: original.as_ref().map(identity),
-	})
-	.map_err(ReplaceError::Authorize)?;
+	};
+	let preserve = authorize(&directory, name, target, original.as_ref())?;
 
 	let mut stage = Stage::new(&directory, parent, name).map_err(PublishError::Create)?;
 	let report = prepare_stage(&mut stage.file, write)?;
 	let stage_check = fs::fstat(&stage.file).map_err(inspect)?;
 	validate(StagedReader(&mut stage.file), &report).map_err(PublishError::Validate)?;
+	let stage_check = if let Some(access) = preserve {
+		let verified = fs::fstat(&stage.file).map_err(inspect)?;
+		if !matches_stamp(&stage_check, &verified) {
+			return Err(ReplaceError::StageChanged);
+		}
+		if stage_check.st_uid != access.owner || stage_check.st_gid != access.group {
+			return Err(ReplaceError::DestinationMetadata);
+		}
+		// Verify that the stage inherited no access controls before exposing
+		// the final permission bits.
+		#[cfg(any(target_os = "linux", feature = "native-directory-privacy"))]
+		incumbent::check_extended_metadata(&stage.file)?;
+		fs::fchmod(&stage.file, access.mode).map_err(inspect)?;
+		stage.file.sync_all().map_err(PublishError::Sync)?;
+		fs::fstat(&stage.file).map_err(inspect)?
+	} else {
+		stage_check
+	};
 	let stage_current = stat_entry(&directory, &stage.name).map_err(inspect)?;
 	if !stage_current
 		.as_ref()
@@ -178,7 +233,7 @@ pub fn publish_replace<T, E>(
 	}
 	.map_err(|error| ReplaceError::Commit(error.into()))?;
 	stage.committed = true;
-	Ok(report)
+	Ok((report, identity(&stage_check)))
 }
 
 fn open_directory(path: &Path) -> rustix::io::Result<OwnedFd> {

@@ -258,3 +258,83 @@ fn directory_shaped_spellings_cannot_replace_a_regular_output() -> io::Result<()
 	assert_eq!(fs::read(destination)?, PREVIOUS);
 	assert_directory_len(&directory, 1)
 }
+
+#[cfg(any(target_os = "linux", feature = "native-directory-privacy"))]
+#[test]
+fn checked_replacement_rejects_a_change_during_staging() -> io::Result<()> {
+	use dmgez_core::output::replace::publish_replace_existing;
+
+	let (_fixture, directory) = fixture()?;
+	let destination = directory.join(DESTINATION);
+	fs::write(&destination, PREVIOUS)?;
+	let metadata = fs::metadata(&destination)?;
+	let expected = EntryIdentity {
+		device: metadata.dev(),
+		inode: metadata.ino(),
+	};
+	let failure = publish_replace_existing(
+		&destination,
+		expected,
+		|original| {
+			let mut data = Vec::new();
+			original.read_to_end(&mut data)?;
+			assert_eq!(data, PREVIOUS);
+			Ok(())
+		},
+		|stage| {
+			let report = write_image(stage)?;
+			fs::write(&destination, CONCURRENT)?;
+			Ok(report)
+		},
+		VERIFY_COMPLETE,
+	);
+	assert!(matches!(failure, Err(ReplaceError::DestinationChanged)));
+	assert_eq!(fs::read(destination)?, CONCURRENT);
+	assert_directory_len(&directory, 1)
+}
+
+#[cfg(any(target_os = "linux", feature = "native-directory-privacy"))]
+#[test]
+fn checked_replacement_refuses_a_fifo_and_extended_metadata() -> io::Result<()> {
+	use std::process::Command;
+
+	use dmgez_core::output::replace::publish_replace_existing;
+	use rustix::fs::{XattrFlags, fsetxattr};
+
+	let (_fixture, directory) = fixture()?;
+	let destination = directory.join(DESTINATION);
+	let authorize = |_: &mut dyn Read| panic!("nonqualifying incumbent reached read callback");
+	fs::write(&destination, PREVIOUS)?;
+	let metadata = fs::metadata(&destination)?;
+	let expected = EntryIdentity {
+		device: metadata.dev(),
+		inode: metadata.ino(),
+	};
+	fsetxattr(
+		File::open(&destination)?,
+		"user.dmgez-project-note",
+		b"keep",
+		XattrFlags::empty(),
+	)?;
+	let failure = publish_replace_existing(
+		&destination,
+		expected,
+		authorize,
+		write_image,
+		VERIFY_COMPLETE,
+	);
+	assert!(matches!(failure, Err(ReplaceError::DestinationMetadata)));
+	assert_eq!(fs::read(&destination)?, PREVIOUS);
+	fs::remove_file(&destination)?;
+	// The portable std API has no FIFO constructor.
+	assert!(Command::new("mkfifo").arg(&destination).status()?.success());
+	let failure = publish_replace_existing(
+		&destination,
+		expected,
+		authorize,
+		write_image,
+		VERIFY_COMPLETE,
+	);
+	assert!(matches!(failure, Err(ReplaceError::DestinationType)));
+	assert_directory_len(&directory, 1)
+}

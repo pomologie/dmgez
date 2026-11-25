@@ -36,6 +36,16 @@ pub enum PublishError<E> {
 /// A read-only, seekable view of the synced staging data.
 pub struct StagedReader<'file>(&'file mut File);
 
+impl StagedReader<'_> {
+	/// Metadata of the held staging file.
+	///
+	/// # Errors
+	/// Returns an error if the file metadata cannot be observed.
+	pub fn metadata(&self) -> io::Result<std::fs::Metadata> {
+		self.0.metadata()
+	}
+}
+
 /// Owns synced, verified temporary output. Dropping it removes the file.
 pub struct StagedOutput<T> {
 	file: NamedTempFile,
