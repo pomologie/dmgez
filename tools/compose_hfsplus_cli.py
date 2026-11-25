@@ -32,7 +32,7 @@ HFSPLUS_PACKAGES = {
     "hfsplus-pomologie-core": "crates/foundation/hfsplus-pomologie-core",
 }
 ADAPTER = "dmgez-hfsplus"
-VERIFY_ADAPTER = "dmgez-hfsplus-verify"
+VERIFY_ADAPTER = "dmgez-hfsplus-read"
 VERIFY_FEATURE = "hfsplus-verify"
 SOURCE_DIRS = ("apps", "crates", "tests")
 FEATURE_ADDITIONS = {
@@ -88,7 +88,7 @@ def compose_cli_manifest(manifest, verify, build):
         additions.update(FEATURE_ADDITIONS)
         dependencies_to_add.extend(("dmgez-builder", ADAPTER))
     if verify:
-        additions[VERIFY_FEATURE] = ["inspect", f"dep:{VERIFY_ADAPTER}"]
+        additions[VERIFY_FEATURE] = ["inspect", f"dep:{VERIFY_ADAPTER}", f"{VERIFY_ADAPTER}/verify"]
         dependencies_to_add.append(VERIFY_ADAPTER)
     if features.keys() & additions.keys():
         raise ValueError("CLI manifest already has HFS+ composition features")

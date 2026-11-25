@@ -18,7 +18,7 @@ PROFILES = {
     "appdmg_import": (["--no-default-features", "--features", "appdmg-import"], {"dmgez-config", "dmgez-core", "serde_json"}),
 }
 OUTSIDE_DEFAULT = {
-    "apple-dmg", "apfs", "bzip2", "dmgez-hfsplus-verify", "eframe", "egui", "fstool", "fuser",
+    "apple-dmg", "apfs", "bzip2", "dmgez-hfsplus-read", "eframe", "egui", "fstool", "fuser",
     "hfsplus-reader", "lzfse_rust", "lzma-rust2", "notify",
     "reqwest", "rmcp", "tokio", "udif", "winfsp",
 }

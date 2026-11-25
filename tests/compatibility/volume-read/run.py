@@ -13,6 +13,8 @@ from tempfile import TemporaryDirectory
 RUNNER = Path(__file__).resolve().parent
 ENGINE_VERSION = "0.1.0"
 HFSPLUS_CORE_PACKAGE = "hfsplus-pomologie-core"
+HFSPLUS_ADAPTER_PACKAGE = "dmgez-hfsplus-read"
+HFSPLUS_ENGINE = "hfsplus"
 HFSX_FEATURE = "hfsx-fixture"
 DMGEZ_PACKAGES = {
     "dmgez-operations": "crates/services/dmgez-operations",
@@ -20,7 +22,7 @@ DMGEZ_PACKAGES = {
     "dmgez-vfs": "crates/foundation/dmgez-vfs",
 }
 ENGINE_PACKAGES = {
-    "hfsplus": {
+    HFSPLUS_ENGINE: {
         HFSPLUS_CORE_PACKAGE: f"crates/foundation/{HFSPLUS_CORE_PACKAGE}",
         "hfsplus-format": "crates/formats/hfsplus-format",
         "hfsplus-builder": "crates/filesystem/hfsplus-builder",
@@ -34,7 +36,7 @@ ENGINE_PACKAGES = {
     },
 }
 PACKAGE_PATCHES = {
-    "hfsplus": (HFSPLUS_CORE_PACKAGE, "hfsplus-format"),
+    HFSPLUS_ENGINE: (HFSPLUS_CORE_PACKAGE, "hfsplus-format", "hfsplus-reader"),
     "apfs": ("apfs-core", "apfs-format", "apfs-container"),
 }
 
@@ -80,7 +82,11 @@ def run(dmgez, engine, source, packaged, hfsx):
     recipe = RUNNER / engine
     packages = resolve_packages(dmgez, DMGEZ_PACKAGES)
     packages.update(resolve_packages(source, locations))
-    patches = PACKAGE_PATCHES[engine] if packaged else ()
+    if engine == HFSPLUS_ENGINE:
+        packages.update(resolve_packages(dmgez, {
+            HFSPLUS_ADAPTER_PACKAGE: f"crates/services/{HFSPLUS_ADAPTER_PACKAGE}",
+        }))
+    patches = PACKAGE_PATCHES[engine] if packaged or engine == HFSPLUS_ENGINE else ()
     fixtures = [recipe / "fixtures.json"]
     command = ["cargo", "test", "--offline", "--locked"]
     if hfsx:
@@ -118,7 +124,7 @@ def main():
     for option, (engine, packaged) in choices.items():
         source = options[option]
         if source is not None:
-            if options["hfsx"] and engine != "hfsplus":
+            if options["hfsx"] and engine != HFSPLUS_ENGINE:
                 parser.error(f"--{HFSX_FEATURE} requires --hfsplus or --hfsplus-packages")
             try:
                 return run(

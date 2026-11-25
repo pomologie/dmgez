@@ -1,5 +1,5 @@
-//! HFS+ read-only adapter for the C5 filesystem view.
+//! Integration witness for the HFS+ C5 filesystem view.
 
-mod volume;
-
-pub use volume::{Error, HfsBackend, HfsDirectory, HfsView, Limits, SourceError, with_view};
+pub use dmgez_hfsplus_read::browse::{
+	Error, HfsBackend, HfsDirectory, HfsView, Limits, SourceError, with_view,
+};

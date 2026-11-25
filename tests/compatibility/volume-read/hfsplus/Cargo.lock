@@ -79,18 +79,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "dmgez-hfsplus-read"
+version = "0.1.0"
+dependencies = [
+ "dmgez-vfs",
+ "hfsplus-format",
+ "hfsplus-pomologie-core",
+ "hfsplus-reader",
+ "thiserror",
+]
+
+[[package]]
 name = "dmgez-hfsplus-read-probe"
 version = "0.0.0"
 dependencies = [
+ "dmgez-hfsplus-read",
  "dmgez-operations",
  "dmgez-udif",
  "dmgez-vfs",
  "hfsplus-builder",
  "hfsplus-format",
- "hfsplus-pomologie-core",
  "hfsplus-reader",
  "tempfile",
- "thiserror",
 ]
 
 [[package]]

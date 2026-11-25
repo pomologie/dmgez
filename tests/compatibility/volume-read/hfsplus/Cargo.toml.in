@@ -9,16 +9,15 @@ publish = false
 hfsx-fixture = []
 
 [dependencies]
-dmgez-vfs = { path = @dmgez-vfs@, default-features = false }
-hfsplus-core = { package = "hfsplus-pomologie-core", version = "=0.1.0", path = @hfsplus-pomologie-core@ }
-hfsplus-format = { version = "=0.1.0", path = @hfsplus-format@ }
-hfsplus-reader = { version = "=0.1.0", path = @hfsplus-reader@ }
-thiserror = "=2.0.21"
+dmgez-hfsplus-read = { path = @dmgez-hfsplus-read@, default-features = false, features = ["browse"] }
 
 [dev-dependencies]
 dmgez-operations = { version = "=0.1.0", path = @dmgez-operations@, default-features = false, features = ["extract"] }
 dmgez-udif = { path = @dmgez-udif@, default-features = false, features = ["read", "write", "zlib"] }
+dmgez-vfs = { path = @dmgez-vfs@, default-features = false }
 hfsplus-builder = { version = "=0.1.0", path = @hfsplus-builder@ }
+hfsplus-format = { version = "=0.1.0", path = @hfsplus-format@ }
+hfsplus-reader = { version = "=0.1.0", path = @hfsplus-reader@ }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
 tempfile = "=3.27.0"

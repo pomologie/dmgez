@@ -29,8 +29,10 @@ const BSD_SYMBOLIC_LINK: u16 = 0o120000;
 const BSD_COMPRESSED: u8 = 1 << 5;
 const LINK_FINDER_CODE: &[u8; 8] = b"slnkrhap";
 const HFS_SYMLINK_LIMIT: NonZeroUsize = NonZeroUsize::new(1024).unwrap();
+const DEFAULT_READ_REQUEST_LIMIT: u64 = 1_000_000;
+const DEFAULT_READ_BYTE_LIMIT: u64 = 1 << 32;
 
-/// Independent limits for each engine operator and the materialized link payload.
+/// Per-operator engine limits and aggregate limits for one admitted volume session.
 #[derive(Debug, Clone, Copy)]
 pub struct Limits {
 	pub catalog: CatalogLimits,
@@ -38,6 +40,10 @@ pub struct Limits {
 	pub stored_fork: OverflowLimits,
 	pub logical_data: LogicalDataLimits,
 	pub link_bytes: NonZeroUsize,
+	/// Number of requested positional reads, including failed and empty reads.
+	pub max_read_requests: u64,
+	/// Total decoded bytes requested from the bounded volume window.
+	pub max_read_bytes: u64,
 }
 
 impl Default for Limits {
@@ -48,6 +54,8 @@ impl Default for Limits {
 			stored_fork: OverflowLimits::default(),
 			logical_data: LogicalDataLimits::default(),
 			link_bytes: HFS_SYMLINK_LIMIT,
+			max_read_requests: DEFAULT_READ_REQUEST_LIMIT,
+			max_read_bytes: DEFAULT_READ_BYTE_LIMIT,
 		}
 	}
 }
@@ -88,13 +96,37 @@ pub enum Error {
 pub enum SourceError {
 	#[error("filesystem read attempted to reenter its source")]
 	Reentrant(#[from] BorrowMutError),
+	#[error("HFS+ volume read request budget exceeded")]
+	RequestLimit,
+	#[error("HFS+ volume read byte budget exceeded")]
+	ByteLimit,
 	#[error(transparent)]
 	Window(#[from] dmgez_vfs::Error),
 }
 
 struct WindowSource<'disk, S> {
-	window: RefCell<Window<'disk, S>>,
+	read: RefCell<BudgetedWindow<'disk, S>>,
 	length: ByteLen,
+}
+
+struct BudgetedWindow<'disk, S> {
+	window: Window<'disk, S>,
+	requests_remaining: u64,
+	bytes_remaining: u64,
+}
+
+impl<S: LogicalDisk> BudgetedWindow<'_, S> {
+	fn read_exact_at(&mut self, offset: u64, output: &mut [u8]) -> Result<(), SourceError> {
+		self.requests_remaining = self
+			.requests_remaining
+			.checked_sub(1)
+			.ok_or(SourceError::RequestLimit)?;
+		self.bytes_remaining = self
+			.bytes_remaining
+			.checked_sub(output.len() as u64)
+			.ok_or(SourceError::ByteLimit)?;
+		Ok(self.window.read_exact_at(offset, output)?)
+	}
 }
 
 impl<S: LogicalDisk> ReadAt for WindowSource<'_, S> {
@@ -105,10 +137,7 @@ impl<S: LogicalDisk> ReadAt for WindowSource<'_, S> {
 	}
 
 	fn read_exact_at(&self, offset: ByteOffset, output: &mut [u8]) -> Result<(), SourceError> {
-		Ok(self
-			.window
-			.try_borrow_mut()?
-			.read_exact_at(offset.0, output)?)
+		self.read.try_borrow_mut()?.read_exact_at(offset.0, output)
 	}
 }
 
@@ -140,7 +169,11 @@ pub fn with_view<S: LogicalDisk, T>(
 	let window = disk.data_window(selected)?;
 	let source = WindowSource {
 		length: ByteLen(window.len()),
-		window: RefCell::new(window),
+		read: RefCell::new(BudgetedWindow {
+			window,
+			requests_remaining: limits.max_read_requests,
+			bytes_remaining: limits.max_read_bytes,
+		}),
 	};
 	let volume = Volume::open(source)?;
 	let catalog = volume.open_catalog(limits.catalog)?;
@@ -173,6 +206,10 @@ impl<'volume, 'disk, S: LogicalDisk> VolumeBackend for HfsBackend<'volume, 'disk
 
 	fn root(&mut self) -> Result<CatalogId, Error> {
 		Ok(self.catalog.root()?.metadata.id)
+	}
+
+	fn numeric_id(&self, id: CatalogId) -> Option<u64> {
+		Some(u64::from(id.0))
 	}
 
 	fn lookup(

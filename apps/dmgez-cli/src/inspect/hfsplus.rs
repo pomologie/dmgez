@@ -1,4 +1,4 @@
-use dmgez_hfsplus_verify::CheckFailureKind;
+use dmgez_hfsplus_read::CheckFailureKind;
 use dmgez_inspector::{
 	FilesystemCheckError, FilesystemEvidence, FilesystemOptions, FilesystemScope,
 	VerificationReport,
@@ -16,7 +16,7 @@ pub(super) fn verify(source: FileSource) -> VerificationReport {
 		Limits::default(),
 		FilesystemOptions::default(),
 		|window| {
-			dmgez_hfsplus_verify::check(window.len(), |offset, output| {
+			dmgez_hfsplus_read::check(window.len(), |offset, output| {
 				window.read_exact_at(offset, output)
 			})
 			.map(|_| FilesystemEvidence::window(FilesystemScope::ReachableStructure))
