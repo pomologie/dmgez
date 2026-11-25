@@ -4,7 +4,7 @@ use crate::window::translate;
 
 use super::ViewError;
 
-/// Engine operator for exact positional reads of one admitted fork.
+/// Engine operator for exact positional reads of an admitted fork or extended attribute.
 pub trait ForkReader {
 	type Error: StdError + 'static;
 
@@ -21,7 +21,7 @@ pub trait ForkReader {
 	fn read_exact_at(&mut self, offset: u64, output: &mut [u8]) -> Result<(), Self::Error>;
 }
 
-/// Bounded exact read of one file's selected fork.
+/// Bounded exact read of one selected fork or extended attribute.
 pub struct Fork<'reader, E> {
 	reader: &'reader mut dyn ForkReader<Error = E>,
 	length: u64,

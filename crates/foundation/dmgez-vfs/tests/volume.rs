@@ -28,6 +28,8 @@ const ALIAS: &str = "alias";
 const LINK: &str = "link";
 const LINK_PAYLOAD: &[u8] = b"../file\xff";
 const DATA: &[u8] = b"content";
+const DATA_ATTRIBUTE: &str = "org.pomologie.data";
+const EMPTY_ATTRIBUTE: &str = "org.pomologie.empty";
 const MODE: u16 = 0o100640;
 const OWNER: u32 = 501;
 const GROUP: u32 = 20;
@@ -144,6 +146,39 @@ impl VolumeBackend for Backend<'_> {
 		Ok(Directory { next: 0 })
 	}
 
+	fn list_xattrs(
+		&mut self,
+		node: Id,
+		_limit: NonZeroU32,
+	) -> Result<Option<Vec<RawName>>, EngineError> {
+		Ok(match node {
+			Id::File => Some(vec![
+				RawName::Utf8(DATA_ATTRIBUTE.into()),
+				RawName::Utf8(EMPTY_ATTRIBUTE.into()),
+			]),
+			Id::Root | Id::Alias => Some(Vec::new()),
+			Id::Link => None,
+		})
+	}
+
+	fn with_xattr<T>(
+		&mut self,
+		node: Id,
+		name: LookupName<'_>,
+		read: impl FnOnce(&mut dyn ForkReader<Error = EngineError>) -> T,
+	) -> Result<Option<T>, EngineError> {
+		let data = match (node, name) {
+			(Id::File, LookupName::Utf8(DATA_ATTRIBUTE)) => DATA,
+			(Id::File, LookupName::Utf8(EMPTY_ATTRIBUTE)) => &[],
+			_ => return Ok(None),
+		};
+		Ok(Some(read(&mut ReadFork {
+			data,
+			reads: self.reads,
+			position: &mut self.position,
+		})))
+	}
+
 	fn with_fork<T>(
 		&mut self,
 		node: Id,
@@ -167,6 +202,78 @@ impl VolumeBackend for Backend<'_> {
 		assert_eq!(node, Id::Link);
 		Ok(Some(LINK_PAYLOAD.to_vec()))
 	}
+}
+
+#[test]
+fn xattrs_preserve_session_limits_and_empty_values() {
+	let reads = Cell::new(0);
+	let mut first = VolumeView::new(
+		VolumeId::WholeDisk,
+		Backend {
+			reads: &reads,
+			position: 0,
+		},
+	);
+	let mut second = VolumeView::new(
+		VolumeId::WholeDisk,
+		Backend {
+			reads: &reads,
+			position: 0,
+		},
+	);
+	let root = first.root().unwrap();
+	let file = first
+		.lookup(&root, LookupName::StoredUtf16(STORED_NAME))
+		.unwrap()
+		.unwrap();
+	let link = first
+		.lookup(&root, LookupName::Utf8(LINK))
+		.unwrap()
+		.unwrap();
+	assert!(matches!(
+		first.list_xattrs(&file.node, NonZeroU32::MIN),
+		Err(ViewError::AttributeLimit {
+			limit: 1,
+			entries: 2
+		})
+	));
+	assert!(matches!(
+		second.list_xattrs(&file.node, LINK_COUNT),
+		Err(ViewError::ForeignHandle)
+	));
+	assert_eq!(
+		first.list_xattrs(&root, LINK_COUNT).unwrap(),
+		Some(Vec::new())
+	);
+	assert_eq!(first.list_xattrs(&link.node, LINK_COUNT).unwrap(), None);
+	let names = first.list_xattrs(&file.node, LINK_COUNT).unwrap().unwrap();
+	assert!(matches!(
+		second.with_xattr(&file.node, names[0].as_lookup(), |_| panic!(
+			"foreign attribute"
+		)),
+		Err(ViewError::ForeignHandle)
+	));
+	assert!(matches!(
+		first
+			.with_xattr(&file.node, names[0].as_lookup(), |value| {
+				value.read_exact_at(value.len(), &mut [0])
+			})
+			.unwrap(),
+		Some(Err(ViewError::OutOfRange { .. }))
+	));
+	assert_eq!(
+		first
+			.with_xattr(&file.node, names[1].as_lookup(), |value| value.is_empty())
+			.unwrap(),
+		Some(true)
+	);
+	assert_eq!(
+		first
+			.with_xattr(&root, names[0].as_lookup(), |_| ())
+			.unwrap(),
+		None
+	);
+	assert_eq!(reads.get(), 0);
 }
 
 fn entry(node: Id) -> DirectoryEntry<Id> {
