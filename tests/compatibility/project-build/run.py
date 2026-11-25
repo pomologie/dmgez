@@ -17,7 +17,7 @@ VOLUME_ICON_FIXTURE = "crates/presentation/dmgez-finder/tests/fixtures/apple-ico
 DMGEZ_PACKAGES = {
     "dmgez-builder": "crates/services/dmgez-builder",
     "dmgez-config": "crates/foundation/dmgez-config",
-    "dmgez-core": "crates/foundation/dmgez-core",
+    "dmgez-hfsplus": "crates/services/dmgez-hfsplus",
     "dmgez-udif": "crates/formats/dmgez-udif",
 }
 HFSPLUS_PACKAGES = {
@@ -36,15 +36,14 @@ def resolved_packages(root, packages):
     return paths
 
 
-def isolated_manifest(paths, packaged):
+def isolated_manifest(paths):
     template = (COMPATIBILITY / "Cargo.toml.in").read_text(encoding="utf-8")
     path_literals = {name: json.dumps(str(path), ensure_ascii=False)
                      for name, path in paths.items()}
     manifest = re.sub(r"@([a-z-]+)@", lambda match: path_literals[match[1]], template)
-    if packaged:
-        manifest += "\n[patch.crates-io]\n"
-        for name in (HFSPLUS_CORE_PACKAGE, "hfsplus-format"):
-            manifest += f"{name} = {{ path = {path_literals[name]} }}\n"
+    manifest += "\n[patch.crates-io]\n"
+    for name in HFSPLUS_PACKAGES:
+        manifest += f"{name} = {{ path = {path_literals[name]} }}\n"
     return manifest
 
 
@@ -109,7 +108,7 @@ def main():
             shutil.copytree(COMPATIBILITY / required, isolated / required)
         if options.volume_icon and not options.project:
             shutil.copy2(dmgez_source / VOLUME_ICON_FIXTURE, isolated / "tests" / "smoke")
-        (isolated / "Cargo.toml").write_text(isolated_manifest(paths, options.hfsplus_packages is not None), encoding="utf-8")
+        (isolated / "Cargo.toml").write_text(isolated_manifest(paths), encoding="utf-8")
         # Preserve the command's status without echoing its definition values on failure.
         raise SystemExit(subprocess.run(command, cwd=isolated).returncode)
 

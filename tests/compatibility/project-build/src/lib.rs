@@ -1,3 +1,3 @@
 //! Development-only exercise of the versioned HFS+ builder boundary.
 
-pub mod hfsplus;
+pub use dmgez_hfsplus as hfsplus;

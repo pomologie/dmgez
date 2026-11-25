@@ -36,6 +36,7 @@ dmgez/
       dmgez-preview/             # shared preview geometry + optional renderer
     services/
       dmgez-builder/             # manifest and image construction orchestration
+      dmgez-hfsplus/             # compose the independent HFS+ builder and DMG publication
       dmgez-inspector/           # structured read-only reports / verification
       dmgez-operations/          # extraction, conversion, copy-on-write edits
       dmgez-diff/                # semantic and physical comparison, once substantial
@@ -66,7 +67,8 @@ Read arrows as `consumer -> dependency`.
 | `dmgez-config` | core |
 | `dmgez-udif` | core (or its own minimal portable format types); no filesystem |
 | `dmgez-finder` | core, config; external Finder libraries; no concrete builder |
-| `dmgez-builder` | core, config, udif writer, finder writer, independent HFS+ builder; APFS builder only when selected |
+| `dmgez-builder` | core, config, udif writer, finder writer |
+| `dmgez-hfsplus` | dmgez-builder, core, config, udif writer, independent versioned HFS+ libraries |
 | `dmgez-vfs` | core, udif reader, independent filesystem readers, partition adapters; no write service |
 | `dmgez-inspector` | core, vfs, udif reader, finder reader; metadata-only mode can avoid traversal |
 | `dmgez-operations` | core, vfs, writer/reader and builder when a requested operation needs them |
@@ -84,6 +86,8 @@ For release workflows the app (or a later shared DMG release service) composes `
 ## 4. Build profiles and feature forwarding
 
 Canonical CLI capability graph is in `docs/reference/feature-graph.json`; the graph is a target plan, not a Cargo manifest. Implement only gates whose functionality actually exists. `[workspace] resolver = "3"`, Rust edition 2024; `default-members = ["apps/dmgez-cli"]`. Each optional service dependency uses `optional = true` and `default-features = false` where appropriate; each CLI feature forwards to the owning package feature. Default CLI `build,parallel` transitively enables only `udif-write,hfsplus-build,finder-write,zlib` and required shared plumbing. Use `cargo build -p dmgez-cli --release --no-default-features --features build` for serial. Reader and write APIs should gate separately, including separate feature gates on filesystem dependencies. Never expose an option as successfully usable when compiled out. Compile a minimal help/capabilities CLI with no defaults. A library-only build does not include CLI, rayon, GUI or MCP unless selected.
+
+While the exact HFS+ dependencies are unpublished, keep their service outside the normal workspace lock. Use a temporary Cargo workspace with explicit patches to the sibling sources or unpacked packages to compile the same standalone CLI and build command. The release workspace will resolve the versioned dependencies directly.
 
 - `parallel` enables bounded worker scheduling; `build` alone works and selects serial. Enabling `parallel` alone can expose compression scheduling primitives without implicitly enabling a high-level builder. TOML `performance.parallel = "auto"` chooses compiled support and actual resources; boolean true explicitly requires compiled parallel support, false always serial. `threads=0` resolves to a bounded host-aware count. Explicit threads >1 in serial-only mode error; no silent fallback for explicit requests.
 - `inspect` enables reader + filesystem + partition detection + Finder reader, `verify` includes reader, filesystem structural verification when supported. `extract`, `diff`, `edit`, `preview`, `convert` depend on only needed readers or writers. `verify_output=true` is explicit and requires verification support; default writer performs internal checks, not full independent read-back. `verify` without supported filesystem reports partial container verification, not whole-image success.

@@ -1,0 +1,29 @@
+[package]
+name = "dmgez-hfsplus"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "Apache-2.0"
+repository = "https://github.com/pomologie/dmgez"
+description = "Compose the versioned HFS+ builder with dmgez image planning"
+
+[features]
+default = ["finder-write", "parallel"]
+finder-write = ["dmgez-builder/finder-write"]
+lzfse = ["dmgez-builder/lzfse"]
+lzma = ["dmgez-builder/lzma"]
+parallel = ["dmgez-builder/parallel"]
+volume-icon = ["finder-write", "dmgez-builder/volume-icon"]
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+dmgez-builder = { version = "=0.1.0", path = "../dmgez-builder", default-features = false, features = ["zlib"] }
+dmgez-config = { version = "=0.1.0", path = "../../foundation/dmgez-config" }
+dmgez-core = { version = "=0.1.0", path = "../../foundation/dmgez-core", default-features = false, features = ["source"] }
+dmgez-udif = { version = "=0.1.0", path = "../../formats/dmgez-udif", default-features = false, features = ["write"] }
+hfsplus-builder = "=0.1.0"
+hfsplus-core = { package = "hfsplus-pomologie-core", version = "=0.1.0" }
+hfsplus-format = "=0.1.0"
+thiserror = "=2.0.21"
+
+[lints.rust]
+unsafe_code = "forbid"

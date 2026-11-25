@@ -329,13 +329,25 @@ dependencies = [
  "clap",
  "dmgez-builder",
  "dmgez-config",
+ "dmgez-hfsplus",
+ "dmgez-udif",
+ "hfsplus-format",
+ "rustix",
+ "tempfile",
+ "thiserror",
+]
+
+[[package]]
+name = "dmgez-hfsplus"
+version = "0.1.0"
+dependencies = [
+ "dmgez-builder",
+ "dmgez-config",
  "dmgez-core",
  "dmgez-udif",
  "hfsplus-builder",
  "hfsplus-format",
  "hfsplus-pomologie-core",
- "rustix",
- "tempfile",
  "thiserror",
 ]
 

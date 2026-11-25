@@ -16,7 +16,7 @@ members = [
 	"crates/services/dmgez-operations",
 ]
 default-members = ["apps/dmgez-cli"]
-exclude = ["fuzz"]
+exclude = ["crates/services/dmgez-hfsplus", "fuzz"]
 
 [workspace.package]
 edition = "2024"
