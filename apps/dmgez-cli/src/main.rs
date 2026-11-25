@@ -20,9 +20,11 @@ mod project_input;
 #[cfg(any(
 	feature = "hfsplus-read",
 	feature = "apfs-read",
+	feature = "signing-native",
 	all(feature = "installer-lint", any(unix, windows)),
 ))]
 mod report_output;
+mod signing;
 mod verify_command;
 mod volume_commands;
 #[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
@@ -125,6 +127,11 @@ enum Command {
 		suppress: Vec<String>,
 		#[arg(long)]
 		json: bool,
+	},
+	/// Inspect or verify the code signature on an existing app or disk image.
+	Sign {
+		#[command(subcommand)]
+		action: signing::Action,
 	},
 	/// Translate appdmg JSON settings into a new dmgez project.
 	#[command(name = IMPORT_APPDMG_COMMAND)]
@@ -253,7 +260,10 @@ type CliResult<T = ()> = Result<T, Box<dyn Error>>;
 
 fn main() -> ExitCode {
 	let command = Cli::parse().command;
-	let error_status = if matches!(command, Command::Diff(_) | Command::Lint { .. }) {
+	let error_status = if matches!(
+		command,
+		Command::Diff(_) | Command::Lint { .. } | Command::Sign { .. }
+	) {
 		ExitCode::from(REPORT_ERROR_EXIT_CODE)
 	} else {
 		ExitCode::FAILURE
@@ -339,6 +349,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 			] {
 				report_field(name, if compiled { COMPILED } else { NOT_COMPILED });
 			}
+			report_field(signing::NATIVE_FEATURE, signing::NATIVE_CAPABILITY);
 			Ok(())
 		}
 		#[cfg(feature = "project-build")]
@@ -404,6 +415,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 			profile: LintProfile::Layout,
 			..
 		} => Err(format!("feature not compiled: {LINT_COMMAND}").into()),
+		Command::Sign { action } => return signing::run(&action),
 		#[cfg(feature = "appdmg-import")]
 		Command::ImportAppdmg {
 			settings,

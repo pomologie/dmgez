@@ -22,6 +22,7 @@ finder-diff = ["diff", "dmgez-diff/finder-layout"]
 appdmg-import = ["dep:dmgez-config", "dmgez-config/appdmg-import", "dep:dmgez-core"]
 lint = ["dep:dmgez-config", "dep:dmgez-lint", "dep:dmgez-preview", "dep:serde", "dep:serde_json"]
 installer-lint = ["lint", "dmgez-lint/installer"]
+signing-native = ["dep:dmgez-signing", "dmgez-signing/native", "dep:serde", "dep:serde_json"]
 parallel = ["dmgez-udif?/parallel", "dmgez-operations?/parallel"]
 lzfse = ["dmgez-udif?/lzfse"]
 lzma = ["dmgez-udif?/lzma"]
@@ -36,6 +37,7 @@ dmgez-inspector = { workspace = true, optional = true }
 dmgez-lint = { workspace = true, optional = true }
 dmgez-operations = { workspace = true, optional = true }
 dmgez-preview = { workspace = true, optional = true }
+dmgez-signing = { workspace = true, optional = true }
 dmgez-udif = { workspace = true, optional = true }
 dmgez-vfs = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }

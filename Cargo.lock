@@ -1019,6 +1019,7 @@ dependencies = [
  "dmgez-lint",
  "dmgez-operations",
  "dmgez-preview",
+ "dmgez-signing",
  "dmgez-udif",
  "dmgez-vfs",
  "serde",

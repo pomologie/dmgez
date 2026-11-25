@@ -19,14 +19,16 @@ PROFILES = {
     "layout_lint": (["--no-default-features", "--features", "lint"], {"dmgez-config", "dmgez-lint", "dmgez-preview", "serde_json"}),
     "installer_lint": (["--no-default-features", "--features", "installer-lint"], {"dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-lint", "dmgez-preview", "dmgez-udif", "serde_json"}),
     "appdmg_import": (["--no-default-features", "--features", "appdmg-import"], {"dmgez-config", "dmgez-core", "serde_json"}),
+    "native_signing": (["--no-default-features", "--features", "signing-native"],
+                       {"dmgez-signing", "serde_json"} | ({"dmgez-udif"} if sys.platform == "darwin" else set())),
 }
 OUTSIDE_DEFAULT = {
-    "apple-dmg", "apfs", "apfs-container", "apfs-core", "apfs-format", "apfs-reader",
+    "apple-codesign", "apple-dmg", "apfs", "apfs-container", "apfs-core", "apfs-format", "apfs-reader",
     "bzip2", "dmgez-apfs-read", "dmgez-hfsplus-read", "eframe", "egui", "fstool", "fuser",
     "hfsplus-reader", "lzfse_rust", "lzma-rust2", "notify",
     "reqwest", "rmcp", "tokio", "udif", "winfsp",
 }
-PROFILE_DEPS = {"blake3", "dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-inspector", "dmgez-lint", "dmgez-operations", "dmgez-preview", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "rayon", "serde_json"}
+PROFILE_DEPS = {"blake3", "dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-inspector", "dmgez-lint", "dmgez-operations", "dmgez-preview", "dmgez-signing", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "rayon", "serde_json"}
 
 
 def main():
@@ -55,7 +57,7 @@ def main():
                     "read": profile in ("inspection", "conversion", "parallel_conversion", "comparison", "hash_comparison", "finder_comparison"),
                     "write": profile in ("serial", "default", "conversion", "parallel_conversion", "installer_lint"),
                     "parallel": profile in ("default", "parallel_conversion"),
-                    "zlib": profile != "installer_lint", "lzfse": False, "lzma": False,
+                    "zlib": profile not in ("installer_lint", "native_signing"), "lzfse": False, "lzma": False,
                 }[feature]
                 if active != expected_active:
                     errors.append(f"{profile} profile: unexpected activation state for {feature}")
