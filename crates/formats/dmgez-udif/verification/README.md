@@ -8,6 +8,12 @@ The logical cross-table harness supplies two `Run` values with the shapes guaran
 
 Kani 0.68.0 with CBMC 6.11.0 on macOS arm64 verified the four harnesses in 94.16 seconds with four verification jobs. The eight-record composition took 92.11 seconds and reached all four covers. A scratch mutation allowed an incomplete logical table to finish successfully. Kani rejected it at the terminal coverage assertion.
 
+The D-V03 [checksum-domain harness](checksum_domains.rs) compares the production writer, trailer and table declarations, and reader verification with a bitwise IEEE CRC32 oracle. It exercises one eight-sector mixed disk in UDRO and UDZO, writer chunk widths of one through eight sectors, and four input read strides. The UDZO one-sector case emits raw, compressed, and zero runs. A 257-sector raw run checks separately fragmented reads of the data fork and the logical table.
+
+The native fixtures and their [recorded manifests](../../../../tests/fixtures/manifests) establish the data-fork, table, and master checksum domains. The harness verifies that explicit zero sectors contribute to the table CRC and ignored sectors are omitted. A four-table native fixture checks the master checksum of big-endian table CRCs in resource order. A changed raw sector with a recomputed data-fork CRC must still produce a logical-table checksum mismatch with the original and measured values. All six fixtures passed `hdiutil verify -nocache` on macOS 14.7.2 (23H311), and their SHA-256 digests matched before and after the checks.
+
+Run the bounded checksum tests with `cargo test --locked -p dmgez-udif --test checksum_domains` from the workspace root.
+
 The indexed-read harnesses cover routing for D-V04 through the production cursor called by `Image::read_exact_at`. They assume a contiguous logical partition and an admitted request. There are zero to eight runs, with arbitrary strictly increasing `u64` endpoints and reverse backing order. The neighboring endpoints identify the unique starting ordinal. The step harness checks the exact half-open fragment, advancement to the following run when bytes remain, and termination on an empty request. The unwind bound is 10. Reachability checks include a later starting run, a request at the disk end, and a fragment that ends at a run boundary while the request continues.
 
 The routing checks enable only `read`. Parser admission, output-buffer arithmetic, payload decoding, unknown encodings, I/O failures, and verification outside the stated finite bounds require separate evidence in the obligation registry.
