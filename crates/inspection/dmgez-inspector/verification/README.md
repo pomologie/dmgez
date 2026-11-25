@@ -17,7 +17,7 @@ The model assumes each origin binds its strong tags to the represented bytes. Th
 Run from the repository root with Java 21 and the SHA-256-pinned TLA+ Tools v1.8.0 JAR. The checker leaves TLC's deadlock check enabled and requires both mutations to violate their intended invariants.
 
 ```sh
-TLA2TOOLS_JAR=/path/to/tla2tools.jar bash crates/services/dmgez-inspector/verification/check.sh
+TLA2TOOLS_JAR=/path/to/tla2tools.jar bash crates/inspection/dmgez-inspector/verification/check.sh
 ```
 
 On macOS 14.7.2 arm64 with Temurin 21.0.8, TLC build `2026.11.19.180144` (`bc1b506`) explored 13,664 generated states and 5,376 distinct states from 128 initial states. The positive search reached depth 12 with an empty queue and no invariant or deadlock failures.

@@ -25,20 +25,24 @@ members = [
 	# Security
 	"crates/security/dmgez-signing",
 
-	# Services
-	"crates/services/dmgez-builder",
-	"crates/services/dmgez-cache",
-	"crates/services/dmgez-diff",
-	"crates/services/dmgez-inspector",
-	"crates/services/dmgez-lint",
-	"crates/services/dmgez-operations",
+	# Build
+	"crates/build/dmgez-builder",
+	"crates/build/dmgez-cache",
+
+	# Inspection
+	"crates/inspection/dmgez-diff",
+	"crates/inspection/dmgez-inspector",
+	"crates/inspection/dmgez-lint",
+
+	# Runtime
+	"crates/runtime/dmgez-operations",
 ]
 default-members = ["apps/dmgez-cli"]
 exclude = [
 	# Composed filesystem adapters
-	"crates/services/dmgez-apfs-read",
-	"crates/services/dmgez-hfsplus",
-	"crates/services/dmgez-hfsplus-read",
+	"crates/adapters/dmgez-apfs-read",
+	"crates/adapters/dmgez-hfsplus",
+	"crates/adapters/dmgez-hfsplus-read",
 
 	# Fuzz harness
 	"fuzz",
@@ -73,13 +77,17 @@ dmgez-preview = { path = "crates/presentation/dmgez-preview" }
 # Workspace security
 dmgez-signing = { path = "crates/security/dmgez-signing", default-features = false }
 
-# Workspace services
-dmgez-builder = { path = "crates/services/dmgez-builder", default-features = false }
-dmgez-cache = { path = "crates/services/dmgez-cache" }
-dmgez-diff = { path = "crates/services/dmgez-diff" }
-dmgez-inspector = { path = "crates/services/dmgez-inspector", default-features = false }
-dmgez-lint = { path = "crates/services/dmgez-lint" }
-dmgez-operations = { path = "crates/services/dmgez-operations", default-features = false }
+# Workspace build
+dmgez-builder = { path = "crates/build/dmgez-builder", default-features = false }
+dmgez-cache = { path = "crates/build/dmgez-cache" }
+
+# Workspace inspection
+dmgez-diff = { path = "crates/inspection/dmgez-diff" }
+dmgez-inspector = { path = "crates/inspection/dmgez-inspector", default-features = false }
+dmgez-lint = { path = "crates/inspection/dmgez-lint" }
+
+# Workspace runtime
+dmgez-operations = { path = "crates/runtime/dmgez-operations", default-features = false }
 
 # Compression
 flate2 = { version = "=1.1.11", default-features = false, features = ["zlib-rs"] }

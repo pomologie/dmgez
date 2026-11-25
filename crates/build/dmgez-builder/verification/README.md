@@ -52,7 +52,7 @@ The native Rust tests exercise replacement with old handles kept open, protected
 Supply the official TLA+ Tools v1.8.0 JAR and run the checker from the repository root. It verifies the release digest before running TLC, uses one breadth-first worker with seed 1 and fingerprint 0, and checks the exact invariant diagnostics and trace witnesses expected from the negative configurations. TLC's default deadlock check remains enabled. [Pinned release asset and SHA-256](https://github.com/tlaplus/tlaplus/releases/expanded_assets/v1.8.0)
 
 ```sh
-TLA2TOOLS_JAR=/path/to/tla2tools.jar bash crates/services/dmgez-builder/verification/check.sh
+TLA2TOOLS_JAR=/path/to/tla2tools.jar bash crates/build/dmgez-builder/verification/check.sh
 cargo nextest run --locked -p dmgez-core -p dmgez-builder --features dmgez-core/staging \
 	--test publication --test replacement --test execution
 ```
@@ -78,7 +78,7 @@ Run from the repository root with Python 3.11 or later and source or unpacked HF
 
 ```sh
 python3 tools/compose_hfsplus_cli.py --hfsplus ../hfsplus --features hfsplus-read,diff
-python3 crates/services/dmgez-builder/verification/check-reproducibility.py \
+python3 crates/build/dmgez-builder/verification/check-reproducibility.py \
 	--dmgez target/hfsplus-cli/debug/dmgez --native
 ```
 

@@ -18,9 +18,9 @@ HFSPLUS_VERSION = "0.1.0"
 HFSPLUS_CORE_PACKAGE = "hfsplus-pomologie-core"
 VOLUME_ICON_FIXTURE = "crates/presentation/dmgez-finder/tests/fixtures/apple-iconutil.icns"
 DMGEZ_PACKAGES = {
-    "dmgez-builder": "crates/services/dmgez-builder",
+    "dmgez-builder": "crates/build/dmgez-builder",
     "dmgez-config": "crates/foundation/dmgez-config",
-    "dmgez-hfsplus": "crates/services/dmgez-hfsplus",
+    "dmgez-hfsplus": "crates/adapters/dmgez-hfsplus",
     "dmgez-udif": "crates/formats/dmgez-udif",
 }
 HFSPLUS_PACKAGES = {

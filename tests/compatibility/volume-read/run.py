@@ -19,7 +19,7 @@ APFS_ENGINE = "apfs"
 APFS_ADAPTER_PACKAGE = "dmgez-apfs-read"
 HFSX_FEATURE = "hfsx-fixture"
 DMGEZ_PACKAGES = {
-    "dmgez-operations": "crates/services/dmgez-operations",
+    "dmgez-operations": "crates/runtime/dmgez-operations",
     "dmgez-udif": "crates/formats/dmgez-udif",
     "dmgez-vfs": "crates/foundation/dmgez-vfs",
 }
@@ -89,7 +89,7 @@ def run(dmgez, engine, source, packaged, hfsx):
     packages = resolve_packages(dmgez, DMGEZ_PACKAGES)
     packages.update(resolve_packages(source, locations))
     adapter = ADAPTER_PACKAGES[engine]
-    packages.update(resolve_packages(dmgez, {adapter: f"crates/services/{adapter}"}))
+    packages.update(resolve_packages(dmgez, {adapter: f"crates/adapters/{adapter}"}))
     patches = PACKAGE_PATCHES[engine]
     fixtures = [recipe / "fixtures.json"]
     command = ["cargo", "test", "--offline", "--locked"]

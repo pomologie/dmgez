@@ -38,7 +38,7 @@ jobs:
           python3 tools/check_rust_roots.py
       - run: cargo fmt --all -- --check
       - run: cargo fmt --manifest-path fuzz/Cargo.toml -- --check
-      - run: cargo fmt --manifest-path crates/services/dmgez-hfsplus/Cargo.toml -- --check
+      - run: cargo fmt --manifest-path crates/adapters/dmgez-hfsplus/Cargo.toml -- --check
       - run: cargo install --locked cargo-nextest --version '=0.9.151'
       - run: cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
       - run: cargo nextest run --locked --workspace --all-features
@@ -98,7 +98,7 @@ jobs:
       - run: cargo kani setup
       - run: bash crates/formats/dmgez-udif/verification/check.sh
       - run: bash crates/foundation/dmgez-vfs/verification/check.sh
-      - run: bash crates/services/dmgez-operations/verification/check.sh
+      - run: bash crates/runtime/dmgez-operations/verification/check.sh
 
   native-udif:
     runs-on: macos-15

@@ -35,16 +35,19 @@ dmgez/
     presentation/
       dmgez-finder/              # DMG layout + generated records/assets orchestration
       dmgez-preview/             # shared preview geometry + optional renderer
-    services/
+    build/
       dmgez-builder/             # manifest and image construction orchestration
+      dmgez-cache/               # DMG-specific block reuse, optional
+    adapters/
       dmgez-hfsplus/             # compose the independent HFS+ builder and DMG publication
       dmgez-hfsplus-read/        # adapter for HFS+ browsing and structural verification
       dmgez-apfs-read/           # APFS browsing, reachable verification and quarantine admission
+    inspection/
       dmgez-inspector/           # structured read-only reports / verification
-      dmgez-operations/          # extraction, conversion, copy-on-write edits
       dmgez-diff/                # semantic and physical comparison, once substantial
       dmgez-lint/                # policy-based diagnostics and release checks
-      dmgez-cache/               # DMG-specific block reuse, optional
+    runtime/
+      dmgez-operations/          # extraction, conversion, copy-on-write edits
     platform/
       dmgez-mount/               # OS backends and managed sessions
       dmgez-install/             # explicit bundle copy/install and safe monitoring

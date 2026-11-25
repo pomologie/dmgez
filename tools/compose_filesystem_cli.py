@@ -69,6 +69,12 @@ APFS_PACKAGES = {
     APFS_READER: "crates/filesystem/apfs-reader",
 }
 APFS_ADAPTER = "dmgez-apfs-read"
+COMPOSED_CRATE_GROUPS = {
+    "dmgez-builder": "build",
+    ADAPTER: "adapters",
+    READ_ADAPTER: "adapters",
+    APFS_ADAPTER: "adapters",
+}
 APFS_FEATURE = "apfs-read"
 APFS_EXTRACT_FEATURE = "apfs-extract"
 APFS_INSTALL_FEATURE = "apfs-install"
@@ -221,8 +227,8 @@ def compose_cli_manifest(manifest, reader, build, apfs):
         normal, dev_boundary, development = dependencies.partition("\n[dev-dependencies]\n")
         if not dev_boundary:
             raise ValueError("could not find the CLI dev-dependencies section")
-        normal += "\n# Composed filesystem services\n" + "".join(
-            f'{name} = {{ path = "../../crates/services/{name}", '
+        normal += "\n# Composed filesystem dependencies\n" + "".join(
+            f'{name} = {{ path = "../../crates/{COMPOSED_CRATE_GROUPS[name]}/{name}", '
             "optional = true, default-features = false }\n"
             for name in sorted(dependencies_to_add)
         )
@@ -254,8 +260,8 @@ def compose_desktop_manifest(manifest):
         manifest = manifest.replace(dependency_section, feature_section + group + dependency_section, 1)
     return manifest.replace(
         development_section,
-        "\n# Composed filesystem services\n"
-        f'{READ_ADAPTER} = {{ path = "../../crates/services/{READ_ADAPTER}", '
+        "\n# Composed filesystem dependencies\n"
+        f'{READ_ADAPTER} = {{ path = "../../crates/{COMPOSED_CRATE_GROUPS[READ_ADAPTER]}/{READ_ADAPTER}", '
         'optional = true, default-features = false, features = ["browse"] }\n'
         "dmgez-vfs = { workspace = true, optional = true }\n"
         + development_section,

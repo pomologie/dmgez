@@ -21,7 +21,7 @@ Four tests passed against HFS+ revision `2571ebb3d47c0ebc056dc5f28fe7325eef61d0d
 
 The fixture bytes cover selected recorded ranges. The tests reconstruct the disk with those bytes at their captured offsets and zeroes elsewhere. In an instrumented 16 GiB logical disk containing the recorded HFS+ volume, layout discovery, one directory page, and hard-link metadata used 55 reads totaling 195,118 bytes without reading a file payload block. The test checks both seven-byte fork requests at their recorded physical ranges and rejects budget overruns before dispatching the next header read. This covers the filesystem adapter portions of D-READ-03-T01 and D-READ-03-T02. [I/O witness](hfsplus/tests/browse_budget.rs)
 
-The native catalog session lends the original volume and catalog for rebuild planning. It shares the browse path's I/O budgets and exposes stored fork readers without materializing their payloads. The HFS+ hard-link fixture confirms that opening both forks reads metadata only and that subsequent reads request the exact data and resource byte ranges. [Catalog session](../../../crates/services/dmgez-hfsplus-read/src/browse/session.rs) · [I/O witness](hfsplus/tests/browse_budget.rs)
+The native catalog session lends the original volume and catalog for rebuild planning. It shares the browse path's I/O budgets and exposes stored fork readers without materializing their payloads. The HFS+ hard-link fixture confirms that opening both forks reads metadata only and that subsequent reads request the exact data and resource byte ranges. [Catalog session](../../../crates/adapters/dmgez-hfsplus-read/src/browse/session.rs) · [I/O witness](hfsplus/tests/browse_budget.rs)
 
 ## APFS
 

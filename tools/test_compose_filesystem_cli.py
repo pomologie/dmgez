@@ -29,12 +29,14 @@ class ReleaseCompositionTests(unittest.TestCase):
                 self.assertIn(line, text.splitlines())
         for group in (
             "HFS+ project build, edit and release", "HFS+ Finder metadata", "HFS+ volume access",
-            "APFS volume access", "Composed filesystem services", "Hashes and checksums",
+            "APFS volume access", "Composed filesystem dependencies", "Hashes and checksums",
         ):
             self.assertIn(f"\n# {group}\n", text)
         self.assertIn('image-edit = [\n\t"project-build",\n', text)
         self.assertIn('[dev-dependencies]\n# Workspace presentation\ndmgez-finder.workspace = true\n', text)
-        tomllib.loads(text)
+        composed = tomllib.loads(text)["dependencies"]
+        for name, group in compose.COMPOSED_CRATE_GROUPS.items():
+            self.assertEqual(composed[name]["path"], f"../../crates/{group}/{name}")
 
     def test_watch_requires_selected_mount_and_installation_services(self):
         manifest = (compose.ROOT / compose.CLI / compose.MANIFEST).read_text(encoding="utf-8")

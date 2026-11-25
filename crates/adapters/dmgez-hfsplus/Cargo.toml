@@ -45,7 +45,7 @@ dmgez-core = { version = "=0.1.0", path = "../../foundation/dmgez-core", default
 dmgez-finder = { version = "=0.1.0", path = "../../presentation/dmgez-finder", optional = true }
 
 # Workspace services
-dmgez-builder = { version = "=0.1.0", path = "../dmgez-builder", default-features = false, features = ["zlib"] }
+dmgez-builder = { version = "=0.1.0", path = "../../build/dmgez-builder", default-features = false, features = ["zlib"] }
 
 # HFS+ libraries
 hfsplus-builder = "=0.1.0"

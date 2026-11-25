@@ -33,7 +33,7 @@ On macOS and Linux, set `sidecar = "sources/._Manual.pdf"` under `[metadata]` to
 
 The admitted AppleDouble version 2 profile carries a resource fork, Finder information, and the bounded macOS `ATTR` layout with ordinary attribute names and values. The build checks the admitted file identity when reading both sources, merges equal values once, and rejects conflicting native metadata under either metadata policy. The normal per-field preservation settings still apply. Versioned multi-file manifests, AppleDouble ACL and compressed-file records, and Windows sidecar import remain outside the current profile. [RFC 1740](https://www.rfc-editor.org/rfc/rfc1740) · [Apple copyfile documentation](https://github.com/apple-oss-distributions/copyfile/blob/main/copyfile.3)
 
-D-BUILD-03-T03 was exercised with AppleDouble produced by `ditto` on arm64 macOS 14.7.2 and HFS+ packages from `fb11b35`. Native readback of a disposable image matched both forks, Finder information and the imported extended attribute. A different native resource fork caused the build to fail before publication. [Builder sidecar tests](../../crates/services/dmgez-builder/src/metadata/sidecar/tests.rs)
+D-BUILD-03-T03 was exercised with AppleDouble produced by `ditto` on arm64 macOS 14.7.2 and HFS+ packages from `fb11b35`. Native readback of a disposable image matched both forks, Finder information and the imported extended attribute. A different native resource fork caused the build to fail before publication. [Builder sidecar tests](../../crates/build/dmgez-builder/src/metadata/sidecar/tests.rs)
 
 ## Cross-platform safety and acceptance
 
