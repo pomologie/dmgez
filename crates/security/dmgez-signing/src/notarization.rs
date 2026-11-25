@@ -9,10 +9,14 @@ use crate::ResolvedBackend;
 
 #[cfg(target_os = "macos")]
 mod flow;
+mod staple;
 #[cfg(target_os = "macos")]
 mod store;
 #[cfg(target_os = "macos")]
 pub(crate) use flow::{Receipt, Service, Submission};
+#[cfg(target_os = "macos")]
+pub(crate) use staple::AcceptedImage;
+pub use staple::{StapleReport, staple};
 
 #[cfg(target_os = "macos")]
 const REPORT_VERSION: u16 = 1;
@@ -220,6 +224,10 @@ pub enum Error {
 	},
 	#[error("could not prepare the native notarization tool: {0}")]
 	Tool(#[source] Box<dyn std::error::Error + Send + Sync>),
+	#[error("the record must contain an accepted notarization with a verified image digest")]
+	AcceptanceRequired,
+	#[error("could not staple and publish the disk image")]
+	Staple(#[source] Box<dyn std::error::Error + Send + Sync>),
 }
 
 /// Reserve a new private record, then submit an exact copy of the signed DMG.

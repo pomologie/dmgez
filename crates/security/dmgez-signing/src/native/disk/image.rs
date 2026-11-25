@@ -15,7 +15,7 @@ use super::Artifact;
 use crate::native::runner;
 
 const MAX_UNSIGNED_BYTES: u64 = 1 << 40;
-const MAX_SIGNATURE_BYTES: u64 = 16 << 20;
+pub(in crate::native) const MAX_SIGNATURE_BYTES: u64 = 16 << 20;
 #[cfg(feature = "notarization-native")]
 pub(in crate::native) const MAX_SIGNED_BYTES: u64 = MAX_UNSIGNED_BYTES + MAX_SIGNATURE_BYTES;
 const COPY_BUFFER_BYTES: usize = 64 << 10;
@@ -57,10 +57,7 @@ pub(super) fn copy_unsigned(source: &Artifact, stage: &mut File) -> Result<Unsig
 	hash.update(trailer);
 
 	let quarantine = read_quarantine(source.file())?;
-	if let Some(value) = &quarantine {
-		fs::fsetxattr(&*stage, QUARANTINE, value, fs::XattrFlags::empty())
-			.map_err(|error| SignError::Quarantine(error.into()))?;
-	}
+	write_quarantine(stage, quarantine.as_deref())?;
 	stage.sync_all().map_err(SignError::ImageIo)?;
 	source.validate()?;
 	Ok(Unsigned {
@@ -103,7 +100,7 @@ impl Unsigned {
 	}
 }
 
-pub(super) fn verify_checksum(artifact: &Artifact) -> Result<(), SignError> {
+pub(in crate::native) fn verify_checksum(artifact: &Artifact) -> Result<(), SignError> {
 	let mut arguments: Vec<_> = VERIFY_OPTIONS.iter().map(OsStr::new).collect();
 	// hdiutil rejects an end-of-options marker. The captured absolute path
 	// cannot be interpreted as a flag, positional URL, or special operand.
@@ -144,7 +141,7 @@ fn matching_crc(report: &[u8]) -> bool {
 		})
 }
 
-fn read_quarantine(file: &File) -> Result<Option<Vec<u8>>, SignError> {
+pub(in crate::native) fn read_quarantine(file: &File) -> Result<Option<Vec<u8>>, SignError> {
 	let mut value = [0; MAX_QUARANTINE_BYTES];
 	match fs::fgetxattr(file, QUARANTINE, &mut value[..]) {
 		Ok(size) => Ok(Some(value[..size].to_vec())),
@@ -153,7 +150,18 @@ fn read_quarantine(file: &File) -> Result<Option<Vec<u8>>, SignError> {
 	}
 }
 
-fn read_trailer(mut file: &File) -> Result<[u8; TRAILER_BYTES], SignError> {
+pub(in crate::native) fn write_quarantine(
+	file: &File,
+	value: Option<&[u8]>,
+) -> Result<(), SignError> {
+	if let Some(value) = value {
+		fs::fsetxattr(file, QUARANTINE, value, fs::XattrFlags::empty())
+			.map_err(|error| SignError::Quarantine(error.into()))?;
+	}
+	Ok(())
+}
+
+pub(in crate::native) fn read_trailer(mut file: &File) -> Result<[u8; TRAILER_BYTES], SignError> {
 	let mut trailer = [0; TRAILER_BYTES];
 	file.seek(SeekFrom::End(-(TRAILER_BYTES as i64)))
 		.map_err(SignError::ImageIo)?;

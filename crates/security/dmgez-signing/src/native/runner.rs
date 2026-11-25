@@ -25,6 +25,12 @@ const SECURITY: &str = "/usr/bin/security";
 const XCRUN: &str = "/usr/bin/xcrun";
 #[cfg(feature = "notarization-native")]
 const NOTARYTOOL: &str = "notarytool";
+#[cfg(feature = "notarization-native")]
+const STAPLER: &str = "stapler";
+#[cfg(feature = "notarization-native")]
+const FIND_TOOL: &str = "--find";
+#[cfg(feature = "notarization-native")]
+const TOOL_LOOKUP_TIMEOUT: Duration = Duration::from_secs(10);
 const IDENTITY_LOOKUP: &[&str] = &["find-identity", "-v", "-p", "codesigning"];
 const SYSTEM_ROOT: &str = "/";
 const SYSTEM_PATH: &str = "/usr/bin:/bin";
@@ -99,6 +105,24 @@ pub(super) fn notarytool(
 		Command::new(XCRUN).arg(NOTARYTOOL).args(args),
 		timeout,
 		output_limit,
+	)
+}
+
+#[cfg(feature = "notarization-native")]
+pub(super) fn find_stapler() -> Result<Output, Error> {
+	run(
+		Command::new(XCRUN).args([FIND_TOOL, STAPLER]),
+		TOOL_LOOKUP_TIMEOUT,
+		MAX_OUTPUT_BYTES,
+	)
+}
+
+#[cfg(feature = "notarization-native")]
+pub(super) fn stapler(args: &[&OsStr]) -> Result<Output, Error> {
+	run(
+		Command::new(XCRUN).arg(STAPLER).args(args),
+		TIMEOUT,
+		MAX_OUTPUT_BYTES,
 	)
 }
 

@@ -16,6 +16,10 @@ pub(crate) mod notary_tool;
 mod policy;
 mod runner;
 mod stage;
+#[cfg(feature = "notarization-native")]
+pub(crate) mod staple_image;
+#[cfg(feature = "notarization-native")]
+mod stapler;
 
 #[cfg(test)]
 mod tests;
