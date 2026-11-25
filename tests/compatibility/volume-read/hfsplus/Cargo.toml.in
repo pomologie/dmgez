@@ -16,6 +16,7 @@ dmgez-operations = { version = "=0.1.0", path = @dmgez-operations@, default-feat
 dmgez-udif = { path = @dmgez-udif@, default-features = false, features = ["read", "write", "zlib"] }
 dmgez-vfs = { path = @dmgez-vfs@, default-features = false }
 hfsplus-builder = { version = "=0.1.0", path = @hfsplus-builder@ }
+hfsplus-core = { package = "hfsplus-pomologie-core", version = "=0.1.0", path = @hfsplus-pomologie-core@ }
 hfsplus-format = { version = "=0.1.0", path = @hfsplus-format@ }
 hfsplus-reader = { version = "=0.1.0", path = @hfsplus-reader@ }
 

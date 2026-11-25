@@ -99,6 +99,7 @@ dependencies = [
  "dmgez-vfs",
  "hfsplus-builder",
  "hfsplus-format",
+ "hfsplus-pomologie-core",
  "hfsplus-reader",
  "tempfile",
 ]

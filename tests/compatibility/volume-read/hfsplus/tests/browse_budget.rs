@@ -1,11 +1,13 @@
 use std::{cell::RefCell, num::NonZeroU16, ops::Range};
 
-use dmgez_hfsplus_read::browse::{Error, Limits, SourceError, with_view};
+use dmgez_hfsplus_read::browse::{Error, Limits, SourceError, with_catalog, with_view};
 use dmgez_vfs::{
 	Disk, LogicalDisk, VolumeId,
 	volume::{ForkKind, LookupName, NodeKind},
 };
-use hfsplus_format::volume::{HEADER_BYTES, PRIMARY_HEADER_OFFSET};
+use hfsplus_core::{ByteOffset, ReadAt};
+use hfsplus_format::volume::{HEADER_BYTES, PRIMARY_HEADER_OFFSET, Signature};
+use hfsplus_reader::overflow::ForkKind as StoredFork;
 
 const FIXTURE: &[u8] = include_bytes!("fixtures/native-chained-hardlinks.bin");
 const SOURCE_BYTES: u64 = 16 << 30;
@@ -162,6 +164,47 @@ fn exact_data_and_resource_reads_touch_only_their_requested_native_ranges() {
 			let payload = payload_reads(&reads.borrow());
 			assert_eq!(payload.len(), 1, "payload reads: {payload:?}");
 			assert_eq!(payload[0], start..start + LENGTH as u64);
+		}
+	})
+	.unwrap();
+}
+
+#[test]
+fn native_catalog_lends_both_stored_forks_without_materializing_payload() {
+	let reads = Reads::default();
+	let mut disk = native_disk(&reads);
+	let limits = Limits::default();
+	with_catalog(&mut disk, VolumeId::WholeDisk, limits, |volume, catalog| {
+		assert_eq!(volume.header().signature, Signature::HfsPlus);
+		let root = catalog.root().unwrap();
+		let entry = catalog
+			.lookup(root.metadata.id, LINK_NAME)
+			.unwrap()
+			.unwrap();
+		let file = catalog
+			.regular_file(entry.metadata.id, limits.hard_links)
+			.unwrap()
+			.unwrap();
+		assert_eq!(file.hard_link().unwrap().count.get(), NATIVE_LINK_COUNT);
+		let data = file
+			.open_stored_fork(StoredFork::Data, limits.stored_fork)
+			.unwrap();
+		let resource = file
+			.open_stored_fork(StoredFork::Resource, limits.stored_fork)
+			.unwrap();
+		assert!(payload_reads(&reads.borrow()).is_empty());
+		for (fork, start, expected) in [
+			(data, INODE_19_DATA, NATIVE_DATA),
+			(resource, INODE_19_RESOURCE, NATIVE_RESOURCE),
+		] {
+			reads.borrow_mut().clear();
+			assert_eq!(fork.len().0, expected.len() as u64);
+			let mut output = vec![0; expected.len()];
+			fork.read_exact_at(ByteOffset(0), &mut output).unwrap();
+			assert_eq!(output, expected);
+			let payload = payload_reads(&reads.borrow());
+			assert_eq!(payload.len(), 1);
+			assert_eq!(payload[0], start..start + fork.len().0);
 		}
 	})
 	.unwrap();
