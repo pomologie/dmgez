@@ -116,6 +116,8 @@ The qualified source profile covers ordinary regular file permissions and owners
 
 With a composed release CLI that includes `inspect`, run `python3 check_ci_project.py /path/to/dmgez /path/to/output --seven-zip 7z`. The fixture builds the unsigned image twice and builds an ad hoc release with the default Rust signer. It checks each container, verifies the signature separately, and compares the signed raw export with 7-Zip’s independent decode.
 
+The fixture defaults to UDZO and requires a zlib run. For UDRO, pass `--format udro` and use a separate output directory. The UDRO check requires stored raw runs with no zlib runs. Both profiles check the same HFS+ payload and symlink, byte-for-byte unsigned reproducibility, and exact preservation of the logical disk during signing.
+
 The fixture passed on arm64 macOS 14.7.2 and in an offline x86-64 Linux container with HFS+ `185ba1d`. The two hosts produced identical DMGs. The unsigned SHA-256 was `2ee99222fba33459bb167732656ded0452e53f5db3d01f7e536900a193fb16ea`. The signed SHA-256 was `7d4e0d4a49f1287c02ab40ba5c681aab4b2a2c7944c55ec1d50f08e0b787e85b`. Apple’s `hdiutil verify` and strict `codesign` checks passed on macOS. The hosted three-platform matrix still awaits its first recorded run. [CI workflow](../../../.github/workflows/project-build.yml)
 
 ## Windows NTFS composition

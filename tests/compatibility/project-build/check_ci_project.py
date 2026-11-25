@@ -25,18 +25,20 @@ PAYLOAD_PATH = f"{VOLUME_NAME}/Documentation/Release Nôtes.bin"
 APPLICATIONS_PATH = f"{VOLUME_NAME}/Applications"
 APPLICATIONS_TARGET = b"/Applications"
 BUILD_REPORT_SCHEMA_VERSION = 1
+UDRO = "udro"
+UDZO = "udzo"
 
 
-def build(cli, directory, preview):
+def build(cli, directory, preview, image_format):
     directory.mkdir()
     shutil.copyfile(PROJECT, directory / PROJECT.name)
     (directory / SOURCE_NAME).write_bytes(PAYLOAD)
     image = directory / IMAGE_NAME
-    command = (cli, "build", PROJECT.name, "--json")
+    command = (cli, "build", PROJECT.name, "--json", "--set", f"image.format={image_format}")
     expected = {
         "schema_version": BUILD_REPORT_SCHEMA_VERSION,
         "operation": "build",
-        "format": "udzo",
+        "format": image_format,
         "release": "configured_stages_deferred",
         "logical_bytes": str(LOGICAL_BYTES),
     }
@@ -63,15 +65,20 @@ def build(cli, directory, preview):
     return image
 
 
-def verify_container(cli, image, *, signed=False):
+def verify_container(cli, image, image_format, *, signed=False):
     report = json.loads(subprocess.check_output([cli, "verify", image, "--container", "--json"]))
+    runs = report["container"]["runs"]
+    encoding_matches = (
+        runs["raw"] > 0 and runs["zlib"] == 0 if image_format == UDRO else runs["zlib"] > 0
+    )
     if (
         report["outcome"] != "passed"
         or report["coverage"]["payload"] != "passed"
         or report["coverage"]["security"] != "not_checked"
         or (report["container"]["embedded_signature"] is not None) != signed
         or int(report["container"]["logical_bytes"]) != LOGICAL_BYTES
-        or report["container"]["runs"]["zlib"] == 0
+        or not encoding_matches
+        or any(runs[codec] != 0 for codec in ("lzfse", "lzma2", "unsupported"))
         or report["checksums"]["data_fork"] != "passed"
         or report["checksums"]["tables"] != ["passed"]
         or report["checksums"]["master"] != "passed"
@@ -83,9 +90,10 @@ def image_identity(data):
     return {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
 
 
-def build_signed(cli, directory, unsigned):
+def build_signed(cli, directory, unsigned, image_format):
     report = json.loads(subprocess.check_output([
         cli, "build", PROJECT.name, "--release", "--json", "--set", f"image.output={SIGNED_IMAGE_NAME}",
+        "--set", f"image.format={image_format}",
     ], cwd=directory, encoding="utf-8"))
     image = directory / SIGNED_IMAGE_NAME
     signed = image_identity(image.read_bytes())
@@ -148,6 +156,8 @@ def main():
     parser.add_argument("cli", type=Path, help="composed dmgez executable with build, inspect, and signing")
     parser.add_argument("output_dir", type=Path, help="directory for the two verified DMGs")
     parser.add_argument("--seven-zip", default="7z", help="7-Zip executable")
+    parser.add_argument("--format", choices=(UDRO, UDZO), default=UDZO,
+                        help="image format to build and verify (default: udzo)")
     args = parser.parse_args()
     cli = args.cli.resolve(strict=True)
     seven_zip = shutil.which(args.seven_zip)
@@ -158,18 +168,18 @@ def main():
     output = args.output_dir.resolve()
     with tempfile.TemporaryDirectory(prefix="dmgez-ci-", dir=output) as temporary:
         workspace = Path(temporary)
-        image = build(cli, workspace / "first", preview=True)
-        repeated = build(cli, workspace / "second", preview=False)
+        image = build(cli, workspace / "first", preview=True, image_format=args.format)
+        repeated = build(cli, workspace / "second", preview=False, image_format=args.format)
         data = image.read_bytes()
         if data != repeated.read_bytes():
             raise RuntimeError("two fresh builds of the project produced different DMG bytes")
         unsigned = image_identity(data)
-        verify_container(cli, image)
+        verify_container(cli, image, args.format)
         raw = workspace / "installer.hfs"
         decode_image(seven_zip, image, raw)
         verify_files(seven_zip, raw)
-        signed_image, signed = build_signed(cli, image.parent, unsigned)
-        verify_container(cli, signed_image, signed=True)
+        signed_image, signed = build_signed(cli, image.parent, unsigned, args.format)
+        verify_container(cli, signed_image, args.format, signed=True)
         verify_signature(cli, signed_image)
         signed_raw = workspace / "installer-adhoc.hfs"
         decode_image(seven_zip, signed_image, signed_raw)
