@@ -210,13 +210,18 @@ fn updates_icon_positions_by_original_entry_and_keeps_each_folders_settings() {
 fn build(root: &Path, project: &str) -> Vec<u8> {
 	fs::write(root.join(DATA), PAYLOAD).unwrap();
 	fs::write(root.join(PROJECT), project).unwrap();
+	let image = build_project(root, PROJECT);
+	assert_eq!(fs::read_to_string(root.join(PROJECT)).unwrap(), project);
+	image
+}
+
+pub(super) fn build_project(root: &Path, project: &str) -> Vec<u8> {
 	let output = Command::new(BINARY)
 		.current_dir(root)
-		.args(["build", PROJECT])
+		.args(["build", project])
 		.output()
 		.unwrap();
 	assert!(output.status.success(), "{output:?}");
-	assert_eq!(fs::read_to_string(root.join(PROJECT)).unwrap(), project);
 	fs::read(root.join(ORIGINAL)).unwrap()
 }
 
@@ -231,7 +236,7 @@ fn apply(root: &Path, changes: &str) -> Vec<u8> {
 	fs::read(root.join(EDITED)).unwrap()
 }
 
-fn fork(image: &[u8], path: &str, kind: ForkKind) -> Option<Vec<u8>> {
+pub(super) fn fork(image: &[u8], path: &str, kind: ForkKind) -> Option<Vec<u8>> {
 	let image = Image::open(image, dmgez_udif::reader::Limits::default()).unwrap();
 	let mut disk = Disk::discover(image, dmgez_vfs::Limits::default()).unwrap();
 	with_view(&mut disk, VolumeId::WholeDisk, Limits::default(), |view| {
