@@ -12,6 +12,7 @@ mod checksum;
 #[cfg(all(any(feature = "read", feature = "write"), feature = "zlib"))]
 mod codec;
 mod error;
+mod geometry;
 #[cfg(feature = "read")]
 mod index;
 #[cfg(all(any(feature = "read", feature = "write"), feature = "lzfse"))]
@@ -31,9 +32,7 @@ pub mod reader;
 pub mod writer;
 
 pub use error::Error;
-
-/// UDIF logical sector size in bytes, independent of filesystem block size.
-pub const SECTOR_BYTES: u64 = 512;
+pub use geometry::SECTOR_BYTES;
 
 #[cfg(kani)]
 #[path = "../verification/kani/checked_range.rs"]
