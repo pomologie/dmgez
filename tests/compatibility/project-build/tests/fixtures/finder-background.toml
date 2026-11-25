@@ -1,0 +1,39 @@
+schema_version = 1
+
+[image]
+name = "Café Background"
+output = "image.dmg"
+format = "udzo"
+size = "1MiB"
+
+[build]
+reproducible = true
+source_date_epoch = 946684800
+
+[[contents]]
+type = "directory"
+destination = "/Inherited"
+position = [50, 70]
+
+[[contents]]
+type = "directory"
+destination = "/Inherited/Override"
+
+[[contents]]
+type = "directory"
+destination = "/Solid"
+
+[finder]
+background = { kind = "image", source = "background-root.png" }
+
+[[finder.folders]]
+path = "/Inherited"
+window_size = [550, 270]
+
+[[finder.folders]]
+path = "/Inherited/Override"
+background = { kind = "image", source = "background-override.png" }
+
+[[finder.folders]]
+path = "/Solid"
+background = { kind = "color", value = "#246" }

@@ -20,6 +20,9 @@ use hfsplus_format::{
 };
 use rustix::fs::{XattrFlags, fsetxattr};
 
+#[cfg(feature = "finder-write")]
+#[path = "smoke/background.rs"]
+mod background;
 #[cfg(feature = "volume-icon")]
 #[path = "smoke/volume_icon.rs"]
 mod volume_icon;

@@ -59,6 +59,7 @@ def main():
                          help="directory containing unpacked versioned HFS+ packages")
     parser.add_argument("--project", type=Path, help="build this TOML project instead of testing")
     parser.add_argument("--dry-run", action="store_true", help="plan without publishing")
+    parser.add_argument("--include-ignored", action="store_true", help="also run opt-in compatibility tests")
     parser.add_argument("--define", metavar="NAME=VALUE", action="append", default=[],
                         help="set a literal project substitution")
     parser.add_argument("--set", metavar="SECTION.FIELD=VALUE", action="append", default=[],
@@ -75,6 +76,8 @@ def main():
         parser.error("the development adapter requires a macOS or Linux host metadata adapter")
     if not options.project and any((options.dry_run, options.define, options.set, options.overwrite)):
         parser.error("--dry-run, --define, --set, and --overwrite require --project")
+    if options.project and options.include_ignored:
+        parser.error("--include-ignored is available only in test mode")
 
     dmgez_source = options.dmgez.resolve(strict=True)
     paths = resolved_packages(dmgez_source, DMGEZ_PACKAGES)
@@ -103,6 +106,8 @@ def main():
         if options.overwrite:
             command.append("--overwrite")
         command.extend(["--", str(options.project)])
+    elif options.include_ignored:
+        command.extend(["--", "--include-ignored"])
     with TemporaryDirectory(prefix="dmgez-hfsplus-build.") as isolated:
         isolated = Path(isolated)
         shutil.copy2(dmgez_source / "rust-toolchain.toml", isolated / "rust-toolchain.toml")
