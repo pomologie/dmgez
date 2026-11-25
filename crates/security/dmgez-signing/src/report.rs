@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub(super) const SCHEMA_VERSION: u16 = 1;
 
@@ -41,7 +41,7 @@ impl Backend {
 }
 
 /// Backend selected for the operation.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 #[non_exhaustive]
 pub enum ResolvedBackend {

@@ -1148,12 +1148,14 @@ dependencies = [
 name = "dmgez-signing"
 version = "0.1.0"
 dependencies = [
+ "dmgez-core",
  "dmgez-macho",
  "dmgez-udif",
  "plist",
  "quick-xml 0.42.0",
  "rustix 1.1.6",
  "serde",
+ "serde_json",
  "sha2",
  "tempfile",
  "thiserror 2.0.21",

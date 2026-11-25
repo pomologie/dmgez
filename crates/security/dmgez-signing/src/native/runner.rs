@@ -16,7 +16,15 @@ mod tests;
 const CODESIGN: &str = "/usr/bin/codesign";
 const DITTO: &str = "/usr/bin/ditto";
 const HDIUTIL: &str = "/usr/bin/hdiutil";
+#[cfg(feature = "notarization-native")]
+const LIST: &str = "/bin/ls";
+#[cfg(feature = "notarization-native")]
+const ACL_LIST_OPTIONS: &str = "-ldben";
 const SECURITY: &str = "/usr/bin/security";
+#[cfg(feature = "notarization-native")]
+const XCRUN: &str = "/usr/bin/xcrun";
+#[cfg(feature = "notarization-native")]
+const NOTARYTOOL: &str = "notarytool";
 const IDENTITY_LOOKUP: &[&str] = &["find-identity", "-v", "-p", "codesigning"];
 const SYSTEM_ROOT: &str = "/";
 const SYSTEM_PATH: &str = "/usr/bin:/bin";
@@ -64,11 +72,33 @@ pub(super) fn hdiutil(args: &[&OsStr]) -> Result<Output, Error> {
 	run(Command::new(HDIUTIL).args(args), TIMEOUT, MAX_OUTPUT_BYTES)
 }
 
+#[cfg(feature = "notarization-native")]
+pub(super) fn list_acl(path: &std::path::Path) -> Result<Output, Error> {
+	run(
+		Command::new(LIST).arg(ACL_LIST_OPTIONS).arg(path),
+		TIMEOUT,
+		MAX_OUTPUT_BYTES,
+	)
+}
+
 pub(super) fn find_code_signing_identities() -> Result<Output, Error> {
 	run(
 		Command::new(SECURITY).args(IDENTITY_LOOKUP),
 		TIMEOUT,
 		MAX_OUTPUT_BYTES,
+	)
+}
+
+#[cfg(feature = "notarization-native")]
+pub(super) fn notarytool(
+	args: &[&OsStr],
+	timeout: Duration,
+	output_limit: usize,
+) -> Result<Output, Error> {
+	run(
+		Command::new(XCRUN).arg(NOTARYTOOL).args(args),
+		timeout,
+		output_limit,
 	)
 }
 

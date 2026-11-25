@@ -110,22 +110,7 @@ impl AppIdentity {
 			Some(identifier) => format!("{requirement} and identifier \"{identifier}\""),
 			None => requirement,
 		};
-		let mut arguments: Vec<_> = VERIFY_OPTIONS.iter().map(OsStr::new).collect();
-		if deep {
-			arguments.push(OsStr::new(DEEP));
-		}
-		arguments.extend([
-			OsStr::new(REQUIREMENT),
-			OsStr::new(&requirement),
-			OsStr::new(END_OPTIONS),
-			path.as_os_str(),
-		]);
-		let result = codesign(&arguments)?;
-		if result.status.success() {
-			Ok(())
-		} else {
-			Err(SignError::SigningPolicy)
-		}
+		verify_requirement(path, &requirement, deep)
 	}
 
 	fn signing_arguments(&self) -> Vec<&OsStr> {
@@ -134,6 +119,36 @@ impl AppIdentity {
 			OsStr::new(&self.fingerprint),
 			OsStr::new(TIMESTAMP_OPTION),
 		]
+	}
+}
+
+#[cfg(feature = "notarization-native")]
+pub(super) fn verify_notarization_image(path: &Path) -> Result<(), SignError> {
+	let display = inspect(path, None)?;
+	if !super::is_disk_image(path, &display.stderr) {
+		return Err(SignError::SigningPolicy);
+	}
+	let fields = display_fields(path, &display.stderr).ok_or(SignError::SigningPolicy)?;
+	verify_display(fields, false)?;
+	verify_requirement(path, DEVELOPER_ID_POLICY, false)
+}
+
+fn verify_requirement(path: &Path, requirement: &str, deep: bool) -> Result<(), SignError> {
+	let mut arguments: Vec<_> = VERIFY_OPTIONS.iter().map(OsStr::new).collect();
+	if deep {
+		arguments.push(OsStr::new(DEEP));
+	}
+	arguments.extend([
+		OsStr::new(REQUIREMENT),
+		OsStr::new(requirement),
+		OsStr::new(END_OPTIONS),
+		path.as_os_str(),
+	]);
+	let result = codesign(&arguments)?;
+	if result.status.success() {
+		Ok(())
+	} else {
+		Err(SignError::SigningPolicy)
 	}
 }
 

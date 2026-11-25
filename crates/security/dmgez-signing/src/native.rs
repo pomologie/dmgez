@@ -9,6 +9,10 @@ pub(super) mod app;
 mod artifact;
 pub(super) mod disk;
 mod identity;
+#[cfg(feature = "notarization-native")]
+pub(crate) mod notary_artifact;
+#[cfg(feature = "notarization-native")]
+pub(crate) mod notary_tool;
 mod policy;
 mod runner;
 mod stage;

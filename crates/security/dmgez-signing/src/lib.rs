@@ -4,6 +4,8 @@
 
 #[cfg(all(feature = "native", target_os = "macos"))]
 mod native;
+#[cfg(feature = "notarization-native")]
+pub mod notarization;
 mod report;
 mod signature;
 mod signing;

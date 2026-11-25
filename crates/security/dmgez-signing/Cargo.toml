@@ -9,17 +9,20 @@ description = "Explicit code signing and signature checks for dmgez"
 
 [features]
 native = ["dep:dmgez-macho", "dep:dmgez-udif", "dep:plist", "dep:quick-xml", "dep:rustix", "dep:sha2", "dep:tempfile"]
+notarization-native = ["native", "dep:dmgez-core", "dep:serde_json", "rustix/process"]
 
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
+dmgez-core = { workspace = true, optional = true, features = ["staging"] }
 dmgez-macho = { workspace = true, optional = true }
 dmgez-udif = { workspace = true, optional = true }
 plist = { workspace = true, optional = true, features = ["serde", "enable_unstable_features_that_may_break_with_minor_version_bumps"] }
 quick-xml = { workspace = true, optional = true }
 rustix = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
 
