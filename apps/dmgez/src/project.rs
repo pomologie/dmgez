@@ -1,5 +1,5 @@
 use dmgez_config::{
-	VirtualPath,
+	Project, VirtualPath,
 	project_edit::{
 		ContentChanges, FieldChange, ProjectDocument, ProjectEdit, ProjectEditError, RevisionId,
 	},
@@ -8,6 +8,8 @@ use dmgez_preview::{
 	DeclaredTree, DeclaredTreeError, Drag, FolderPoint, PositionSource, ProjectFolder,
 };
 use eframe::egui::{self, Button, DragValue, Panel, ScrollArea, TextEdit, Ui};
+
+use crate::layout_lint::LayoutLint;
 
 const IMAGE_ROOT: &str = "/";
 const PATH_SEPARATOR: char = '/';
@@ -28,6 +30,7 @@ pub(crate) struct ProjectTab {
 	zoom: u32,
 	show_hidden: bool,
 	snap: bool,
+	layout_lint: LayoutLint,
 	image_name: String,
 	position_draft: Option<(VirtualPath, [f64; 2])>,
 	pub(crate) drag: Option<DragEdit>,
@@ -51,6 +54,7 @@ impl ProjectTab {
 			zoom: DEFAULT_ZOOM_PERCENT,
 			show_hidden: false,
 			snap: false,
+			layout_lint: LayoutLint::default(),
 			image_name: project.image.name.as_str().to_owned(),
 			position_draft: None,
 			drag: None,
@@ -193,7 +197,7 @@ impl ProjectTab {
 		};
 		ui.strong(name(&path));
 		ui.small(path.as_str());
-		let editable = self.editable(&path);
+		let editable = editable(self.document.project(), &path);
 		let position = self.layout().ok().and_then(|layout| {
 			layout
 				.items()
@@ -253,19 +257,31 @@ impl ProjectTab {
 	}
 
 	fn design(&mut self, ui: &mut Ui) {
-		ui.horizontal(|ui| {
+		ui.horizontal_wrapped(|ui| {
 			ui.heading("Layout");
 			ui.add(
 				egui::Slider::new(&mut self.zoom, MIN_ZOOM_PERCENT..=MAX_ZOOM_PERCENT).suffix("%"),
 			);
 			ui.checkbox(&mut self.show_hidden, "Show hidden");
 			ui.checkbox(&mut self.snap, "Snap to grid");
+			self.layout_lint.toggle(ui);
 		});
 		if let Some(error) = &self.error {
 			ui.label(error);
 		}
-		let (action, active_drag) = match self.layout() {
+		let project = self.document.project();
+		let (action, active_drag) = match folder_layout(project, &self.tree, &self.folder) {
 			Ok(layout) => {
+				let declared_folder = self
+					.tree
+					.as_ref()
+					.is_ok_and(|tree| tree.contains_folder(&self.folder));
+				let lint_warnings = self.layout_lint.show(
+					ui,
+					self.document.revision(),
+					&self.folder,
+					declared_folder.then_some(&layout),
+				);
 				let scale = f64::from(self.zoom) / f64::from(DEFAULT_ZOOM_PERCENT);
 				let view = crate::canvas::View {
 					selected: self.selected.as_ref(),
@@ -273,8 +289,9 @@ impl ProjectTab {
 					snap: self.snap,
 					scale,
 					drag: self.drag.as_ref(),
+					lint_warnings,
 				};
-				crate::canvas::show(ui, &layout, view, |path| self.editable(path))
+				crate::canvas::show(ui, &layout, view, |path| editable(project, path))
 			}
 			Err(error) => {
 				ui.label(error);
@@ -299,24 +316,8 @@ impl ProjectTab {
 		self.apply(ProjectEdit::Modify { target, changes });
 	}
 
-	fn editable(&self, path: &VirtualPath) -> bool {
-		self.document
-			.project()
-			.contents
-			.iter()
-			.any(|entry| entry.destination == *path)
-	}
-
 	fn layout(&self) -> Result<ProjectFolder<'_>, String> {
-		let tree = self.tree.as_ref().map_err(ToString::to_string)?;
-		let children = tree.children(&self.folder);
-		if children.len() > MAX_CANVAS_ENTRIES {
-			return Err(format!(
-				"The folder contains too many entries for the canvas ({MAX_CANVAS_ENTRIES} maximum)."
-			));
-		}
-		tree.layout(self.document.project(), &self.folder)
-			.map_err(|error| error.to_string())
+		folder_layout(self.document.project(), &self.tree, &self.folder)
 	}
 }
 
@@ -327,6 +328,28 @@ pub(crate) enum Action {
 		path: VirtualPath,
 		center: FolderPoint,
 	},
+}
+
+fn editable(project: &Project, path: &VirtualPath) -> bool {
+	project
+		.contents
+		.iter()
+		.any(|entry| entry.destination == *path)
+}
+
+fn folder_layout<'project>(
+	project: &'project Project,
+	tree: &'project Result<DeclaredTree, DeclaredTreeError>,
+	folder: &VirtualPath,
+) -> Result<ProjectFolder<'project>, String> {
+	let tree = tree.as_ref().map_err(ToString::to_string)?;
+	if tree.children(folder).len() > MAX_CANVAS_ENTRIES {
+		return Err(format!(
+			"The folder contains too many entries for the canvas ({MAX_CANVAS_ENTRIES} maximum)."
+		));
+	}
+	tree.layout(project, folder)
+		.map_err(|error| error.to_string())
 }
 
 fn parent(path: &str) -> &str {

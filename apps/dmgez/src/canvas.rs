@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use dmgez_config::{Background, LabelPosition, VirtualPath};
 use dmgez_preview::{
 	CanvasPoint, Drag, FolderPoint, ItemVisibility, PositionSource, ProjectFolder, Viewport,
@@ -15,6 +17,11 @@ const ITEM_SELECTED: Color32 = Color32::from_rgb(0, 111, 107);
 const ITEM_SURFACE: Color32 = Color32::from_rgb(215, 234, 229);
 const ITEM_EDGE: Color32 = Color32::from_rgb(103, 132, 129);
 const ITEM_FOREGROUND: Color32 = Color32::from_rgb(34, 56, 60);
+const LINT_WARNING: Color32 = Color32::from_rgb(151, 67, 13);
+const LINT_BORDER_WIDTH: f32 = 2.0;
+const LINT_MARK_RADIUS: f32 = 8.0;
+const LINT_MARK_FONT_SIZE: f32 = 12.0;
+const LINT_MARK_TEXT: &str = "!";
 const ITEM_CORNER: u8 = 8;
 const LABEL_MARGIN: f32 = 5.0;
 const MAX_LABEL_POINTS: f64 = 36.0;
@@ -28,6 +35,7 @@ pub(crate) struct View<'a> {
 	pub snap: bool,
 	pub scale: f64,
 	pub drag: Option<&'a DragEdit>,
+	pub lint_warnings: Option<&'a BTreeSet<String>>,
 }
 
 pub(crate) fn show(
@@ -52,7 +60,7 @@ pub(crate) fn show(
 		drag: active.drag,
 		center: active.center,
 	});
-	ScrollArea::both().show(ui, |ui| {
+	ScrollArea::both().id_salt("project_canvas").show(ui, |ui| {
 		ui.add_space(FIT_PADDING);
 		let canvas_size = vec2(width as f32, height as f32);
 		let (rect, response) = ui.allocate_exact_size(canvas_size, Sense::click_and_drag());
@@ -153,6 +161,32 @@ pub(crate) fn show(
 				Stroke::new(1.0, ITEM_EDGE),
 				StrokeKind::Inside,
 			);
+			let visible_icon = icon.intersect(rect);
+			if drag.is_none()
+				&& visible_icon.is_positive()
+				&& view
+					.lint_warnings
+					.is_some_and(|warnings| warnings.contains(item.destination.as_str()))
+			{
+				painter.rect_stroke(
+					icon,
+					ITEM_CORNER,
+					Stroke::new(LINT_BORDER_WIDTH, LINT_WARNING),
+					StrokeKind::Inside,
+				);
+				let badge = pos2(
+					visible_icon.right() - LINT_MARK_RADIUS,
+					visible_icon.top() + LINT_MARK_RADIUS,
+				);
+				painter.circle_filled(badge, LINT_MARK_RADIUS, LINT_WARNING);
+				painter.text(
+					badge,
+					Align2::CENTER_CENTER,
+					LINT_MARK_TEXT,
+					FontId::proportional(LINT_MARK_FONT_SIZE),
+					Color32::WHITE,
+				);
+			}
 			let mark_size = half / 2.3;
 			let mark = Rect::from_center_size(center, vec2(mark_size, mark_size * 1.2));
 			painter.rect_stroke(
@@ -236,15 +270,16 @@ mod tests {
 	use super::*;
 
 	#[test]
-	fn pointer_selects_the_icon_at_its_projected_center() {
+	fn pointer_selects_the_icon_with_or_without_a_lint_marker() {
 		const SOURCE: &str = "schema_version=1\n[image]\nname='Demo'\noutput='demo.dmg'\n[[contents]]\nsource='absent.txt'\ndestination='/Demo.txt'\nposition=[70,50]\n[finder]\nwindow_size=[320,190]\n[finder.icon_view]\nicon_size=32\n";
 		let ctx = Context::default();
 		let project = Project::parse(SOURCE).unwrap();
 		let folder = "/".parse().unwrap();
 		let children = [ItemInput::from(&project.contents[0])];
 		let layout = ProjectFolder::from_project(&project, &folder, &children).unwrap();
+		let warnings = BTreeSet::from(["/Demo.txt".to_owned()]);
 		let mut action = None;
-		let mut frame = |events| {
+		let mut frame = |events, show_lint: bool| {
 			let mut output = ctx.run_ui(
 				RawInput {
 					screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(720.0, 550.0))),
@@ -258,6 +293,7 @@ mod tests {
 						snap: false,
 						scale: 1.0,
 						drag: None,
+						lint_warnings: show_lint.then_some(&warnings),
 					};
 					if let (Some(selected), _) = show(ui, &layout, view, |_| true) {
 						action = Some(selected);
@@ -267,7 +303,7 @@ mod tests {
 			output.textures_delta.clear();
 			output
 		};
-		let first = frame(Vec::new());
+		let first = frame(Vec::new(), false);
 		let icon = first
 			.shapes
 			.iter()
@@ -276,14 +312,18 @@ mod tests {
 				_ => None,
 			})
 			.expect("the fixture icon was painted");
+		let is_badge = |shape: &eframe::egui::epaint::ClippedShape| matches!(&shape.shape, Shape::Circle(circle) if circle.fill == LINT_WARNING);
+		assert!(!first.shapes.iter().any(is_badge));
+		let marked = frame(Vec::new(), true);
+		assert!(marked.shapes.iter().any(is_badge));
 		let click = |pressed| Event::PointerButton {
 			pos: icon,
 			button: PointerButton::Primary,
 			pressed,
 			modifiers: Modifiers::NONE,
 		};
-		let _ = frame(vec![Event::PointerMoved(icon), click(true)]);
-		let _ = frame(vec![click(false)]);
+		let _ = frame(vec![Event::PointerMoved(icon), click(true)], true);
+		let _ = frame(vec![click(false)], true);
 		assert!(matches!(action, Some(Action::Select(path)) if path.as_str() == "/Demo.txt"));
 	}
 }

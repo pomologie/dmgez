@@ -3,6 +3,7 @@ mod canvas;
 mod document;
 mod import;
 mod inspector;
+mod layout_lint;
 mod project;
 
 use std::path::PathBuf;

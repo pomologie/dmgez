@@ -12,6 +12,7 @@ publish = false
 dmgez-config = { workspace = true, features = ["project-edit"] }
 dmgez-core = { workspace = true, features = ["staging"] }
 dmgez-inspector = { workspace = true, features = ["zlib"] }
+dmgez-lint.workspace = true
 dmgez-preview.workspace = true
 dmgez-udif = { workspace = true, features = ["read"] }
 eframe.workspace = true

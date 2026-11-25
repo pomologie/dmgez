@@ -1024,6 +1024,7 @@ dependencies = [
  "dmgez-config",
  "dmgez-core",
  "dmgez-inspector",
+ "dmgez-lint",
  "dmgez-preview",
  "dmgez-udif",
  "eframe",
