@@ -196,6 +196,32 @@ fn raw_payload_limit_charges_native_sparse_holes_without_claiming_completed_evid
 
 #[cfg(feature = "apfs-read")]
 #[test]
+fn reports_unqualified_apfs_directory_names_as_unsupported() {
+	use native_mutations::{edit_object, replace_field};
+
+	const FSROOT_BLOCK: u64 = 206;
+	const ROOT_DIRECTORY_NAME_OFFSET: usize = 731;
+	const ORIGINAL_NAME: &[u8] = b"primary.bin";
+	const UNICODE_11_NAME: &str = "\u{1c90}mary.bin";
+	let directory = tempfile::tempdir().unwrap();
+	let image = directory.path().join("unqualified-name.raw");
+	materialize(&image, HARD_LINK_FIXTURE, &[]);
+	edit_object(&image, FSROOT_BLOCK, |block| {
+		replace_field::<{ ORIGINAL_NAME.len() }>(
+			block,
+			ROOT_DIRECTORY_NAME_OFFSET,
+			ORIGINAL_NAME.try_into().unwrap(),
+			UNICODE_11_NAME.as_bytes().try_into().unwrap(),
+		);
+	});
+
+	let report = verify(&image, &["--raw"], false);
+	assert_filesystem_failure(&report, "unsupported_variant", "unsupported");
+	assert_eq!(report["outcome"], "partial");
+}
+
+#[cfg(feature = "apfs-read")]
+#[test]
 fn newest_rejected_checkpoint_is_reported_with_earlier_native_evidence() {
 	use native_mutations::{INCOMPLETE_CHECKPOINT_XID, advertise_incomplete_checkpoint};
 

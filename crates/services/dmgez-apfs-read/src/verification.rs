@@ -3,7 +3,9 @@ use std::{cell::RefCell, error::Error as StdError};
 use apfs_container::{Error as ContainerError, ObjectMapError, VolumeError};
 use apfs_core::{ByteOffset, ReadAt};
 use apfs_format::{Error as FormatError, volume::Error as VolumeFormatError};
-use apfs_reader::{CheckData, CheckOptions, CheckReport, Corruption, Error as ReaderError};
+use apfs_reader::{
+	CheckData, CheckOptions, CheckReport, Corruption, Error as ReaderError, NameError,
+};
 use thiserror::Error;
 
 use crate::{
@@ -202,8 +204,14 @@ fn reader_failure<E: StdError + 'static>(error: &ReaderError<ReadError<E>>) -> C
 	match error {
 		ReaderError::Container(error) => container_failure(error),
 		ReaderError::Corrupt(Corruption::PhysicalNode(error)) => format_failure(error),
-		ReaderError::Unsupported(_) => CheckFailureKind::Unsupported,
-		ReaderError::Allocation | ReaderError::Limit(_) => CheckFailureKind::ResourceLimit,
+		ReaderError::Unsupported(_) | ReaderError::Name(NameError::UnsupportedScalar { .. }) => {
+			CheckFailureKind::Unsupported
+		}
+		ReaderError::Allocation
+		| ReaderError::Limit(_)
+		| ReaderError::Name(NameError::Allocation | NameError::NormalizationLimit) => {
+			CheckFailureKind::ResourceLimit
+		}
 		ReaderError::Cancelled => CheckFailureKind::Cancelled,
 		_ => CheckFailureKind::Corrupt,
 	}
