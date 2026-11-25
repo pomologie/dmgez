@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Run the isolated HFS+ adapter against explicit worktree or package paths."""
+"""Exercise the composed project CLI and the HFS+ adapter compatibility tests."""
 
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 import shutil
@@ -11,9 +12,9 @@ import sys
 from tempfile import TemporaryDirectory
 
 COMPATIBILITY = Path(__file__).resolve().parent
-CLI_SOURCE = "apps/dmgez-cli/src"
-CLI_BUILD_FILES = ("project_build.rs", "project_input.rs")
-CLI_BUILD_MODULES = "project_build"
+CLI_COMPOSER = Path("tools/compose_hfsplus_cli.py")
+CLI_ENV = "DMGEZ_PROJECT_BUILD_CLI"
+TARGET_ENV = "CARGO_TARGET_DIR"
 HFSPLUS_VERSION = "0.1.0"
 HFSPLUS_CORE_PACKAGE = "hfsplus-pomologie-core"
 VOLUME_ICON_FIXTURE = "crates/presentation/dmgez-finder/tests/fixtures/apple-iconutil.icns"
@@ -50,6 +51,76 @@ def isolated_manifest(paths):
     return manifest
 
 
+def compose_cli(dmgez_source, options, target):
+    command = [
+        sys.executable, "-B", dmgez_source / CLI_COMPOSER,
+        "--no-default-features", "--features", "project-build", "--target-dir", target,
+    ]
+    if options.hfsplus is not None:
+        command.extend(("--hfsplus", options.hfsplus.resolve(strict=True)))
+    else:
+        command.extend(("--hfsplus-packages", options.hfsplus_packages.resolve(strict=True)))
+    if not options.no_default_features:
+        command.extend(("--features", "finder-write,parallel"))
+    command.extend(feature_arguments(options))
+    executable = subprocess.check_output(command, cwd=dmgez_source, encoding="utf-8").strip()
+    return Path(executable).resolve(strict=True)
+
+
+def feature_arguments(options):
+    features = []
+    if options.lzma:
+        features.extend(("--features", "lzma"))
+    if options.compression_cache:
+        features.extend(("--features", "compression-cache"))
+    if options.badge_icons:
+        features.extend(("--features", "badge-icons"))
+    elif options.volume_icon:
+        features.extend(("--features", "volume-icon"))
+    return features
+
+
+def build_project(executable, options):
+    command = [executable, "build"]
+    if options.dry_run:
+        command.append("--dry-run")
+    for definition in options.define:
+        command.extend(("--define", definition))
+    for assignment in options.set:
+        command.extend(("--set", assignment))
+    if options.overwrite:
+        command.append("--overwrite")
+    command.extend(("--", options.project))
+    return subprocess.run(command).returncode
+
+
+def test_probe(dmgez_source, options, isolated, executable, target):
+    paths = resolved_packages(dmgez_source, DMGEZ_PACKAGES)
+    if options.hfsplus is not None:
+        paths.update(resolved_packages(options.hfsplus, HFSPLUS_PACKAGES))
+    else:
+        unpacked = {name: f"{name}-{HFSPLUS_VERSION}" for name in HFSPLUS_PACKAGES}
+        paths.update(resolved_packages(options.hfsplus_packages, unpacked))
+
+    shutil.copy2(dmgez_source / "rust-toolchain.toml", isolated / "rust-toolchain.toml")
+    for required in ("Cargo.lock", "rustfmt.toml"):
+        shutil.copy2(COMPATIBILITY / required, isolated / required)
+    for required in ("src", "tests"):
+        shutil.copytree(COMPATIBILITY / required, isolated / required)
+    if options.volume_icon or options.badge_icons:
+        shutil.copy2(dmgez_source / VOLUME_ICON_FIXTURE, isolated / "tests" / "smoke")
+    (isolated / "Cargo.toml").write_text(isolated_manifest(paths), encoding="utf-8")
+
+    command = ["cargo", "test", "--offline", "--locked"]
+    if options.no_default_features:
+        command.append("--no-default-features")
+    command.extend(feature_arguments(options))
+    if options.include_ignored:
+        command.extend(("--", "--include-ignored"))
+    environment = os.environ | {CLI_ENV: str(executable), TARGET_ENV: str(target)}
+    return subprocess.run(command, cwd=isolated, env=environment).returncode
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dmgez", type=Path, required=True, help="dmgez source checkout")
@@ -84,55 +155,18 @@ def main():
         parser.error("--include-ignored is available only in test mode")
 
     dmgez_source = options.dmgez.resolve(strict=True)
-    paths = resolved_packages(dmgez_source, DMGEZ_PACKAGES)
-    if options.hfsplus is not None:
-        paths.update(resolved_packages(options.hfsplus, HFSPLUS_PACKAGES))
-    else:
-        unpacked = {name: f"{name}-{HFSPLUS_VERSION}" for name in HFSPLUS_PACKAGES}
-        paths.update(resolved_packages(options.hfsplus_packages, unpacked))
-
-    command = ["cargo", "run" if options.project else "test", "--offline", "--locked",
-               "--features", "project-build"]
-    if options.no_default_features:
-        command.append("--no-default-features")
-    if options.lzma:
-        command.extend(["--features", "lzma"])
-    if options.compression_cache:
-        command.extend(["--features", "compression-cache"])
-    if options.badge_icons:
-        command.extend(["--features", "badge-icons"])
-    elif options.volume_icon:
-        command.extend(["--features", "volume-icon"])
-    if options.project:
-        command.extend(["--quiet", "--", "--working-directory", str(Path.cwd())])
-        if options.dry_run:
-            command.append("--dry-run")
-        for definition in options.define:
-            command.extend(["--define", definition])
-        for assignment in options.set:
-            command.extend(["--set", assignment])
-        if options.overwrite:
-            command.append("--overwrite")
-        command.extend(["--", str(options.project)])
-    elif options.include_ignored:
-        command.extend(["--", "--include-ignored"])
     with TemporaryDirectory(prefix="dmgez-hfsplus-build.") as isolated:
         isolated = Path(isolated)
-        shutil.copy2(dmgez_source / "rust-toolchain.toml", isolated / "rust-toolchain.toml")
-        for required in ("Cargo.lock", "rustfmt.toml"):
-            shutil.copy2(COMPATIBILITY / required, isolated / required)
-        for required in ("src", "tests"):
-            shutil.copytree(COMPATIBILITY / required, isolated / required)
-        cli = dmgez_source / CLI_SOURCE
-        for source in CLI_BUILD_FILES:
-            shutil.copy2(cli / source, isolated / "src" / source)
-        shutil.copytree(cli / CLI_BUILD_MODULES, isolated / "src" / CLI_BUILD_MODULES)
-        if (options.volume_icon or options.badge_icons) and not options.project:
-            shutil.copy2(dmgez_source / VOLUME_ICON_FIXTURE, isolated / "tests" / "smoke")
-        (isolated / "Cargo.toml").write_text(isolated_manifest(paths), encoding="utf-8")
-        # Preserve the command's status without echoing its definition values on failure.
-        raise SystemExit(subprocess.run(command, cwd=isolated).returncode)
+        target = Path(os.environ.get(TARGET_ENV) or isolated / "target").resolve()
+        try:
+            executable = compose_cli(dmgez_source, options, target)
+        except subprocess.CalledProcessError as error:
+            return error.returncode
+        if options.project:
+            # Forward the exit status without printing definition values on failure.
+            return build_project(executable, options)
+        return test_probe(dmgez_source, options, isolated, executable, target)
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

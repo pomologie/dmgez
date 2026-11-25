@@ -1,14 +1,14 @@
 #![cfg(any(target_os = "macos", target_os = "linux"))]
 
 use std::{
-	fs,
+	env, fs,
 	path::Path,
 	process::{Command, Output},
 };
 
 use dmgez_udif::reader::{FileSource, Image, Limits, RunEncoding};
 
-const BINARY: &str = env!("CARGO_BIN_EXE_dmgez-hfs-adapter-probe");
+const BINARY_ENV: &str = "DMGEZ_PROJECT_BUILD_CLI";
 const CONFIG_DIRECTORY: &str = "project";
 const CONFIG_PATH: &str = "project/dmg.toml";
 const TOML_OUTPUT: &str = "from-config.dmg";
@@ -54,11 +54,15 @@ fn project(root: &Path) {
 	fs::write(config.join(SOURCE_NAME), CONTENTS).unwrap();
 }
 
-fn run_from_isolate(caller: &Path, isolated: &Path, extra: &[&str]) -> Output {
-	Command::new(BINARY)
-		.current_dir(isolated)
-		.arg("--working-directory")
-		.arg(caller)
+fn command(caller: &Path) -> Command {
+	let executable = env::var_os(BINARY_ENV).expect("run command fixtures through run.py");
+	let mut command = Command::new(executable);
+	command.current_dir(caller).arg("build");
+	command
+}
+
+fn run_project(caller: &Path, extra: &[&str]) -> Output {
+	command(caller)
 		.args([CONFIG_PATH, "--define", SOURCE_DEFINE])
 		.args(extra)
 		.output()
@@ -75,7 +79,6 @@ fn successful(output: Output) -> (String, String) {
 fn dry_run_reports_exact_capacity_and_resolves_each_path_from_its_origin() {
 	let caller = tempfile::tempdir().unwrap();
 	let root = caller.path().canonicalize().unwrap();
-	let isolated = tempfile::tempdir().unwrap();
 	project(&root);
 	let overrides = [
 		"--set",
@@ -89,7 +92,7 @@ fn dry_run_reports_exact_capacity_and_resolves_each_path_from_its_origin() {
 	];
 	let mut preview = overrides.to_vec();
 	preview.push("--dry-run");
-	let (stdout, stderr) = successful(run_from_isolate(&root, isolated.path(), &preview));
+	let (stdout, stderr) = successful(run_project(&root, &preview));
 	assert!(stdout.contains("mode=dry-run\n"));
 	assert!(stdout.contains(&format!("logical_bytes={CLI_SIZE_BYTES}\n")));
 	assert!(stdout.contains("physical_bytes=unknown\n"));
@@ -111,9 +114,8 @@ fn dry_run_reports_exact_capacity_and_resolves_each_path_from_its_origin() {
 		fs::read_dir(root.join(CONFIG_DIRECTORY)).unwrap().count(),
 		2
 	);
-	assert_eq!(fs::read_dir(isolated.path()).unwrap().count(), 0);
 
-	let (_, stderr) = successful(run_from_isolate(&root, isolated.path(), &overrides));
+	let (_, stderr) = successful(run_project(&root, &overrides));
 	assert!(stderr.contains("Discovering source paths"));
 	assert!(stderr.contains(&format!("Encoding {CLI_SIZE_BYTES} logical bytes")));
 	assert!(stderr.contains("Checking sources before publication"));
@@ -144,25 +146,15 @@ fn reports_column_view_and_builds_the_root_and_nested_finder_assets() {
 fn check_default_view(config: &str, image: &str, manifest: &str, view: &str, assets: usize) {
 	let caller = tempfile::tempdir().unwrap();
 	let root = caller.path().canonicalize().unwrap();
-	let isolated = tempfile::tempdir().unwrap();
 	fs::write(root.join(config), manifest).unwrap();
-	let command = |extra: &[&str]| {
-		Command::new(BINARY)
-			.current_dir(isolated.path())
-			.arg("--working-directory")
-			.arg(&root)
-			.arg(config)
-			.args(extra)
-			.output()
-			.unwrap()
-	};
-	let preview = command(&["--dry-run"]);
+	let run = |extra: &[&str]| command(&root).arg(config).args(extra).output().unwrap();
+	let preview = run(&["--dry-run"]);
 	let destination = root.join(image);
 	assert!(!destination.exists());
 	assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
 
 	if !cfg!(feature = "finder-write") {
-		for output in [preview, command(&[])] {
+		for output in [preview, run(&[])] {
 			assert!(!output.status.success());
 			let stderr = String::from_utf8(output.stderr).unwrap();
 			assert!(
@@ -179,7 +171,7 @@ fn check_default_view(config: &str, image: &str, manifest: &str, view: &str, ass
 	assert!(summary.contains(&format!("finder={view}\n")));
 	assert!(summary.contains(&format!("finder_assets={assets}\n")));
 	assert!(summary.contains(&format!("logical_bytes={FINDER_FIXTURE_LOGICAL_BYTES}\n")));
-	successful(command(&[]));
+	successful(run(&[]));
 	let source = FileSource::new(fs::File::open(destination).unwrap()).unwrap();
 	let mut image = Image::open(source, Limits::default()).unwrap();
 	assert_eq!(
@@ -206,10 +198,7 @@ output = 'image.dmg'
 	const IMAGE_NAME: &str = "image.dmg";
 	let root = tempfile::tempdir().unwrap();
 	fs::write(root.path().join(PROJECT_NAME), PROJECT).unwrap();
-	let output = Command::new(BINARY)
-		.current_dir(root.path())
-		.arg("--working-directory")
-		.arg(root.path())
+	let output = command(root.path())
 		.args([PROJECT_NAME, "--dry-run"])
 		.output()
 		.unwrap();
@@ -241,10 +230,7 @@ custom_icon = 'absent.icns'
 	const IMAGE_NAME: &str = "image.dmg";
 	let root = tempfile::tempdir().unwrap();
 	fs::write(root.path().join(PROJECT_NAME), PROJECT).unwrap();
-	let output = Command::new(BINARY)
-		.current_dir(root.path())
-		.arg("--working-directory")
-		.arg(root.path())
+	let output = command(root.path())
 		.args([PROJECT_NAME, "--dry-run"])
 		.output()
 		.unwrap();
@@ -275,10 +261,7 @@ badge = 'absent.png'
 	const IMAGE_NAME: &str = "image.dmg";
 	let root = tempfile::tempdir().unwrap();
 	fs::write(root.path().join(PROJECT_NAME), PROJECT).unwrap();
-	let output = Command::new(BINARY)
-		.current_dir(root.path())
-		.arg("--working-directory")
-		.arg(root.path())
+	let output = command(root.path())
 		.args([PROJECT_NAME, "--dry-run"])
 		.output()
 		.unwrap();
@@ -296,7 +279,6 @@ badge = 'absent.png'
 fn ulmo_requires_the_optional_codec_and_preserves_the_logical_image() {
 	let caller = tempfile::tempdir().unwrap();
 	let root = caller.path().canonicalize().unwrap();
-	let isolated = tempfile::tempdir().unwrap();
 	project(&root);
 	let output = root.join(CONFIG_DIRECTORY).join(TOML_OUTPUT);
 	let reproducible = [
@@ -308,13 +290,9 @@ fn ulmo_requires_the_optional_codec_and_preserves_the_logical_image() {
 		"build.source_date_epoch=946684800",
 	];
 	let options = [&reproducible[..], &["--set", ULMO_FORMAT_OVERRIDE]].concat();
-	let preview = run_from_isolate(
-		&root,
-		isolated.path(),
-		&[&options[..], &["--dry-run"]].concat(),
-	);
+	let preview = run_project(&root, &[&options[..], &["--dry-run"]].concat());
 	if !cfg!(feature = "lzma") {
-		for refused in [preview, run_from_isolate(&root, isolated.path(), &options)] {
+		for refused in [preview, run_project(&root, &options)] {
 			assert!(!refused.status.success());
 			let stderr = String::from_utf8(refused.stderr).unwrap();
 			assert!(
@@ -335,7 +313,7 @@ fn ulmo_requires_the_optional_codec_and_preserves_the_logical_image() {
 	assert!(summary.contains("format=Ulmo\n"));
 	assert!(summary.contains(&format!("logical_bytes={CLI_SIZE_BYTES}\n")));
 	assert!(!output.exists());
-	successful(run_from_isolate(&root, isolated.path(), &options));
+	successful(run_project(&root, &options));
 	let source = FileSource::new(fs::File::open(output).unwrap()).unwrap();
 	let mut ulmo = Image::open(source, Limits::default()).unwrap();
 	assert!(
@@ -349,7 +327,7 @@ fn ulmo_requires_the_optional_codec_and_preserves_the_logical_image() {
 		&["--set", CLI_FORMAT_OVERRIDE, "--set", CLI_OUTPUT_OVERRIDE],
 	]
 	.concat();
-	successful(run_from_isolate(&root, isolated.path(), &baseline));
+	successful(run_project(&root, &baseline));
 	let source = FileSource::new(fs::File::open(root.join(CLI_OUTPUT)).unwrap()).unwrap();
 	let mut udro = Image::open(source, Limits::default()).unwrap();
 	let mut compressed = Vec::new();
@@ -364,11 +342,10 @@ fn ulmo_requires_the_optional_codec_and_preserves_the_logical_image() {
 fn preserves_existing_output_until_explicit_overwrite() {
 	let caller = tempfile::tempdir().unwrap();
 	let root = caller.path().canonicalize().unwrap();
-	let isolated = tempfile::tempdir().unwrap();
 	project(&root);
 	let output = root.join(CONFIG_DIRECTORY).join(TOML_OUTPUT);
 	fs::write(&output, PREVIOUS).unwrap();
-	let refused = run_from_isolate(&root, isolated.path(), &[]);
+	let refused = run_project(&root, &[]);
 	assert!(!refused.status.success());
 	assert_eq!(fs::read(&output).unwrap(), PREVIOUS);
 	assert_eq!(
@@ -376,22 +353,14 @@ fn preserves_existing_output_until_explicit_overwrite() {
 		3
 	);
 
-	let conflicting = run_from_isolate(
-		&root,
-		isolated.path(),
-		&["--overwrite", "--set", "build.overwrite=false"],
-	);
+	let conflicting = run_project(&root, &["--overwrite", "--set", "build.overwrite=false"]);
 	assert!(!conflicting.status.success());
 	let diagnostics = String::from_utf8(conflicting.stderr).unwrap();
 	assert!(diagnostics.contains("choose either --overwrite or --set build.overwrite"));
 	assert!(!diagnostics.contains("Discovering source paths"));
 	assert_eq!(fs::read(&output).unwrap(), PREVIOUS);
 
-	let (report, _) = successful(run_from_isolate(
-		&root,
-		isolated.path(),
-		&["--overwrite", "--dry-run"],
-	));
+	let (report, _) = successful(run_project(&root, &["--overwrite", "--dry-run"]));
 	assert!(report.contains("publication=Path { overwrite: true }"));
 	assert_eq!(fs::read(&output).unwrap(), PREVIOUS);
 	assert_eq!(
@@ -399,7 +368,7 @@ fn preserves_existing_output_until_explicit_overwrite() {
 		3
 	);
 
-	successful(run_from_isolate(&root, isolated.path(), &["--overwrite"]));
+	successful(run_project(&root, &["--overwrite"]));
 	let source = FileSource::new(fs::File::open(&output).unwrap()).unwrap();
 	Image::open(source, Limits::default())
 		.unwrap()
@@ -415,11 +384,10 @@ fn preserves_existing_output_until_explicit_overwrite() {
 fn rejects_bad_typed_values_without_echoing_the_value() {
 	let caller = tempfile::tempdir().unwrap();
 	let root = caller.path().canonicalize().unwrap();
-	let isolated = tempfile::tempdir().unwrap();
 	project(&root);
 	const PRIVATE_VALUE: &str = "an-opaque-argument-value";
 	let assignment = format!("image.size={PRIVATE_VALUE}");
-	let output = run_from_isolate(&root, isolated.path(), &["--dry-run", "--set", &assignment]);
+	let output = run_project(&root, &["--dry-run", "--set", &assignment]);
 	assert!(!output.status.success());
 	let stderr = String::from_utf8(output.stderr).unwrap();
 	assert!(stderr.contains("invalid configuration override value for image.size"));

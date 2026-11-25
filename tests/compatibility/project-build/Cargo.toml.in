@@ -8,9 +8,6 @@ publish = false
 [features]
 default = ["finder-write", "parallel"]
 
-# HFS+ project build
-project-build = []
-
 # Finder metadata
 finder-write = ["dmgez-hfsplus/finder-write"]
 volume-icon = ["finder-write", "dmgez-hfsplus/volume-icon"]
@@ -28,9 +25,6 @@ dmgez-config = { path = @dmgez-config@ }
 # Workspace build
 dmgez-builder = { path = @dmgez-builder@, default-features = false }
 dmgez-hfsplus = { path = @dmgez-hfsplus@, default-features = false, features = ["build"] }
-
-# Command-line interface
-clap = { version = "=4.6.8", features = ["derive"] }
 
 [dev-dependencies]
 # Workspace formats
