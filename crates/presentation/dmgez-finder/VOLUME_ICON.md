@@ -6,13 +6,19 @@ The parser limits the encoded ICNS file to 16 MiB, verifies every element bounda
 
 An optional info record may carry a binary property-list dictionary. The validator streams up to 256 events from at most 4 KiB of encoded bytes. Repeated references therefore cannot expand into an unbounded owned property-list tree. The application preserves this data without interpreting the archived metadata. This module uses the unstable stream API of plist 1.10.4, as locked in Cargo.lock. Revalidate the stream's allocation, iteration, and error behavior when updating that package. [plist 1.10.4 BinaryReader](https://docs.rs/plist/1.10.4/plist/stream/struct.BinaryReader.html)
 
-JPEG 2000, legacy icon elements, badging, and per-item icons require additional qualification. The validator performs no file I/O. Its caller reads bounded, identity-checked local sources and accounts for the decoder's working set.
+JPEG 2000, legacy icon elements, and per-item icons require additional qualification. The validator performs no file I/O. Its caller reads bounded, identity-checked local sources and accounts for the decoder's working set.
 
 ## PNG representations
 
 With the optional feature, the builder can also assemble a volume icon from an explicit `[volume_icon.images]` map. Supported logical sizes are 16, 32, 128, 256, and 512 points, each at standard or Retina scale. A key such as `"16@2x"` requires a 32 × 32 pixel PNG. The builder emits only the supplied slots, in ascending logical size with standard scale first. It checks complete PNG framing, checksums, dimensions, and decodability, and rejects animation. [Apple iconset reference](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_ref-Asset_Catalog_Format/IconSetType.html)
 
 The standard 16- and 32-point slots are encoded as Apple's planar ARGB types. Those slots require samples and color metadata that fit eight-bit sRGB. Unsupported color profiles or orientation data fail during build planning. The other eight slots preserve their validated PNG bytes. The builder bounds aggregate encoded input and ICNS output, charges the generated ICNS to the metadata budget, and checks every source again at publication.
+
+## Badged icon
+
+Enable `badge-icons` and set `[volume_icon] badge = "artwork/Badge.png"` to place artwork over an original drive glyph. The renderer keeps the badge aspect ratio, scales and blends it with alpha, and renders all ten slots. The admitted sources are static PNGs or validated modern ICNS files with a supported largest representation. The renderer selects that representation by physical pixel dimensions and resolves ties deterministically.
+
+The input is limited to 8 MiB and PNG dimensions to 1024 × 1024. The rendering profile accepts sRGB-compatible samples up to eight bits. Unsupported color metadata, animated sources, corrupt payloads, and assets beyond the configured workspace or metadata budgets cause build planning to fail. The source receives the same identity validation and output-alias protection as other icon files. [dmgbuild's badge setting](https://dmgbuild.readthedocs.io/en/stable/settings/#badge-icon)
 
 ## Native evidence
 
@@ -29,6 +35,8 @@ The TOML runner then resolved a relative source with its `--volume-icon` feature
 These observations cover prebuilt asset admission, TOML build, and root flag placement for D-FINDER-01-T01 and D-FINDER-03-T01, plus the representation and wrong-dimension checks of D-FINDER-03-T02. Native Finder rendering still requires a separate check.
 
 For the generated profile, the composed HFS+ runner built a 1 MiB logical image from ten distinct synthetic RGBA PNGs on macOS 14.7.2 (23H311), arm64. Apple verified and mounted the 4,831-byte UDZO read-only. GetFileInfo read the root's custom-icon bit, iconutil found all ten named slots at the expected dimensions, and ImageIO matched the pixels and alpha of each isolated ICNS element. The pixel test isolates each element because full-family decoding can select the same image for slots that share physical pixel dimensions. The independent container test also verifies the planar ARGB samples and exact bytes of the other eight PNG payloads. [Native generated profile check](../../../tests/compatibility/project-build/check_finder_volume_icon.py)
+
+The native artwork check on the same macOS build verified and mounted an 8 MiB logical image with the built-in arrow and a badged volume icon. GetFileInfo read the custom-icon bit, iconutil decoded all ten sizes, and ImageIO confirmed the badge color, base artwork, and transparent corner in each isolated element. Equivalent PNG and ICNS badge inputs produced byte-identical DMGs. [Native artwork check](../../../tests/compatibility/project-build/check_finder_artwork.py)
 
 ~~~sh
 cargo test --locked -p dmgez-finder --features volume-icon --test volume_icon

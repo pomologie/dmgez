@@ -73,6 +73,22 @@ The native PNG-set check uses Apple's Swift compiler and `iconutil`. It publishe
 python3 check_finder_volume_icon.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplus
 ```
 
+Use `--badge-icons` to enable badged volume icons in the runner. A standalone composed CLI enables it with `--features badge-icons` during composition.
+
+```toml
+[finder]
+background = { kind = "template", name = "builtin-arrow" }
+
+[volume_icon]
+badge = "artwork/Badge.png"
+```
+
+The independent template test checks both TIFF pages and DPI tags, verifies the catalog alias, and covers inheritance and reserved paths. The badge tests check all ten ICNS slots and their sampled pixels, enforce selection of the largest ICNS source representation, and reject source aliasing and changes before publication. The combined native check uses the same pinned Python packages as the background check and Apple's Swift compiler.
+
+```sh
+python3 check_finder_artwork.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplus
+```
+
 The qualified source profile covers ordinary regular file permissions and ownership, timestamp conversion at HFS+ precision, inline attributes, Finder information, a buffered resource fork, and exact symlink target bytes. The Unicode profile gives included regular-file hard links distinct catalog entries that share one chain-free inode, with both forks and attributes captured once. Source checks cover every alias before publication. Shared metadata losses name the representative and its other image paths. The strict policy rejects unavailable required directory and symlink attributes, subsecond date loss, unsupported BSD flags and attribute encodings, and hard-link groups outside the supported regular-file profile. Report policy records those losses, and an explicit hard-link preservation opt-out emits independent files with omission diagnostics. Explicit timestamp omission and an explicit generated epoch suit deterministic synthetic fixtures.
 
 The smoke tests assert minimum free capacity, byte-exact regular-file, inline attribute and macOS resource-fork read-back, an insufficient shrink bound, and rejection of source changes before publication. Hard-link tests verify a shared inode and single attribute owner, distinct catalog IDs, independent equal-content files, byte-identical output after reordering declarations, and rejection when the nonrepresentative source path is replaced. Native smoke evidence additionally runs Apple's UDIF checksum verifier and UDTO export on a disposable generated image, checks exact file and symlink bytes with 7-Zip, and reads both Finder positions with the Python ds_store oracle.
