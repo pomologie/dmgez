@@ -24,6 +24,8 @@ use thiserror::Error;
 #[cfg(feature = "finder-write")]
 mod finder;
 mod hard_links;
+#[cfg(feature = "volume-icon")]
+mod item_icons;
 mod metadata;
 mod source;
 
@@ -87,6 +89,18 @@ pub enum Error {
 	UnsupportedEntry { path: String },
 	#[error("requested Finder flag overrides are unavailable at {path:?}")]
 	FinderFlags { path: String },
+	#[cfg(feature = "volume-icon")]
+	#[error("a custom Finder icon cannot be applied to the item at {path:?}")]
+	CustomIconTarget { path: String },
+	#[cfg(feature = "volume-icon")]
+	#[error("a custom Finder icon cannot change shared hard-link metadata at {path:?}")]
+	CustomIconHardLink { path: String },
+	#[cfg(feature = "volume-icon")]
+	#[error("a custom Finder icon would replace an existing resource fork at {path:?}")]
+	CustomIconResourceFork { path: String },
+	#[cfg(feature = "volume-icon")]
+	#[error("a custom Finder icon would invalidate native code-signing metadata at {path:?}")]
+	CustomIconSigningMetadata { path: String },
 	#[error("HFS+ timestamp exceeds the representable epoch")]
 	Timestamp,
 	#[error("admitted build has no output path")]
@@ -138,6 +152,7 @@ pub fn capabilities() -> BuildCapabilities {
 	}
 	if cfg!(feature = "volume-icon") {
 		capabilities.finder_volume_icon = Availability::Available;
+		capabilities.finder_custom_icon = Availability::Available;
 	}
 	capabilities
 }
@@ -292,6 +307,10 @@ fn seal<'build>(
 	let count = count
 		.checked_add(finder::account_assets(prepared, &mut remaining)?)
 		.ok_or(Error::MetadataBudget)?;
+	#[cfg(feature = "volume-icon")]
+	let count = count
+		.checked_add(item_icons::account_assets(prepared, &mut remaining)?)
+		.ok_or(Error::MetadataBudget)?;
 	charge_many::<ManifestEntry<'_, Payload<'_>>>(&mut remaining, count)?;
 	let mut entries = Vec::new();
 	entries.try_reserve_exact(count)?;
@@ -313,14 +332,24 @@ fn seal<'build>(
 	for entry in manifest.entries() {
 		check_cancelled(cancellation)?;
 		if let Some(member) = shared_member(entry) {
+			#[cfg(feature = "volume-icon")]
+			item_icons::reject_shared(entry)?;
 			members.push(member);
 			continue;
 		}
-		let (entry, attrs) = capture.entry(entry, generated_seconds)?;
+		let (catalog_entry, attrs) = capture.entry(entry, generated_seconds)?;
+		#[cfg(feature = "volume-icon")]
+		let catalog_entry = item_icons::apply(
+			prepared,
+			entry,
+			catalog_entry,
+			&mut entries,
+			generated_seconds,
+		)?;
 		if !attrs.is_empty() {
-			pending_attrs.push((entry.path, attrs));
+			pending_attrs.push((catalog_entry.path, attrs));
 		}
-		entries.push(entry);
+		entries.push(catalog_entry);
 	}
 	let groups = hard_links::assemble(
 		members,

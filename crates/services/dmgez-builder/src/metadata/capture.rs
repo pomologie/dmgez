@@ -12,6 +12,13 @@ use crate::manifest::{self, SourceSnapshot};
 const ATTRIBUTE_SEPARATOR: u8 = 0;
 const FINDER_INFO_NAME: &[u8] = b"com.apple.FinderInfo";
 const RESOURCE_FORK_NAME: &[u8] = b"com.apple.ResourceFork";
+#[cfg(all(feature = "volume-icon", target_os = "macos"))]
+const SIGNING_ATTRIBUTE_NAMES: [&[u8]; 4] = [
+	b"com.apple.cs.CodeDirectory",
+	b"com.apple.cs.CodeRequirements",
+	b"com.apple.cs.CodeRequirements-1",
+	b"com.apple.cs.CodeSignature",
+];
 
 /// A source or its metadata could not be captured within the requested limits.
 #[derive(Debug, Error)]
@@ -51,6 +58,53 @@ pub fn capture_regular(
 	let captured = CapturedFile::new(file)?;
 	snapshot.validate()?;
 	Ok((captured, attributes))
+}
+
+/// Native source metadata that conflicts with adding a per-item Finder icon.
+#[cfg(feature = "volume-icon")]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ItemIconSourceConflict {
+	/// The file already has a native resource fork.
+	ResourceFork,
+	/// The file has native code-signing attributes.
+	SigningMetadata,
+}
+
+/// Checks for native metadata incompatible with an item icon without reading
+/// attribute values.
+/// # Errors
+/// Rejects source identity changes or an unreadable native attribute status.
+#[cfg(feature = "volume-icon")]
+pub fn probe_item_icon_conflict(
+	snapshot: &SourceSnapshot,
+) -> Result<Option<ItemIconSourceConflict>, Error> {
+	#[cfg(target_os = "macos")]
+	let conflict = native_item_icon_conflict(&snapshot.open_regular()?)?;
+	// The Linux metadata adapter has no native Finder or resource fork xattrs.
+	#[cfg(target_os = "linux")]
+	let conflict = None;
+	snapshot.validate()?;
+	Ok(conflict)
+}
+
+#[cfg(all(feature = "volume-icon", target_os = "macos"))]
+fn native_item_icon_conflict(file: &File) -> Result<Option<ItemIconSourceConflict>, Error> {
+	for name in SIGNING_ATTRIBUTE_NAMES {
+		if native_attribute_present(file, name)? {
+			return Ok(Some(ItemIconSourceConflict::SigningMetadata));
+		}
+	}
+	Ok(native_attribute_present(file, RESOURCE_FORK_NAME)?
+		.then_some(ItemIconSourceConflict::ResourceFork))
+}
+
+#[cfg(all(feature = "volume-icon", target_os = "macos"))]
+fn native_attribute_present(file: &File, name: &[u8]) -> Result<bool, Error> {
+	match fs::fgetxattr_query(file, name) {
+		Ok(_) => Ok(true),
+		Err(Errno::NOATTR) => Ok(false),
+		Err(source) => Err(Error::Attributes(source)),
+	}
 }
 
 fn read_attributes(file: &File, limits: AttributeLimits) -> Result<Attributes, Error> {

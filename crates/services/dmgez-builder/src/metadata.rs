@@ -6,6 +6,8 @@ pub mod policy;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use capture::{Error, capture_regular};
+#[cfg(all(feature = "volume-icon", any(target_os = "linux", target_os = "macos")))]
+pub use capture::{ItemIconSourceConflict, probe_item_icon_conflict};
 
 const FINDER_INFO_BYTES: usize = 32;
 

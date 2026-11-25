@@ -120,6 +120,10 @@ impl<'build> Capture<'_, '_, 'build> {
 		is_file: bool,
 	) -> Result<policy::AttributeCapture, Error> {
 		let requests = &self.project.metadata;
+		#[cfg(feature = "volume-icon")]
+		if is_file && entry.finder.custom_icon.is_some() {
+			validate_icon_source(entry, source)?;
+		}
 		if !(requests.preserve_finder_info
 			|| requests.preserve_resource_forks
 			|| requests.preserve_extended_attributes)
@@ -146,10 +150,32 @@ impl<'build> Capture<'_, '_, 'build> {
 	}
 }
 
+#[cfg(feature = "volume-icon")]
+fn validate_icon_source(
+	entry: &manifest::Entry,
+	source: &manifest::SourceSnapshot,
+) -> Result<(), Error> {
+	use metadata::ItemIconSourceConflict;
+
+	let conflict = metadata::probe_item_icon_conflict(source).map_err(|cause| Error::Capture {
+		path: entry.destination.as_str().into(),
+		cause,
+	})?;
+	match conflict {
+		Some(ItemIconSourceConflict::ResourceFork) => Err(Error::CustomIconResourceFork {
+			path: entry.destination.as_str().into(),
+		}),
+		Some(ItemIconSourceConflict::SigningMetadata) => Err(Error::CustomIconSigningMetadata {
+			path: entry.destination.as_str().into(),
+		}),
+		None => Ok(()),
+	}
+}
+
 pub(super) fn validate_finder_overrides(entry: &manifest::Entry) -> Result<(), Error> {
 	if entry.finder.hidden.is_some()
 		|| entry.finder.hide_extension.is_some()
-		|| entry.finder.custom_icon.is_some()
+		|| (!cfg!(feature = "volume-icon") && entry.finder.custom_icon.is_some())
 	{
 		return Err(Error::FinderFlags {
 			path: entry.destination.as_str().into(),
