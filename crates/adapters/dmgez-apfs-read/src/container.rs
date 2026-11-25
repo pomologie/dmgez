@@ -1,6 +1,8 @@
 use std::error::Error as StdError;
 
-use apfs_container::{Container, Error as ContainerError, LookupOptions, OpenOptions, Volume};
+use apfs_container::{
+	Container, Error as ContainerError, LookupOptions, OpenOptions, Volume, VolumeSelectionError,
+};
 use apfs_core::ReadAt;
 use apfs_reader::{Error as ReaderError, TreeLimits, VolumeView};
 use dmgez_vfs::{LogicalDisk, Window};
@@ -8,15 +10,8 @@ use thiserror::Error;
 
 use crate::{
 	ApfsBackend, CheckpointDiagnostic, ObjectId, SourceError, TransactionId, VolumeName,
-	VolumeRole, WindowSource,
+	VolumeRole, VolumeSelector, WindowSource,
 };
-
-/// Identifies a volume within one APFS container checkpoint.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum VolumeSelector {
-	ObjectId(ObjectId),
-	Uuid([u8; 16]),
-}
 
 /// Checked metadata for a volume as it appears in the selected checkpoint.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -135,23 +130,20 @@ where
 	S::Error: StdError + 'static,
 {
 	let options = LookupOptions::default();
-	let id = match requested {
-		Some(VolumeSelector::ObjectId(id)) => id,
-		Some(selector @ VolumeSelector::Uuid(uuid)) => {
-			container
-				.volumes(options)?
-				.into_iter()
-				.find(|volume| volume.superblock.uuid == uuid)
-				.ok_or(OpenError::UnknownVolume(selector))?
-				.mapping
-				.id
-		}
-		None => match container.volumes(options)?.as_slice() {
-			[only] => only.mapping.id,
-			[] => return Err(OpenError::NoVolumes),
-			volumes => return Err(OpenError::AmbiguousVolumes(volumes.len())),
-		},
-	};
+	let id = container
+		.select_volume_id(requested, options)
+		.map_err(|error| match error {
+			ContainerError::VolumeSelection(VolumeSelectionError::NoVolumes) => {
+				OpenError::NoVolumes
+			}
+			ContainerError::VolumeSelection(VolumeSelectionError::AmbiguousVolumes(count)) => {
+				OpenError::AmbiguousVolumes(count)
+			}
+			ContainerError::VolumeSelection(VolumeSelectionError::UnknownVolume(selector)) => {
+				OpenError::UnknownVolume(selector)
+			}
+			error => error.into(),
+		})?;
 	VolumeView::open(container, id, options, TreeLimits::default())?
 		.ok_or(OpenError::UnknownVolume(VolumeSelector::ObjectId(id)))
 }
