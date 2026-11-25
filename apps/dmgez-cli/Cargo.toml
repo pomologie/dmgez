@@ -14,43 +14,85 @@ path = "src/main.rs"
 
 [features]
 default = ["build", "parallel"]
-build = ["dep:dmgez-core", "dmgez-core/source", "dep:dmgez-udif", "dmgez-udif/write", "dmgez-udif/zlib"]
+
+# Image creation and conversion
+build = [
+	"dep:dmgez-core",
+	"dmgez-core/source",
+	"dep:dmgez-udif",
+	"dmgez-udif/write",
+	"dmgez-udif/zlib",
+]
 convert = ["dep:dmgez-operations", "dmgez-operations/convert", "dep:dmgez-udif"]
-diff = ["dep:dmgez-diff", "dep:dmgez-udif", "dmgez-udif/read", "dmgez-udif/zlib", "dep:dmgez-vfs", "dep:serde", "dep:serde_json"]
+
+# Inspection and comparison
+inspect = [
+	"dep:dmgez-core",
+	"dep:dmgez-inspector",
+	"dmgez-inspector/zlib",
+	"dep:dmgez-udif",
+	"dmgez-udif/read",
+	"dep:dmgez-vfs",
+	"dep:serde",
+	"dep:serde_json",
+]
+diff = [
+	"dep:dmgez-diff",
+	"dep:dmgez-udif",
+	"dmgez-udif/read",
+	"dmgez-udif/zlib",
+	"dep:dmgez-vfs",
+	"dep:serde",
+	"dep:serde_json",
+]
 diff-hash = ["diff", "dmgez-diff/content-hash"]
 finder-diff = ["diff", "dmgez-diff/finder-layout"]
+
+# Project import and installer checks
 appdmg-import = ["dep:dmgez-config", "dmgez-config/appdmg-import", "dep:dmgez-core"]
 lint = ["dep:dmgez-config", "dep:dmgez-lint", "dep:dmgez-preview", "dep:serde", "dep:serde_json"]
 installer-lint = ["lint", "dmgez-lint/installer"]
 installer-test = ["inspect", "dep:dmgez-operations", "dmgez-operations/install"]
+
+# Signing and notarization
 signing-native = ["dep:dmgez-signing", "dmgez-signing/native", "dep:serde", "dep:serde_json"]
 notarization-native = ["signing-native", "dmgez-signing/notarization-native"]
+
+# Parallel execution and compression
 parallel = ["dmgez-udif?/parallel", "dmgez-operations?/parallel"]
 lzfse = ["dmgez-udif?/lzfse"]
 lzma = ["dmgez-udif?/lzma"]
-inspect = ["dep:dmgez-core", "dep:dmgez-inspector", "dmgez-inspector/zlib", "dep:dmgez-udif", "dmgez-udif/read", "dep:dmgez-vfs", "dep:serde", "dep:serde_json"]
 
 [dependencies]
-# Workspace crates
+# Workspace formats
+dmgez-udif = { workspace = true, optional = true }
+
+# Workspace foundation
 dmgez-config = { workspace = true, optional = true }
 dmgez-core = { workspace = true, optional = true, features = ["staging"] }
+dmgez-vfs = { workspace = true, optional = true }
+
+# Workspace presentation
+dmgez-preview = { workspace = true, optional = true }
+
+# Workspace security
+dmgez-signing = { workspace = true, optional = true }
+
+# Workspace services
 dmgez-diff = { workspace = true, optional = true }
 dmgez-inspector = { workspace = true, optional = true }
 dmgez-lint = { workspace = true, optional = true }
 dmgez-operations = { workspace = true, optional = true }
-dmgez-preview = { workspace = true, optional = true }
-dmgez-signing = { workspace = true, optional = true }
-dmgez-udif = { workspace = true, optional = true }
-dmgez-vfs = { workspace = true, optional = true }
+
+# Serialization and configuration
+serde = { workspace = true, optional = true }
+serde_json = { workspace = true, optional = true }
 
 # Command-line interface
 clap.workspace = true
 
-# Serialization
-serde = { workspace = true, optional = true }
-serde_json = { workspace = true, optional = true }
-
 [dev-dependencies]
+# Filesystem access and staging
 tempfile.workspace = true
 
 [lints]
