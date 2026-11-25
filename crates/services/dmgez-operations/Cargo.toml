@@ -9,11 +9,30 @@ repository.workspace = true
 
 [features]
 default = []
+
+# Image conversion and editing
 convert = ["dep:dmgez-core", "dep:dmgez-udif", "dep:thiserror"]
-edit = ["dep:dmgez-builder", "dep:dmgez-config", "dmgez-builder/zlib", "dmgez-config/project-edit", "dep:thiserror"]
+edit = [
+	"dep:dmgez-builder",
+	"dep:dmgez-config",
+	"dmgez-builder/zlib",
+	"dmgez-config/project-edit",
+	"dep:thiserror",
+]
+image-edit = [
+	"edit",
+	"dep:dmgez-udif",
+	"dmgez-udif/signature-integrity",
+	"dep:dmgez-vfs",
+	"dep:rustix",
+	"dep:sha2",
+]
+
+# Extraction and installation
 extract = ["dep:dmgez-vfs", "dep:rustix", "dep:serde", "dep:tempfile", "dep:thiserror"]
-image-edit = ["edit", "dep:dmgez-udif", "dmgez-udif/signature-integrity", "dep:dmgez-vfs", "dep:rustix", "dep:sha2"]
 install = ["extract", "dep:dmgez-config", "dep:plist", "dep:quick-xml"]
+
+# Parallel execution
 parallel = ["dmgez-udif?/parallel"]
 
 [dependencies]

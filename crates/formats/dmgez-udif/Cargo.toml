@@ -9,13 +9,21 @@ description = "Native UDIF disk image codecs for dmgez"
 
 [features]
 default = ["read", "write", "zlib"]
+
+# UDIF reading, writing and block reuse
 read = ["dep:dmgez-core", "dep:quick-xml", "dep:plist", "dep:crc32fast"]
 write = ["dep:plist", "dep:crc32fast"]
 write-cache = ["write", "zlib", "dep:sha2", "dep:zlib-rs"]
+
+# Compression codecs
 zlib = ["dep:flate2"]
 lzfse = ["dep:lzfse_rust"]
 lzma = ["dep:lzma-rust2"]
+
+# Parallel execution
 parallel = ["dep:rayon"]
+
+# Signature integrity
 signature-integrity = ["dep:sha2"]
 
 [dependencies]

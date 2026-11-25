@@ -9,14 +9,25 @@ description = "Compose the versioned HFS+ builder with dmgez image planning"
 
 [features]
 default = ["finder-write", "parallel"]
-badge-icons = ["volume-icon", "dmgez-builder/badge-icons"]
-compression-cache = ["dmgez-builder/compression-cache"]
+
+# Finder layout and icons
 finder-write = ["dep:dmgez-finder", "dep:dmgez-macho", "dmgez-builder/finder-write"]
-image-edit = ["dmgez-config/project-edit", "dep:dmgez-finder", "dep:dmgez-macho", "dep:hfsplus-reader"]
+volume-icon = ["finder-write", "dmgez-builder/volume-icon"]
+badge-icons = ["volume-icon", "dmgez-builder/badge-icons"]
+
+# Image editing
+image-edit = [
+	"dmgez-config/project-edit",
+	"dep:dmgez-finder",
+	"dep:dmgez-macho",
+	"dep:hfsplus-reader",
+]
+
+# Compression and parallel execution
 lzfse = ["dmgez-builder/lzfse"]
 lzma = ["dmgez-builder/lzma"]
+compression-cache = ["dmgez-builder/compression-cache"]
 parallel = ["dmgez-builder/parallel"]
-volume-icon = ["finder-write", "dmgez-builder/volume-icon"]
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", windows))'.dependencies]
 # Workspace formats

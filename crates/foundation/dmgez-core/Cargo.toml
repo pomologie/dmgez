@@ -9,6 +9,8 @@ description = "Shared I/O contracts for dmgez services"
 
 [features]
 default = []
+
+# Source access and output staging
 source = ["dep:thiserror"]
 staging = ["dep:tempfile", "dep:thiserror", "dep:rustix"]
 

@@ -9,14 +9,18 @@ description = "Plan and execute dmgez image builds"
 
 [features]
 default = ["finder-write", "parallel", "zlib"]
-badge-icons = ["volume-icon", "dmgez-finder/badge-icons"]
-compression-cache = ["zlib", "dep:dmgez-cache", "dmgez-udif/write-cache"]
+
+# Finder layout and icons
 finder-write = ["dep:dmgez-finder", "dep:dmgez-macho", "dep:flate2", "dep:png", "dep:tiff"]
+volume-icon = ["finder-write", "dmgez-finder/volume-icon"]
+badge-icons = ["volume-icon", "dmgez-finder/badge-icons"]
+
+# Compression and parallel execution
+zlib = ["dmgez-udif/zlib"]
 lzfse = ["dmgez-udif/lzfse"]
 lzma = ["dmgez-udif/lzma"]
+compression-cache = ["zlib", "dep:dmgez-cache", "dmgez-udif/write-cache"]
 parallel = ["dmgez-udif/parallel"]
-volume-icon = ["finder-write", "dmgez-finder/volume-icon"]
-zlib = ["dmgez-udif/zlib"]
 
 [dependencies]
 # Workspace formats

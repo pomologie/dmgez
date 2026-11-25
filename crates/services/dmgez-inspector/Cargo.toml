@@ -9,9 +9,13 @@ repository.workspace = true
 
 [features]
 default = ["zlib"]
+
+# Compression codecs
 zlib = ["dmgez-udif/zlib"]
 lzfse = ["dmgez-udif/lzfse"]
 lzma = ["dmgez-udif/lzma"]
+
+# Remote sources
 remote = []
 
 [dependencies]

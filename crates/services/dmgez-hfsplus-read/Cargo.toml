@@ -9,10 +9,14 @@ description = "Read-only HFS+ and HFSX browsing and structural verification for 
 
 [features]
 default = []
-analysis = ["browse", "dep:serde"]
+
+# Volume browsing, analysis and verification
 browse = ["dep:dmgez-vfs"]
-decmpfs-zlib = ["hfsplus-reader/decmpfs-zlib"]
+analysis = ["browse", "dep:serde"]
 verify = []
+
+# File compression
+decmpfs-zlib = ["hfsplus-reader/decmpfs-zlib"]
 
 [dependencies]
 # Workspace foundation
@@ -23,7 +27,7 @@ hfsplus-core = { package = "hfsplus-pomologie-core", version = "=0.1.0" }
 hfsplus-format = "=0.1.0"
 hfsplus-reader = "=0.1.0"
 
-# Serialization
+# Serialization and configuration
 serde = { version = "1.0.229", features = ["derive"], optional = true }
 
 # Diagnostics

@@ -8,7 +8,18 @@ repository.workspace = true
 description = "Explicit code signing and signature checks for dmgez"
 
 [features]
-native = ["dep:dmgez-macho", "dep:dmgez-udif", "dep:plist", "dep:quick-xml", "dep:rustix", "dep:sha2", "dep:tempfile"]
+# Native signing and trust checks
+native = [
+	"dep:dmgez-macho",
+	"dep:dmgez-udif",
+	"dep:plist",
+	"dep:quick-xml",
+	"dep:rustix",
+	"dep:sha2",
+	"dep:tempfile",
+]
+
+# Notarization and stapling
 notarization-native = ["native", "dep:dmgez-core", "dep:serde_json", "rustix/process"]
 
 [dependencies]
