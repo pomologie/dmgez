@@ -64,6 +64,9 @@ struct SemanticOptions {
 	/// Select a filesystem for both inputs in semantic mode. HFS+ includes HFSX.
 	#[arg(long = FILESYSTEM_OPTION, value_enum)]
 	filesystem: Option<Filesystem>,
+	/// Include supported extended attributes in the semantic comparison.
+	#[arg(long)]
+	xattrs: bool,
 	/// Interpret the left input as a raw disk image in semantic mode.
 	#[arg(long)]
 	left_raw: bool,
@@ -92,7 +95,7 @@ struct SemanticOptions {
 
 #[cfg(feature = "diff")]
 impl SemanticOptions {
-	fn has_any(&self) -> bool {
+	fn has_selectors(&self) -> bool {
 		self.filesystem.is_some()
 			|| self.left_raw
 			|| self.right_raw
@@ -118,7 +121,8 @@ pub(super) fn run(_arguments: &Arguments) -> CliResult<ExitCode> {
 pub(super) fn run(arguments: &Arguments) -> CliResult<ExitCode> {
 	match arguments.mode {
 		Mode::Semantic => run_semantic(arguments),
-		_ if arguments.options.has_any() => Err(invalid(
+		_ if arguments.options.xattrs => Err(invalid("--xattrs requires --mode semantic").into()),
+		_ if arguments.options.has_selectors() => Err(invalid(
 			"filesystem, raw input, partition, volume and checkpoint selectors require --mode semantic",
 		)
 		.into()),

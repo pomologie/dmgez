@@ -6,7 +6,7 @@ use std::{
 
 use dmgez_diff::{
 	Side,
-	semantic::{Limits, Outcome, Report, compare},
+	semantic::{Limits, Outcome, Report, compare, compare_with_xattrs},
 };
 use dmgez_inspector::SelectedWindowId;
 use dmgez_vfs::{
@@ -148,12 +148,17 @@ where
 		Input::new(right.partition(), arguments.options.right_raw, right_volume),
 		Side::Right,
 	)?;
+	let comparison = if arguments.options.xattrs {
+		compare_with_xattrs(left, right, limits, || false)?
+	} else {
+		compare(left, right, limits, || false)?
+	};
 	Ok(DiffReport {
 		address_space: FILESYSTEM_SPACE,
 		filesystem: filesystem.as_str(),
 		left: left_input,
 		right: right_input,
-		comparison: compare(left, right, limits, || false)?,
+		comparison,
 	})
 }
 
@@ -258,6 +263,10 @@ impl DiffReport {
 			write_json(output, &change.path)?;
 			for field in &change.fields {
 				write!(output, "\t{}", field.as_str())?;
+			}
+			if !change.xattrs.is_empty() {
+				write!(output, "\txattrs = ")?;
+				write_json(output, &change.xattrs)?;
 			}
 			writeln!(output)?;
 		}
