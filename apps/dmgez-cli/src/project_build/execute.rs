@@ -8,7 +8,7 @@ use std::{
 
 use dmgez_builder::{
 	planning::PreparedBuild,
-	preflight::{OutputIntent, PreflightOptions, ReleaseIntent},
+	preflight::{OutputIntent, PreflightOptions, ReleaseIntent, ReleasePlan},
 	progress::BuildProgress,
 };
 use dmgez_config::{ConfigOverride, Project};
@@ -26,6 +26,8 @@ const RELATIVE_WORKING_DIRECTORY: &str = "working directory must be absolute";
 const MISSING_PROJECT_DIRECTORY: &str = "project path has no parent directory";
 const INVALID_DEFINITION: &str = "expected a definition in NAME=VALUE form";
 const DUPLICATE_OVERWRITE: &str = "choose either --overwrite or --set build.overwrite";
+const RELEASE_DEFERRED: &str =
+	"Configured release stages were deferred. Published an unsigned image.";
 
 pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> CliResult {
 	if !working_directory.is_absolute() {
@@ -77,6 +79,9 @@ pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> CliResult
 		return Ok(());
 	}
 	let report = sealed.publish_with_progress(None, |event| progress.update(event))?;
+	if report.report.release == ReleasePlan::ConfiguredStagesDeferred {
+		writeln!(io::stderr().lock(), "{RELEASE_DEFERRED}")?;
+	}
 	let image = report.report.image;
 	writeln!(
 		io::stdout().lock(),

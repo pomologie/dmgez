@@ -100,3 +100,46 @@ destination = "/Data"
 			.contains(&format!("{EXACT_SIZE_BYTES} logical bytes"))
 	);
 }
+
+#[cfg(feature = "project-build")]
+#[test]
+fn unsigned_build_reports_configured_release_stages_as_deferred() {
+	use std::fs;
+
+	const OUTPUT_NAME: &str = "unsigned.dmg";
+	const SETTINGS: &str = r#"
+schema_version = 1
+
+[image]
+name = "Unsigned Fixture"
+output = "unsigned.dmg"
+format = "udro"
+
+[[contents]]
+type = "directory"
+destination = "/Data"
+
+[signing]
+enabled = true
+dmg = true
+
+[notarization]
+enabled = true
+
+[release]
+require_native_assessment = true
+"#;
+	let directory = tempfile::tempdir().unwrap();
+	fs::write(directory.path().join(MANIFEST_NAME), SETTINGS).unwrap();
+	let build = Command::new(BINARY)
+		.current_dir(directory.path())
+		.args(["build", MANIFEST_NAME])
+		.output()
+		.unwrap();
+	let stderr = String::from_utf8(build.stderr).unwrap();
+	assert!(build.status.success(), "{stderr}");
+	assert!(
+		stderr.contains("Configured release stages were deferred. Published an unsigned image.")
+	);
+	assert!(directory.path().join(OUTPUT_NAME).is_file());
+}
