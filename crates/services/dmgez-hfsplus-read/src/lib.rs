@@ -1,5 +1,7 @@
 //! Read-only access to a selected HFS+ or HFSX volume.
 
+#[cfg(feature = "analysis")]
+pub mod analysis;
 #[cfg(feature = "browse")]
 pub mod browse;
 #[cfg(feature = "verify")]

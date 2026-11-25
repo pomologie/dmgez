@@ -354,7 +354,7 @@ fn visible_entry(entry: Entry) -> DirectoryEntry<CatalogId> {
 	}
 }
 
-fn node_kind(entry: &Entry) -> NodeKind {
+pub(crate) fn node_kind(entry: &Entry) -> NodeKind {
 	if matches!(entry.kind, EntryKind::Directory { .. }) {
 		return NodeKind::Directory;
 	}

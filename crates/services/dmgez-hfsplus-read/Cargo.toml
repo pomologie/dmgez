@@ -9,6 +9,7 @@ description = "Read-only HFS+ and HFSX browsing and structural verification for 
 
 [features]
 default = []
+analysis = ["browse", "dep:serde"]
 browse = ["dep:dmgez-vfs"]
 decmpfs-zlib = ["hfsplus-reader/decmpfs-zlib"]
 verify = []
@@ -22,8 +23,15 @@ hfsplus-core = { package = "hfsplus-pomologie-core", version = "=0.1.0" }
 hfsplus-format = "=0.1.0"
 hfsplus-reader = "=0.1.0"
 
+# Serialization
+serde = { version = "1.0.229", features = ["derive"], optional = true }
+
 # Diagnostics
 thiserror = "=2.0.21"
+
+[dev-dependencies]
+# Workspace formats
+dmgez-udif = { path = "../../formats/dmgez-udif", default-features = false, features = ["read"] }
 
 [lints.rust]
 unsafe_code = "forbid"
