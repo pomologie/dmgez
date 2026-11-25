@@ -7,6 +7,9 @@ use apfs_core::{ByteOffset, ReadAt};
 use apfs_format::object::{ObjectId, TransactionId};
 use apfs_reader::{Error as NativeError, Limit, TreeLimits, VolumeView as NativeView};
 use dmgez_apfs_volume_read_compatibility::{AdapterError, ApfsBackend};
+use dmgez_operations::extract::{
+	NameError, NameLimits, NamePlanError, NameProfile, preflight_names,
+};
 use dmgez_vfs::volume::{
 	ForkKind, LookupName, NodeHandle, NodeKind, RawName, ViewError, VolumeBackend, VolumeView,
 };
@@ -89,6 +92,40 @@ fn native_aliases_keep_distinct_handles_and_checked_shared_forks() {
 	assert_ne!(file, &unicode.node);
 	assert_ne!(alias.node, unicode.node);
 	assert_eq!(unicode.name, RawName::Utf8(NATIVE_UNICODE_ALIAS.to_owned()));
+
+	let limits = NameLimits {
+		page_entries: FIRST_PAGE,
+		..NameLimits::default()
+	};
+	let unicode_parent = &root_entries[1].node;
+	assert!(matches!(
+		preflight_names(
+			&mut view,
+			unicode_parent,
+			NameProfile::PortableAscii,
+			limits,
+			|| false
+		),
+		Err(NamePlanError::Name {
+			reason: NameError::Encoding,
+			..
+		})
+	));
+	let plan = preflight_names(
+		&mut view,
+		unicode_parent,
+		NameProfile::PosixUtf8,
+		limits,
+		|| false,
+	)
+	.unwrap();
+	let planned_alias = plan
+		.entries()
+		.iter()
+		.find(|entry| entry.name.as_str() == NATIVE_UNICODE_ALIAS)
+		.unwrap();
+	assert_eq!(planned_alias.kind, NodeKind::RegularFile);
+	assert_eq!(planned_alias.source, unicode.node);
 
 	let data = DATA_PATTERN.repeat(DATA_REPETITIONS);
 	let resource = RESOURCE_PATTERN.repeat(RESOURCE_REPETITIONS);

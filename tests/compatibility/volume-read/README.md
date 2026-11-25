@@ -1,6 +1,6 @@
 # Filesystem volume read compatibility
 
-Run the development adapter with Python 3, the dmgez toolchain, and a populated Cargo cache. The runner builds a temporary Cargo project from the chosen dependency paths, verifies each native fixture's SHA-256 digest, and runs locked, offline tests.
+Run the development adapter with Python 3, the dmgez toolchain, and a populated Cargo cache. The dmgez checkout must include the extraction preflight introduced by `42e24a7`. The runner builds a temporary Cargo project from the chosen dependency paths, verifies each native fixture's SHA-256 digest, and runs locked, offline tests.
 
 ```sh
 python3 tests/compatibility/volume-read/run.py --dmgez . --hfsplus /path/to/hfsplus
@@ -25,3 +25,16 @@ The fixture bytes cover selected recorded ranges. The tests reconstruct the disk
 The adapter opens the selected APFS partition, then a volume and checkpoint through the APFS reader. It uses exact stored UTF-8 names. It keeps each hard-link entry distinct from its shared inode and lends data and resource streams independently. Symbolic links expose their exact target bytes.
 
 The tests passed against dmgez `1edf143` and APFS `a210ad5`. They stream a synthetic MBR and [pinned blocks](apfs/fixtures.json) from native APFS fixtures through UDZO. They exercise directory page recovery, separate hard-link and storage identities, both forks, absent and empty streams, foreign handle refusal, and an inline symlink. The fixture source refuses reads outside the captured APFS blocks. APFS qualification currently uses the sibling source checkout.
+
+## Extraction name preflight
+
+Both recipes call `dmgez_operations::extract::preflight_names` on the real filesystem adapter. The HFS+ fixture constructed with a non-UTF-8 relative symlink target yields a portable name plan containing the link object and its source handle. The native APFS hard-link fixture preserves `Écho.bin` in the exact UTF-8 plan. The portable profile rejects that name with a typed encoding error. The APFS payload fixture provides targeted symlink lookup evidence. A full name scan of that fixture reaches uncaptured catalog block 408.
+
+Select `--hfsx-fixture` for the native case-sensitive HFSX test. It requires HFS+ revision `eca5c48c6df694246b810a380f1d6b18ea11f4f7` or a compatible reader and the [pinned `native-hfsx.bin` capture](hfsplus/fixtures-hfsx.json). The reader package records the `fsck_hfs`, read-only mount and 7-Zip oracles in `tests/fixtures/native-hfsx-case-sensitive.json`. The base commands also work with the earlier `2571ebb` package set.
+
+```sh
+python3 tests/compatibility/volume-read/run.py --dmgez . --hfsplus /path/to/hfsplus --hfsx-fixture
+python3 tests/compatibility/volume-read/run.py --dmgez . --hfsplus-packages /path/to/unpacked --hfsx-fixture
+```
+
+The portable profile rejects the distinct HFSX directories `Cases` and `cases` even when they arrive on separate pages. The bytewise UTF-8 profile preserves both and keeps `Case.txt` and `case.txt` as distinct children of `Cases`. These checks exercise name admission and source topology for D-READ-05.

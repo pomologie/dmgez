@@ -1,6 +1,7 @@
 use std::num::NonZeroU16;
 
 use dmgez_hfsplus_read_probe::{Error, HfsView, Limits, with_view};
+use dmgez_operations::extract::{NameLimits, NameProfile, preflight_names};
 use dmgez_udif::{reader, writer};
 use dmgez_vfs::{
 	Disk, VolumeId,
@@ -224,6 +225,50 @@ fn refusing_a_dirty_journal_prevents_view_access() {
 	));
 }
 
+#[cfg(feature = "hfsx-fixture")]
+#[test]
+fn native_hfsx_root_case_collision_preserves_posix_spellings() {
+	use dmgez_operations::extract::NamePlanError;
+	const NATIVE_HFSX: &[u8] = include_bytes!("fixtures/native-hfsx.bin");
+	const DIRECTORIES: [&str; 2] = ["Cases", "cases"];
+	const CASE_PAIR: [&str; 2] = ["Case.txt", "case.txt"];
+	let logical = materialize(NATIVE_HFSX);
+	with_image(&logical, |view| {
+		let root = view.root().unwrap();
+		let limits = NameLimits {
+			page_entries: NonZeroU16::MIN,
+			..NameLimits::default()
+		};
+		let Err(NamePlanError::Collision { first, second }) =
+			preflight_names(view, &root, NameProfile::PortableAscii, limits, || false)
+		else {
+			panic!("native directory names must collide in the portable profile");
+		};
+		assert_eq!([first.as_str(), second.as_str()], DIRECTORIES);
+
+		let plan = preflight_names(view, &root, NameProfile::PosixUtf8, limits, || false).unwrap();
+		let roots: Vec<_> = plan
+			.entries()
+			.iter()
+			.filter(|entry| entry.parent.is_none())
+			.map(|entry| entry.name.as_str())
+			.collect();
+		assert_eq!(roots, DIRECTORIES);
+		let files = CASE_PAIR.map(|name| {
+			let entry = plan
+				.entries()
+				.iter()
+				.find(|entry| entry.name.as_str() == name)
+				.unwrap();
+			let parent = &plan.entries()[entry.parent.unwrap().index()];
+			assert_eq!(parent.name.as_str(), DIRECTORIES[0]);
+			assert_eq!(entry.kind, NodeKind::RegularFile);
+			&entry.source
+		});
+		assert_ne!(files[0], files[1]);
+	});
+}
+
 #[test]
 fn constructed_symlink_preserves_non_utf8_target_without_dereferencing() {
 	use hfsplus_builder::volume::{
@@ -258,6 +303,21 @@ fn constructed_symlink_preserves_non_utf8_target_without_dereferencing() {
 			.unwrap()
 			.node;
 		assert_eq!(view.stat(&link).unwrap().kind, NodeKind::Symlink);
+		let plan = preflight_names(
+			view,
+			&root,
+			NameProfile::PortableAscii,
+			NameLimits::default(),
+			|| false,
+		)
+		.unwrap();
+		let [planned] = plan.entries() else {
+			panic!("expected one planned symlink")
+		};
+		assert_eq!(planned.name.as_str(), LINK_NAME);
+		assert_eq!(planned.kind, NodeKind::Symlink);
+		assert_eq!(planned.source, link);
+		assert!(planned.parent.is_none());
 		assert_eq!(view.read_link(&link).unwrap(), TARGET);
 		assert!(matches!(
 			view.with_fork(&link, ForkKind::Data, |_| ()),

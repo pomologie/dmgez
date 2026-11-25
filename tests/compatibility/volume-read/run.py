@@ -12,7 +12,9 @@ from tempfile import TemporaryDirectory
 
 RUNNER = Path(__file__).resolve().parent
 ENGINE_VERSION = "0.1.0"
+HFSX_FEATURE = "hfsx-fixture"
 DMGEZ_PACKAGES = {
+    "dmgez-operations": "crates/services/dmgez-operations",
     "dmgez-udif": "crates/formats/dmgez-udif",
     "dmgez-vfs": "crates/foundation/dmgez-vfs",
 }
@@ -56,19 +58,20 @@ def manifest(recipe, packages, patches):
     return expanded
 
 
-def install_fixtures(recipe, packages, destination):
-    expected = json.loads((recipe / "fixtures.json").read_text(encoding="utf-8"))
+def install_fixtures(indices, packages, destination):
     destination.mkdir()
-    for package, fixtures in expected.items():
-        for name, digest in fixtures.items():
-            source = packages[package] / "tests" / "fixtures" / name
-            data = source.read_bytes()
-            if hashlib.sha256(data).hexdigest() != digest:
-                raise ValueError(f"{package} fixture {name} has an unexpected SHA-256 digest")
-            (destination / name).write_bytes(data)
+    for index in indices:
+        expected = json.loads(index.read_text(encoding="utf-8"))
+        for package, fixtures in expected.items():
+            for name, digest in fixtures.items():
+                source = packages[package] / "tests" / "fixtures" / name
+                data = source.read_bytes()
+                if hashlib.sha256(data).hexdigest() != digest:
+                    raise ValueError(f"{package} fixture {name} has an unexpected SHA-256 digest")
+                (destination / name).write_bytes(data)
 
 
-def run(dmgez, engine, source, packaged):
+def run(dmgez, engine, source, packaged, hfsx):
     locations = ENGINE_PACKAGES[engine]
     if packaged:
         locations = {name: f"{name}-{ENGINE_VERSION}" for name in locations}
@@ -76,6 +79,11 @@ def run(dmgez, engine, source, packaged):
     packages = resolve_packages(dmgez, DMGEZ_PACKAGES)
     packages.update(resolve_packages(source, locations))
     patches = PACKAGE_PATCHES[engine] if packaged else ()
+    fixtures = [recipe / "fixtures.json"]
+    command = ["cargo", "test", "--offline", "--locked"]
+    if hfsx:
+        fixtures.append(recipe / "fixtures-hfsx.json")
+        command.extend(["--features", HFSX_FEATURE])
     with TemporaryDirectory(prefix="dmgez-volume-read.") as temporary:
         isolated = Path(temporary)
         for name in ("rust-toolchain.toml", "rustfmt.toml"):
@@ -83,14 +91,16 @@ def run(dmgez, engine, source, packaged):
         shutil.copy2(recipe / "Cargo.lock", isolated / "Cargo.lock")
         for name in ("src", "tests"):
             shutil.copytree(recipe / name, isolated / name)
-        install_fixtures(recipe, packages, isolated / "tests" / "fixtures")
+        install_fixtures(fixtures, packages, isolated / "tests" / "fixtures")
         (isolated / "Cargo.toml").write_text(manifest(recipe, packages, patches), encoding="utf-8")
-        return subprocess.run(["cargo", "test", "--offline", "--locked"], cwd=isolated).returncode
+        return subprocess.run(command, cwd=isolated).returncode
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dmgez", required=True, type=Path, help="dmgez source checkout")
+    parser.add_argument(f"--{HFSX_FEATURE}", dest="hfsx", action="store_true",
+                        help="test the pinned native case-sensitive HFSX fixture")
     sources = parser.add_mutually_exclusive_group(required=True)
     choices = {}
     for engine in ENGINE_PACKAGES:
@@ -106,8 +116,12 @@ def main():
     for option, (engine, packaged) in choices.items():
         source = options[option]
         if source is not None:
+            if options["hfsx"] and engine != "hfsplus":
+                parser.error(f"--{HFSX_FEATURE} requires --hfsplus or --hfsplus-packages")
             try:
-                return run(options["dmgez"].resolve(), engine, source.resolve(), packaged)
+                return run(
+                    options["dmgez"].resolve(), engine, source.resolve(), packaged, options["hfsx"],
+                )
             except (OSError, ValueError) as error:
                 parser.error(str(error))
 

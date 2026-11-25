@@ -14,5 +14,8 @@ dmgez-udif = { version = "=0.1.0", path = @dmgez-udif@, default-features = false
 dmgez-vfs = { version = "=0.1.0", path = @dmgez-vfs@, default-features = false, features = ["zlib"] }
 thiserror = "=2.0.21"
 
+[dev-dependencies]
+dmgez-operations = { version = "=0.1.0", path = @dmgez-operations@, default-features = false, features = ["extract"] }
+
 [lints.rust]
 unsafe_code = "forbid"

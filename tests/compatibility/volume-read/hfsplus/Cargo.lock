@@ -82,12 +82,21 @@ dependencies = [
 name = "dmgez-hfsplus-read-probe"
 version = "0.0.0"
 dependencies = [
+ "dmgez-operations",
  "dmgez-udif",
  "dmgez-vfs",
  "hfsplus-builder",
  "hfsplus-core",
  "hfsplus-format",
  "hfsplus-reader",
+ "thiserror",
+]
+
+[[package]]
+name = "dmgez-operations"
+version = "0.1.0"
+dependencies = [
+ "dmgez-vfs",
  "thiserror",
 ]
 

@@ -5,6 +5,9 @@ edition = "2024"
 rust-version = "1.98"
 publish = false
 
+[features]
+hfsx-fixture = []
+
 [dependencies]
 dmgez-vfs = { path = @dmgez-vfs@, default-features = false }
 hfsplus-core = { version = "=0.1.0", path = @hfsplus-core@ }
@@ -13,6 +16,7 @@ hfsplus-reader = { version = "=0.1.0", path = @hfsplus-reader@ }
 thiserror = "=2.0.21"
 
 [dev-dependencies]
+dmgez-operations = { version = "=0.1.0", path = @dmgez-operations@, default-features = false, features = ["extract"] }
 dmgez-udif = { path = @dmgez-udif@, default-features = false, features = ["read", "write", "zlib"] }
 hfsplus-builder = { version = "=0.1.0", path = @hfsplus-builder@ }
 

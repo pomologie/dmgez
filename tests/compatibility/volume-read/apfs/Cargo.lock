@@ -104,6 +104,7 @@ dependencies = [
  "apfs-core",
  "apfs-format",
  "apfs-reader",
+ "dmgez-operations",
  "dmgez-udif",
  "dmgez-vfs",
  "thiserror",
@@ -113,6 +114,14 @@ dependencies = [
 name = "dmgez-core"
 version = "0.1.0"
 dependencies = [
+ "thiserror",
+]
+
+[[package]]
+name = "dmgez-operations"
+version = "0.1.0"
+dependencies = [
+ "dmgez-vfs",
  "thiserror",
 ]
 
