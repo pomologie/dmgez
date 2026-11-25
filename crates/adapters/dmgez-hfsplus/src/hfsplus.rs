@@ -130,8 +130,17 @@ pub fn prepare_with_progress<'project>(
 	cancellation: Cancellation,
 	progress: impl Fn(BuildProgress),
 ) -> Result<PreparedHfsBuild<'project>, Error> {
-	let build =
-		planning::prepare_with_progress(project, config_dir, options, cancellation, progress)?;
+	#[cfg(feature = "finder-write")]
+	let build = planning::prepare_for_catalog(
+		project,
+		config_dir,
+		options,
+		cancellation,
+		progress,
+		finder::CATALOG_NAMES,
+	)?;
+	#[cfg(not(feature = "finder-write"))]
+	let build = planning::prepare_with_progress(project, config_dir, options, cancellation, progress)?;
 	Ok(PreparedHfsBuild { project, build })
 }
 

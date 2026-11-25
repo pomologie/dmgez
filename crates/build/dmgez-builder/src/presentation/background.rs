@@ -7,11 +7,10 @@ use std::{
 };
 
 use dmgez_config::{
-	Background, BackgroundTemplate, Column, Coordinate, Dimension, Direction, FinderOptions,
-	LocalPath, VirtualPath,
+	Background, BackgroundTemplate, Coordinate, FinderOptions, LocalPath, VirtualPath,
 };
 use dmgez_core::source::CapturedFile;
-use dmgez_finder::{ImageBackgroundIdentity, LayoutItem, write_store_with_background_identity};
+use dmgez_finder::{CatalogNames, ImageBackgroundIdentity, LayoutItem};
 
 use crate::{
 	manifest::{Manifest, SourceSnapshot},
@@ -23,6 +22,7 @@ use super::{
 	parent_and_name,
 };
 
+mod budget;
 mod icc;
 mod output;
 mod prebuilt;
@@ -45,7 +45,6 @@ const MAX_RASTER_BYTES: usize = 64 << 20;
 const MAX_IMAGE_DIMENSION: u32 = 8192;
 const PNG_DECODER_BUDGET_DIVISOR: usize = 4;
 const READ_CHUNK_BYTES: usize = 128 << 10;
-const MINIMUM_COLUMN_WIDTH: u8 = 0;
 
 /// Finder metadata awaiting the frozen catalog identity of its image.
 #[derive(Debug)]
@@ -59,6 +58,7 @@ struct FolderLayout {
 	path: VirtualPath,
 	options: FinderOptions,
 	items: Vec<OwnedItem>,
+	names: CatalogNames,
 }
 
 pub(super) struct PendingFinderStore {
@@ -103,7 +103,10 @@ impl DeferredFinderStore {
 			name: &item.name,
 			position: item.position,
 		}));
-		let bytes = write_store_with_background_identity(&self.layout.options, &items, identity)
+		let bytes = self
+			.layout
+			.names
+			.write_store_with_background_identity(&self.layout.options, &items, identity)
 			.map_err(|source| Error::Layout {
 				folder: parent_and_name(self.path()).0.to_owned(),
 				source,
@@ -120,10 +123,11 @@ impl PendingFinderStore {
 		path: VirtualPath,
 		options: Cow<'_, FinderOptions>,
 		children: &[LayoutItem<'_>],
+		names: CatalogNames,
 		budget: &mut AssetBudget,
 	) -> Result<Self, Error> {
-		let retained =
-			deferred_metadata_bytes(&path, &options, children).ok_or(Error::MetadataBudget)?;
+		let retained = budget::deferred_metadata_bytes(&path, &options, children)
+			.ok_or(Error::MetadataBudget)?;
 		budget.charge(retained)?;
 		budget.charge(MAX_ENCODED_STORE_BYTES)?;
 		budget.charge(size_of::<(Self, usize)>())?;
@@ -138,6 +142,7 @@ impl PendingFinderStore {
 				path,
 				options: options.into_owned(),
 				items,
+				names,
 			},
 			retained,
 		})
@@ -162,46 +167,6 @@ impl PendingFinderStore {
 			retained,
 		))
 	}
-}
-
-fn deferred_metadata_bytes(
-	path: &VirtualPath,
-	options: &FinderOptions,
-	children: &[LayoutItem<'_>],
-) -> Option<usize> {
-	let mut bytes = size_of::<DeferredFinderStore>().checked_add(path.as_str().len())?;
-	match &options.background {
-		Some(Background::Image { source, retina }) => {
-			bytes = bytes.checked_add(source_path_bytes(source, retina.as_ref())?)?;
-		}
-		Some(Background::Template { name }) => bytes = bytes.checked_add(name.as_str().len())?,
-		_ => {}
-	}
-	if let Some(icons) = &options.icon_view {
-		for name in icons.positions.keys() {
-			bytes = bytes
-				.checked_add(size_of::<(String, [Coordinate; 2])>())?
-				.checked_add(name.len())?;
-		}
-	}
-	if let Some(list) = &options.list_view {
-		if let Some(columns) = &list.columns {
-			bytes = bytes.checked_add(size_of::<Column>().checked_mul(columns.len())?)?;
-		}
-		bytes = bytes.checked_add(
-			size_of::<(Column, Dimension<MINIMUM_COLUMN_WIDTH>)>()
-				.checked_mul(list.column_widths.len())?,
-		)?;
-		bytes = bytes.checked_add(
-			size_of::<(Column, Direction)>().checked_mul(list.sort_directions.len())?,
-		)?;
-	}
-	for item in children {
-		bytes = bytes
-			.checked_add(size_of::<OwnedItem>() + size_of::<LayoutItem<'_>>())?
-			.checked_add(item.name.len())?;
-	}
-	Some(bytes)
 }
 
 #[derive(Eq, Ord, PartialEq, PartialOrd)]

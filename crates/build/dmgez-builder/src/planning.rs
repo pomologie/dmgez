@@ -24,7 +24,9 @@ pub(crate) mod cache;
 pub use cache::Error as CompressionCacheError;
 
 #[cfg(feature = "finder-write")]
-use crate::presentation::{self, DeferredFinderStore, GeneratedAsset, PreparedAssets};
+use crate::presentation::{
+	self, CatalogNames, DeferredFinderStore, GeneratedAsset, PreparedAssets,
+};
 
 #[cfg(feature = "volume-icon")]
 use presentation::volume_icon::FINDER_INFO_BYTES;
@@ -190,6 +192,41 @@ pub fn prepare_with_progress(
 	cancellation: Cancellation,
 	progress: impl Fn(BuildProgress),
 ) -> Result<PreparedBuild, Error> {
+	prepare_build(
+		project,
+		config_dir,
+		options,
+		cancellation,
+		progress,
+		#[cfg(feature = "finder-write")]
+		CatalogNames::default(),
+	)
+}
+
+/// Prepares a Finder-enabled build using the selected filesystem's name spelling.
+///
+/// # Errors
+/// Returns the same errors as [`prepare`] or a stored-name encoding error.
+#[cfg(feature = "finder-write")]
+pub fn prepare_for_catalog(
+	project: &Project,
+	config_dir: &Path,
+	options: PreflightOptions,
+	cancellation: Cancellation,
+	progress: impl Fn(BuildProgress),
+	names: CatalogNames,
+) -> Result<PreparedBuild, Error> {
+	prepare_build(project, config_dir, options, cancellation, progress, names)
+}
+
+fn prepare_build(
+	project: &Project,
+	config_dir: &Path,
+	options: PreflightOptions,
+	cancellation: Cancellation,
+	progress: impl Fn(BuildProgress),
+	#[cfg(feature = "finder-write")] names: CatalogNames,
+) -> Result<PreparedBuild, Error> {
 	let mut profile = preflight(project, options)?;
 	if cancellation.is_cancelled() {
 		return Err(Error::Cancelled);
@@ -251,6 +288,7 @@ pub fn prepare_with_progress(
 			&profile,
 			&config_dir,
 			path,
+			names,
 			#[cfg(feature = "volume-icon")]
 			volume_icon,
 		)?

@@ -8,7 +8,8 @@ use std::{
 };
 
 use dmgez_config::{FinderOptions, LocalPath, Project, VirtualPath};
-use dmgez_finder::{LayoutItem, STORE_NAME, write_store};
+pub use dmgez_finder::CatalogNames;
+use dmgez_finder::{LayoutItem, STORE_NAME};
 
 use crate::{
 	manifest::{EntryKind, Manifest},
@@ -65,9 +66,16 @@ pub fn generate(
 		return Ok(Vec::new());
 	}
 	let mut budget = AssetBudget::new(manifest, profile)?;
-	Ok(plan_stores(project, manifest, profile, &mut budget, false)?
-		.assets
-		.ready)
+	Ok(plan_stores(
+		project,
+		manifest,
+		profile,
+		&mut budget,
+		false,
+		CatalogNames::default(),
+	)?
+	.assets
+	.ready)
 }
 
 #[derive(Debug, Default)]
@@ -104,6 +112,7 @@ pub(crate) fn prepare(
 	profile: &ExecutionProfile,
 	config_dir: &Path,
 	output: Option<&LocalPath>,
+	names: CatalogNames,
 	#[cfg(feature = "volume-icon")] volume_icon: Option<volume_icon::IconSources>,
 ) -> Result<PreparedAssets, Error> {
 	let mut budget = AssetBudget::new(manifest, profile)?;
@@ -111,7 +120,7 @@ pub(crate) fn prepare(
 		mut assets,
 		backgrounds,
 		deferred,
-	} = plan_stores(project, manifest, profile, &mut budget, true)?;
+	} = plan_stores(project, manifest, profile, &mut budget, true, names)?;
 	let sort_files = !backgrounds.is_empty();
 	#[cfg(feature = "volume-icon")]
 	let sort_files = sort_files || volume_icon.is_some();
@@ -163,6 +172,7 @@ fn plan_stores(
 	profile: &ExecutionProfile,
 	budget: &mut AssetBudget,
 	allow_deferred: bool,
+	names: CatalogNames,
 ) -> Result<PlannedStores, Error> {
 	if profile.finder() == FinderPlan::NoStore {
 		return Ok(PlannedStores::default());
@@ -202,6 +212,7 @@ fn plan_stores(
 				store,
 				options.expect("an image was selected"),
 				&folder.children,
+				names,
 				budget,
 			)?;
 			plan.deferred.try_reserve_exact(1)?;
@@ -209,8 +220,9 @@ fn plan_stores(
 			continue;
 		}
 		budget.charge(store.as_str().len())?;
-		let bytes =
-			write_store(options.as_deref(), &folder.children).map_err(|source| Error::Layout {
+		let bytes = names
+			.write_store(options.as_deref(), &folder.children)
+			.map_err(|source| Error::Layout {
 				folder: path.to_owned(),
 				source,
 			})?;

@@ -16,6 +16,10 @@ Root `.DS_Store` and optional folder stores built directly. Typical layout uses 
 
 ## Tests and support
 
+HFS+ builds write positioned Unicode item names using the exact spelling held in the catalog. Folder position maps match the project destination spelling, then the HFS+ adapter applies the same Unicode 3.2 normalization used to write the catalog. This applies to both ordinary stores and stores with a background alias. Existing image edits use the catalog spelling for renamed items and preserve unrelated records in the qualified single-leaf profile. Each key admits at most 255 UTF-16 code units and the encoded record counts against the same page budget as ASCII keys.
+
+The Unicode position case of D-FINDER-01-T02 compared root and nested position keys decoded by `ds_store` 1.3.4 with the exact HFS+ names read by 7-Zip 17.05 on macOS 14.7.2 (23H311). It checked the positions and file contents before and after a Unicode rename and position edit. Apple's `hdiutil` verified both images, and editing preserved the original image bytes. [Independent HFS+ and Finder record check](../../tests/compatibility/project-build/check_unicode_positions.py)
+
 The bounded store reader decodes list view from both the keyed `lsvp` and ordered `lsvC` binary plist records. It preserves each record independently because Finder can store different columns in each. Keyed columns follow their stored indices, and ordered columns follow the stored array. Reports include column identifiers, widths, visibility and direction, together with the admitted list settings and the names of unreported settings. The reader bounds nesting and shared-reference expansion before decoding. [Finder-written Sonoma fixture and reader tests](../../crates/presentation/dmgez-finder/tests/list_view.rs)
 
 Root and nested Finder layouts accept `default_view = "column-view"`. The generated `.DS_Store` selects column view with the `icvl/type/clmv` record. A nested folder inherits the selected view and can override it. Icon positions remain available when switching views, and explicit `include_icon_view_settings` and `include_list_view_settings` still control their secondary settings.

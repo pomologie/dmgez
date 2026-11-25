@@ -1,8 +1,8 @@
-use std::{borrow::Cow, mem::size_of};
+use std::{borrow::Cow, error::Error as StdError, mem::size_of};
 
 use dmgez_builder::{
 	planning::PreparedBuild,
-	presentation::{GeneratedAsset, ImageBackgroundIdentity},
+	presentation::{CatalogNames, GeneratedAsset, ImageBackgroundIdentity},
 };
 use dmgez_config::VirtualPath;
 use dmgez_udif::writer::Cancellation;
@@ -21,6 +21,12 @@ use super::{
 const FINDER_FLAGS_OFFSET: usize = 8;
 const FINDER_FLAGS_END: usize = FINDER_FLAGS_OFFSET + size_of::<u16>();
 const FINDER_INVISIBLE: u16 = 0x4000;
+
+pub(super) const CATALOG_NAMES: CatalogNames = CatalogNames::new(stored_name);
+
+fn stored_name(name: &str) -> Result<String, Box<dyn StdError + Send + Sync>> {
+	Ok(String::from_utf16(normalize(name)?.as_units())?)
+}
 
 pub(super) fn account_assets(
 	prepared: &PreparedBuild,
