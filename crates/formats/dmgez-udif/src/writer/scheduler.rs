@@ -17,6 +17,7 @@ const MAX_WORKERS: usize = 32;
 pub(super) fn admit(
 	options: &WriteOptions,
 	available_workers: NonZeroUsize,
+	extra_scratch_bytes: usize,
 ) -> Result<WriteAdmission, Error> {
 	if !cfg!(feature = "parallel") && matches!(options.execution, Execution::Parallel { .. }) {
 		return Err(Error::FeatureNotCompiled("parallel"));
@@ -27,7 +28,7 @@ pub(super) fn admit(
 		super::Profile::Udzo => 2 * options.chunk_bytes + CODEC_WORKSPACE_BYTES,
 		super::Profile::Ulfo => 2 * options.chunk_bytes + LZFSE_WORKSPACE_BYTES,
 		super::Profile::Ulmo => 2 * options.chunk_bytes + LZMA_WORKSPACE_BYTES,
-	};
+	} + extra_scratch_bytes;
 	let capacity = options.max_buffer_bytes / per_chunk;
 	let workers = match options.execution {
 		Execution::Serial => NonZeroUsize::MIN,
@@ -86,20 +87,20 @@ impl Scheduler {
 		&self,
 		chunks: Vec<RawChunk>,
 		options: &WriteOptions,
+		#[cfg(feature = "write-cache")] cache: Option<&super::cache::ActiveCache<'_>>,
 	) -> Vec<Result<StoredChunk, Error>> {
+		let encode = |chunk: RawChunk| {
+			chunk.encode(
+				options,
+				#[cfg(feature = "write-cache")]
+				cache,
+			)
+		};
 		#[cfg(feature = "parallel")]
 		if let Some(pool) = &self.pool {
 			use rayon::prelude::*;
-			return pool.install(|| {
-				chunks
-					.into_par_iter()
-					.map(|chunk| chunk.encode(options))
-					.collect()
-			});
+			return pool.install(|| chunks.into_par_iter().map(encode).collect());
 		}
-		chunks
-			.into_iter()
-			.map(|chunk| chunk.encode(options))
-			.collect()
+		chunks.into_iter().map(encode).collect()
 	}
 }

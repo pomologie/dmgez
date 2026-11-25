@@ -1250,6 +1250,7 @@ dependencies = [
  "rayon",
  "sha2",
  "thiserror 2.0.21",
+ "zlib-rs",
 ]
 
 [[package]]

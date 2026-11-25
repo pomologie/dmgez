@@ -11,6 +11,7 @@ description = "Native UDIF disk image codecs for dmgez"
 default = ["read", "write", "zlib"]
 read = ["dep:dmgez-core", "dep:quick-xml", "dep:plist", "dep:crc32fast"]
 write = ["dep:plist", "dep:crc32fast"]
+write-cache = ["write", "zlib", "dep:sha2", "dep:zlib-rs"]
 zlib = ["dep:flate2"]
 lzfse = ["dep:lzfse_rust"]
 lzma = ["dep:lzma-rust2"]
@@ -25,6 +26,8 @@ dmgez-core = { workspace = true, optional = true, features = ["source"] }
 flate2 = { workspace = true, optional = true }
 lzfse_rust = { workspace = true, optional = true }
 lzma-rust2 = { workspace = true, optional = true }
+# Keep flate2's Rust backend aligned with the cache encoder revision.
+zlib-rs = { workspace = true, optional = true }
 
 # Hashes and checksums
 crc32fast = { workspace = true, optional = true }

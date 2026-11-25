@@ -37,3 +37,38 @@ pub(crate) fn deflate(raw: &[u8], level: u8) -> Result<Option<Vec<u8>>, crate::E
 	encoded.truncate(len);
 	Ok(Some(encoded))
 }
+
+#[cfg(feature = "write-cache")]
+pub(crate) const CACHE_INFLATE_SCRATCH_BYTES: usize = 16 << 10;
+
+#[cfg(feature = "write-cache")]
+pub(crate) fn matches_inflated(mut stored: &[u8], mut raw: &[u8]) -> bool {
+	use flate2::{Decompress, FlushDecompress, Status};
+
+	let mut inflater = Decompress::new(true);
+	let mut decoded = [0; CACHE_INFLATE_SCRATCH_BYTES];
+	loop {
+		let input_before = inflater.total_in();
+		let output_before = inflater.total_out();
+		let Ok(status) = inflater.decompress(stored, &mut decoded, FlushDecompress::None) else {
+			return false;
+		};
+		// Each delta is bounded by its input or scratch slice.
+		let consumed = (inflater.total_in() - input_before) as usize;
+		let produced = (inflater.total_out() - output_before) as usize;
+		let Some((expected, remaining_raw)) = raw.split_at_checked(produced) else {
+			return false;
+		};
+		if decoded[..produced] != *expected {
+			return false;
+		}
+		stored = &stored[consumed..];
+		raw = remaining_raw;
+		if status == Status::StreamEnd {
+			return stored.is_empty() && raw.is_empty();
+		}
+		if consumed == 0 && produced == 0 {
+			return false;
+		}
+	}
+}

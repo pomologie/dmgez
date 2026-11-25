@@ -1,16 +1,21 @@
 //! Streaming UDRO and UDZO construction from finite logical disk bytes.
 
+#[cfg(feature = "write-cache")]
+pub mod cache;
 mod chunk;
 mod metadata;
 mod scheduler;
+mod stream;
 
 pub use crate::Cancellation;
+#[cfg(feature = "write-cache")]
+pub use cache::write_image_with_cache;
 pub(crate) use metadata::OutputMetadata;
 #[cfg(feature = "read")]
 pub use metadata::{RebuildMetadata, write_rebuilt_image};
 
 use std::{
-	io::{self, Read, Write},
+	io::{Read, Write},
 	num::NonZeroUsize,
 };
 
@@ -21,7 +26,7 @@ use crate::{
 	blkx::{self, Kind, Record},
 	checksum, resource, trailer,
 };
-use scheduler::Scheduler;
+use stream::write_stream;
 
 const MAX_CHUNK_BYTES: usize = 1 << 20;
 const MAX_RECORDS: usize = 131_072;
@@ -140,6 +145,31 @@ impl WriteOptions {
 	/// Rejects unavailable codec or scheduling features, invalid chunk size or
 	/// level, and budgets insufficient for the requested scheduling.
 	pub fn admit(&self, available_workers: NonZeroUsize) -> Result<WriteAdmission, Error> {
+		self.admit_with_scratch(available_workers, 0)
+	}
+
+	/// Validates an explicit cached write and includes its per-worker scratch in
+	/// the payload budget. The resolved scheduling is used by
+	/// [`write_image_with_cache`].
+	///
+	/// # Errors
+	/// Rejects profiles other than UDZO, invalid settings and insufficient memory.
+	#[cfg(feature = "write-cache")]
+	pub fn admit_with_cache(
+		&self,
+		available_workers: NonZeroUsize,
+	) -> Result<WriteAdmission, Error> {
+		if self.profile != Profile::Udzo {
+			return Err(Error::Unsupported("compressed-block cache requires UDZO"));
+		}
+		self.admit_with_scratch(available_workers, cache::scratch_bytes(self))
+	}
+
+	fn admit_with_scratch(
+		&self,
+		available_workers: NonZeroUsize,
+		extra_scratch_bytes: usize,
+	) -> Result<WriteAdmission, Error> {
 		self.validate_chunk_bytes()?;
 		if self.zlib_level > MAX_ZLIB_LEVEL {
 			return Err(Error::ResourceLimit("zlib level must be between 0 and 9"));
@@ -156,7 +186,7 @@ impl WriteOptions {
 		if self.max_physical_bytes <= trailer::BYTES as u64 {
 			return Err(Error::ResourceLimit("physical image size"));
 		}
-		scheduler::admit(self, available_workers)
+		scheduler::admit(self, available_workers, extra_scratch_bytes)
 	}
 
 	/// Returns the worst-case data run count for a finite logical disk.
@@ -240,63 +270,20 @@ pub fn write_image(
 }
 
 fn write_with_metadata(
-	mut source: impl Read,
+	source: impl Read,
 	logical_bytes: u64,
-	mut sink: impl Write,
+	sink: impl Write,
 	options: &WriteOptions,
 	metadata: OutputMetadata,
 ) -> Result<WriteReport, Error> {
-	options.cancellation.check()?;
-	let max_records = options.max_data_runs(logical_bytes)? + TERMINATOR_RECORD_COUNT;
-	let available_workers = match options.execution {
-		#[cfg(feature = "parallel")]
-		Execution::Parallel {
-			workers: Execution::AUTO_WORKERS,
-		} => std::thread::available_parallelism().unwrap_or(NonZeroUsize::MIN),
-		_ => NonZeroUsize::MIN,
-	};
-	let admission = options.admit(available_workers)?;
-	let scheduler = Scheduler::new(admission)?;
-	let mut logical_crc = Hasher::new();
-	let mut data = DataFork::new(&mut sink, max_records, options.max_physical_bytes);
-	let mut unread = logical_bytes;
-	while unread != 0 {
-		let mut batch = Vec::with_capacity(scheduler.width());
-		for _ in 0..scheduler.width() {
-			if unread == 0 {
-				break;
-			}
-			options.cancellation.check()?;
-			let size = unread.min(options.chunk_bytes as u64) as usize;
-			let mut bytes = vec![0; size];
-			source
-				.read_exact(&mut bytes)
-				.map_err(|err| match err.kind() {
-					io::ErrorKind::UnexpectedEof => {
-						Error::SourceLength("ended before declared size")
-					}
-					_ => err.into(),
-				})?;
-			unread -= size as u64;
-			logical_crc.update(&bytes);
-			batch.push(RawChunk(bytes));
-		}
-		for result in scheduler.encode(batch, options) {
-			options.cancellation.check()?;
-			data.write(result?)?;
-		}
-	}
-	match source.read_exact(&mut [0]) {
-		Ok(()) => return Err(Error::SourceLength("has bytes beyond declared size")),
-		Err(err) if err.kind() == io::ErrorKind::UnexpectedEof => {}
-		Err(err) => return Err(err.into()),
-	}
-	options.cancellation.check()?;
-	data.finish(
-		logical_crc.finalize(),
+	write_stream(
+		source,
+		logical_bytes,
+		sink,
 		options,
-		admission.accounted_payload_bytes(),
 		metadata,
+		#[cfg(feature = "write-cache")]
+		None,
 	)
 }
 

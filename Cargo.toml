@@ -68,9 +68,10 @@ dmgez-lint = { path = "crates/services/dmgez-lint" }
 dmgez-operations = { path = "crates/services/dmgez-operations", default-features = false }
 
 # Compression
-flate2 = { version = "1.1.11", default-features = false, features = ["zlib-rs"] }
+flate2 = { version = "=1.1.11", default-features = false, features = ["zlib-rs"] }
 lzfse_rust = { version = "=0.2.1", default-features = false }
 lzma-rust2 = { version = "=0.25.0", default-features = false, features = ["std", "xz", "encoder"] }
+zlib-rs = { version = "=0.6.8", default-features = false }
 
 # Hashes and checksums
 blake3 = { version = "=1.8.7", default-features = false, features = ["pure"] }
