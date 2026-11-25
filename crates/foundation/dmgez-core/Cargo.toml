@@ -14,6 +14,9 @@ default = []
 source = ["dep:thiserror"]
 staging = ["dep:tempfile", "dep:thiserror", "dep:rustix"]
 
+# Native host operations
+native-process = ["dep:rustix", "dep:thiserror"]
+
 [dependencies]
 # Filesystem access and staging
 tempfile = { workspace = true, optional = true }

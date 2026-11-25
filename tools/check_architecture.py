@@ -20,7 +20,7 @@ PROFILES = {
     "installer_lint": (["--no-default-features", "--features", "installer-lint"], {"dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-lint", "dmgez-preview", "dmgez-udif", "serde_json"}),
     "appdmg_import": (["--no-default-features", "--features", "appdmg-import"], {"dmgez-config", "dmgez-core", "serde_json"}),
     "native_signing": (["--no-default-features", "--features", "signing-native"],
-                       {"dmgez-signing", "serde_json"} | ({"dmgez-macho", "dmgez-udif", "sha2"} if sys.platform == "darwin" else set())),
+                       {"dmgez-signing", "serde_json"} | ({"dmgez-core", "dmgez-macho", "dmgez-udif", "sha2"} if sys.platform == "darwin" else set())),
     "native_notarization": (["--no-default-features", "--features", "notarization-native"],
                             {"dmgez-signing", "serde_json"} | ({"dmgez-core", "dmgez-macho", "dmgez-udif", "sha2"} if sys.platform == "darwin" else set())),
 }
