@@ -30,6 +30,7 @@ pub(super) fn write() {
 		),
 		(project_edit::FEATURE, cfg!(feature = "project-edit")),
 		(preview::FEATURE, cfg!(feature = "preview")),
+		(preview::ACTUAL_FEATURE, cfg!(feature = "actual-preview")),
 		(image_edit::FEATURE, cfg!(feature = "image-edit")),
 		(WRAP_RAW_COMMAND, cfg!(feature = "build")),
 		(

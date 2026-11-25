@@ -107,7 +107,7 @@ enum Command {
 	/// Plan or build an HFS+ disk image from a TOML project.
 	#[command(name = BUILD_PROJECT_COMMAND)]
 	Build(project_build::Arguments),
-	/// Render a project design as a PNG without building or mounting an image.
+	/// Render a project design or actual disk image as a PNG.
 	Preview(preview::Arguments),
 	/// Apply a typed edit batch to a project and rebuild to a new image.
 	Edit(project_edit::Arguments),

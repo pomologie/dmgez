@@ -46,6 +46,8 @@ HFSPLUS_PACKAGES = {
 ADAPTER = "dmgez-hfsplus"
 READ_ADAPTER = "dmgez-hfsplus-read"
 READ_FEATURE = "hfsplus-read"
+ACTUAL_PREVIEW_FEATURE = "actual-preview"
+PREVIEW_TEST = "preview_cli"
 HFS_ANALYSIS_FEATURE = "hfsplus-analysis"
 VERIFY_FEATURE = "hfsplus-verify"
 EXTRACT_FEATURE = "hfsplus-extract"
@@ -58,7 +60,7 @@ INSTALLER_TEST_FEATURE = "installer-test"
 DIFF_FEATURE = "diff"
 DIFF_HASH_FEATURE = "diff-hash"
 FINDER_DIFF_FEATURE = "finder-diff"
-READ_PROFILES = (READ_FEATURE, HFS_ANALYSIS_FEATURE, EXTRACT_FEATURE, DECMPFS_FEATURE, INSTALL_FEATURE)
+READ_PROFILES = (READ_FEATURE, ACTUAL_PREVIEW_FEATURE, HFS_ANALYSIS_FEATURE, EXTRACT_FEATURE, DECMPFS_FEATURE, INSTALL_FEATURE)
 APFS_READER = "apfs-reader"
 APFS_PACKAGES = {
     "apfs-core": "crates/foundation/apfs-core",
@@ -154,6 +156,7 @@ def compose_cli_manifest(manifest, reader, build, apfs):
     if reader:
         hfsplus_features = {
             READ_FEATURE: ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse"],
+            ACTUAL_PREVIEW_FEATURE: ["preview", READ_FEATURE, f"{READ_ADAPTER}/preview"],
             HFS_ANALYSIS_FEATURE: [READ_FEATURE, f"{READ_ADAPTER}/analysis"],
             VERIFY_FEATURE: ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/verify"],
             EXTRACT_FEATURE: [READ_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract"],
@@ -234,7 +237,7 @@ def compose_cli_manifest(manifest, reader, build, apfs):
 
 def compose_desktop_manifest(manifest):
     parsed = tomllib.loads(manifest)
-    if (READ_FEATURE in parsed.get("features", {})
+    if ({READ_FEATURE, ACTUAL_PREVIEW_FEATURE}.intersection(parsed.get("features", {}))
             or READ_ADAPTER in parsed["dependencies"] or "dmgez-vfs" in parsed["dependencies"]):
         raise ValueError("desktop manifest already has filesystem composition settings")
     feature_section = "\n[features]\n"
@@ -242,8 +245,9 @@ def compose_desktop_manifest(manifest):
     development_section = "\n[dev-dependencies]\n"
     if dependency_section not in manifest or development_section not in manifest:
         raise ValueError("could not find the desktop dependencies sections")
-    features = render_feature(READ_FEATURE, [f"dep:{READ_ADAPTER}", "dep:dmgez-vfs"])
-    group = f"# HFS+ volume access\n{features}\n"
+    read = render_feature(READ_FEATURE, [f"dep:{READ_ADAPTER}", "dep:dmgez-vfs"])
+    preview = render_feature(ACTUAL_PREVIEW_FEATURE, [READ_FEATURE, f"{READ_ADAPTER}/preview"])
+    group = f"# HFS+ volume access\n{read}\n{preview}\n"
     if feature_section in manifest:
         manifest = manifest.replace(feature_section, feature_section + group, 1)
     else:
@@ -364,6 +368,8 @@ def run_cli(cargo, directory, options, packages):
                 command.extend(("--test", DECMPFS_TEST))
             if has_cli_feature(options, EXTRACT_FEATURE):
                 command.extend(("--test", EXTRACT_TEST))
+            if has_cli_feature(options, ACTUAL_PREVIEW_FEATURE):
+                command.extend(("--test", PREVIEW_TEST))
         if any(has_cli_feature(options, name) for name in (INSTALL_FEATURE, APFS_INSTALL_FEATURE)):
             command.extend(("--test", INSTALL_TEST))
         if has_cli_feature(options, MOUNT_WATCH_FEATURE):
@@ -447,7 +453,7 @@ def main():
     for feature in APFS_PROFILES:
         if has_cli_feature(options, feature) and not use_apfs:
             parser.error(f"{feature} requires --apfs or --apfs-packages")
-    for feature in (HFS_ANALYSIS_FEATURE, INSTALL_FEATURE, MOUNT_WATCH_FEATURE, PROJECT_EDIT_FEATURE, IMAGE_EDIT_FEATURE, PARTITION_WRITE_FEATURE):
+    for feature in (ACTUAL_PREVIEW_FEATURE, HFS_ANALYSIS_FEATURE, INSTALL_FEATURE, MOUNT_WATCH_FEATURE, PROJECT_EDIT_FEATURE, IMAGE_EDIT_FEATURE, PARTITION_WRITE_FEATURE):
         if has_cli_feature(options, feature) and not use_hfsplus:
             parser.error(f"{feature} requires --hfsplus or --hfsplus-packages")
     if use_apfs and not any(has_cli_feature(options, feature) for feature in APFS_PROFILES):

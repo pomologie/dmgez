@@ -20,3 +20,16 @@ Omit `--show-hidden` to use the project’s normal visibility. The command print
 The PNG profile accepts the default background, solid colors, and static 8-bit RGB or RGBA backgrounds in sRGB or without a color profile. The primary PNG is drawn from the upper-left corner at native pixel size. Other background variants, custom icons, and automatic arrangement return errors. Rendering is capped at 512 entries in the selected folder, 4,096 pixels per side, and 4,194,304 pixels overall. The command creates a new output file.
 
 Distributions of the CLI with `preview` include the embedded font notices. [Font notices](../../../apps/dmgez/THIRD_PARTY_NOTICES.md#embedded-fonts) · [CLI PNG tests](../../../apps/dmgez-cli/tests/preview_cli.rs)
+
+## Render an actual disk image
+
+Compose the CLI with the sibling HFS+ reader and run `preview` with an image path.
+
+```sh
+python3 tools/compose_filesystem_cli.py --hfsplus ../hfsplus --no-default-features --features actual-preview
+target/hfsplus-cli/debug/dmgez preview installer.dmg --output actual.png
+```
+
+Use `--folder /Guide` for an exact stored folder path, `--partition SLOT` to select a partition, and `--raw` for a raw disk image. `--show-hidden` includes hidden entries. The command reads the real HFS+ or HFSX catalog and the selected folder’s `.DS_Store`. It uses supported icon-view settings, exact matches for stored icon positions, and generic icons. The report identifies the observed store and background and counts stored and fallback positions.
+
+Solid colors and qualified PNG artwork are supported. For image aliases, the reader checks the in-volume stored path, catalog IDs, names, volume label, and creation dates before reading the asset. It reports fallback if the expected store or image cannot be used. The same pixel limits apply as in the design profile. [Actual-image tests](../../../apps/dmgez-cli/tests/preview_cli/actual.rs) · [Fixture and independent checks](../../../tests/fixtures/manifests/actual-preview-udzo.json)

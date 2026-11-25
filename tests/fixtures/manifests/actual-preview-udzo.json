@@ -1,0 +1,24 @@
+{
+  "description": "Synthetic HFS+ folder and stored Finder artwork for actual-image previews.",
+  "format": "UDZO",
+  "filesystem": "HFS+",
+  "logical_bytes": 1048576,
+  "sha256": "f41b138f10a2147978fe70d744156b9abef40632616e81d1b5d1bcfa9168d6d9",
+  "generation": {
+    "command": "dmgez build tests/fixtures/source/actual-preview-udzo/dmg.toml",
+    "hfsplus_revision": "185ba1d605d58c6cdeeca70b94c864e07ede3e5d"
+  },
+  "oracle": {
+    "macos": "14.7.2 (23H311), arm64",
+    "container": "hdiutil verify -nocache",
+    "catalog_and_background": "7-Zip decoded the HFS+ payload and extracted the exact source PNG",
+    "store": "ds_store 1.3.4 inspected the extracted .DS_Store",
+    "window_points": [160, 100],
+    "icon_points": 20,
+    "background_rgb": [23, 77, 129],
+    "positions": {
+      "Guide": [40, 25],
+      "Private": [105, 74]
+    }
+  }
+}

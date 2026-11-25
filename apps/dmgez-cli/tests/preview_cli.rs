@@ -5,6 +5,10 @@ use std::{
 	process::{Command, Output},
 };
 
+#[cfg(feature = "actual-preview")]
+#[path = "preview_cli/actual.rs"]
+mod actual;
+
 fn invoke(project: &Path, output: &Path, arguments: &[&str]) -> Output {
 	Command::new(env!("CARGO_BIN_EXE_dmgez"))
 		.args(["preview", "--project"])
@@ -14,6 +18,45 @@ fn invoke(project: &Path, output: &Path, arguments: &[&str]) -> Output {
 		.args(arguments)
 		.output()
 		.unwrap()
+}
+
+fn invoke_image(image: &Path, output: &Path, arguments: &[&str]) -> Output {
+	Command::new(env!("CARGO_BIN_EXE_dmgez"))
+		.arg("preview")
+		.arg(image)
+		.arg("--output")
+		.arg(output)
+		.args(arguments)
+		.output()
+		.unwrap()
+}
+
+#[test]
+fn image_and_project_sources_are_exclusive() {
+	let directory = tempfile::tempdir().unwrap();
+	let output = directory.path().join("preview.png");
+	let result = invoke_image(Path::new("image.dmg"), &output, &["--project", "dmg.toml"]);
+	assert!(!result.status.success());
+	assert!(String::from_utf8_lossy(&result.stderr).contains("cannot be used with"));
+	for arguments in [&["--raw"][..], &["--partition", "1"]] {
+		let result = invoke(Path::new("dmg.toml"), &output, arguments);
+		assert!(!result.status.success());
+		assert!(String::from_utf8_lossy(&result.stderr).contains("cannot be used with"));
+	}
+	assert!(!output.exists());
+}
+
+#[cfg(not(feature = "actual-preview"))]
+#[test]
+fn disabled_actual_preview_fails_before_opening_image_or_output() {
+	let directory = tempfile::tempdir().unwrap();
+	let output = directory.path().join("preview.png");
+	let result = invoke_image(Path::new("absent.dmg"), &output, &[]);
+	assert!(!result.status.success());
+	assert!(
+		String::from_utf8_lossy(&result.stderr).contains("feature not compiled: actual-preview")
+	);
+	assert!(!output.exists());
 }
 
 #[test]
@@ -58,7 +101,7 @@ mod enabled {
 	const BACKGROUND: [u8; 3] = [224, 234, 244];
 	const ICON_EDGE: [u8; 3] = [103, 132, 129];
 
-	fn assert_success(output: Output) -> String {
+	pub(super) fn assert_success(output: Output) -> String {
 		assert!(
 			output.status.success(),
 			"{:?}",
@@ -67,7 +110,7 @@ mod enabled {
 		String::from_utf8(output.stdout).unwrap()
 	}
 
-	fn decode(path: &Path) -> (Vec<u8>, png::OutputInfo) {
+	pub(super) fn decode(path: &Path) -> (Vec<u8>, png::OutputInfo) {
 		let file = fs::File::open(path).unwrap();
 		let mut reader = png::Decoder::new(BufReader::new(file)).read_info().unwrap();
 		let mut bytes = vec![0; reader.output_buffer_size().unwrap()];
@@ -77,7 +120,7 @@ mod enabled {
 		(bytes, info)
 	}
 
-	fn pixel(bytes: &[u8], row_bytes: usize, x: usize, y: usize) -> [u8; 3] {
+	pub(super) fn pixel(bytes: &[u8], row_bytes: usize, x: usize, y: usize) -> [u8; 3] {
 		bytes[y * row_bytes + x * 3..][..3].try_into().unwrap()
 	}
 

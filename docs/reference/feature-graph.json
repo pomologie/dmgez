@@ -48,6 +48,12 @@
     "preview": [
       "image-processing"
     ],
+    "actual-preview": [
+      "preview",
+      "inspect",
+      "hfsplus-read",
+      "finder-read"
+    ],
     "diff": [
       "inspect"
     ],

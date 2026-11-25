@@ -1,0 +1,35 @@
+schema_version = 1
+
+[image]
+name = "Actual Preview"
+output = "actual-preview-udzo.dmg"
+format = "udzo"
+size = "1MiB"
+
+[build]
+reproducible = true
+source_date_epoch = 1700000000
+
+[[contents]]
+type = "directory"
+destination = "/Guide"
+position = [40, 25]
+
+[[contents]]
+type = "directory"
+destination = "/Guide/Introduction"
+
+[[contents]]
+type = "directory"
+destination = "/Private"
+hidden = true
+position = [105, 74]
+
+[finder]
+window_size = [160, 100]
+background = { kind = "image", source = "background.png" }
+
+[finder.icon_view]
+icon_size = 20
+text_size = 14
+label_position = "right"

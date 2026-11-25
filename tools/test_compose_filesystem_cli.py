@@ -112,6 +112,18 @@ class ReleaseCompositionTests(unittest.TestCase):
             self.assertEqual(compose.main(), 0)
         resolve.assert_called_once_with(root, None, reader=True, build=False)
 
+    def test_actual_preview_requires_the_hfsplus_reader_and_design_renderer(self):
+        manifest = (compose.ROOT / compose.CLI / compose.MANIFEST).read_text(encoding="utf-8")
+        for reader in (False, True):
+            with self.subTest(reader=reader):
+                text = compose.compose_cli_manifest(manifest, reader=reader, build=False, apfs=False)
+                features = tomllib.loads(text)["features"]
+                self.assertEqual(compose.ACTUAL_PREVIEW_FEATURE in features, reader)
+                if reader:
+                    self.assertEqual(features[compose.ACTUAL_PREVIEW_FEATURE], [
+                        "preview", compose.READ_FEATURE, f"{compose.READ_ADAPTER}/preview",
+                    ])
+
 
 class DesktopCompositionTests(unittest.TestCase):
     def test_injects_the_optional_hfsplus_browse_feature(self):
@@ -121,6 +133,7 @@ class DesktopCompositionTests(unittest.TestCase):
         self.assertEqual(manifest["features"], {
             **base.get("features", {}),
             compose.READ_FEATURE: [f"dep:{compose.READ_ADAPTER}", "dep:dmgez-vfs"],
+            compose.ACTUAL_PREVIEW_FEATURE: [compose.READ_FEATURE, f"{compose.READ_ADAPTER}/preview"],
         })
         self.assertEqual(manifest["dependencies"][compose.READ_ADAPTER]["features"], ["browse"])
         self.assertTrue(manifest["dependencies"][compose.READ_ADAPTER]["optional"])

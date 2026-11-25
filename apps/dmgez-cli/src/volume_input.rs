@@ -329,7 +329,7 @@ fn with_verified_file<T>(
 	read(&source, &verify_source)
 }
 
-fn with_logical_disk<T>(
+pub(super) fn with_logical_disk<T>(
 	source: &FileSource,
 	raw: bool,
 	read: impl FnOnce(&mut dyn LogicalDisk) -> CliResult<T>,
