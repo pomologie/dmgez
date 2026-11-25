@@ -16,6 +16,9 @@ mod finder_flags;
 #[cfg(feature = "project-release")]
 #[path = "project_build/release.rs"]
 mod release;
+#[cfg(feature = "project-build")]
+#[path = "project_build/udrw.rs"]
+mod udrw;
 
 const BINARY: &str = env!("CARGO_BIN_EXE_dmgez");
 const MANIFEST_NAME: &str = "installer.toml";

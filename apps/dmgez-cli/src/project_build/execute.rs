@@ -10,7 +10,7 @@ use dmgez_builder::{
 	preflight::{OutputIntent, PreflightOptions, ReleaseIntent, ReleasePlan},
 	progress::BuildProgress,
 };
-use dmgez_config::{ConfigOverride, Project};
+use dmgez_config::{ConfigOverride, ImageFormat, Project};
 use dmgez_hfsplus::{self as hfsplus, HfsImage, MetadataLoss};
 
 use crate::{CliResult, project_input};
@@ -132,7 +132,7 @@ fn write_dry_run(
 	#[cfg(not(feature = "finder-write"))]
 	let finder_assets = 0;
 	writeln!(output, "mode=dry-run")?;
-	writeln!(output, "format={:?}", profile.write_options().profile)?;
+	writeln!(output, "format={:?}", profile.format())?;
 	writeln!(output, "filesystem={:?}", profile.filesystem())?;
 	writeln!(output, "finder={:?}", profile.finder())?;
 	writeln!(output, "output={:?}", prepared.output_path())?;
@@ -142,7 +142,11 @@ fn write_dry_run(
 		writeln!(output, "compression_cache=enabled")?;
 	}
 	writeln!(output, "logical_bytes={}", image.logical_bytes())?;
-	writeln!(output, "physical_bytes=unknown")?;
+	if profile.format() == ImageFormat::Udrw {
+		writeln!(output, "physical_bytes={}", image.logical_bytes())?;
+	} else {
+		writeln!(output, "physical_bytes=unknown")?;
+	}
 	writeln!(output, "resolved_entries={}", manifest.entries().len())?;
 	writeln!(
 		output,

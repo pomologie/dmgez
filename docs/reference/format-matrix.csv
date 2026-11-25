@@ -4,7 +4,7 @@ UDZO,udzo,UDIF,0.1.0,"udif-read,zlib","udif-write,zlib",default output,planned
 RAW,raw,raw disk,0.7.0,explicit raw source,convert,raw import/export; not UDIF,planned
 ULFO,ulfo,UDIF,0.3.0,"udif-read,lzfse","udif-write,lzfse",separate framing evidence,planned
 ULMO,ulmo,UDIF,0.9.0,"udif-read,lzma","udif-write,lzma",do not assume XZ framing,planned
-UDRW,udrw,UDIF,0.9.0,udif-read,udif-write,modern read/write container; not writable mount guarantee,planned
+UDRW,udrw,raw disk,0.9.0,explicit raw source,project-build,trailerless partitionless HFS+ profile matched Apple UDRW conversion,implemented
 UDSB,udsb,sparsebundle,stretch,sparse,sparse,directory/bands; separate adapter,planned
 sparseimage,sparseimage,sparse image,stretch,sparse,sparse,separate variant,planned
 ASIF,asif,ASIF,stretch,asif,asif,research-gated,planned
