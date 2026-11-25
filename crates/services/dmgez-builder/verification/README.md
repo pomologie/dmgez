@@ -1,4 +1,4 @@
-# Builder publication verification
+# Builder verification
 
 ## Staged no-clobber
 
@@ -67,3 +67,27 @@ Local evidence uses Java Temurin 21.0.8 on macOS 14.7.2 arm64 and TLC revision `
 | `CheckedReplace` | 14,576 | 6,066 | 28 | Complete, exit 0 |
 | `CheckedReplaceObserved` | 35,342 | 14,946 | 28 | Complete, exit 0 |
 | `CheckedReplaceUntrusted` | 2,906 | 1,361 | 14 | Present target changed between check and rename, exit 12 |
+
+## Reproducible unsigned project builds
+
+The [D-PERF-02-T02 harness](check-reproducibility.py) uses separate CLI processes and freshly materialized source trees for serial, 1/2/4/8 requested workers, and a serial repeat. The trees alternate creation order and include nested directories, a Unicode file name, a dotfile, and a mixed-entropy payload. The project adds an Applications symlink and Finder layout. It uses an explicit build epoch, fixed modes, and explicit omissions for host ownership, timestamps and extended metadata. Each process receives a `SOURCE_DATE_EPOCH` that differs from the project's explicit epoch.
+
+The check requires multiple batches of UDZO runs containing both raw and zlib data. The baseline passes container verification, and its HFS+ reader returns the exact source payload. Each repeat must pass semantic HFS+ diff, including FinderInfo, and match the baseline image SHA-256. A separate build with a different explicit epoch must yield a different SHA-256. On macOS, `--native` additionally runs `hdiutil verify` and compares the SHA-256 of its UDTO export against `dmgez unwrap-raw`.
+
+Run from the repository root with Python 3.11 or later and source or unpacked HFS+ packages, using the [local composition tool](../../../../README.md#build-from-a-toml-project).
+
+```sh
+python3 tools/compose_hfsplus_cli.py --hfsplus ../hfsplus --features hfsplus-read,diff
+python3 crates/services/dmgez-builder/verification/check-reproducibility.py \
+	--dmgez target/hfsplus-cli/debug/dmgez --native
+```
+
+On macOS 14.7.2 arm64 (23H311), all six equivalent builds matched using dmgez `5e07648`, HFS+ packages from `fb11b35`, Rust 1.99.1, Rayon 1.12.0 and zlib-rs 0.6.8. The 1 MiB HFS+ image had 11 raw runs and 17 zlib runs. [Acceptance scenario](../../../../docs/reference/test-catalog.json)
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Unsigned UDZO image | `5b9dc6d7c2a3021c3e9dcc0f7a853d0faaf1377aee84a5318af8b8040d2d1899` |
+| UDZO image with explicit epoch increased by one second | `247ce6e99798421a68fb6e07d3d53515051c3a11ef77af234d7225b00fd49816` |
+| Decoded disk bytes, confirmed by native UDTO export | `e72a459fd34a0aa5fba01b56c580ade256ac01749380e0b01c12d9fb84dacfcf` |
+
+Cross-host runs and the larger performance and memory workloads remain open under D-PERF-02-T01 and D-PERF-02-T03. The matrix exercises production ordering with one bounded fixture. D-V08's linked proof still needs to cover arbitrary completion order within its declared bounds. [Verification obligations](../../../../verification/obligations.json)
