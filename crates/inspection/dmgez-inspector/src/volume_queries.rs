@@ -6,10 +6,12 @@
 mod error;
 mod path;
 mod report;
+mod storage;
 mod tree;
 
 pub use error::{Action, Error, InvalidPath};
 pub use report::{EntryReport, Kind, ListReport, Name, StatReport, TreeEntryReport, TreeReport};
+pub use storage::{ForkSizes, StorageMetadata, inspect_storage};
 pub use tree::{DEFAULT_TREE_DEPTH, DEFAULT_TREE_LIMIT, MAX_TREE_DEPTH, MAX_TREE_LIMIT, tree};
 
 use std::{io::Write, num::NonZeroU16};

@@ -1,11 +1,14 @@
-use dmgez_hfsplus_read::browse::VolumeSignature;
+use dmgez_hfsplus_read::browse::{Error as HfsError, VolumeSignature};
 use dmgez_inspector::{DiskReport, DiskScheme, RecognizedFilesystem};
-use dmgez_vfs::{PartitionId, Scheme, VolumeId, volume::NodeKind};
+use dmgez_vfs::{
+	PartitionId, Scheme, VolumeId,
+	volume::{NodeKind, ViewError},
+};
 use eframe::egui::{self, Grid, Panel, ScrollArea, Ui};
 
 use crate::image::browse::{Browser, Details, Location, PAGE_ENTRIES, Page, Request, label};
 
-use super::{Action, field};
+use super::{Action, bytes, field};
 
 #[cfg(feature = "actual-preview")]
 mod preview;
@@ -236,8 +239,17 @@ fn show_folder_entries(ui: &mut Ui, page: &Page) -> Option<Request> {
 				}
 				ui.label(kind_label(entry.kind));
 				let details = ui.push_id((index, DETAILS_CELL), |ui| {
-					ui.button("Details")
-						.on_hover_text(format!("Inspect {name}"))
+					let control = ui
+						.button("Details")
+						.on_hover_text(format!("Inspect {name}"));
+					control.widget_info(|| {
+						egui::WidgetInfo::labeled(
+							egui::Role::Button,
+							control.enabled(),
+							format!("Details for {name}"),
+						)
+					});
+					control
 				});
 				if details.inner.clicked() {
 					request = Some(Request::Details {
@@ -287,6 +299,44 @@ fn show_details(ui: &mut Ui, details: &Details) {
 			.map(char::from)
 			.collect();
 		field(ui, "Stored link target", escaped);
+	}
+	if let Some(forks) = &details.storage.forks {
+		show_fork_size(ui, "Data fork", &forks.data);
+		show_fork_size(ui, "Resource fork", &forks.resource);
+	}
+	ui.separator();
+	ui.strong("Extended attributes");
+	match &details.storage.xattrs {
+		Ok(Some(names)) if names.is_empty() => {
+			ui.label("None recorded");
+		}
+		Ok(Some(names)) => {
+			for name in names {
+				ui.label(label(name));
+			}
+		}
+		Ok(None) => {
+			ui.label("Unavailable");
+		}
+		Err(error) => {
+			ui.label(storage_error(error));
+		}
+	}
+}
+
+fn show_fork_size(ui: &mut Ui, title: &str, size: &Result<Option<u64>, ViewError<HfsError>>) {
+	let value = match size {
+		Ok(Some(length)) => bytes(*length),
+		Ok(None) => "Absent".into(),
+		Err(error) => storage_error(error),
+	};
+	field(ui, title, value);
+}
+
+fn storage_error(error: &ViewError<HfsError>) -> String {
+	match error {
+		ViewError::Backend(cause) => format!("Unavailable ({cause})"),
+		_ => format!("Unavailable ({error})"),
 	}
 }
 

@@ -1,9 +1,15 @@
 //! Bounded native-name queries on an admitted HFS+ or HFSX image volume.
 
-use std::{fmt::Write as _, num::NonZeroU16};
+use std::{
+	fmt::Write as _,
+	num::{NonZeroU16, NonZeroU32},
+};
 
 use dmgez_hfsplus_read::browse::{self, VolumeSignature};
-use dmgez_inspector::{DiskLimits, volume_queries::MAX_LIST_OFFSET};
+use dmgez_inspector::{
+	DiskLimits,
+	volume_queries::{MAX_LIST_OFFSET, StorageMetadata, inspect_storage},
+};
 use dmgez_runtime::disk::{Encoding, with_logical_disk};
 use dmgez_udif::{
 	Cancellation, Error as ImageError,
@@ -27,6 +33,7 @@ const SCAN_BATCH_ENTRIES: u16 = 128;
 const MAX_DEPTH: usize = 128;
 const MAX_FS_READS: u64 = 131_072;
 const MAX_FS_READ_BYTES: u64 = 256 << 20;
+const MAX_ENTRY_ATTRIBUTES: NonZeroU32 = NonZeroU32::new(64).unwrap();
 
 #[derive(Default)]
 pub(crate) struct Browser {
@@ -144,6 +151,7 @@ pub(crate) struct Details {
 	pub native_id: Option<u64>,
 	pub metadata: Metadata<StorageId>,
 	pub link_target: Option<Vec<u8>>,
+	pub storage: Box<StorageMetadata<browse::Error>>,
 }
 
 #[derive(Debug, Error)]
@@ -317,11 +325,13 @@ fn entry_details(
 	} else {
 		None
 	};
+	let storage = Box::new(inspect_storage(view, &entry, MAX_ENTRY_ATTRIBUTES));
 	Ok(Observation::Details(Details {
 		name,
 		native_id,
 		metadata,
 		link_target,
+		storage,
 	}))
 }
 

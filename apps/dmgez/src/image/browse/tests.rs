@@ -14,6 +14,8 @@ use crate::{
 	inspector::{self, Action},
 };
 
+mod storage;
+
 const NATIVE_APM: &[u8] =
 	include_bytes!("../../../../../crates/foundation/dmgez-vfs/tests/fixtures/native-apm.dmg");
 const FIXTURES: &str = "DMGEZ_HFSPLUS_FIXTURES";
@@ -22,6 +24,7 @@ const HFSX: &str = "native-hfsx.bin";
 const NATIVE_HFS_PARTITION: u32 = 2;
 const NATIVE_METADATA_PARTITION: u32 = 1;
 const NATIVE_CATALOG_ENTRIES: usize = 97;
+const NATIVE_NESTED_PAYLOAD: &[u8] = b"catalog unicode payload\n";
 
 fn fixture(name: &str) -> Vec<u8> {
 	let root = std::env::var_os(FIXTURES).expect("desktop composition supplies HFS+ fixtures");
@@ -127,6 +130,10 @@ fn native_catalog_pages_and_directory_components_retain_exact_stored_names() {
 	assert_eq!(details.name, entry.name);
 	assert_eq!(details.metadata.kind, NodeKind::RegularFile);
 	assert!(details.native_id.is_some());
+	let forks = details.storage.forks.as_ref().unwrap();
+	assert!(matches!(forks.data, Ok(Some(bytes)) if bytes == NATIVE_NESTED_PAYLOAD.len() as u64));
+	assert!(matches!(forks.resource, Ok(Some(0))));
+	assert!(matches!(&details.storage.xattrs, Ok(Some(names)) if names.is_empty()));
 	let file = folder.child(&entry.name).unwrap();
 	assert!(matches!(
 		tab.snapshot
@@ -240,7 +247,8 @@ fn folder_preview_uses_the_admitted_location_and_a_bounded_texture() {
 	let selected = page(&tab, location.clone(), 0);
 	tab.browser.show_page(selected);
 
-	let Action::Browse(request @ Request::Preview { .. }) = activate(&mut tab, "Preview folder") else {
+	let Action::Browse(request @ Request::Preview { .. }) = activate(&mut tab, "Preview folder")
+	else {
 		panic!("expected a preview request from the current folder");
 	};
 	let Observation::Preview(prepared) = tab
@@ -294,7 +302,10 @@ fn catalog_details_controls_share_a_column_on_separate_rows() {
 		.unwrap()
 		.nodes
 		.iter()
-		.filter(|(_, node)| node.label() == Some("Details"))
+		.filter(|(_, node)| {
+			node.label()
+				.is_some_and(|label| label.starts_with("Details for "))
+		})
 		.filter_map(|(_, node)| node.bounds())
 		.take(2)
 		.collect();
