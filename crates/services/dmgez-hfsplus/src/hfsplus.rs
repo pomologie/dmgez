@@ -10,7 +10,7 @@ use dmgez_builder::{
 	progress::BuildProgress,
 };
 use dmgez_config::{Capacity, Project, VirtualPath};
-use dmgez_udif::writer::{Cancellation, WriteOptions};
+use dmgez_udif::writer::Cancellation;
 use hfsplus_builder::{
 	SealedPlan,
 	volume::{self, CapacityPolicy, ManifestEntry, VolumeOptions},
@@ -190,7 +190,7 @@ impl<'build> HfsImage<'build> {
 		})
 	}
 
-	/// Write the UDIF image to the admitted sink without a raw intermediate.
+	/// Write the selected image format to the admitted sink without an intermediate file.
 	///
 	/// # Errors
 	/// Fails on invalid output intent, source mutation, cancellation, or I/O.
@@ -376,10 +376,7 @@ fn seal<'build>(
 
 fn capacity(profile: &ExecutionProfile) -> Result<CapacityPolicy, Error> {
 	let free_space = ByteLen(profile.free_space_bytes());
-	let write = profile.write_options();
-	let max_runs = profile.limits().max_runs.min(WriteOptions::MAX_DATA_RUNS);
-	let run_bound = (max_runs as u64).saturating_mul(write.chunk_bytes as u64);
-	let writer_max = run_bound.min(write.max_logical_bytes);
+	let writer_max = profile.max_logical_bytes();
 
 	Ok(match profile.capacity() {
 		Capacity::Auto { .. } => CapacityPolicy::ShrinkWithin {

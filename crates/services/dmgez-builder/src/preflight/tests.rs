@@ -2,6 +2,8 @@
 
 use super::*;
 
+mod raw_output;
+
 const MIB: u64 = 1 << 20;
 const HOST_THREADS: NonZeroUsize = NonZeroUsize::new(8).unwrap();
 const IMAGE: &str =
@@ -118,10 +120,10 @@ fn rejects_unsupported_filesystems_formats_partitions_and_catalog_names() {
 		Err(PreflightError::Partition(Partition::Gpt))
 	));
 	unsupported.image.partition = Partition::None;
-	unsupported.image.format = ImageFormat::Udrw;
+	unsupported.image.format = ImageFormat::Raw;
 	assert!(matches!(
 		preflight(&unsupported, options()),
-		Err(PreflightError::Format(ImageFormat::Udrw))
+		Err(PreflightError::Format(ImageFormat::Raw))
 	));
 	unsupported.image.format = ImageFormat::Udro;
 	unsupported.compression.level = Some(5);

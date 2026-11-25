@@ -20,6 +20,9 @@ use dmgez_builder::{
 use dmgez_config::Project;
 use dmgez_core::output::PublishError;
 
+#[path = "execution/raw.rs"]
+mod raw;
+
 const LOGICAL_BYTES: usize = 512;
 const RAW: [u8; LOGICAL_BYTES] = [0xA5; LOGICAL_BYTES];
 const DESTINATION: &str = "built.dmg";

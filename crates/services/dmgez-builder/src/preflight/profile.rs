@@ -1,7 +1,10 @@
 use std::collections::BTreeMap;
 
-use dmgez_config::{Capacity, CompressionCache, IconSlot, LocalPath, VolumeIcon};
-use dmgez_udif::writer::{Cancellation, WriteOptions};
+use dmgez_config::{Capacity, CompressionCache, IconSlot, ImageFormat, LocalPath, VolumeIcon};
+use dmgez_udif::{
+	SECTOR_BYTES,
+	writer::{Cancellation, WriteOptions},
+};
 
 use super::{FilesystemProfile, FinderPlan, OutputPlan, PreflightError, ReleasePlan, Resource};
 
@@ -21,6 +24,7 @@ pub struct ResourceLimits {
 #[derive(Clone, Debug)]
 pub struct ExecutionProfile {
 	pub(super) filesystem: FilesystemProfile,
+	pub(super) format: ImageFormat,
 	pub(super) capacity: Capacity,
 	pub(super) free_space_bytes: u64,
 	pub(super) output: OutputPlan,
@@ -40,6 +44,12 @@ impl ExecutionProfile {
 	#[must_use]
 	pub const fn filesystem(&self) -> FilesystemProfile {
 		self.filesystem
+	}
+
+	/// Output format selected by the project.
+	#[must_use]
+	pub const fn format(&self) -> ImageFormat {
+		self.format
 	}
 
 	#[must_use]
@@ -125,9 +135,24 @@ impl ExecutionProfile {
 		self.fail_on_metadata_loss
 	}
 
+	/// Shared byte budgets and cancellation token, plus the codec settings for UDIF targets.
 	#[must_use]
 	pub const fn write_options(&self) -> &WriteOptions {
 		&self.writer
+	}
+
+	/// Maximum logical length available to the filesystem planner.
+	#[must_use]
+	pub fn max_logical_bytes(&self) -> u64 {
+		if self.format == ImageFormat::Udrw {
+			return self
+				.writer
+				.max_logical_bytes
+				.min(self.writer.max_physical_bytes);
+		}
+		let max_runs = self.limits.max_runs.min(WriteOptions::MAX_DATA_RUNS);
+		let run_bound = (max_runs as u64).saturating_mul(self.writer.chunk_bytes as u64);
+		run_bound.min(self.writer.max_logical_bytes)
 	}
 
 	pub(crate) fn set_cancellation(&mut self, cancellation: Cancellation) {
@@ -150,7 +175,14 @@ impl ExecutionProfile {
 			}
 			_ => {}
 		}
-		if self.writer.max_data_runs(logical_bytes)? > self.limits.max_runs {
+		if self.format == ImageFormat::Udrw {
+			if logical_bytes == 0
+				|| !logical_bytes.is_multiple_of(SECTOR_BYTES)
+				|| logical_bytes > self.max_logical_bytes()
+			{
+				return Err(PreflightError::UdrwGeometry);
+			}
+		} else if self.writer.max_data_runs(logical_bytes)? > self.limits.max_runs {
 			return Err(PreflightError::ResourceLimit(Resource::Runs));
 		}
 		Ok(())

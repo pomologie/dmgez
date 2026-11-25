@@ -1,4 +1,4 @@
-//! Stream a sealed filesystem plan through the UDIF writer (C3 and C7).
+//! Stream a sealed filesystem plan through the admitted image writer (C3 and C7).
 
 use std::{
 	io,
@@ -6,6 +6,7 @@ use std::{
 	path::Path,
 };
 
+use dmgez_config::ImageFormat;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use dmgez_core::output::replace::{EntryIdentity, ReplaceError, TargetIdentity, publish_replace};
 use dmgez_core::output::{PublishError, StagedReader, publish_new};
@@ -21,9 +22,13 @@ use crate::{
 	progress::BuildProgress,
 };
 
+mod raw;
 mod release_stage;
+mod report;
 
+pub use raw::RawWriteError;
 pub use release_stage::StagedRelease;
+pub use report::{ImageEncoding, ImageReport};
 
 /// An admitted build backed by a sealed logical filesystem image.
 /// The reader must expose the image from byte zero and end at `logical_bytes`.
@@ -40,8 +45,8 @@ pub struct BuildPlan<'plan, R> {
 #[derive(Debug)]
 #[non_exhaustive]
 pub struct BuildReport {
-	/// Final UDIF geometry and checksums.
-	pub image: WriteReport,
+	/// Final geometry and format-specific evidence.
+	pub image: ImageReport,
 	/// Whether configured release stages were deferred.
 	pub release: ReleasePlan,
 	/// Whether prepublication verification was requested and completed.
@@ -61,6 +66,8 @@ pub type OutputVerifier<'context> =
 pub enum ImageError {
 	#[error(transparent)]
 	Writer(#[from] dmgez_udif::Error),
+	#[error(transparent)]
+	Raw(#[from] RawWriteError),
 	#[error("a captured source failed its publication checks")]
 	Source(#[from] manifest::Error),
 	#[error("independent staged image verification failed")]
@@ -206,22 +213,26 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 			crate::planning::cache::check_output(cache, destination)?;
 		}
 		let write = |stage: &mut dyn Write| {
-			write_with_progress(
+			write_output_with_progress(
 				self.reader,
 				self.logical_bytes,
 				stage,
-				self.profile.write_options(),
+				self.profile,
 				&progress,
 				#[cfg(feature = "compression-cache")]
 				self.cache,
 			)
-			.map_err(ImageError::from)
 		};
 		let validate = |stage: StagedReader<'_>, output: &Emission| {
-			if let Some(verify) = verify {
-				progress(BuildProgress::VerifyingOutput);
-				check_cancellation(self.profile)?;
-				verify(stage, &output.image).map_err(ImageError::Verification)?;
+			match &output.image.encoding {
+				ImageEncoding::Udrw => raw::validate_stage(stage, output.image.logical_bytes)?,
+				ImageEncoding::Udif(report) => {
+					if let Some(verify) = verify {
+						progress(BuildProgress::VerifyingOutput);
+						check_cancellation(self.profile)?;
+						verify(stage, report).map_err(ImageError::Verification)?;
+					}
+				}
 			}
 			progress(BuildProgress::Publishing);
 			validate_sources(self.manifest, self.profile)
@@ -274,16 +285,16 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 			return Err(ExecuteError::Target);
 		}
 		validate_sources(self.manifest, self.profile)?;
-		let output = write_with_progress(
+		let output = write_output_with_progress(
 			self.reader,
 			self.logical_bytes,
 			&mut sink,
-			self.profile.write_options(),
+			self.profile,
 			&progress,
 			#[cfg(feature = "compression-cache")]
 			self.cache,
 		)
-		.map_err(|error| ExecuteError::Stream(error.into()))?;
+		.map_err(ExecuteError::Stream)?;
 		validate_sources(self.manifest, self.profile).map_err(ExecuteError::Stream)?;
 		sink.flush()
 			.map_err(|error| ExecuteError::Stream(ImageError::Writer(error.into())))?;
@@ -341,9 +352,49 @@ fn check_cancellation(profile: &ExecutionProfile) -> Result<(), ImageError> {
 }
 
 struct Emission {
+	image: ImageReport,
+	#[cfg(feature = "compression-cache")]
+	cache: Option<CacheStats>,
+}
+
+struct UdifEmission {
 	image: WriteReport,
 	#[cfg(feature = "compression-cache")]
 	cache: Option<CacheStats>,
+}
+
+fn write_output_with_progress(
+	reader: impl Read,
+	logical_bytes: u64,
+	sink: impl Write,
+	profile: &ExecutionProfile,
+	progress: &dyn Fn(BuildProgress),
+	#[cfg(feature = "compression-cache")] cache: Option<&dmgez_cache::DiskCache>,
+) -> Result<Emission, ImageError> {
+	let options = profile.write_options();
+	if profile.format() == ImageFormat::Udrw {
+		let source = observe(reader, logical_bytes, options, progress);
+		raw::write(source, logical_bytes, sink, options)?;
+		return Ok(Emission {
+			image: ImageReport::udrw(logical_bytes),
+			#[cfg(feature = "compression-cache")]
+			cache: None,
+		});
+	}
+	let written = write_with_progress(
+		reader,
+		logical_bytes,
+		sink,
+		options,
+		progress,
+		#[cfg(feature = "compression-cache")]
+		cache,
+	)?;
+	Ok(Emission {
+		image: ImageReport::udif(written.image),
+		#[cfg(feature = "compression-cache")]
+		cache: written.cache,
+	})
 }
 
 fn write_with_progress(
@@ -353,29 +404,38 @@ fn write_with_progress(
 	options: &WriteOptions,
 	progress: &dyn Fn(BuildProgress),
 	#[cfg(feature = "compression-cache")] cache: Option<&dmgez_cache::DiskCache>,
-) -> Result<Emission, dmgez_udif::Error> {
-	progress(BuildProgress::WritingImage { logical_bytes });
-	let source = ObservedReader {
-		reader,
-		logical_bytes,
-		logical_bytes_read: 0,
-		chunk_bytes: options.chunk_bytes as u64,
-		progress,
-	};
+) -> Result<UdifEmission, dmgez_udif::Error> {
+	let source = observe(reader, logical_bytes, options, progress);
 	#[cfg(feature = "compression-cache")]
 	if let Some(cache) = cache {
 		let (image, stats) = write_image_with_cache(source, logical_bytes, sink, options, cache)?;
-		return Ok(Emission {
+		return Ok(UdifEmission {
 			image,
 			cache: Some(stats),
 		});
 	}
 	let image = write_image(source, logical_bytes, sink, options)?;
-	Ok(Emission {
+	Ok(UdifEmission {
 		image,
 		#[cfg(feature = "compression-cache")]
 		cache: None,
 	})
+}
+
+fn observe<'observer, R>(
+	reader: R,
+	logical_bytes: u64,
+	options: &WriteOptions,
+	progress: &'observer dyn Fn(BuildProgress),
+) -> ObservedReader<'observer, R> {
+	progress(BuildProgress::WritingImage { logical_bytes });
+	ObservedReader {
+		reader,
+		logical_bytes,
+		logical_bytes_read: 0,
+		chunk_bytes: options.chunk_bytes as u64,
+		progress,
+	}
 }
 
 struct ObservedReader<'observer, R> {

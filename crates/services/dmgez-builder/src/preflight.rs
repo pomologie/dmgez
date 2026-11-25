@@ -11,12 +11,15 @@ use thiserror::Error;
 mod capabilities;
 mod finder;
 mod profile;
+mod release;
 #[cfg(test)]
 mod tests;
+mod udrw;
 
 pub use capabilities::{Availability, BuildCapabilities, BuildFeature};
 use finder::{admit_volume_icon, finder_plan};
 pub use profile::{ExecutionProfile, ResourceLimits};
+use release::release_plan;
 
 const PRINTABLE_ASCII: RangeInclusive<u8> = b' '..=b'~';
 const DEFAULT_MEMORY_BYTES: usize = 512 << 20;
@@ -144,6 +147,16 @@ pub enum PreflightError {
 	CacheFormat,
 	#[error("compression cache requires a prepared build with a resolved cache directory")]
 	CacheRequiresPreparedBuild,
+	#[error("raw-backed UDRW does not support signing, notarization, or other release stages")]
+	UdrwRelease,
+	#[error("raw-backed UDRW has no container checksum verification profile")]
+	UdrwVerification,
+	#[error("raw-backed UDRW writes require serial execution")]
+	UdrwParallel,
+	#[error(
+		"raw-backed UDRW requires a nonempty, sector-aligned image within the write byte limit"
+	)]
+	UdrwGeometry,
 	#[error("more than one thread conflicts with explicitly disabled parallelism")]
 	SerialWorkers,
 	#[error("a stream has no destination file to overwrite")]
@@ -177,7 +190,7 @@ pub enum PreflightError {
 	Writer(#[from] dmgez_udif::Error),
 }
 
-/// Resolves and validates the initial HFS+ and UDIF build profile without I/O.
+/// Resolves and validates the HFS+ image build profile without I/O.
 ///
 /// # Errors
 ///
@@ -196,7 +209,7 @@ pub fn preflight(
 		return Err(PreflightError::Partition(project.image.partition));
 	}
 	let profile = match project.image.format {
-		ImageFormat::Udro => Profile::Udro,
+		ImageFormat::Udro | ImageFormat::Udrw => Profile::Udro,
 		ImageFormat::Udzo => Profile::Udzo,
 		ImageFormat::Ulfo => Profile::Ulfo,
 		ImageFormat::Ulmo => Profile::Ulmo,
@@ -215,6 +228,9 @@ pub fn preflight(
 		&& (project.compression.level.is_some() || project.compression.block_size.is_some())
 	{
 		return Err(PreflightError::Compression);
+	}
+	if project.image.format == ImageFormat::Udrw {
+		udrw::admit(project, options)?;
 	}
 	if filesystem == FilesystemProfile::HfsplusAscii {
 		check_known_names(project)?;
@@ -249,6 +265,7 @@ pub fn preflight(
 	let writer = writer_options(project, profile, limits, options.host_threads, cache)?;
 	let result = ExecutionProfile {
 		filesystem,
+		format: project.image.format,
 		capacity: project.image.capacity(),
 		free_space_bytes: project.image.free_space.get(),
 		output,
@@ -320,43 +337,6 @@ fn output_plan(project: &Project, options: PreflightOptions) -> Result<OutputPla
 			.require(BuildFeature::AtomicReplace)?;
 	}
 	Ok(OutputPlan::Path { overwrite })
-}
-
-fn release_plan(
-	project: &Project,
-	options: PreflightOptions,
-) -> Result<ReleasePlan, PreflightError> {
-	if options.release == ReleaseIntent::Release {
-		if options.output == OutputIntent::Stream {
-			return Err(PreflightError::ReleaseStream);
-		}
-		options
-			.capabilities
-			.release
-			.require(BuildFeature::Release)?;
-		return Ok(ReleasePlan::Requested);
-	}
-	let deferred = project
-		.signing
-		.as_ref()
-		.is_some_and(|stage| stage.enabled == Some(true))
-		|| project
-			.notarization
-			.as_ref()
-			.is_some_and(|stage| stage.enabled == Some(true))
-		|| project.release.as_ref().is_some_and(|stage| {
-			[
-				stage.verify,
-				stage.require_notarization,
-				stage.require_native_assessment,
-			]
-			.contains(&Some(true))
-		});
-	Ok(if deferred {
-		ReleasePlan::ConfiguredStagesDeferred
-	} else {
-		ReleasePlan::Unsigned
-	})
 }
 
 fn cache_plan(
@@ -438,6 +418,9 @@ fn writer_options(
 	host_threads: NonZeroUsize,
 	cache: Option<&CompressionCache>,
 ) -> Result<WriteOptions, PreflightError> {
+	if project.image.format == ImageFormat::Udrw {
+		return Ok(udrw::writer_options(limits));
+	}
 	let threads = usize::try_from(project.performance.threads)
 		.map_err(|_| PreflightError::ResourceLimit(Resource::Workers))?;
 	let parallel = project.performance.parallel;
