@@ -151,6 +151,9 @@ fn validate_limits(limits: SampleLimits) -> Result<(), Error> {
 	if !(1..=MAX_SAMPLE_CHUNKS).contains(&limits.max_chunks) {
 		return Err(Error::SampleCount);
 	}
+	if limits.max_decoded_bytes == 0 {
+		return Err(Error::SampleBudget);
+	}
 	Ok(())
 }
 

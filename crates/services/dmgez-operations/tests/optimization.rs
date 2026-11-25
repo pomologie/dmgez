@@ -152,8 +152,14 @@ fn refuses_exhausted_sample_budgets_and_reports_unavailable_candidates() {
 	let tmp = tempfile::tempdir().unwrap();
 	let source = tmp.path().join(SOURCE);
 	let output = tmp.path().join(OUTPUT);
-	wrap(&source, &vec![b'X'; 2 * CHUNK]);
 	let mut options = options();
+	options.sample_limits.max_decoded_bytes = 0;
+	assert!(matches!(
+		optimize::file(&source, &output, &options),
+		Err(Error::SampleBudget)
+	));
+	assert!(!output.exists());
+	wrap(&source, &vec![b'X'; 2 * CHUNK]);
 	options.sample_limits.max_decoded_bytes = CHUNK as u64 - 1;
 	assert!(matches!(
 		optimize::file(&source, &output, &options),
