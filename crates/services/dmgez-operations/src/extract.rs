@@ -1,4 +1,7 @@
-//! Read-only name and destination topology preflight for extraction.
+//! Name and topology preflight and host publication primitives for extraction.
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub mod host;
 
 mod names;
 

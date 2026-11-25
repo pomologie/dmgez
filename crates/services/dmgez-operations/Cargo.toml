@@ -10,7 +10,7 @@ repository.workspace = true
 [features]
 default = []
 convert = ["dep:dmgez-core", "dep:dmgez-udif", "dep:thiserror"]
-extract = ["dep:dmgez-vfs", "dep:thiserror"]
+extract = ["dep:dmgez-vfs", "dep:rustix", "dep:tempfile", "dep:thiserror"]
 parallel = ["dmgez-udif?/parallel"]
 
 [dependencies]
@@ -18,6 +18,10 @@ dmgez-core = { workspace = true, features = ["staging"], optional = true }
 dmgez-udif = { workspace = true, features = ["read", "write", "zlib"], optional = true }
 dmgez-vfs = { workspace = true, optional = true }
 thiserror = { workspace = true, optional = true }
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+rustix = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
 
 [dev-dependencies]
 plist.workspace = true
