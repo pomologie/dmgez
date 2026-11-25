@@ -48,6 +48,15 @@ target/hfsplus-cli/debug/dmgez build project.toml
 
 Use `--hfsplus-packages PATH` for unpacked packages, or `--no-default-features --features build` for a serial build with Finder support. The compose tool's `--test` mode runs the build command's integration tests. Use `dmgez capabilities` to check whether the binary includes project building. The [compatibility runner](tests/compatibility/project-build/README.md) exercises the same build service and command implementation with the native fixtures.
 
+For a read-only build that checks reachable HFS+ and HFSX structure, compose the CLI with `hfsplus-verify`.
+
+```sh
+python3 tools/compose_hfsplus_cli.py --hfsplus ../hfsplus --no-default-features --features hfsplus-verify
+target/hfsplus-cli/debug/dmgez verify volume.dmg --full --json
+```
+
+A successful HFS+ structural check reports `reachable_structure` and a partial result. The complete `--full` request exits nonzero until global filesystem and file payload checks are available. [Verification coverage](docs/features/INSPECTION.md#verify-is-separate)
+
 The [native desktop app](apps/dmgez/README.md) opens TOML projects for layout editing and disk images for container and partition inspection. Launch it with `cargo run --locked -p dmgez-gui`.
 
 See the [architecture](ARCHITECTURE.md), [roadmap](ROADMAP.md), and [UDIF evidence](docs/reference/UDIF_EVIDENCE.md) for the implemented profile and its verification limits.

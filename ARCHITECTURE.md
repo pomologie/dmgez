@@ -37,6 +37,7 @@ dmgez/
     services/
       dmgez-builder/             # manifest and image construction orchestration
       dmgez-hfsplus/             # compose the independent HFS+ builder and DMG publication
+      dmgez-hfsplus-verify/      # read-only bridge to the independent HFS+ structural checker
       dmgez-inspector/           # structured read-only reports / verification
       dmgez-operations/          # extraction, conversion, copy-on-write edits
       dmgez-diff/                # semantic and physical comparison, once substantial
@@ -69,6 +70,7 @@ Read arrows as `consumer -> dependency`.
 | `dmgez-finder` | core, config; external Finder libraries; no concrete builder |
 | `dmgez-builder` | core, config, udif writer, finder writer |
 | `dmgez-hfsplus` | dmgez-builder, core, config, udif writer, independent versioned HFS+ libraries |
+| `dmgez-hfsplus-verify` | independent versioned HFS+ reader and format libraries |
 | `dmgez-vfs` | core, udif reader, independent filesystem readers, partition adapters; no write service |
 | `dmgez-inspector` | core, vfs, udif reader, finder reader; metadata-only mode can avoid traversal |
 | `dmgez-operations` | core, vfs, writer/reader and builder when a requested operation needs them |
