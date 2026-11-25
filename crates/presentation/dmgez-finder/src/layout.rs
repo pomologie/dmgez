@@ -61,6 +61,7 @@ impl<'a> Layout<'a> {
 		let view = match options.and_then(|options| options.default_view) {
 			None | Some(View::IconView) => FinderViewStyle::Icon,
 			Some(View::ListView) => FinderViewStyle::List,
+			Some(View::ColumnView) => FinderViewStyle::Column,
 			Some(view) => return Err(Error::View(view)),
 		};
 		let icon_switch = options.and_then(|options| options.include_icon_view_settings);

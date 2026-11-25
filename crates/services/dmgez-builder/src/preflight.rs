@@ -85,6 +85,8 @@ pub enum FinderPlan {
 	IconView,
 	/// Open the root in list view.
 	ListView,
+	/// Open the root in column view.
+	ColumnView,
 }
 
 /// A resource constrained by configuration or host representation.

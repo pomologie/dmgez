@@ -1,6 +1,6 @@
 //! Generate and inspect Finder presentation stores for image folders.
 //!
-//! The writer supports icon and list layouts and integer icon positions.
+//! The writer supports icon, list, and column defaults and integer icon positions.
 //! Image backgrounds can use a file alias prepared from the final volume.
 //! Each store uses one B-tree leaf. Writing it performs no filesystem access.
 

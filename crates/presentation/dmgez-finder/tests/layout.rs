@@ -5,9 +5,9 @@ use std::{
 	process::{Command, Stdio},
 };
 
-use dmgez_config::{FinderOptions, Project};
+use dmgez_config::{FinderOptions, Project, View};
 use dmgez_finder::{Error, LayoutItem, validate_options, write_store};
-use ds_parser::{DSStore, FieldKey, FinderViewStyle, IconLocation, Value, WindowBounds};
+use ds_parser::{DSStore, FieldKey, FinderViewStyle, FourCC, IconLocation, Value, WindowBounds};
 
 const PROJECT: &str = r##"
 schema_version = 1
@@ -42,6 +42,8 @@ label_position = "right"
 const APPLICATIONS: &str = "Applications";
 const RELEASE_NOTES: &str = "Release Notes";
 const CURRENT_FOLDER: &str = ".";
+const COLUMN_VIEW: [u8; 4] = *b"clmv";
+const COLUMN_DEFAULT: &str = "default_view = 'column-view'\n";
 const ROOT_OPTIONS_PROJECT: &str = r#"
 schema_version = 1
 [image]
@@ -166,10 +168,50 @@ fn defaults_are_present_without_user_finder_settings() {
 }
 
 #[test]
+fn writes_an_exact_column_default_and_preserves_icon_locations() {
+	let project = Project::parse(PROJECT).unwrap();
+	let item = LayoutItem {
+		name: APPLICATIONS,
+		position: project.contents[0].position,
+	};
+	let settings = options(COLUMN_DEFAULT);
+	let bytes = write_store(Some(&settings), &[item]).unwrap();
+	let store = ds_parser::parse(&bytes).unwrap();
+	assert_eq!(
+		record(&store, CURRENT_FOLDER, FieldKey::icvl),
+		&Value::Type(FourCC::from(COLUMN_VIEW))
+	);
+	assert_eq!(
+		record(&store, APPLICATIONS, FieldKey::Iloc),
+		&Value::IconLocation(IconLocation::new(140, 120))
+	);
+	assert!(store.records.iter().all(|record| !matches!(
+		record.field,
+		FieldKey::icvp | FieldKey::lsvp | FieldKey::lsvC
+	)));
+}
+
+#[test]
+fn column_default_retains_requested_secondary_view_settings() {
+	let settings = options(&format!(
+		"{COLUMN_DEFAULT}include_icon_view_settings = true\n[finder.list_view]\nicon_size = 32"
+	));
+	let bytes = write_store(Some(&settings), &[]).unwrap();
+	let store = ds_parser::parse(&bytes).unwrap();
+	assert_eq!(
+		record(&store, CURRENT_FOLDER, FieldKey::icvl),
+		&Value::Type(FourCC::from(COLUMN_VIEW))
+	);
+	for field in [FieldKey::icvp, FieldKey::lsvp, FieldKey::lsvC] {
+		assert!(store.records.iter().any(|record| record.field == field));
+	}
+}
+
+#[test]
 fn refuses_settings_that_cannot_be_preserved() {
 	assert!(matches!(
-		validate_options(Some(&options("default_view = 'column-view'"))),
-		Err(Error::View(_))
+		validate_options(Some(&options("default_view = 'coverflow'"))),
+		Err(Error::View(View::Coverflow))
 	));
 	assert!(matches!(
 		validate_options(Some(&options("include_icon_view_settings = false"))),

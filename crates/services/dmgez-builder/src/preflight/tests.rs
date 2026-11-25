@@ -305,10 +305,12 @@ fn finder_validates_explicit_options_and_duplicate_positions_before_resolution()
 		preflight(&background, options).unwrap().finder(),
 		FinderPlan::IconView
 	);
-	let column_view = project("[finder]\ndefault_view = 'column-view'\n");
+	let coverflow = project("[finder]\ndefault_view = 'coverflow'\n");
 	assert!(matches!(
-		preflight(&column_view, options),
-		Err(PreflightError::Finder(dmgez_finder::Error::View(_)))
+		preflight(&coverflow, options),
+		Err(PreflightError::Finder(dmgez_finder::Error::View(
+			dmgez_config::View::Coverflow
+		)))
 	));
 	let duplicate = project(
 		"[[contents]]\nsource = 'Example.app'\nposition = [40, 32]\n\
@@ -326,6 +328,21 @@ fn finder_validates_explicit_options_and_duplicate_positions_before_resolution()
 		preflight(&duplicate_folder, options),
 		Err(PreflightError::DuplicateFinderFolder { index: 1 })
 	));
+}
+
+#[cfg(feature = "finder-write")]
+#[test]
+fn finder_admits_column_view_without_icon_or_list_settings() {
+	let mut options = options();
+	options.capabilities.finder_layout = Availability::Available;
+	let column_view = project(
+		"[finder]\ndefault_view = 'column-view'\n\
+		include_icon_view_settings = false\ninclude_list_view_settings = false\n",
+	);
+	assert_eq!(
+		preflight(&column_view, options).unwrap().finder(),
+		FinderPlan::ColumnView
+	);
 }
 
 #[cfg(feature = "finder-write")]

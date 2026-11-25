@@ -107,7 +107,7 @@ pub enum Error {
 /// # Errors
 ///
 /// Returns an error for a view, background, arrangement, or record switch
-/// outside the qualified icon and list profile. Use [`write_store`] to check
+/// outside the supported Finder store profile. Use [`write_store`] to check
 /// item positions against the resolved folder children.
 pub fn validate_options(options: Option<&FinderOptions>) -> Result<(), Error> {
 	Layout::resolve(options, ImageBackground::Unavailable).map(|_| ())

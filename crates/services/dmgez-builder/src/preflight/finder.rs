@@ -116,6 +116,7 @@ fn admit_layout(
 	match finder.options.default_view {
 		None | Some(View::IconView) => Ok(FinderPlan::IconView),
 		Some(View::ListView) => Ok(FinderPlan::ListView),
+		Some(View::ColumnView) => Ok(FinderPlan::ColumnView),
 		Some(view) => Err(dmgez_finder::Error::View(view).into()),
 	}
 }
