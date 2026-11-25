@@ -66,7 +66,19 @@ Use a trusted local directory for the record. dmgez requires the record director
 
 A timeout or malformed upload result leaves the record in an unknown state. Recover the candidate ID from the team's notary history and query it with the same record. With a reservation that has no saved ID, only a terminal Apple log with the matching ID and SHA-256 can bind the submission to the record. The same digest check gates terminal updates for records that already have an ID. Reports keep redacted issue counts and omit the raw log. `notarize status` also supports a remote-only query without `--record`; `digest_verified` then remains false because no local artifact digest was compared. [Apple submission status, history and logs](https://developer.apple.com/documentation/technotes/tn3147-migrating-to-the-latest-notarization-tool)
 
-Exit 0 means pending or accepted, exit 1 means rejected, and exit 2 means unknown or an operational error. Local mock tests cover interrupted upload, repeated submission refusal, expired waits, rejection, and attempts to recover with a different digest. A protected Apple submission and stapling remain open for D-REL-02. [Notarization recovery fixtures](../../crates/security/dmgez-signing/src/notarization/flow/tests.rs)
+Exit 0 means pending or accepted, exit 1 means rejected, and exit 2 means unknown or an operational error. Local mock tests cover interrupted upload, repeated submission refusal, expired waits, rejection, and attempts to recover with a different digest. A protected Apple submission remains open for D-REL-02. [Notarization recovery fixtures](../../crates/security/dmgez-signing/src/notarization/flow/tests.rs)
+
+### Staple a notarized disk image
+
+Use the same signed DMG and its accepted local record on macOS with `notarization-native`. The record must have a digest verified against Apple's log. Stapling contacts Apple's ticket service through Xcode's native `stapler`. [Apple ticket workflow](https://developer.apple.com/documentation/security/customizing-the-notarization-workflow#Staple-the-ticket-to-your-distribution)
+
+```sh
+dmgez staple Signed.dmg --record Submission.json --output Stapled.dmg --json
+```
+
+dmgez checks the size and SHA-256 of the staged copy before attaching a ticket. It compares the image body, unaffected UDIF trailer fields, existing signature components, and quarantine attribute after the operation. The only admitted layout change is a new ticket slot and the corresponding signature length. It requires the native image CRC, strict Developer ID signature, and `stapler validate` to pass before publishing to a new path. The source, submission record, and any existing destination stay untouched. Gatekeeper assessment remains a separate check. [Apple Security UDIF signature layout](https://github.com/apple-oss-distributions/Security/blob/main/OSX/libsecurity_codesigning/lib/diskimagerep.cpp)
+
+Offline fixtures cover matching and changed digests, payload mutation, and native ticket-validation failure through a mock. An end-to-end run with an Apple-accepted ticket remains open. [Stapling transaction fixtures](../../crates/security/dmgez-signing/src/native/staple_image/tests.rs)
 
 ## Semantic diff and lint policies
 

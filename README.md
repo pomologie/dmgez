@@ -70,6 +70,8 @@ On macOS, `signing-native` enables `sign inspect` and `sign verify` for app bund
 
 With `notarization-native` on macOS, `notarize` submits a signed DMG with a private local record. `notarize status` resumes by Apple's submission ID. [Submit and resume notarization](docs/features/RELEASE.md#submit-and-resume-notarization)
 
+`staple` matches a DMG to the accepted record's SHA-256, validates a ticket on a private copy, and publishes to a new path. [Staple a notarized disk image](docs/features/RELEASE.md#staple-a-notarized-disk-image)
+
 `import-appdmg` translates documented appdmg JSON settings into a new version-one TOML manifest. Relative asset paths keep their original settings directory. A relative `--image-output` is interpreted from the new manifest's directory. The command reports unmapped behavior and refuses to replace an existing manifest.
 
 ## Build from a TOML project
