@@ -4,7 +4,10 @@ use std::{
 	io::{self, Read, Seek, SeekFrom, Write},
 };
 
-use dmgez_udif::{TRAILER_BYTES, validate_signature_append, validate_unsigned_signature_fields};
+use dmgez_udif::{
+	MAX_EMBEDDED_SIGNATURE_BYTES, SignatureIntegrityError, TRAILER_BYTES, read_embedded_signature,
+	validate_signature_append, validate_unsigned_signature_fields, verify_code_directory_digests,
+};
 use rustix::{fs, io::Errno};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -15,7 +18,7 @@ use super::Artifact;
 use crate::native::runner;
 
 const MAX_UNSIGNED_BYTES: u64 = 1 << 40;
-pub(in crate::native) const MAX_SIGNATURE_BYTES: u64 = 16 << 20;
+pub(in crate::native) const MAX_SIGNATURE_BYTES: u64 = MAX_EMBEDDED_SIGNATURE_BYTES as u64;
 #[cfg(feature = "notarization-native")]
 pub(in crate::native) const MAX_SIGNED_BYTES: u64 = MAX_UNSIGNED_BYTES + MAX_SIGNATURE_BYTES;
 const COPY_BUFFER_BYTES: usize = 64 << 10;
@@ -87,13 +90,15 @@ impl Unsigned {
 		if signed_body != self.body_sha256 || read_quarantine(signed.file())? != self.quarantine {
 			return Err(SignError::ImageChanged);
 		}
-		copy_to(
-			&mut input,
-			&mut io::sink(),
-			signature.end - signature.start,
-			&mut hash,
-		)
-		.map_err(SignError::ImageIo)?;
+		let frame = read_embedded_signature(&mut input, signature.end - signature.start)
+			.map_err(|error| SignError::ImageIntegrity(Box::new(error)))?;
+		match verify_code_directory_digests(&frame, &signed_trailer, signature.start, &signed_body)
+		{
+			// The following native verification also handles other directory profiles.
+			Ok(()) | Err(SignatureIntegrityError::Format(dmgez_udif::Error::Unsupported(_))) => {}
+			Err(error) => return Err(SignError::ImageIntegrity(Box::new(error))),
+		}
+		hash.update(frame);
 		hash.update(signed_trailer);
 		signed.validate()?;
 		Ok(encode_hex(&hash.finalize()))

@@ -1,5 +1,10 @@
-use std::{ffi::OsStr, fs, io::Write};
+use std::{
+	ffi::OsStr,
+	fs,
+	io::{Seek, SeekFrom, Write},
+};
 
+use dmgez_udif::{embedded_code_directory, read_embedded_signature, signed_signature_range};
 use rustix::fs::{XattrFlags, fgetxattr, fsetxattr};
 use sha2::{Digest, Sha256};
 
@@ -17,6 +22,8 @@ const UDZO: &[u8] = include_bytes!(concat!(
 const SOURCE_NAME: &str = "Unsigned.dmg";
 const OUTPUT_NAME: &str = "Published.dmg";
 const IDENTIFIER: &str = "org.dmgez.release-fixture";
+const SHA256_OPTION: &str = "--digest-algorithm=sha256";
+const SHA384_OPTION: &str = "--digest-algorithm=sha384";
 const QUARANTINE: &str = "com.apple.quarantine";
 const QUARANTINE_VALUE: &[u8] = b"0083;00000000;dmgez-test;";
 const FIXTURE_FINGERPRINT: &str = "0123456789abcdef0123456789abcdef01234567";
@@ -72,6 +79,59 @@ fn withholds_output_when_signing_changes_the_original_body() {
 	assert!(!output.exists());
 	assert_eq!(fs::read(&source).unwrap(), UDZO);
 	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn withholds_output_when_the_appended_code_directory_has_the_wrong_body_digest() {
+	let directory = tempfile::tempdir().unwrap();
+	let source = directory.path().join(SOURCE_NAME);
+	let output = directory.path().join(OUTPUT_NAME);
+	fs::write(&source, UDZO).unwrap();
+	let artifact = open_unsigned(&source).unwrap();
+	let result = stage_and_sign(
+		&artifact,
+		&output,
+		|path| {
+			sign_fixture(path)?;
+			let mut file = fs::OpenOptions::new()
+				.read(true)
+				.write(true)
+				.open(path)
+				.unwrap();
+			let trailer = image::read_trailer(&file)?;
+			let range = signed_signature_range(&trailer, file.metadata().unwrap().len()).unwrap();
+			file.seek(SeekFrom::Start(range.start)).unwrap();
+			let frame = read_embedded_signature(&mut file, range.end - range.start).unwrap();
+			let directory = embedded_code_directory(&frame).unwrap();
+			let offset = directory.body_hash.as_ptr() as usize - frame.as_ptr() as usize;
+			file.seek(SeekFrom::Start(range.start + offset as u64))
+				.unwrap();
+			file.write_all(&[frame[offset] ^ 1]).unwrap();
+			Ok(())
+		},
+		|_| panic!("the independent CodeDirectory check must reject the altered frame"),
+	);
+	assert!(matches!(result, Err(SignError::ImageIntegrity(_))));
+	assert!(!output.exists());
+	assert_eq!(fs::read(&source).unwrap(), UDZO);
+}
+
+#[test]
+fn keeps_native_verification_for_other_code_directory_profiles() {
+	let directory = tempfile::tempdir().unwrap();
+	let source = directory.path().join(SOURCE_NAME);
+	let output = directory.path().join(OUTPUT_NAME);
+	fs::write(&source, UDZO).unwrap();
+	let artifact = open_unsigned(&source).unwrap();
+	stage_and_sign(
+		&artifact,
+		&output,
+		|path| sign_fixture_with_digest(path, SHA384_OPTION),
+		verify_fixture,
+	)
+	.unwrap();
+	assert!(output.is_file());
+	assert_eq!(fs::read(&source).unwrap(), UDZO);
 }
 
 #[test]
@@ -131,10 +191,15 @@ fn reserves_existing_destination_before_invoking_a_signer() {
 }
 
 fn sign_fixture(path: &Path) -> Result<(), SignError> {
+	sign_fixture_with_digest(path, SHA256_OPTION)
+}
+
+fn sign_fixture_with_digest(path: &Path, digest_option: &str) -> Result<(), SignError> {
 	let options = [
 		"--sign",
 		"-",
 		"--timestamp=none",
+		digest_option,
 		"--identifier",
 		IDENTIFIER,
 		END_OPTIONS,

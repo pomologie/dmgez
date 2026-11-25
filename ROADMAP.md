@@ -25,7 +25,7 @@ These are scope and evidence gates, not dates. Every release claims only the sup
 4. Run pinned independent differential implementations for overlapping support. Resolve deviations or mark explicit unsupported scope; never weaken tests to pass. If security, metadata loss or structural corruption unresolved, no release for affected capability.
 5. Publish docs/capability matrix, binaries and crates with dependency notices and reproducible build evidence. Confirm package names free. Version schema migrations and stable diagnostics; document known differences from dmgbuild and unsupported OS/format profiles.
 
-Stretch features `legacy` (obsolete formats incl ADC/UDBZ/NDIF/DC42), `license` (deprecated EULA), `encryption`, `sparse`, `asif`, `segmented`, `mount-write`, `apfs-read`, `apfs-build` have explicit separate research/security/compatibility gates (D-OPS-05). `legacy` stays off by default, as do all reader, GUI, network and signing extensions. FAT32/exFAT/NTFS logical filesystem creation and recovery/carving are not planned. A separate standalone APFS project can be released independently with its own roadmap.
+Stretch features `legacy` (obsolete formats incl ADC/UDBZ/NDIF/DC42), `license` (deprecated EULA), `encryption`, `sparse`, `asif`, `segmented`, `mount-write`, `apfs-read`, `apfs-build` have explicit separate research/security/compatibility gates (D-OPS-05). Legacy formats, advanced readers, GUI, and remote access stay off by default. Signing follows the per-host release profile. FAT32/exFAT/NTFS logical filesystem creation and recovery/carving are not planned. A separate standalone APFS project can be released independently with its own roadmap.
 
 ## Verification integration
 

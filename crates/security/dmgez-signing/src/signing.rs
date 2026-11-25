@@ -81,6 +81,8 @@ pub enum SignError {
 	Quarantine(#[source] io::Error),
 	#[error("native image checksum verification failed")]
 	ImageChecksum,
+	#[error("the staged disk image did not pass CodeDirectory integrity checks")]
+	ImageIntegrity(#[source] Box<dyn std::error::Error + Send + Sync>),
 	#[error("the native signing tool failed ({status})")]
 	SigningFailed { status: std::process::ExitStatus },
 	#[error("the staged artifact did not pass strict Developer ID signature verification")]
