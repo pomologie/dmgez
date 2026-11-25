@@ -86,8 +86,8 @@ dependencies = [
  "dmgez-udif",
  "dmgez-vfs",
  "hfsplus-builder",
- "hfsplus-core",
  "hfsplus-format",
+ "hfsplus-pomologie-core",
  "hfsplus-reader",
  "tempfile",
  "thiserror",
@@ -213,24 +213,24 @@ checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 name = "hfsplus-builder"
 version = "0.1.0"
 dependencies = [
- "hfsplus-core",
  "hfsplus-format",
+ "hfsplus-pomologie-core",
 ]
-
-[[package]]
-name = "hfsplus-core"
-version = "0.1.0"
 
 [[package]]
 name = "hfsplus-format"
 version = "0.1.0"
 
 [[package]]
+name = "hfsplus-pomologie-core"
+version = "0.1.0"
+
+[[package]]
 name = "hfsplus-reader"
 version = "0.1.0"
 dependencies = [
- "hfsplus-core",
  "hfsplus-format",
+ "hfsplus-pomologie-core",
 ]
 
 [[package]]

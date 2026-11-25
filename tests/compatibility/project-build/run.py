@@ -12,6 +12,7 @@ from tempfile import TemporaryDirectory
 
 COMPATIBILITY = Path(__file__).resolve().parent
 HFSPLUS_VERSION = "0.1.0"
+HFSPLUS_CORE_PACKAGE = "hfsplus-pomologie-core"
 VOLUME_ICON_FIXTURE = "crates/presentation/dmgez-finder/tests/fixtures/apple-iconutil.icns"
 DMGEZ_PACKAGES = {
     "dmgez-builder": "crates/services/dmgez-builder",
@@ -21,7 +22,7 @@ DMGEZ_PACKAGES = {
 }
 HFSPLUS_PACKAGES = {
     "hfsplus-builder": "crates/filesystem/hfsplus-builder",
-    "hfsplus-core": "crates/foundation/hfsplus-core",
+    HFSPLUS_CORE_PACKAGE: f"crates/foundation/{HFSPLUS_CORE_PACKAGE}",
     "hfsplus-format": "crates/formats/hfsplus-format",
 }
 
@@ -42,7 +43,7 @@ def isolated_manifest(paths, packaged):
     manifest = re.sub(r"@([a-z-]+)@", lambda match: path_literals[match[1]], template)
     if packaged:
         manifest += "\n[patch.crates-io]\n"
-        for name in ("hfsplus-core", "hfsplus-format"):
+        for name in (HFSPLUS_CORE_PACKAGE, "hfsplus-format"):
             manifest += f"{name} = {{ path = {path_literals[name]} }}\n"
     return manifest
 

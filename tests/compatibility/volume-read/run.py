@@ -12,6 +12,7 @@ from tempfile import TemporaryDirectory
 
 RUNNER = Path(__file__).resolve().parent
 ENGINE_VERSION = "0.1.0"
+HFSPLUS_CORE_PACKAGE = "hfsplus-pomologie-core"
 HFSX_FEATURE = "hfsx-fixture"
 DMGEZ_PACKAGES = {
     "dmgez-operations": "crates/services/dmgez-operations",
@@ -20,7 +21,7 @@ DMGEZ_PACKAGES = {
 }
 ENGINE_PACKAGES = {
     "hfsplus": {
-        "hfsplus-core": "crates/foundation/hfsplus-core",
+        HFSPLUS_CORE_PACKAGE: f"crates/foundation/{HFSPLUS_CORE_PACKAGE}",
         "hfsplus-format": "crates/formats/hfsplus-format",
         "hfsplus-builder": "crates/filesystem/hfsplus-builder",
         "hfsplus-reader": "crates/filesystem/hfsplus-reader",
@@ -33,7 +34,7 @@ ENGINE_PACKAGES = {
     },
 }
 PACKAGE_PATCHES = {
-    "hfsplus": ("hfsplus-core", "hfsplus-format"),
+    "hfsplus": (HFSPLUS_CORE_PACKAGE, "hfsplus-format"),
     "apfs": ("apfs-core", "apfs-format", "apfs-container"),
 }
 

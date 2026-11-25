@@ -19,7 +19,7 @@ dmgez-config = { path = @dmgez-config@ }
 dmgez-core = { path = @dmgez-core@, default-features = false, features = ["source"] }
 dmgez-udif = { path = @dmgez-udif@, default-features = false, features = ["write"] }
 hfsplus-builder = { version = "=0.1.0", path = @hfsplus-builder@ }
-hfsplus-core = { version = "=0.1.0", path = @hfsplus-core@ }
+hfsplus-core = { package = "hfsplus-pomologie-core", version = "=0.1.0", path = @hfsplus-pomologie-core@ }
 hfsplus-format = { version = "=0.1.0", path = @hfsplus-format@ }
 thiserror = "=2.0.21"
 

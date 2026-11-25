@@ -10,7 +10,7 @@ hfsx-fixture = []
 
 [dependencies]
 dmgez-vfs = { path = @dmgez-vfs@, default-features = false }
-hfsplus-core = { version = "=0.1.0", path = @hfsplus-core@ }
+hfsplus-core = { package = "hfsplus-pomologie-core", version = "=0.1.0", path = @hfsplus-pomologie-core@ }
 hfsplus-format = { version = "=0.1.0", path = @hfsplus-format@ }
 hfsplus-reader = { version = "=0.1.0", path = @hfsplus-reader@ }
 thiserror = "=2.0.21"
