@@ -10,7 +10,7 @@ use dmgez_diff::semantic::Contents;
 use dmgez_diff::semantic::Field;
 use dmgez_diff::{
 	Side,
-	semantic::{Limits, Options, Outcome, Report, compare_with_options},
+	semantic::{Limits, Options, Outcome, PathMatching, Report, compare_with_options},
 };
 use dmgez_inspector::SelectedWindowId;
 use dmgez_vfs::{
@@ -34,11 +34,13 @@ use crate::{
 
 #[cfg(feature = "diff-hash")]
 use super::ContentsMode;
-use super::{Arguments, DIFFERENT_EXIT_CODE, require_regular_file, with_side};
+use super::{Arguments, DIFFERENT_EXIT_CODE, PathMode, require_regular_file, with_side};
 #[cfg(feature = "apfs-read")]
 use super::{LEFT_VOLUME_OPTION, RIGHT_VOLUME_OPTION};
 
 const FILESYSTEM_SPACE: &str = "filesystem";
+const EQUIVALENT_PATH_SPELLING_LABEL: &str = "equivalent_path_spelling";
+const RIGHT_PATH_LABEL: &str = "right_path";
 #[cfg(feature = "diff-hash")]
 const RENAME_CANDIDATE_LABEL: &str = "rename_candidate";
 
@@ -157,6 +159,10 @@ where
 		Side::Right,
 	)?;
 	let mut options = Options::default();
+	options.paths = match arguments.options.paths.unwrap_or_default() {
+		PathMode::Exact => PathMatching::ExactStoredText,
+		PathMode::Native => PathMatching::Native,
+	};
 	options.xattrs = arguments.options.xattrs;
 	options.finder_info = arguments.options.finder_info;
 	#[cfg(feature = "diff-hash")]
@@ -281,6 +287,10 @@ impl DiffReport {
 		for change in &self.comparison.changes {
 			write!(output, "{}\t", change.kind.as_str())?;
 			write_json(output, &change.path)?;
+			if let Some(right_path) = &change.right_path {
+				write!(output, "\t{RIGHT_PATH_LABEL} = ")?;
+				write_json(output, right_path)?;
+			}
 			for field in &change.fields {
 				write!(output, "\t{}", field.as_str())?;
 			}
@@ -295,16 +305,38 @@ impl DiffReport {
 			}
 			writeln!(output)?;
 		}
+		for spellings in &self.comparison.equivalent_path_spellings {
+			write_path_pair(
+				output,
+				EQUIVALENT_PATH_SPELLING_LABEL,
+				&spellings.left,
+				&spellings.right,
+			)?;
+		}
 		#[cfg(feature = "diff-hash")]
 		for candidate in &self.comparison.rename_candidates {
-			write!(output, "{RENAME_CANDIDATE_LABEL}\t")?;
-			write_json(output, &candidate.from)?;
-			write!(output, "\t")?;
-			write_json(output, &candidate.to)?;
-			writeln!(output)?;
+			write_path_pair(
+				output,
+				RENAME_CANDIDATE_LABEL,
+				&candidate.from,
+				&candidate.to,
+			)?;
 		}
 		Ok(())
 	}
+}
+
+fn write_path_pair(
+	output: &mut impl Write,
+	label: &str,
+	left: &[String],
+	right: &[String],
+) -> io::Result<()> {
+	write!(output, "{label}\t")?;
+	write_json(output, &left)?;
+	write!(output, "\t")?;
+	write_json(output, &right)?;
+	writeln!(output)
 }
 
 fn write_value(output: &mut impl Write, label: &str, value: &impl Serialize) -> io::Result<()> {

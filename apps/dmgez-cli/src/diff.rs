@@ -69,11 +69,21 @@ enum ContentsMode {
 	Blake3Exact,
 }
 
+#[derive(Clone, Copy, Default, ValueEnum)]
+enum PathMode {
+	#[default]
+	Exact,
+	Native,
+}
+
 #[derive(Args)]
 struct SemanticOptions {
 	/// Select a filesystem for both inputs in semantic mode. HFS+ includes HFSX.
 	#[arg(long = FILESYSTEM_OPTION, value_enum)]
 	filesystem: Option<Filesystem>,
+	/// Match paths by exact stored spelling (default) or supported native filesystem rules.
+	#[arg(long, value_enum)]
+	paths: Option<PathMode>,
 	/// Compare regular-file forks by exact bytes (default), BLAKE3, or BLAKE3 with exact confirmation.
 	#[arg(long, value_enum)]
 	contents: Option<ContentsMode>,
@@ -143,6 +153,9 @@ pub(super) fn run(_arguments: &Arguments) -> CliResult<ExitCode> {
 pub(super) fn run(arguments: &Arguments) -> CliResult<ExitCode> {
 	match arguments.mode {
 		Mode::Semantic => run_semantic(arguments),
+		_ if arguments.options.paths.is_some() => {
+			Err(invalid("--paths requires --mode semantic").into())
+		}
 		_ if arguments.options.contents.is_some() => {
 			Err(invalid("--contents requires --mode semantic").into())
 		}
