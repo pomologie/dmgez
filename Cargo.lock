@@ -1040,6 +1040,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dmgez-lint"
+version = "0.1.0"
+dependencies = [
+ "dmgez-config",
+ "dmgez-preview",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "dmgez-operations"
 version = "0.1.0"
 dependencies = [

@@ -1,0 +1,20 @@
+[package]
+name = "dmgez-lint"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Typed layout diagnostics for dmgez projects"
+
+[dependencies]
+dmgez-config.workspace = true
+dmgez-preview.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true
