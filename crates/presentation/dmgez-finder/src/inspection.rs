@@ -1,7 +1,10 @@
 //! Bounded, read-only inspection of single-leaf Finder stores.
 
 mod background;
+mod binary_plist;
 mod leaf;
+mod list;
+mod list_plist;
 mod properties;
 
 use std::collections::HashSet;
@@ -13,6 +16,7 @@ pub use background::{
 	BackgroundAlias, BackgroundAliasName, BackgroundAliasTarget, HfsCreationTime,
 };
 use leaf::Cursor;
+pub use list::{ListColumn, ListView};
 
 const MAX_STORE_BYTES: usize = 64 << 10;
 const MAX_RECORDS: usize = 512;
@@ -34,7 +38,7 @@ pub struct ReadLimits {
 	pub name_units: usize,
 	/// Maximum number of objects in a known binary plist value.
 	pub plist_objects: usize,
-	/// Maximum number of key-value pairs in each known flat settings dictionary.
+	/// Maximum number of entries in each known settings dictionary or array.
 	pub plist_entries: usize,
 }
 
@@ -58,6 +62,8 @@ pub enum ReadBudget {
 	NameUnits,
 	PlistObjects,
 	PlistEntries,
+	PlistDepth,
+	PlistExpansion,
 }
 
 /// Failure to read the supported store profile.
@@ -88,7 +94,7 @@ pub enum ReadError {
 	Payload([u8; 4]),
 	#[error("invalid binary Finder settings plist")]
 	PlistLayout,
-	#[error("Finder settings require a flat binary plist dictionary")]
+	#[error("Finder settings use an unsupported plist profile")]
 	PlistProfile,
 	#[error("Finder settings contain a nonfinite number")]
 	SettingsNumber,
@@ -124,6 +130,7 @@ pub struct Record {
 pub enum RecordValue {
 	Window(Window),
 	IconView(IconView),
+	ListView(ListView),
 	View(ViewKind),
 	StoreVersion(u32),
 	IconPosition {
@@ -292,6 +299,9 @@ fn report_value(
 		(FieldKey::icvp, ValueTag::Blob) => {
 			Ok(RecordValue::IconView(properties::icons(payload, limits)?))
 		}
+		(FieldKey::lsvp | FieldKey::lsvC, ValueTag::Blob) => {
+			Ok(RecordValue::ListView(list::read(payload, limits, field)?))
+		}
 		(FieldKey::icvl, ValueTag::Type) => {
 			let code = value.array()?;
 			let view = if code == FinderViewStyle::Icon.fourcc().bytes() {
@@ -308,9 +318,16 @@ fn report_value(
 				y: value.word()?,
 			})
 		}
-		(FieldKey::bwsp | FieldKey::icvp | FieldKey::icvl | FieldKey::vSrn | FieldKey::Iloc, _) => {
-			Err(ReadError::Payload(field.fourcc().bytes()))
-		}
+		(
+			FieldKey::bwsp
+			| FieldKey::icvp
+			| FieldKey::lsvp
+			| FieldKey::lsvC
+			| FieldKey::icvl
+			| FieldKey::vSrn
+			| FieldKey::Iloc,
+			_,
+		) => Err(ReadError::Payload(field.fourcc().bytes())),
 		_ => Ok(RecordValue::Opaque),
 	}
 }

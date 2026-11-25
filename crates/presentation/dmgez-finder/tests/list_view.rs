@@ -6,6 +6,7 @@ use std::{
 };
 
 use dmgez_config::{Column, Project};
+use dmgez_finder::inspection::{ListView, ReadLimits, RecordValue, Report, inspect};
 use dmgez_finder::{Error, validate_options, write_store};
 use ds_parser::{DSStore, FieldKey, FinderViewStyle, Value};
 use plist::Dictionary;
@@ -99,6 +100,58 @@ fn ordered_column<'a>(options: &'a Dictionary, name: &str) -> &'a Dictionary {
 			(column[IDENTIFIER].as_string() == Some(name)).then_some(column)
 		})
 		.unwrap()
+}
+
+fn inspected_list(report: &Report, field: FieldKey) -> &ListView {
+	let record = report
+		.records
+		.iter()
+		.find(|record| record.name == "." && record.field == field.fourcc().bytes())
+		.unwrap();
+	match &record.value {
+		RecordValue::ListView(view) => view,
+		value => panic!("unexpected list record {value:?}"),
+	}
+}
+
+#[test]
+fn inspects_generated_list_records_with_the_same_column_semantics() {
+	let report = inspect(&bytes(LIST), ReadLimits::default()).unwrap();
+	let keyed = inspected_list(&report, FieldKey::lsvp);
+	let ordered = inspected_list(&report, FieldKey::lsvC);
+	assert_eq!(keyed, ordered);
+	assert_eq!(ordered.sort_column.as_deref(), Some("size"));
+	assert_eq!(ordered.scroll_position_x, Some(2.5));
+	assert_eq!(ordered.scroll_position_y, Some(3.5));
+	let columns = ordered.columns.as_deref().unwrap();
+	assert_eq!(
+		columns
+			.iter()
+			.filter(|column| column.visible)
+			.map(|column| column.identifier.as_str())
+			.collect::<Vec<_>>(),
+		["name", "dateAdded", "size"]
+	);
+	assert_eq!(columns[0].width, 289);
+	assert!(columns[2].ascending);
+}
+
+#[test]
+fn inspects_native_sonoma_columns_in_each_record_order() {
+	let report = inspect(NATIVE, ReadLimits::default()).unwrap();
+	let keyed = inspected_list(&report, FieldKey::lsvp);
+	let ordered = inspected_list(&report, FieldKey::lsvC);
+	assert_eq!(keyed.sort_column.as_deref(), Some("size"));
+	assert_eq!(keyed.sort_column, ordered.sort_column);
+	assert_eq!(keyed.text_size, Some(13.0));
+	let keyed = keyed.columns.as_deref().unwrap();
+	let ordered = ordered.columns.as_deref().unwrap();
+	assert_eq!(keyed.len(), 9);
+	assert_eq!(ordered.len(), 14);
+	assert_eq!(keyed[1].identifier, "dateModified");
+	assert_eq!(ordered[1].identifier, "ubiquity");
+	assert!(!ordered[1].visible);
+	assert_eq!(ordered[1].width, 35);
 }
 
 #[test]
