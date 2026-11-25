@@ -9,8 +9,9 @@ use std::{
 use dmgez_vfs::{
 	VolumeId,
 	volume::{
-		DirectoryEntry, DirectoryPage, DirectoryReader, ForkKind, ForkReader, HardLink, LookupName,
-		Metadata, NodeKind, RawName, ViewError, VolumeBackend, VolumeView,
+		DirectoryEntry, DirectoryPage, DirectoryReader, FINDER_INFO_BYTES, FinderInfo, ForkKind,
+		ForkReader, HardLink, LookupName, Metadata, NodeKind, RawName, ViewError, VolumeBackend,
+		VolumeView,
 	},
 };
 
@@ -30,6 +31,7 @@ const LINK_PAYLOAD: &[u8] = b"../file\xff";
 const DATA: &[u8] = b"content";
 const DATA_ATTRIBUTE: &str = "org.pomologie.data";
 const EMPTY_ATTRIBUTE: &str = "org.pomologie.empty";
+const ZERO_FINDER_INFO: [u8; FINDER_INFO_BYTES] = [0; FINDER_INFO_BYTES];
 const MODE: u16 = 0o100640;
 const OWNER: u32 = 501;
 const GROUP: u32 = 20;
@@ -139,6 +141,14 @@ impl VolumeBackend for Backend<'_> {
 			gid: GROUP,
 			hard_link,
 		}))
+	}
+
+	fn finder_info(&mut self, node: Id) -> Result<FinderInfo, EngineError> {
+		Ok(match node {
+			Id::Root => FinderInfo::Absent,
+			Id::File | Id::Alias => FinderInfo::Present(ZERO_FINDER_INFO),
+			Id::Link => FinderInfo::Unavailable,
+		})
 	}
 
 	fn read_dir(&mut self, directory: Id) -> Result<Self::Directory<'_>, EngineError> {
@@ -424,6 +434,47 @@ fn exact_forks_distinguish_absent_empty_and_symlink_bytes() {
 			..
 		})
 	));
+}
+
+#[test]
+fn finder_info_retains_admitted_states_and_rejects_foreign_handles() {
+	let reads = Cell::new(0);
+	let mut view = VolumeView::new(
+		VolumeId::WholeDisk,
+		Backend {
+			reads: &reads,
+			position: 0,
+		},
+	);
+	let mut other = VolumeView::new(
+		VolumeId::WholeDisk,
+		Backend {
+			reads: &reads,
+			position: 0,
+		},
+	);
+	let root = view.root().unwrap();
+	assert_eq!(view.finder_info(&root).unwrap(), FinderInfo::Absent);
+	assert!(matches!(
+		other.finder_info(&root),
+		Err(ViewError::ForeignHandle)
+	));
+	for name in [
+		LookupName::StoredUtf16(STORED_NAME),
+		LookupName::Utf8(ALIAS),
+	] {
+		let child = view.lookup(&root, name).unwrap().unwrap();
+		assert_eq!(
+			view.finder_info(&child.node).unwrap(),
+			FinderInfo::Present(ZERO_FINDER_INFO)
+		);
+	}
+	let link = view.lookup(&root, LookupName::Utf8(LINK)).unwrap().unwrap();
+	assert_eq!(
+		view.finder_info(&link.node).unwrap(),
+		FinderInfo::Unavailable
+	);
+	assert_eq!(reads.get(), 0);
 }
 
 #[test]

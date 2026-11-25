@@ -14,6 +14,8 @@
 
 Effective stat reports object kind, mode, ownership, and any admitted hard-link group. A group identifies shared storage within the view while its aliases retain separate visible handles. Regular files expose logical data and stored resource forks through bounded, exact readers. The view preserves a present zero-length fork and reports an absent fork as `None`. Symbolic links expose their own target bytes through `read_link` and reject fork access and child lookup.
 
+`VolumeView::finder_info` uses the same visible handle and obtains the effective 32-byte FinderInfo from filesystem metadata. An absent value, a present value, and an unavailable check are distinct states. The operation uses the backend's metadata read budget and addresses symbolic links directly.
+
 ## Supported map profiles
 
 - APM uses 512-byte sectors, a driver descriptor, and up to 128 map entries. Reported entries include map metadata and free space. The map validates record counts, descriptor and partition bounds, declared data extents, and overlaps.

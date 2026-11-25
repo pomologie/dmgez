@@ -4,8 +4,8 @@ use std::{
 };
 
 use super::{
-	DirectoryEntry, DirectoryPage, ForkKind, ForkReader, LookupName, Metadata, Quarantine,
-	QuarantineScope, RawName,
+	DirectoryEntry, DirectoryPage, FinderInfo, ForkKind, ForkReader, LookupName, Metadata,
+	Quarantine, QuarantineScope, RawName,
 };
 
 /// Engine operator that advances one bounded directory scan.
@@ -56,6 +56,13 @@ pub trait VolumeBackend {
 
 	/// Gets effective metadata. Hard-link storage keys are local to this view.
 	fn stat(&mut self, node: Self::Id) -> Result<Option<Metadata<u64>>, Self::Error>;
+
+	/// Reads effective FinderInfo from bounded metadata without opening data forks.
+	/// Symbolic link handles address the link itself. Hard links use effective
+	/// shared metadata. Return `Absent` only when the backend establishes absence.
+	fn finder_info(&mut self, _node: Self::Id) -> Result<FinderInfo, Self::Error> {
+		Ok(FinderInfo::Unavailable)
+	}
 
 	/// Opens a scan over the selected directory's visible children.
 	fn read_dir(&mut self, directory: Self::Id) -> Result<Self::Directory<'_>, Self::Error>;

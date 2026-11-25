@@ -13,9 +13,11 @@ use thiserror::Error;
 use crate::VolumeId;
 
 mod backend;
+mod finder_info;
 mod fork;
 
 pub use backend::{DirectoryReader, VolumeBackend};
+pub use finder_info::{FINDER_INFO_BYTES, FinderInfo};
 pub use fork::{Fork, ForkReader};
 
 /// A native name retained without Unicode replacement or path interpretation.
@@ -278,6 +280,18 @@ impl<B: VolumeBackend> VolumeView<B> {
 		self.backend
 			.quarantine(local, scope)
 			.map_err(ViewError::Backend)
+	}
+
+	/// Reads the effective FinderInfo of an admitted object without following links.
+	///
+	/// # Errors
+	/// Rejects foreign handles and propagates backend metadata failures.
+	pub fn finder_info(
+		&mut self,
+		node: &NodeHandle<B::Id>,
+	) -> Result<FinderInfo, ViewError<B::Error>> {
+		let local = self.require_session(node)?;
+		self.backend.finder_info(local).map_err(ViewError::Backend)
 	}
 
 	/// Gets effective metadata with any storage group scoped to this view.
