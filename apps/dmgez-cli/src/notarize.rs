@@ -8,6 +8,8 @@ use crate::{COMPILED, CliResult, NOT_COMPILED};
 mod report;
 
 pub(super) const NATIVE_FEATURE: &str = "notarization-native";
+const STATUS_ID_ARG: &str = "id";
+const RECORD_ARG: &str = "record";
 pub(super) const NATIVE_CAPABILITY: &str = match (
 	cfg!(feature = "notarization-native"),
 	cfg!(target_os = "macos"),
@@ -34,13 +36,13 @@ pub(super) struct Arguments {
 
 #[derive(Subcommand)]
 enum Action {
-	/// Query the status of an existing submission by ID.
+	/// Query a submission by ID or use the ID from its private record.
 	Status {
-		/// Apple notarization submission UUID.
-		#[arg(value_name = "ID")]
-		id: String,
+		/// Apple notarization submission UUID. Defaults to the bound record ID.
+		#[arg(value_name = "ID", required_unless_present = RECORD_ARG)]
+		id: Option<String>,
 		/// Update an existing private submission record.
-		#[arg(long, value_name = "PATH")]
+		#[arg(long, value_name = "PATH", required_unless_present = STATUS_ID_ARG)]
 		record: Option<PathBuf>,
 		#[command(flatten)]
 		options: Options,
@@ -74,7 +76,7 @@ pub(super) fn run(_arguments: &Arguments) -> CliResult<ExitCode> {
 
 #[cfg(all(feature = "notarization-native", target_os = "macos"))]
 pub(super) fn run(arguments: &Arguments) -> CliResult<ExitCode> {
-	use dmgez_signing::notarization::{Status, status, submit};
+	use dmgez_signing::notarization::{Status, status, status_from_record, submit};
 
 	use crate::REPORT_ERROR_EXIT_CODE;
 
@@ -86,7 +88,14 @@ pub(super) fn run(arguments: &Arguments) -> CliResult<ExitCode> {
 			record,
 			options,
 		}) => (
-			status(id, record.as_deref(), options.profile()?, options.wait)?,
+			if let Some(id) = id {
+				status(id, record.as_deref(), options.profile()?, options.wait)?
+			} else {
+				let record = record
+					.as_deref()
+					.ok_or("--record is required when no ID is supplied")?;
+				status_from_record(record, options.profile()?, options.wait)?
+			},
 			options.json,
 		),
 		None => {

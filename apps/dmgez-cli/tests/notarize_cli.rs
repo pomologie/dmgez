@@ -39,7 +39,7 @@ fn reports_notarization_capability() {
 
 #[test]
 fn documents_submission_and_status_arguments() {
-	for (command, operand) in [(&[][..], "<IMAGE>"), (&[STATUS][..], "<ID>")] {
+	for (command, operand) in [(&[][..], "<IMAGE>"), (&[STATUS][..], "[ID]")] {
 		let output = notarize().args(command).arg("--help").output().unwrap();
 		assert!(output.status.success(), "{output:?}");
 		let help = String::from_utf8_lossy(&output.stdout);
@@ -57,6 +57,15 @@ fn documents_submission_and_status_arguments() {
 			"{help}"
 		);
 	}
+}
+
+#[test]
+fn requires_an_id_or_record_for_status() {
+	let output = notarize()
+		.args([STATUS, "--keychain-profile", PROFILE])
+		.output()
+		.unwrap();
+	assert_error(&output, "--record <PATH>");
 }
 
 #[test]
@@ -136,4 +145,49 @@ fn rejects_invalid_profile_before_accessing_paths_and_keeps_it_out_of_diagnostic
 		assert!(!String::from_utf8_lossy(&output.stderr).contains(INVALID_PROFILE_VALUE));
 	}
 	assert_eq!(directory.path().read_dir().unwrap().count(), 0);
+}
+
+#[cfg(all(feature = "notarization-native", target_os = "macos"))]
+#[test]
+fn returns_a_verified_record_by_path_with_no_remote_lookup() {
+	use std::{fs, io::Write, os::unix::fs::OpenOptionsExt};
+
+	const PRIVATE_FILE_MODE: u32 = 0o600;
+	const DIGEST: &str = "b869a03d3af158c1972fca0afba2aebc229d01ab273c32ca7ecf3d7f5a43db22";
+	let directory = tempfile::tempdir().unwrap();
+	let record = directory.path().join(RECORD);
+	let original = serde_json::json!({
+		"schema_version": 1, "backend": "native", "submission_id": UUID,
+		"status": "accepted", "artifact_sha256": DIGEST, "artifact_bytes": 4096,
+		"created_at": 1, "updated_at": 2, "digest_verified": true,
+		"log": { "errors": 0, "warnings": 1 }, "issue": null
+	});
+	let bytes = serde_json::to_vec(&original).unwrap();
+	let mut file = fs::OpenOptions::new()
+		.write(true)
+		.create_new(true)
+		.mode(PRIVATE_FILE_MODE)
+		.open(&record)
+		.unwrap();
+	file.write_all(&bytes).unwrap();
+	drop(file);
+	let result = notarize()
+		.current_dir(directory.path())
+		.args([
+			STATUS,
+			"--record",
+			RECORD,
+			"--keychain-profile",
+			PROFILE,
+			"--wait",
+			"--json",
+		])
+		.output()
+		.unwrap();
+	assert!(result.status.success(), "{result:?}");
+	assert_eq!(
+		serde_json::from_slice::<serde_json::Value>(&result.stdout).unwrap(),
+		original
+	);
+	assert_eq!(fs::read(record).unwrap(), bytes);
 }
