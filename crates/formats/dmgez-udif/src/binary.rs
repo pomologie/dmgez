@@ -5,6 +5,14 @@ use crate::Error;
 #[path = "../verification/binary_geometry.rs"]
 mod geometry_properties;
 
+#[cfg(all(kani, feature = "read"))]
+#[path = "../verification/kani/binary_geometry.rs"]
+mod binary_geometry_proof;
+
+#[cfg(all(kani, feature = "write"))]
+#[path = "../verification/kani/write_geometry.rs"]
+mod write_geometry_proof;
+
 #[cfg(feature = "read")]
 pub(crate) fn field<const N: usize>(bytes: &[u8], offset: usize) -> Result<[u8; N], Error> {
 	bytes

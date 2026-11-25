@@ -135,31 +135,14 @@ pub(crate) struct Table {
 #[cfg(feature = "read")]
 impl Table {
 	pub fn decode(bytes: &[u8], run_limit: usize) -> Result<Self, Error> {
-		if !bytes.starts_with(SIGNATURE) {
-			return Err(Error::Corrupt("missing mish block-map signature"));
-		}
-		if binary::u32_at(bytes, VERSION_OFFSET)? != VERSION {
-			return Err(Error::Unsupported("mish version"));
-		}
-		let count = usize::try_from(binary::u32_at(bytes, RUN_COUNT_OFFSET)?)
-			.map_err(|_| Error::ResourceLimit("run records"))?;
-		if count > run_limit {
-			return Err(Error::ResourceLimit("run records"));
-		}
-		if count == 0 || Some(bytes.len()) != encoded_len(count) {
-			return Err(Error::Corrupt(
-				"mish record count does not match its length",
-			));
-		}
+		let records = admit_records(bytes, run_limit)?;
 		if bytes[RESERVED_START..CHECKSUM_OFFSET]
 			.iter()
 			.any(|&byte| byte != 0)
 		{
 			return Err(Error::Unsupported("extended mish block-map header"));
 		}
-		let records = bytes[HEADER_BYTES..]
-			.as_chunks::<RUN_BYTES>()
-			.0
+		let records = records
 			.iter()
 			.map(decode_record)
 			.collect::<Result<_, _>>()?;
@@ -173,6 +156,27 @@ impl Table {
 			records,
 		})
 	}
+}
+
+#[cfg(feature = "read")]
+pub(super) fn admit_records(bytes: &[u8], run_limit: usize) -> Result<&[[u8; RUN_BYTES]], Error> {
+	if !bytes.starts_with(SIGNATURE) {
+		return Err(Error::Corrupt("missing mish block-map signature"));
+	}
+	if binary::u32_at(bytes, VERSION_OFFSET)? != VERSION {
+		return Err(Error::Unsupported("mish version"));
+	}
+	let count = usize::try_from(binary::u32_at(bytes, RUN_COUNT_OFFSET)?)
+		.map_err(|_| Error::ResourceLimit("run records"))?;
+	if count > run_limit {
+		return Err(Error::ResourceLimit("run records"));
+	}
+	if count == 0 || Some(bytes.len()) != encoded_len(count) {
+		return Err(Error::Corrupt(
+			"mish record count does not match its length",
+		));
+	}
+	Ok(bytes[HEADER_BYTES..].as_chunks::<RUN_BYTES>().0)
 }
 
 #[cfg(feature = "read")]
