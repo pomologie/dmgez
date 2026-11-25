@@ -206,6 +206,22 @@ pub struct IconView {
 /// Returns an error for a malformed store, an unsupported tree or value shape,
 /// or a budget violation.
 pub fn inspect(bytes: &[u8], limits: ReadLimits) -> Result<Report, ReadError> {
+	let leaf = admitted_leaf(bytes, limits)?;
+	let mut records = Vec::new();
+	records.try_reserve_exact(leaf.record_count)?;
+	visit_leaf(leaf, limits, |record, _| records.push(record))?;
+	Ok(Report { records })
+}
+
+pub(crate) fn visit_records(
+	bytes: &[u8],
+	limits: ReadLimits,
+	visit: impl FnMut(Record, usize),
+) -> Result<(), ReadError> {
+	visit_leaf(admitted_leaf(bytes, limits)?, limits, visit)
+}
+
+fn admitted_leaf(bytes: &[u8], limits: ReadLimits) -> Result<leaf::Leaf<'_>, ReadError> {
 	if bytes.len() > limits.store_bytes {
 		return Err(ReadError::Limit(ReadBudget::StoreBytes));
 	}
@@ -216,9 +232,14 @@ pub fn inspect(bytes: &[u8], limits: ReadLimits) -> Result<Report, ReadError> {
 	if leaf.record_count > leaf.records.len() / MIN_RECORD_BYTES {
 		return Err(ReadError::RecordCount);
 	}
+	Ok(leaf)
+}
 
-	let mut records = Vec::new();
-	records.try_reserve_exact(leaf.record_count)?;
+fn visit_leaf(
+	leaf: leaf::Leaf<'_>,
+	limits: ReadLimits,
+	mut visit: impl FnMut(Record, usize),
+) -> Result<(), ReadError> {
 	let mut names = HashSet::new();
 	names.try_reserve(leaf.record_count)?;
 	let mut input = Cursor::new(leaf.records);
@@ -243,14 +264,19 @@ pub fn inspect(bytes: &[u8], limits: ReadLimits) -> Result<Report, ReadError> {
 			payload,
 			limits,
 		)?;
-		records.push(Record {
-			name,
-			field,
-			data_type,
-			value,
-		});
+		let consumed = leaf.records.len() - input.remaining().len();
+		let payload_offset = leaf.records_offset + consumed - payload.len();
+		visit(
+			Record {
+				name,
+				field,
+				data_type,
+				value,
+			},
+			payload_offset,
+		);
 	}
-	Ok(Report { records })
+	Ok(())
 }
 
 fn read_name(input: &mut Cursor<'_>, limit: usize) -> Result<String, ReadError> {

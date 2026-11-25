@@ -5,6 +5,7 @@
 //! Each store uses one B-tree leaf. Writing it performs no filesystem access.
 
 mod background_alias;
+pub mod edit;
 #[cfg(feature = "volume-icon")]
 mod finder_info;
 pub mod inspection;

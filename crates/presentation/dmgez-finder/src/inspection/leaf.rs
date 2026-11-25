@@ -15,6 +15,7 @@ const NODE_COUNT: u32 = 1;
 
 pub(super) struct Leaf<'a> {
 	pub record_count: usize,
+	pub records_offset: usize,
 	pub records: &'a [u8],
 }
 
@@ -56,6 +57,7 @@ pub(super) fn read(bytes: &[u8]) -> Result<Leaf<'_>, ReadError> {
 	if overlaps(&root, &master) || overlaps(&root, &allocator) {
 		return Err(ReadError::Allocator);
 	}
+	let root_offset = root.start;
 	let root = &bytes[root];
 	let logical_bytes = root.len().min(BTreeMaster::PAGE_SIZE.as_usize());
 	let mut leaf = Cursor::new(&root[..logical_bytes]);
@@ -67,6 +69,7 @@ pub(super) fn read(bytes: &[u8]) -> Result<Leaf<'_>, ReadError> {
 	}
 	Ok(Leaf {
 		record_count,
+		records_offset: root_offset + logical_bytes - leaf.remaining().len(),
 		records: leaf.remaining(),
 	})
 }

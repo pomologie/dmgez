@@ -2,7 +2,7 @@
 
 `write_store` produces a deterministic `.DS_Store` for a folder in a newly built image. It takes the folder's settings and the final names and positions of its direct children. The standard records capture window bounds and chrome, icon-view preferences, default view, and icon positions. Window origins follow dmgbuild's screen coordinates with y increasing upwards. Icon positions are unsigned whole points with y increasing downwards. Solid backgrounds accept opaque CSS names, `#RGB`, `#RRGGBB` and dmgbuild's comma-separated `rgb`, `hsl`, `hwb`, `cmyk`, and `gray`/`grey` functions. Non-angle function components use fractions or percentages.
 
-The writer accepts printable ASCII item names. It supports icon view and list view as the default. Column view, cover flow, gallery view, template backgrounds, and editing existing stores require additional qualification. The caller resolves folder inheritance and reserves the generated store before planning catalog IDs.
+The writer accepts printable ASCII item names. It supports icon view and list view as the default. Column view, cover flow, gallery view, and template backgrounds require additional qualification. The caller resolves folder inheritance and reserves the generated store before planning catalog IDs.
 
 `write_store_with_background_identity` writes an image-background record from the final HFS+ volume label, catalog IDs, stored creation dates, and the file's path on the volume. The version-2 Alias carries complete Unicode names, Carbon and volume-relative POSIX paths, and the direct parent CNID trail for a file one folder below the volume root. Its mount hint uses `/Volumes/<label>` with the complete Unicode label. The independent oracle compares the emitted alias against `mac_alias` bytes. Native Finder lookup remains a separate qualification. [mac_alias implementation](https://github.com/dmgbuild/mac_alias/blob/v2.2.3/src/mac_alias/alias.py)
 
@@ -35,5 +35,11 @@ PATH="/tmp/dmgez-finder-oracle/bin:$PATH" cargo test --locked -p dmgez-finder --
 `inspection::inspect` reports `bwsp`, `icvp`, `icvl`, `Iloc` and `vSrn` from single-leaf stores. The caller sets limits on input bytes, record counts, filenames and flat binary plist dictionaries. Unknown records retain their name and four-byte tags when their payload length is known. Unreported plist fields retain key names only. Alias resolution, free-list verification and multi-leaf inspection remain outside this profile.
 
 The D-READ-02 layout checks use an independent Python-written synthetic store and an unchanged, Finder-authored fixture with three icon locations. The native fixture uses a 128-byte physical leaf allocation. The Python fixture uses an 8192-byte allocation for a 4096-byte logical leaf. Both allocations produce bounded record reads. [Native fixture provenance](tests/fixtures/README.md)
+
+## Editing existing icon positions
+
+`edit::edit_icon_positions` takes a complete single-leaf store and a batch of exact record names and replacement centers. It updates only the two coordinate words of each existing `Iloc` record. The remaining payload bytes, unknown fields with known wire types, the B-tree, and unused allocator bytes stay byte-for-byte identical. Missing positions, duplicate targets, unsupported value types, and malformed records fail before any writes. The caller owns storage and publication of the edited bytes.
+
+D-FINDER-03-T04 covers raw-byte preservation using a Finder-authored fixture and a synthetic store with an opaque record. The independent `ds_store` oracle reads the edited centers and the preserved opaque payload. [Edit regression tests](tests/store_edit.rs) · [Independent oracle](tests/store_edit_oracle.py)
 
 `ds_parser` 0.4.0 and its transitive dependency `alias_record` 0.3.0 use the Blue Oak Model License 1.0.0. [License text](https://blueoakcouncil.org/license/1.0.0)
