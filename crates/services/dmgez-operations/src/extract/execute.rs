@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use super::{
 	ExtractionPlan, HostName, NameError, Progress,
-	host::{DestinationDirectory, ForkMode, ForkWriteError, ForkWriteLimits, HostError},
+	host::{DestinationDirectory, ForkWriteError, ForkWriteLimits, HostError},
 	plan::{Contents, File, Tree, TreeItem},
 };
 
@@ -186,7 +186,6 @@ impl<B: VolumeBackend> Run<'_, '_, B> {
 					name,
 					fork,
 					limits,
-					ForkMode::OwnerReadWrite,
 					&mut *self.cancelled,
 					&mut *self.verify_source,
 				)?)

@@ -32,16 +32,6 @@ pub struct ForkWriteLimits {
 	pub chunk_bytes: NonZeroUsize,
 }
 
-/// Owner-only permissions for a published fork.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
-pub enum ForkMode {
-	/// Create with `0600` permissions, subject to the process umask.
-	#[default]
-	OwnerReadWrite,
-	/// Publish as `0700` after the full fork is staged.
-	OwnerExecutable,
-}
-
 /// Failure to publish the admitted fork.
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -62,8 +52,6 @@ pub enum ForkWriteError<E: StdError + 'static> {
 	},
 	#[error("could not write the staging file")]
 	Write(#[source] io::Error),
-	#[error("could not set owner permissions on the staging file")]
-	SetPermissions(#[source] io::Error),
 	#[error("could not sync the staging file")]
 	Sync(#[source] io::Error),
 	#[error("extraction source failed its final identity check")]
@@ -71,10 +59,11 @@ pub enum ForkWriteError<E: StdError + 'static> {
 }
 
 impl DestinationDirectory<'_> {
-	/// Writes one selected VFS fork as a new, owner-only ordinary file.
+	/// Writes one selected VFS fork as a new non-executable file.
 	///
 	/// Pass the session-bound fork lent by [dmgez_vfs::volume::VolumeView::with_fork].
-	/// An empty fork creates an empty file. The declared name must be absent,
+	/// The mode is `0600`, subject to the process umask. An empty fork creates
+	/// an empty file. The declared name must be absent,
 	/// including when the existing entry is a symbolic link. The file's data
 	/// is synced before the no-clobber rename. Directory durability depends
 	/// on platform and caller policy. On failure, the writer attempts cleanup
@@ -91,24 +80,7 @@ impl DestinationDirectory<'_> {
 		limits: ForkWriteLimits,
 		cancelled: impl FnMut() -> bool,
 	) -> Result<u64, ForkWriteError<E>> {
-		self.publish_fork_with_mode(name, fork, limits, ForkMode::OwnerReadWrite, cancelled)
-	}
-
-	/// Writes a selected fork with the requested owner-only permissions.
-	///
-	/// The stage gains execute permission only after all bytes have been written.
-	///
-	/// # Errors
-	/// Returns the errors from [`Self::publish_fork`] and any failure to set permissions.
-	pub fn publish_fork_with_mode<E: StdError + 'static>(
-		&self,
-		name: &HostName,
-		fork: &mut Fork<'_, E>,
-		limits: ForkWriteLimits,
-		mode: ForkMode,
-		cancelled: impl FnMut() -> bool,
-	) -> Result<u64, ForkWriteError<E>> {
-		self.publish_fork_verified(name, fork, limits, mode, cancelled, || Ok(()))
+		self.publish_fork_verified(name, fork, limits, cancelled, || Ok(()))
 	}
 
 	/// Publishes a selected fork after a caller-supplied source identity check.
@@ -117,13 +89,12 @@ impl DestinationDirectory<'_> {
 	/// destination attachment again and attempting the no-clobber rename.
 	///
 	/// # Errors
-	/// Returns the errors from [`Self::publish_fork_with_mode`] and identity-check failures.
+	/// Returns the errors from [`Self::publish_fork`] and identity-check failures.
 	pub fn publish_fork_verified<E: StdError + 'static>(
 		&self,
 		name: &HostName,
 		fork: &mut Fork<'_, E>,
 		limits: ForkWriteLimits,
-		mode: ForkMode,
 		mut cancelled: impl FnMut() -> bool,
 		verify_source: impl FnOnce() -> io::Result<()>,
 	) -> Result<u64, ForkWriteError<E>> {
@@ -140,7 +111,6 @@ impl DestinationDirectory<'_> {
 		self.publish_with(
 			name,
 			length,
-			mode,
 			&mut cancelled,
 			verify_source,
 			|stage, cancelled| {
@@ -157,7 +127,6 @@ impl DestinationDirectory<'_> {
 		&self,
 		name: &HostName,
 		length: u64,
-		mode: ForkMode,
 		cancelled: &mut dyn FnMut() -> bool,
 		verify_source: impl FnOnce() -> io::Result<()>,
 		write: impl FnOnce(&mut Stage<'_>, &mut dyn FnMut() -> bool) -> Result<(), ForkWriteError<E>>,
@@ -166,20 +135,13 @@ impl DestinationDirectory<'_> {
 		self.require_absent(name)?;
 		let mut stage = Stage::create(self.descriptor(), self.root_path(), name)?;
 		write(&mut stage, cancelled)?;
-		if mode == ForkMode::OwnerExecutable {
-			self.check_attachment()?;
-			stage.verify_name()?;
-			stage
-				.make_owner_executable()
-				.map_err(ForkWriteError::SetPermissions)?;
-		}
 		stage.sync().map_err(ForkWriteError::Sync)?;
 		check_cancel(cancelled)?;
-		stage.verify_metadata(length, mode)?;
+		stage.verify_metadata(length)?;
 		verify_source().map_err(ForkWriteError::SourceIdentity)?;
 		check_cancel(cancelled)?;
 		self.check_attachment()?;
-		stage.verify_metadata(length, mode)?;
+		stage.verify_metadata(length)?;
 		stage.publish(name)?;
 		Ok(())
 	}

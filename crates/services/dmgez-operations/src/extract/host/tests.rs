@@ -14,7 +14,7 @@ use std::{
 
 use dmgez_vfs::volume::ForkKind;
 
-use super::{ForkMode, ForkWriteError, ForkWriteLimits, HostError, StableDestination, stream_fork};
+use super::{ForkWriteError, ForkWriteLimits, HostError, StableDestination, stream_fork};
 use fixture::{
 	CHUNK_BYTES, DATA, DESTINATION, DETACHED, LIMITS, NESTED, RESOURCE, SENTINEL, Scratch,
 	assert_children, copy, host_name, with_fork,
@@ -292,7 +292,6 @@ fn short_output_write_then_error_abandons_the_stage() {
 			directory.publish_with(
 				&host_name(DESTINATION),
 				fork.len(),
-				ForkMode::OwnerReadWrite,
 				&mut || false,
 				|| Ok(()),
 				|stage, cancelled| {

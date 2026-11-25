@@ -12,12 +12,10 @@ use super::{
 		with_fork,
 	},
 };
-use crate::extract::host::ForkMode;
-
 const ALL_PERMISSION_BITS: u32 = 0o7777;
 const OWNER_READ_WRITE: u32 = 0o600;
 const OWNER_EXECUTABLE: u32 = 0o700;
-const UNSAFE_PERMISSIONS: u32 = 0o644;
+const PUBLIC_READABLE: u32 = 0o644;
 const STAGE_OUTSIDE_NAME: &str = "moved-stage";
 
 #[test]
@@ -81,6 +79,7 @@ fn stages_nonexecutable_bytes_and_publishes_only_owner_permissions() {
 	let root = scratch.open();
 	let directory = root.directory();
 	let name = host_name(DESTINATION);
+	let mut stage_mode = None;
 	let written = with_fork(
 		DATA,
 		None,
@@ -88,15 +87,13 @@ fn stages_nonexecutable_bytes_and_publishes_only_owner_permissions() {
 		|offset, _| {
 			if offset == 0 {
 				let staging = fs::read_dir(&scratch.destination)?.next().unwrap()?.path();
-				let mode = fs::metadata(staging)?.permissions().mode();
-				assert_eq!(mode & ALL_PERMISSION_BITS & !OWNER_READ_WRITE, 0);
+				let mode = fs::metadata(staging)?.permissions().mode() & ALL_PERMISSION_BITS;
+				assert_eq!(mode & !OWNER_READ_WRITE, 0);
+				stage_mode = Some(mode);
 			}
 			Ok(())
 		},
-		|fork| {
-			directory
-				.publish_fork_with_mode(&name, fork, LIMITS, ForkMode::OwnerExecutable, || false)
-		},
+		|fork| directory.publish_fork_verified(&name, fork, LIMITS, || false, || Ok(())),
 	)
 	.unwrap()
 	.unwrap();
@@ -105,7 +102,7 @@ fn stages_nonexecutable_bytes_and_publishes_only_owner_permissions() {
 	assert_eq!(fs::read(&destination).unwrap(), DATA);
 	assert_eq!(
 		fs::metadata(&destination).unwrap().permissions().mode() & ALL_PERMISSION_BITS,
-		OWNER_EXECUTABLE
+		stage_mode.unwrap()
 	);
 	assert_children(&scratch.destination, &[DESTINATION]);
 }
@@ -126,7 +123,6 @@ fn final_source_identity_failure_leaves_no_publication_or_stage() {
 				&name,
 				fork,
 				LIMITS,
-				ForkMode::OwnerReadWrite,
 				|| false,
 				|| {
 					assert!(!scratch.destination.join(DESTINATION).exists());
@@ -163,7 +159,6 @@ fn rechecks_stage_identity_after_the_final_source_check() {
 				&name,
 				fork,
 				LIMITS,
-				ForkMode::OwnerReadWrite,
 				|| false,
 				|| {
 					let stage = fs::read_dir(&scratch.destination)?.next().unwrap()?.path();
@@ -187,35 +182,36 @@ fn rechecks_stage_identity_after_the_final_source_check() {
 }
 
 #[test]
-fn refuses_a_stage_whose_owner_only_permissions_were_changed() {
+fn refuses_a_stage_that_gained_execute_or_public_permissions() {
 	let scratch = Scratch::new();
 	let root = scratch.open();
 	let directory = root.directory();
 	let name = host_name(DESTINATION);
-	let result = with_fork(
-		DATA,
-		None,
-		ForkKind::Data,
-		|_, _| Ok(()),
-		|fork| {
-			directory.publish_fork_verified(
-				&name,
-				fork,
-				LIMITS,
-				ForkMode::OwnerReadWrite,
-				|| false,
-				|| {
-					let staging = fs::read_dir(&scratch.destination)?.next().unwrap()?.path();
-					fs::set_permissions(staging, fs::Permissions::from_mode(UNSAFE_PERMISSIONS))
-				},
-			)
-		},
-	)
-	.unwrap();
-	assert!(matches!(
-		result,
-		Err(ForkWriteError::Host(HostError::StageChanged))
-	));
-	assert_children(&scratch.destination, &[]);
+	for mode in [OWNER_EXECUTABLE, PUBLIC_READABLE] {
+		let result = with_fork(
+			DATA,
+			None,
+			ForkKind::Data,
+			|_, _| Ok(()),
+			|fork| {
+				directory.publish_fork_verified(
+					&name,
+					fork,
+					LIMITS,
+					|| false,
+					|| {
+						let staging = fs::read_dir(&scratch.destination)?.next().unwrap()?.path();
+						fs::set_permissions(staging, fs::Permissions::from_mode(mode))
+					},
+				)
+			},
+		)
+		.unwrap();
+		assert!(matches!(
+			result,
+			Err(ForkWriteError::Host(HostError::StageChanged))
+		));
+		assert_children(&scratch.destination, &[]);
+	}
 	scratch.outside_untouched();
 }

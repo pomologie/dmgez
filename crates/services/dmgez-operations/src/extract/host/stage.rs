@@ -13,7 +13,7 @@ use rustix::{
 use tempfile::Builder;
 
 use super::{
-	ForkMode, HostError, HostName,
+	HostError, HostName,
 	directory::{identity, inspect, stat_entry},
 };
 
@@ -23,7 +23,6 @@ const STAGE_FLAGS: OFlags = OFlags::WRONLY
 	.union(OFlags::NOFOLLOW)
 	.union(OFlags::CLOEXEC);
 const PRIVATE_FILE: Mode = Mode::RUSR.union(Mode::WUSR);
-const PRIVATE_EXECUTABLE: Mode = PRIVATE_FILE.union(Mode::XUSR);
 const TEMP_RANDOM_BYTES: usize = 16;
 const MAX_STAGE_ATTEMPTS: usize = 32;
 const ZERO_DIGIT: u8 = b'0';
@@ -80,10 +79,6 @@ impl<'dir> Stage<'dir> {
 		self.file.write_all(bytes)
 	}
 
-	pub(super) fn make_owner_executable(&self) -> io::Result<()> {
-		Ok(fs::fchmod(&self.file, PRIVATE_EXECUTABLE)?)
-	}
-
 	pub(super) fn sync(&self) -> io::Result<()> {
 		self.file.sync_all()
 	}
@@ -92,14 +87,11 @@ impl<'dir> Stage<'dir> {
 		self.verified_stat().map(|_| ())
 	}
 
-	pub(super) fn verify_metadata(&self, expected: u64, mode: ForkMode) -> Result<(), HostError> {
+	pub(super) fn verify_metadata(&self, expected: u64) -> Result<(), HostError> {
 		let open = self.verified_stat()?;
 		let permissions = Mode::from_raw_mode(open.st_mode);
-		let allowed = match mode {
-			ForkMode::OwnerReadWrite => PRIVATE_FILE.contains(permissions),
-			ForkMode::OwnerExecutable => permissions == PRIVATE_EXECUTABLE,
-		};
-		if u64::try_from(open.st_size).ok() != Some(expected) || !allowed {
+		if u64::try_from(open.st_size).ok() != Some(expected) || !PRIVATE_FILE.contains(permissions)
+		{
 			return Err(HostError::StageChanged);
 		}
 		Ok(())
