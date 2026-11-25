@@ -369,9 +369,34 @@ fn preflights_opt_in_volume_icon_representations_without_reading_sources() {
 			));
 		}
 	}
-	let badge = project("[volume_icon]\nbadge = 'badge.png'\n");
+}
+
+#[test]
+fn preflights_the_opt_in_volume_icon_badge_without_reading_sources() {
+	let mut options = options();
+	options.capabilities.finder_volume_icon = Availability::Available;
+	let badge = project("[volume_icon]\nbadge = 'absent.png'\n");
+	if !cfg!(feature = "badge-icons") {
+		assert!(matches!(
+			preflight(&badge, options),
+			Err(PreflightError::FeatureNotCompiled(
+				BuildFeature::FinderVolumeIconBadge
+			))
+		));
+		return;
+	}
+	let admitted = preflight(&badge, options).unwrap();
+	assert_eq!(
+		admitted.volume_icon_badge().unwrap().as_path(),
+		std::path::Path::new("absent.png")
+	);
+	assert!(admitted.volume_icon_source().is_none());
+	assert!(admitted.volume_icon_images().is_none());
+	options.capabilities.finder_volume_icon = Availability::Unavailable;
 	assert!(matches!(
 		preflight(&badge, options),
-		Err(PreflightError::UnsupportedFinder(FinderSetting::VolumeIcon))
+		Err(PreflightError::BackendUnavailable(
+			BuildFeature::FinderVolumeIcon
+		))
 	));
 }

@@ -8,6 +8,8 @@ use thiserror::Error;
 
 mod finder;
 mod profile;
+#[cfg(test)]
+mod tests;
 
 use finder::{admit_volume_icon, finder_plan};
 pub use profile::{ExecutionProfile, ResourceLimits};
@@ -78,6 +80,8 @@ pub enum BuildFeature {
 	FinderImageBackground,
 	#[error("Finder volume icon")]
 	FinderVolumeIcon,
+	#[error("Finder volume icon badge (badge-icons)")]
+	FinderVolumeIconBadge,
 	#[error("Finder entry flags")]
 	FinderFlags,
 	#[error("output verification")]
@@ -494,6 +498,3 @@ fn writer_options(
 	writer.execution = writer.admit(host_threads)?.execution();
 	Ok(writer)
 }
-
-#[cfg(test)]
-mod tests;

@@ -89,6 +89,15 @@ impl ExecutionProfile {
 		}
 	}
 
+	/// Returns the admitted badge artwork path, relative to the project if applicable.
+	#[must_use]
+	pub fn volume_icon_badge(&self) -> Option<&LocalPath> {
+		match self.volume_icon.as_ref() {
+			Some(VolumeIcon::Badge(badge)) => Some(badge),
+			_ => None,
+		}
+	}
+
 	#[must_use]
 	pub const fn limits(&self) -> ResourceLimits {
 		self.limits

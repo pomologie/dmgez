@@ -47,21 +47,27 @@ pub(super) fn admit_volume_icon(
 	project: &Project,
 	capabilities: BuildCapabilities,
 ) -> Result<Option<VolumeIcon>, PreflightError> {
-	match &project.volume_icon {
-		None => Ok(None),
-		Some(icon @ (VolumeIcon::Source(_) | VolumeIcon::Images(_))) => {
-			if !cfg!(feature = "volume-icon") {
-				return Err(PreflightError::FeatureNotCompiled(
-					BuildFeature::FinderVolumeIcon,
-				));
-			}
-			capabilities
-				.finder_volume_icon
-				.require(BuildFeature::FinderVolumeIcon)?;
-			Ok(Some(icon.clone()))
-		}
-		Some(_) => Err(PreflightError::UnsupportedFinder(FinderSetting::VolumeIcon)),
+	let Some(icon) = &project.volume_icon else {
+		return Ok(None);
+	};
+	let (compiled, feature) = match icon {
+		VolumeIcon::Source(_) | VolumeIcon::Images(_) => (
+			cfg!(feature = "volume-icon"),
+			BuildFeature::FinderVolumeIcon,
+		),
+		VolumeIcon::Badge(_) => (
+			cfg!(feature = "badge-icons"),
+			BuildFeature::FinderVolumeIconBadge,
+		),
+		_ => return Err(PreflightError::UnsupportedFinder(FinderSetting::VolumeIcon)),
+	};
+	if !compiled {
+		return Err(PreflightError::FeatureNotCompiled(feature));
 	}
+	capabilities
+		.finder_volume_icon
+		.require(BuildFeature::FinderVolumeIcon)?;
+	Ok(Some(icon.clone()))
 }
 
 #[cfg(not(feature = "finder-write"))]

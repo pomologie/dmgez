@@ -32,6 +32,8 @@ impl RootFinderInfo {
 pub(crate) enum IconSources {
 	Prebuilt(usize),
 	Images(BTreeMap<IconSlot, usize>),
+	#[cfg(feature = "badge-icons")]
+	Badge(usize),
 }
 
 pub(crate) fn capture_sources(
@@ -53,6 +55,10 @@ pub(crate) fn capture_sources(
 	};
 	if let Some(source) = profile.volume_icon_source() {
 		return capture(source).map(|index| Some(IconSources::Prebuilt(index)));
+	}
+	#[cfg(feature = "badge-icons")]
+	if let Some(badge) = profile.volume_icon_badge() {
+		return capture(badge).map(|index| Some(IconSources::Badge(index)));
 	}
 	let Some(images) = profile.volume_icon_images() else {
 		return Ok(None);
@@ -91,6 +97,8 @@ pub(crate) fn prepare_asset(
 			read_prebuilt(manifest.auxiliary_source(index), profile, budget)?
 		}
 		IconSources::Images(indices) => encode_pngs(indices, manifest, profile, budget)?,
+		#[cfg(feature = "badge-icons")]
+		IconSources::Badge(index) => encode_badge(manifest.auxiliary_source(index), profile, budget)?,
 	};
 	let mut flags = RootFinderInfo::default();
 	volume_icon::mark_root_finder_info(&mut flags.0);
@@ -156,17 +164,50 @@ fn encode_pngs(
 		pngs.insert(slot, bytes);
 	}
 	check_cancelled(profile)?;
-	let bytes =
-		volume_icon::encode_pngs(&pngs, budget.metadata_bytes).map_err(|error| match error {
-			volume_icon::Error::OutputBudget => Error::MetadataBudget,
-			other => Error::VolumeIcon(other),
-		})?;
+	let bytes = volume_icon::encode_pngs(&pngs, budget.metadata_bytes).map_err(encode_error)?;
 	budget.charge(bytes.capacity())?;
 	for index in indices.into_values() {
 		check_cancelled(profile)?;
 		manifest.auxiliary_source(index).validate()?;
 	}
 	Ok(bytes)
+}
+
+#[cfg(feature = "badge-icons")]
+fn encode_badge(
+	source: &SourceSnapshot,
+	profile: &ExecutionProfile,
+	budget: &mut AssetBudget,
+) -> Result<Vec<u8>, Error> {
+	let size = usize::try_from(source.metadata().size)
+		.ok()
+		.filter(|&size| size <= volume_icon::MAX_BADGE_BYTES)
+		.ok_or(volume_icon::Error::BadgeSize)?;
+	let scratch = volume_icon::badge_memory(size).ok_or(Error::VolumeIconMemory)?;
+	let available = profile
+		.write_options()
+		.max_buffer_bytes
+		.checked_sub(scratch)
+		.ok_or(Error::VolumeIconMemory)?;
+	let input = read_bytes(
+		source,
+		profile,
+		size,
+		available.min(volume_icon::MAX_BADGE_BYTES),
+	)?;
+	check_cancelled(profile)?;
+	let bytes = volume_icon::encode_badge(&input, budget.metadata_bytes).map_err(encode_error)?;
+	budget.charge(bytes.capacity())?;
+	check_cancelled(profile)?;
+	source.validate()?;
+	Ok(bytes)
+}
+
+fn encode_error(error: volume_icon::Error) -> Error {
+	match error {
+		volume_icon::Error::OutputBudget => Error::MetadataBudget,
+		other => Error::VolumeIcon(other),
+	}
 }
 
 fn read_bytes(
