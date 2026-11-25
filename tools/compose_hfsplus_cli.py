@@ -36,6 +36,8 @@ ADAPTER = "dmgez-hfsplus"
 READ_ADAPTER = "dmgez-hfsplus-read"
 READ_FEATURE = "hfsplus-read"
 VERIFY_FEATURE = "hfsplus-verify"
+EXTRACT_FEATURE = "hfsplus-extract"
+READ_PROFILES = (READ_FEATURE, EXTRACT_FEATURE)
 SOURCE_DIRS = ("apps", "crates", "tests")
 FEATURE_ADDITIONS = {
     "project-build": ["dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config"],
@@ -92,6 +94,7 @@ def compose_cli_manifest(manifest, reader, build):
     if reader:
         additions[READ_FEATURE] = ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse"]
         additions[VERIFY_FEATURE] = ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/verify"]
+        additions[EXTRACT_FEATURE] = [READ_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract"]
         dependencies_to_add.append(READ_ADAPTER)
     if features.keys() & additions.keys():
         raise ValueError("CLI manifest already has HFS+ composition features")
@@ -193,7 +196,7 @@ def run_cli(cargo, directory, options, hfsplus):
             environment.setdefault(HFSPLUS_FIXTURES_ENV, str(fixtures))
             if has_cli_feature(options, VERIFY_FEATURE):
                 command.extend(("--test", VERIFY_TEST))
-            if has_cli_feature(options, READ_FEATURE):
+            if any(has_cli_feature(options, name) for name in READ_PROFILES):
                 command.extend(("--test", READ_TEST))
         if HFSPLUS_BUILDER in hfsplus:
             command.extend(("--test", CLI_TEST))
@@ -235,7 +238,7 @@ def main():
         parser.error("HFS+ CLI composition requires a macOS or Linux host")
 
     try:
-        reader = has_cli_feature(options, VERIFY_FEATURE) or has_cli_feature(options, READ_FEATURE)
+        reader = any(has_cli_feature(options, name) for name in (*READ_PROFILES, VERIFY_FEATURE))
         build = not reader or not options.no_default_features or any(
             has_cli_feature(options, name) for name in ("build", *FEATURE_ADDITIONS)
         )

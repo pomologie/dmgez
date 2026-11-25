@@ -35,6 +35,20 @@ pub const MAX_FORK_BYTES: u64 = 4 * (1 << 30);
 const SCAN_PAGE_ENTRIES: NonZeroU16 = NonZeroU16::new(128).unwrap();
 const FORK_CHUNK_BYTES: usize = 64 * 1024;
 
+/// Resolves an absolute volume path to a handle bound to this view.
+///
+/// The terminal component can be a link. Intermediate components must be
+/// directories, so resolving the path never follows a link target.
+///
+/// # Errors
+/// Rejects invalid or missing paths and propagates lookup failures.
+pub fn resolve_node<B: VolumeBackend>(
+	view: &mut VolumeView<B>,
+	path: &str,
+) -> Result<NodeHandle<B::Id>, Error<B::Error>> {
+	Ok(resolve(view, path)?.node)
+}
+
 /// Lists a page of visible children in native directory order.
 ///
 /// `offset` is zero-based. The query looks ahead by one entry so an exact-fit

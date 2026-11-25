@@ -6,13 +6,13 @@ use dmgez_inspector::{
 };
 use dmgez_vfs::volume::ForkKind;
 
-use crate::{CliResult, volume_input::with_hfs_view};
+use crate::{
+	CliResult,
+	report_output::{EscapedBytes, EscapedText, write_report},
+	volume_input::with_hfs_view,
+};
 
 use super::{CatArguments, Fork, ListArguments, StatArguments, TreeArguments};
-
-mod output;
-
-use output::{EscapedBytes, EscapedText, write_report};
 
 const NEXT_OFFSET_KEY: &str = "next_offset";
 const TRUNCATED_KEY: &str = "truncated";

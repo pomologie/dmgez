@@ -6,6 +6,7 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 mod convert;
 #[cfg(feature = "diff")]
 mod diff;
+mod extract;
 #[cfg(feature = "appdmg-import")]
 mod import_appdmg;
 #[cfg(feature = "inspect")]
@@ -17,6 +18,8 @@ mod optimize;
 mod project_build;
 #[cfg(any(feature = "appdmg-import", feature = "lint", feature = "project-build"))]
 mod project_input;
+#[cfg(feature = "hfsplus-read")]
+mod report_output;
 mod volume_commands;
 #[cfg(feature = "hfsplus-read")]
 mod volume_input;
@@ -45,6 +48,7 @@ const LZFSE_FEATURE: &str = "lzfse";
 const LZMA_FEATURE: &str = "lzma";
 const VERIFY_CONTAINER_CAPABILITY: &str = "verify-container";
 const VERIFY_HFSPLUS_CAPABILITY: &str = "verify-hfsplus";
+const HFSPLUS_DECMPFS_CAPABILITY: &str = "hfsplus-decmpfs";
 const RUN_LIMIT_ARG: &str = "run_limit";
 const PARTITION_SLOT_VALUE: &str = "SLOT";
 const COMPILED: &str = "compiled";
@@ -175,6 +179,8 @@ enum Command {
 	Stat(volume_commands::StatArguments),
 	/// Write the selected file fork to standard output.
 	Cat(volume_commands::CatArguments),
+	/// Extract a selected fork or directory tree to an absent host path.
+	Extract(extract::Arguments),
 	/// Export the decoded disk or one partition to a regular file.
 	#[command(name = UNWRAP_RAW_COMMAND)]
 	UnwrapRaw {
@@ -320,7 +326,12 @@ fn run(command: Command) -> CliResult<ExitCode> {
 				),
 				(INSPECT_COMMAND, cfg!(feature = "inspect")),
 				(VERIFY_HFSPLUS_CAPABILITY, cfg!(feature = "hfsplus-verify")),
+				(
+					HFSPLUS_DECMPFS_CAPABILITY,
+					cfg!(feature = "hfsplus-decmpfs"),
+				),
 				(volume_commands::FEATURE, cfg!(feature = "hfsplus-read")),
+				(extract::FEATURE, extract::COMPILED),
 				(ANALYZE_COMMAND, cfg!(feature = "inspect")),
 				(CONVERT_COMMAND, cfg!(feature = "convert")),
 				(OPTIMIZE_COMMAND, cfg!(feature = "convert")),
@@ -419,6 +430,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		Command::Ls(_) | Command::Tree(_) | Command::Stat(_) | Command::Cat(_) => {
 			Err(format!("feature not compiled: {}", volume_commands::FEATURE).into())
 		}
+		Command::Extract(arguments) => extract::run(&arguments),
 		#[cfg(feature = "inspect")]
 		Command::UnwrapRaw {
 			image,

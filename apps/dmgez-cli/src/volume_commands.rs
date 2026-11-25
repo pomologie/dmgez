@@ -14,15 +14,15 @@ const ROOT_PATH: &str = "/";
 const PARTITION_SLOT_VALUE_NAME: &str = "SLOT";
 
 #[derive(Args)]
-struct InputArguments {
+pub(super) struct InputArguments {
 	/// UDIF image file, or a regular raw disk image with --raw.
-	image: PathBuf,
+	pub(super) image: PathBuf,
 	/// Read a raw disk image instead of a UDIF container.
 	#[arg(long)]
-	raw: bool,
+	pub(super) raw: bool,
 	/// Select a one-based partition slot. Otherwise one data window is required.
 	#[arg(long, value_name = PARTITION_SLOT_VALUE_NAME)]
-	partition: Option<NonZeroU32>,
+	pub(super) partition: Option<NonZeroU32>,
 }
 
 #[derive(Args)]
