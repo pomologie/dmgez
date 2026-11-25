@@ -1,6 +1,6 @@
-use std::borrow::Cow;
 #[cfg(not(windows))]
 use std::mem::size_of;
+use std::{borrow::Cow, num::NonZeroU32};
 
 #[cfg(not(windows))]
 use dmgez_builder::metadata::{self, AttributeLimits};
@@ -15,6 +15,8 @@ use dmgez_finder::finder_info::DisplayFlags;
 #[cfg(feature = "finder-write")]
 use dmgez_macho::bundle::is_signing_attribute;
 use hfsplus_builder::volume::{self, EntryKind, EntryMetadata, ForkSource, ManifestEntry};
+use hfsplus_format::date;
+pub(super) use hfsplus_format::date::MISSING as MISSING_HFS_DATE;
 
 use super::{Error, Payload, charge, relative};
 
@@ -26,14 +28,10 @@ pub use host::HostCopyMetadataLoss;
 #[cfg(feature = "image-edit")]
 pub(crate) use host::{HostCapture, HostEntry, HostKind, capture_host_copies};
 
-const HFS_EPOCH_SECONDS: i64 = 2_082_844_800;
-const FIRST_HFS_UNIX_SECOND: i64 = 1 - HFS_EPOCH_SECONDS;
-const LAST_HFS_UNIX_SECOND: i64 = u32::MAX as i64 - HFS_EPOCH_SECONDS;
 const POSIX_PERMISSION_MASK: u16 = 0o7777;
 pub(super) const DEFAULT_FILE_MODE: u16 = 0o644;
 pub(super) const DEFAULT_FOLDER_MODE: u16 = 0o755;
 const DEFAULT_SYMLINK_MODE: u16 = 0o777;
-pub(super) const MISSING_HFS_DATE: u32 = 0;
 
 pub(super) struct Capture<'scope, 'config> {
 	pub(super) policy: &'scope policy::Policy<'config>,
@@ -284,7 +282,7 @@ fn metadata_capabilities(is_file: bool, supports_file_hard_links: bool) -> polic
 		permissions: true,
 		ownership: true,
 		timestamps: Some(policy::TimestampEncoding {
-			unix_seconds: FIRST_HFS_UNIX_SECOND..=LAST_HFS_UNIX_SECOND,
+			unix_seconds: date::UNIX_SECONDS_RANGE,
 			precision: policy::TimestampPrecision::Seconds,
 		}),
 		finder_info: true,
@@ -340,8 +338,7 @@ pub(super) fn epoch_seconds(seconds: u64) -> Result<u32, Error> {
 }
 
 fn hfs_seconds(seconds: i64) -> Result<u32, Error> {
-	if !(FIRST_HFS_UNIX_SECOND..=LAST_HFS_UNIX_SECOND).contains(&seconds) {
-		return Err(Error::Timestamp);
-	}
-	u32::try_from(seconds + HFS_EPOCH_SECONDS).map_err(|_| Error::Timestamp)
+	date::from_unix_seconds(seconds)
+		.map(NonZeroU32::get)
+		.ok_or(Error::Timestamp)
 }
