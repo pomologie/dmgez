@@ -13,7 +13,10 @@ use super::{CopyContent, CopyPlan, CopySummary};
 mod native;
 
 #[cfg(target_os = "macos")]
-pub use native::existing::{ExistingBundleError, verify_existing_bundle};
+pub use native::existing::{
+	BundleIdentity, BundleStamp, ExistingBundleError, VerifiedBundle, observe_existing_bundle,
+	verify_existing_bundle, verify_existing_bundle_observed,
+};
 
 /// Application metadata that the host copy profile cannot reproduce.
 #[derive(Debug, Error)]

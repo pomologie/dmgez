@@ -1,11 +1,9 @@
-use std::{collections::TryReserveError, error::Error as StdError, fs::File, io};
+use std::{
+	collections::TryReserveError, convert::Infallible, error::Error as StdError, fmt, fs::File, io,
+};
 
 use dmgez_vfs::volume::{VolumeBackend, VolumeView};
-use rustix::{
-	fd::AsFd,
-	fs::{self, AtFlags, Dir, FileType, Mode, OFlags, Stat},
-	io::Errno,
-};
+use rustix::fs::{self, FileType, Mode, OFlags, Stat};
 use thiserror::Error;
 
 use crate::{
@@ -15,15 +13,18 @@ use crate::{
 
 use super::{
 	CopyContent, DestinationDirectory, InstallFailure, READ_FILE, Run, host_mode, os,
-	readback::{
-		CURRENT_DIRECTORY, PARENT_DIRECTORY, verify_directory_names, verify_empty_attributes,
-	},
+	readback::{verify_directory_names, verify_empty_attributes},
 	verify_link,
 };
 
-const MAX_PARENT_ENTRIES: usize = 16_384;
-const MNT_LOCAL: u32 = 0x0000_1000; // Darwin sys/mount.h
-const SF_DATALESS: u32 = 0x4000_0000; // Darwin sys/stat.h
+mod observation;
+
+pub use observation::{BundleIdentity, BundleStamp, observe_existing_bundle};
+use observation::{
+	ParentBinding, check_materialized, check_name, check_stamp, kind, named, observe_bundle_name,
+	open_bundle,
+};
+
 // Darwin opens the link itself with O_SYMLINK, including a dangling link.
 const READ_LINK: OFlags = OFlags::SYMLINK
 	.union(OFlags::RDONLY)
@@ -46,6 +47,8 @@ pub enum ExistingBundleError<E: StdError + 'static> {
 	NonLocal,
 	#[error("the destination application contains a dataless object")]
 	Dataless,
+	#[error("the bundle evidence belongs to a different copy plan")]
+	DifferentPlan,
 	#[error("verification of the destination application was cancelled")]
 	Cancelled,
 	#[error("could not observe the destination application")]
@@ -100,45 +103,138 @@ pub fn verify_existing_bundle<B: VolumeBackend>(
 	view: &mut VolumeView<B>,
 	plan: &CopyPlan<B::Id>,
 	destination: &DestinationDirectory<'_>,
+	verify_source: impl FnMut() -> io::Result<()>,
+	cancelled: impl FnMut() -> bool,
+) -> Check<CopySummary, B::Error> {
+	Ok(
+		verify_existing_bundle_observed(view, plan, destination, verify_source, cancelled)?
+			.summary(),
+	)
+}
+
+/// Compares an existing bundle and retains evidence for a later destination recheck.
+///
+/// This uses the same scope, source checks and bounds as [`verify_existing_bundle`].
+///
+/// # Errors
+/// Returns an error if the comparison fails or its evidence cannot be retained.
+pub fn verify_existing_bundle_observed<'plan, B: VolumeBackend>(
+	view: &mut VolumeView<B>,
+	plan: &'plan CopyPlan<B::Id>,
+	destination: &DestinationDirectory<'_>,
 	mut verify_source: impl FnMut() -> io::Result<()>,
 	mut cancelled: impl FnMut() -> bool,
-) -> Check<CopySummary, B::Error> {
+) -> Check<VerifiedBundle<'plan, B::Id>, B::Error> {
 	let mut run = Run {
 		view,
 		verify_source: &mut verify_source,
 		cancelled: &mut cancelled,
 	};
 	let children = run.prepare(plan)?;
-	if os(fs::fstatfs(destination.descriptor()))?.f_flags & MNT_LOCAL == 0 {
-		return Err(ExistingBundleError::NonLocal);
-	}
+	let parent = ParentBinding::observe(destination)?;
 	let name = plan.application().destination_name();
-	let initial = observe_bundle_name(destination, name.as_str(), run.cancelled)?;
-	let initial = initial.ok_or(ExistingBundleError::Missing)?;
-	if kind(&initial) != FileType::Directory {
-		return Err(ExistingBundleError::Mismatch);
-	}
-	check_materialized(&initial)?;
-	let root = destination.open_child(name)?;
+	let root =
+		open_bundle(destination, name, run.cancelled)?.ok_or(ExistingBundleError::Missing)?;
 	let mut entries = Vec::new();
 	entries.try_reserve_exact(plan.entries().len())?;
-	entries.resize(plan.entries().len(), initial);
+	entries.resize(plan.entries().len(), root.stamp.0);
 	let mut comparison = Comparison {
 		plan,
 		children,
 		entries,
 	};
-	let index = plan.entries().len();
-	comparison.compare_directory(&mut run, &root, index, &initial)?;
+	comparison.compare_directory(
+		&mut run,
+		&root.directory,
+		plan.entries().len(),
+		&root.stamp.0,
+	)?;
 	run.check_ready()?;
-	comparison.recheck_directory(&root, index, &initial, run.cancelled)?;
-	let current = observe_bundle_name(destination, name.as_str(), run.cancelled)
-		.map_err(changed_namespace)?;
-	if !current.is_some_and(|current| unchanged(&initial, &current)) {
-		return Err(ExistingBundleError::Changed);
+	let verified = VerifiedBundle {
+		stamp: root.stamp,
+		parent,
+		comparison,
+	};
+	verified.recheck_tree(destination, &root.directory, run.cancelled)?;
+	run.check_ready()?;
+	Ok(verified)
+}
+
+/// Observed root and child identities retained by an exact bundle comparison.
+pub struct VerifiedBundle<'plan, Id> {
+	stamp: BundleStamp,
+	parent: ParentBinding,
+	comparison: Comparison<'plan, Id>,
+}
+
+impl<Id> VerifiedBundle<'_, Id> {
+	/// Returns the mutation-sensitive observation of this bundle's root.
+	#[must_use]
+	pub const fn stamp(&self) -> BundleStamp {
+		self.stamp
 	}
-	run.check_ready()?;
-	Ok(plan.summary())
+
+	/// Returns the inventory summary of the admitted copy plan.
+	#[must_use]
+	pub const fn summary(&self) -> CopySummary {
+		self.comparison.plan.summary()
+	}
+
+	/// Rechecks the exact tree relative to the originally observed parent.
+	///
+	/// Reopen the held source separately if its continued validity is needed.
+	/// This reads destination names and change stamps without rereading payloads.
+	///
+	/// # Errors
+	/// Returns an error for a different copy plan, a moved or changed bundle or
+	/// parent, an unavailable observation, or cancellation.
+	pub fn recheck(
+		&self,
+		plan: &CopyPlan<Id>,
+		destination: &DestinationDirectory<'_>,
+		mut cancelled: impl FnMut() -> bool,
+	) -> Check<(), Infallible> {
+		if !std::ptr::eq(plan, self.comparison.plan) {
+			return Err(ExistingBundleError::DifferentPlan);
+		}
+		check_cancelled(&mut cancelled)?;
+		self.parent.recheck(destination)?;
+		let current = open_bundle(
+			destination,
+			plan.application().destination_name(),
+			&mut cancelled,
+		)
+		.map_err(changed_namespace)?
+		.ok_or(ExistingBundleError::Changed)?;
+		check_stamp(&self.stamp.0, &current.stamp.0)?;
+		self.recheck_tree(destination, &current.directory, &mut cancelled)
+	}
+
+	fn recheck_tree<E: StdError + 'static>(
+		&self,
+		destination: &DestinationDirectory<'_>,
+		root: &DestinationDirectory<'_>,
+		cancelled: &mut dyn FnMut() -> bool,
+	) -> Check<(), E> {
+		let plan = self.comparison.plan;
+		self.comparison
+			.recheck_directory(root, plan.entries().len(), &self.stamp.0, cancelled)?;
+		let name = plan.application().destination_name();
+		let current = observe_bundle_name(destination, name.as_str(), cancelled)
+			.map_err(changed_namespace)?;
+		if current.map(BundleStamp) != Some(self.stamp) {
+			return Err(ExistingBundleError::Changed);
+		}
+		self.parent.recheck(destination)
+	}
+}
+
+impl<Id> fmt::Debug for VerifiedBundle<'_, Id> {
+	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+		formatter
+			.debug_struct("VerifiedBundle")
+			.finish_non_exhaustive()
+	}
 }
 
 struct Comparison<'plan, Id> {
@@ -259,68 +355,6 @@ impl<Id> Comparison<'_, Id> {
 	}
 }
 
-fn observe_bundle_name<E: StdError + 'static>(
-	parent: &DestinationDirectory<'_>,
-	name: &str,
-	cancelled: &mut dyn FnMut() -> bool,
-) -> Check<Option<Stat>, E> {
-	check_cancelled(cancelled)?;
-	parent.check_attachment()?;
-	let fd = parent.descriptor();
-	let stamp = os(fs::fstat(fd))?;
-	let initial = named(fd, name)?;
-	if let Some(initial) = &initial {
-		let mut count = 0;
-		let mut exact = false;
-		for item in os(Dir::read_from(fd))? {
-			check_cancelled(cancelled)?;
-			let item = os(item)?;
-			let entry = item.file_name().to_bytes();
-			if entry == CURRENT_DIRECTORY || entry == PARENT_DIRECTORY {
-				continue;
-			}
-			if count == MAX_PARENT_ENTRIES {
-				return Err(ExistingBundleError::ParentLimit);
-			}
-			if entry == name.as_bytes() {
-				exact = true;
-				break;
-			}
-			count += 1;
-		}
-		check_name(fd, name, initial)?;
-		check_stamp(&stamp, &os(fs::fstat(fd))?)?;
-		if !exact {
-			return Err(ExistingBundleError::Mismatch);
-		}
-	} else if named(fd, name)?.is_some() {
-		return Err(ExistingBundleError::Changed);
-	}
-	check_stamp(&stamp, &os(fs::fstat(fd))?)?;
-	parent.check_attachment()?;
-	Ok(initial)
-}
-
-fn named<E: StdError + 'static>(fd: impl AsFd, name: &str) -> Check<Option<Stat>, E> {
-	match fs::statat(fd, name, AtFlags::SYMLINK_NOFOLLOW) {
-		Ok(stat) => Ok(Some(stat)),
-		Err(Errno::NOENT) => Ok(None),
-		Err(error) => Err(ExistingBundleError::Io(error.into())),
-	}
-}
-
-fn check_name<E: StdError + 'static>(fd: impl AsFd, name: &str, before: &Stat) -> Check<(), E> {
-	let current = named(fd, name)?.ok_or(ExistingBundleError::Changed)?;
-	check_stamp(before, &current)
-}
-
-fn check_stamp<E: StdError + 'static>(before: &Stat, current: &Stat) -> Check<(), E> {
-	if !unchanged(before, current) {
-		return Err(ExistingBundleError::Changed);
-	}
-	Ok(())
-}
-
 fn changed_namespace<E: StdError + 'static>(
 	error: ExistingBundleError<E>,
 ) -> ExistingBundleError<E> {
@@ -337,38 +371,9 @@ fn check_mode<E: StdError + 'static>(stat: &Stat, mode: u16) -> Check<(), E> {
 	Ok(())
 }
 
-fn check_materialized<E: StdError + 'static>(stat: &Stat) -> Check<(), E> {
-	if stat.st_flags & SF_DATALESS != 0 {
-		return Err(ExistingBundleError::Dataless);
-	}
-	Ok(())
-}
-
 fn check_cancelled<E: StdError + 'static>(cancelled: &mut dyn FnMut() -> bool) -> Check<(), E> {
 	if cancelled() {
 		return Err(ExistingBundleError::Cancelled);
 	}
 	Ok(())
-}
-
-fn unchanged(before: &Stat, current: &Stat) -> bool {
-	before.st_dev == current.st_dev
-		&& before.st_ino == current.st_ino
-		&& before.st_gen == current.st_gen
-		&& before.st_birthtime == current.st_birthtime
-		&& before.st_birthtime_nsec == current.st_birthtime_nsec
-		&& before.st_ctime == current.st_ctime
-		&& before.st_ctime_nsec == current.st_ctime_nsec
-		&& before.st_mtime == current.st_mtime
-		&& before.st_mtime_nsec == current.st_mtime_nsec
-		&& before.st_mode == current.st_mode
-		&& before.st_uid == current.st_uid
-		&& before.st_gid == current.st_gid
-		&& before.st_size == current.st_size
-		&& before.st_nlink == current.st_nlink
-		&& before.st_flags == current.st_flags
-}
-
-fn kind(stat: &Stat) -> FileType {
-	FileType::from_raw_mode(stat.st_mode)
 }

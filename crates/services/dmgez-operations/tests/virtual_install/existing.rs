@@ -1,10 +1,16 @@
-use std::{fs, os::unix::fs::symlink, path::Path, process::Command};
+use std::{
+	fs,
+	os::unix::fs::{PermissionsExt, symlink},
+	path::Path,
+	process::Command,
+};
 
 use dmgez_operations::{
 	extract::host::StableDestination,
 	install::{
-		CopyLimits, CopyPlan, ExistingBundleError, InstallFailure, execute_copy, prepare_copy,
-		verify_existing_bundle,
+		CopyLimits, CopyPlan, ExistingBundleError, InstallFailure, execute_copy,
+		observe_existing_bundle, prepare_copy, verify_existing_bundle,
+		verify_existing_bundle_observed,
 	},
 };
 
@@ -17,6 +23,7 @@ const TEST_ATTRIBUTE: &[u8] = b"verified native attribute";
 const LINK_NAME: &str = "Library";
 const EXTRA_NAME: &str = "extra";
 const OLD_CONTENTS: &str = "OldContents";
+const OLD_BUNDLE: &str = "Moved.app";
 const DATA_BLOCK_BYTES: usize = 64 << 10;
 
 fn plan<'fixture>(
@@ -230,5 +237,98 @@ fn requires_held_source_revalidation_after_comparing_payloads() {
 		Err(ExistingBundleError::Check(InstallFailure::SourceIdentity(
 			_
 		))),
+	));
+}
+
+#[test]
+fn classifies_bundle_absence_and_separates_identity_from_root_mutation() {
+	let root = tempfile::tempdir().unwrap();
+	let parent = root.path().canonicalize().unwrap();
+	let reads = Cell::new(0);
+	let (_, plan) = plan(&reads, PROGRAM_BYTES);
+	let name = plan.application().destination_name();
+	let held = StableDestination::open(&parent).unwrap();
+	let target = parent.join(name.as_str());
+	let observe = || observe_existing_bundle(&held.directory(), name);
+	assert!(observe().unwrap().is_none());
+	symlink(parent.join(OLD_BUNDLE), &target).unwrap();
+	assert!(matches!(observe(), Err(ExistingBundleError::Mismatch)));
+	fs::remove_file(&target).unwrap();
+	fs::create_dir(&target).unwrap();
+	let initial = observe().unwrap().unwrap();
+	assert_eq!(observe().unwrap(), Some(initial));
+	let changed_mode = fs::metadata(&target).unwrap().permissions().mode() ^ 0o020;
+	fs::set_permissions(&target, fs::Permissions::from_mode(changed_mode)).unwrap();
+	let changed = observe().unwrap().unwrap();
+	assert_ne!(initial, changed);
+	assert_eq!(initial.identity(), changed.identity());
+	assert!(initial.same_object(&changed));
+	fs::rename(&target, parent.join(OLD_BUNDLE)).unwrap();
+	fs::create_dir(&target).unwrap();
+	let replacement = observe().unwrap().unwrap();
+	assert_ne!(initial.identity(), replacement.identity());
+	assert!(!initial.same_object(&replacement));
+	assert_eq!(reads.get(), 1);
+}
+
+#[test]
+fn retained_tree_detects_a_same_size_descendant_rewrite_after_comparison() {
+	let root = tempfile::tempdir().unwrap();
+	let parent = root.path().canonicalize().unwrap();
+	let reads = Cell::new(0);
+	let (destination, mut view, plan) = publish(&parent, &reads, PROGRAM_BYTES);
+	let expected_name = plan.application().destination_name();
+	let held_parent = destination.directory();
+	let verified =
+		verify_existing_bundle_observed(&mut view, &plan, &held_parent, || Ok(()), || false)
+			.unwrap();
+	assert_eq!(verified.summary(), plan.summary());
+	assert_eq!(
+		observe_existing_bundle(&held_parent, expected_name).unwrap(),
+		Some(verified.stamp()),
+	);
+	let verified_reads = reads.get();
+	verified.recheck(&plan, &held_parent, || false).unwrap();
+	assert_eq!(reads.get(), verified_reads);
+	let info = parent.join(APP_NAME).join(CONTENTS_NAME).join(INFO_NAME);
+	fs::write(&info, vec![b'x'; INFO.len()]).unwrap();
+	assert_eq!(fs::metadata(&info).unwrap().len(), INFO.len() as u64);
+	assert_eq!(
+		observe_existing_bundle(&held_parent, expected_name).unwrap(),
+		Some(verified.stamp()),
+	);
+	assert!(matches!(
+		verified.recheck(&plan, &held_parent, || false),
+		Err(ExistingBundleError::Changed),
+	));
+	assert_eq!(reads.get(), verified_reads);
+}
+
+#[test]
+fn retained_tree_is_bound_to_the_original_copy_plan_and_parent() {
+	let root = tempfile::tempdir().unwrap();
+	let parent = root.path().canonicalize().unwrap();
+	let reads = Cell::new(0);
+	let (destination, mut view, plan) = publish(&parent, &reads, PROGRAM_BYTES);
+	let held_parent = destination.directory();
+	let verified =
+		verify_existing_bundle_observed(&mut view, &plan, &held_parent, || Ok(()), || false)
+			.unwrap();
+	let other_reads = Cell::new(0);
+	let (_, other_plan) = self::plan(&other_reads, PROGRAM_BYTES);
+	assert!(matches!(
+		verified.recheck(&other_plan, &held_parent, || false),
+		Err(ExistingBundleError::DifferentPlan),
+	));
+	assert!(matches!(
+		verified.recheck(&plan, &held_parent, || true),
+		Err(ExistingBundleError::Cancelled),
+	));
+	let other_root = tempfile::tempdir().unwrap();
+	let other_parent = other_root.path().canonicalize().unwrap();
+	let other = StableDestination::open(&other_parent).unwrap();
+	assert!(matches!(
+		verified.recheck(&plan, &other.directory(), || false),
+		Err(ExistingBundleError::Changed),
 	));
 }
