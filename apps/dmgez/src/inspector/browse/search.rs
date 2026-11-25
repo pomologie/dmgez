@@ -1,5 +1,6 @@
 //! Find controls and bounded results for the current image folder.
 
+#[cfg(feature = "hfsplus-read")]
 use dmgez_hfsplus::browse::NameFragment;
 use dmgez_inspector::volume_queries::SearchExtent;
 use eframe::egui::{Button, Key, TextEdit, Ui};
@@ -8,13 +9,17 @@ use crate::image::browse::{Location, Request, search::State};
 
 const SEARCH_LABEL: &str = "Find in folder";
 const SEARCH_BUTTON: &str = "Search";
+#[cfg(not(feature = "hfsplus-read"))]
+const MAX_SEARCH_CHARACTERS: usize = 255;
+#[cfg(feature = "hfsplus-read")]
+const MAX_SEARCH_CHARACTERS: usize = NameFragment::MAX_UNITS;
 
 pub(super) fn show(ui: &mut Ui, location: &Location, state: &mut State) -> (bool, Option<Request>) {
 	let request = ui
 		.horizontal_wrapped(|ui| {
 			let label = ui.label(SEARCH_LABEL);
 			let response = ui
-				.add(TextEdit::singleline(&mut state.query).char_limit(NameFragment::MAX_UNITS))
+				.add(TextEdit::singleline(&mut state.query).char_limit(MAX_SEARCH_CHARACTERS))
 				.labelled_by(label.id);
 			if response.changed() {
 				state.report = None;
@@ -38,6 +43,10 @@ pub(super) fn show(ui: &mut Ui, location: &Location, state: &mut State) -> (bool
 			})
 		})
 		.inner;
+	#[cfg(feature = "apfs-read")]
+	if location.apfs.is_some() {
+		ui.label("APFS search matches the stored spelling and case.");
+	}
 	let Some(report) = &state.report else {
 		return (false, request);
 	};

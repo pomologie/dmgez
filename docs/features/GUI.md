@@ -28,6 +28,8 @@ The optional `actual-preview` feature reads the observed Finder icon layout, cat
 
 The desktop accepts pointer or keyboard activation on the rendered icon bounds and uses exact catalog names for folder navigation and item details. The hidden item control preserves the choice across folders. Search and folder history operate through the held image and retain exact catalog selections. [Preview activation tests](../../apps/dmgez/src/inspector/browse/preview/tests.rs)
 
+The optional APFS desktop profile shares the **Files** workspace for catalog pages, navigation, stored name search, and item details. It opens an explicit volume at the displayed checkpoint and rechecks that identity on each held-image query. Checkpoint diagnostics remain visible during volume selection. [Desktop APFS composition](../../apps/dmgez/README.md#browse-apfs-files)
+
 ## Inspector workspace
 
 The run table accepts a decimal or hexadecimal logical byte offset and selects the corresponding run on its page. The shared runtime uses the admitted UDIF index and revalidates the held source. [Run lookup tests](../../crates/runtime/dmgez-runtime/src/image/tests.rs)

@@ -1,15 +1,12 @@
-//! Bounded native-name queries on an admitted HFS+ or HFSX image volume.
+//! Bounded native-name queries on admitted image volumes.
 
-use std::{
-	fmt::Write as _,
-	num::{NonZeroU16, NonZeroU32},
-};
+use std::fmt::Write as _;
 
+#[cfg(feature = "hfsplus-read")]
 use dmgez_hfsplus::browse::{self, VolumeSignature};
-use dmgez_inspector::{
-	DiskLimits,
-	volume_queries::{MAX_LIST_OFFSET, StorageMetadata, inspect_storage},
-};
+#[cfg(feature = "hfsplus-read")]
+use dmgez_inspector::DiskLimits;
+use dmgez_inspector::volume_queries::{SearchError, StorageMetadata};
 #[cfg(feature = "actual-preview")]
 use dmgez_preview::ItemVisibility;
 use dmgez_runtime::disk::{Encoding, with_logical_disk};
@@ -17,27 +14,30 @@ use dmgez_udif::{
 	Cancellation, Error as ImageError,
 	reader::{Limits, ReadAt},
 };
+#[cfg(feature = "hfsplus-read")]
+use dmgez_vfs::{Disk, LogicalDisk};
 use dmgez_vfs::{
-	Disk, VolumeId,
-	volume::{
-		Metadata, NodeHandle, NodeKind, RawName, StorageId, ViewError, VolumeBackend, VolumeView,
-	},
+	VolumeId,
+	volume::{Metadata, NodeKind, RawName, StorageId, ViewError},
 };
 use thiserror::Error;
 
 use super::{ImageSnapshot, ImageSource};
 
+#[cfg(feature = "apfs-read")]
+pub(crate) mod apfs;
 pub(crate) mod history;
 #[cfg(feature = "actual-preview")]
 pub(crate) mod preview;
+mod query;
 pub(crate) mod search;
 
 pub(crate) const PAGE_ENTRIES: u64 = 64;
-const SCAN_BATCH_ENTRIES: u16 = 128;
 const MAX_DEPTH: usize = 128;
+#[cfg(feature = "hfsplus-read")]
 const MAX_FS_READS: u64 = 131_072;
+#[cfg(feature = "hfsplus-read")]
 const MAX_FS_READ_BYTES: u64 = 256 << 20;
-const MAX_ENTRY_ATTRIBUTES: NonZeroU32 = NonZeroU32::new(64).unwrap();
 
 #[derive(Default)]
 pub(crate) struct Browser {
@@ -46,6 +46,8 @@ pub(crate) struct Browser {
 	pub details: Option<Details>,
 	pub history: history::History,
 	pub search: search::State,
+	#[cfg(feature = "apfs-read")]
+	pub apfs: Option<apfs::Catalog>,
 	#[cfg(feature = "actual-preview")]
 	pub preview: Option<preview::Presented>,
 }
@@ -56,6 +58,10 @@ impl Browser {
 		self.details = None;
 		self.history = history::History::default();
 		self.search.clear();
+		#[cfg(feature = "apfs-read")]
+		{
+			self.apfs = None;
+		}
 		#[cfg(feature = "actual-preview")]
 		{
 			self.preview = None;
@@ -87,6 +93,8 @@ impl Browser {
 pub(crate) struct Location {
 	pub volume: VolumeId,
 	pub path: Vec<RawName>,
+	#[cfg(feature = "apfs-read")]
+	pub apfs: Option<apfs::Selection>,
 }
 
 impl Location {
@@ -94,6 +102,8 @@ impl Location {
 		Self {
 			volume,
 			path: Vec::new(),
+			#[cfg(feature = "apfs-read")]
+			apfs: None,
 		}
 	}
 
@@ -110,12 +120,16 @@ impl Location {
 		Self {
 			volume: self.volume,
 			path: self.path[..depth].to_vec(),
+			#[cfg(feature = "apfs-read")]
+			apfs: self.apfs,
 		}
 	}
 }
 
 #[derive(Debug)]
 pub(crate) enum Request {
+	#[cfg(feature = "apfs-read")]
+	ApfsCatalog(VolumeId),
 	Page {
 		location: Location,
 		offset: u64,
@@ -147,6 +161,8 @@ impl Request {
 
 #[derive(Debug)]
 pub(crate) enum Observation {
+	#[cfg(feature = "apfs-read")]
+	ApfsCatalog(apfs::Catalog),
 	Page(Page),
 	Details(Details),
 	Search(search::Report),
@@ -157,7 +173,7 @@ pub(crate) enum Observation {
 #[derive(Debug)]
 pub(crate) struct Page {
 	pub location: Location,
-	pub filesystem: VolumeSignature,
+	pub filesystem: Filesystem,
 	pub entries: Vec<Entry>,
 	pub offset: u64,
 	pub next: Option<u64>,
@@ -172,11 +188,62 @@ pub(crate) struct Entry {
 
 #[derive(Debug)]
 pub(crate) struct Details {
+	pub folder: Location,
 	pub name: RawName,
 	pub native_id: Option<u64>,
 	pub metadata: Metadata<StorageId>,
 	pub link_target: Option<Vec<u8>>,
-	pub storage: Box<StorageMetadata<browse::Error>>,
+	pub storage: Box<Storage>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum Filesystem {
+	#[cfg(feature = "hfsplus-read")]
+	HfsPlus,
+	#[cfg(feature = "hfsplus-read")]
+	HfsX,
+	#[cfg(feature = "apfs-read")]
+	Apfs,
+}
+
+impl Filesystem {
+	pub(crate) const fn label(self) -> &'static str {
+		match self {
+			#[cfg(feature = "hfsplus-read")]
+			Self::HfsPlus => "HFS+",
+			#[cfg(feature = "hfsplus-read")]
+			Self::HfsX => "HFSX",
+			#[cfg(feature = "apfs-read")]
+			Self::Apfs => "APFS",
+		}
+	}
+
+	#[cfg(feature = "actual-preview")]
+	pub(crate) const fn supports_finder_preview(self) -> bool {
+		matches!(self, Self::HfsPlus | Self::HfsX)
+	}
+}
+
+#[derive(Debug)]
+pub(crate) enum Storage {
+	#[cfg(feature = "hfsplus-read")]
+	Hfs(StorageMetadata<browse::Error>),
+	#[cfg(feature = "apfs-read")]
+	Apfs(StorageMetadata<apfs::BackendError>),
+}
+
+#[cfg(feature = "hfsplus-read")]
+impl From<StorageMetadata<browse::Error>> for Storage {
+	fn from(storage: StorageMetadata<browse::Error>) -> Self {
+		Self::Hfs(storage)
+	}
+}
+
+#[cfg(feature = "apfs-read")]
+impl From<StorageMetadata<apfs::BackendError>> for Storage {
+	fn from(storage: StorageMetadata<apfs::BackendError>) -> Self {
+		Self::Apfs(storage)
+	}
 }
 
 #[derive(Debug, Error)]
@@ -185,8 +252,10 @@ pub(crate) enum Error {
 	Image(#[from] ImageError),
 	#[error(transparent)]
 	Disk(#[from] dmgez_vfs::Error),
+	#[cfg(feature = "hfsplus-read")]
 	#[error(transparent)]
 	Filesystem(#[from] browse::Error),
+	#[cfg(feature = "hfsplus-read")]
 	#[error(transparent)]
 	View(#[from] ViewError<browse::Error>),
 	#[error("folder nesting exceeds the supported depth")]
@@ -199,8 +268,27 @@ pub(crate) enum Error {
 	NotDirectory,
 	#[error("catalog returned an empty incomplete page")]
 	StalledDirectory,
+	#[cfg(feature = "hfsplus-read")]
 	#[error(transparent)]
-	Search(#[from] dmgez_inspector::volume_queries::SearchError<browse::Error>),
+	Search(#[from] SearchError<browse::Error>),
+	#[cfg(feature = "apfs-read")]
+	#[error(transparent)]
+	ApfsWindow(#[from] dmgez_runtime::volume::Error),
+	#[cfg(feature = "apfs-read")]
+	#[error(transparent)]
+	ApfsOpen(#[from] dmgez_apfs::OpenError),
+	#[cfg(feature = "apfs-read")]
+	#[error(transparent)]
+	ApfsView(#[from] ViewError<apfs::BackendError>),
+	#[cfg(feature = "apfs-read")]
+	#[error(transparent)]
+	ApfsSearch(#[from] SearchError<apfs::BackendError>),
+	#[cfg(feature = "apfs-read")]
+	#[error("the APFS volume at this checkpoint no longer matches the selected identity")]
+	ApfsVolumeChanged,
+	#[cfg(any(feature = "apfs-read", feature = "actual-preview"))]
+	#[error("the request requires a supported and selected filesystem volume")]
+	UnsupportedVolumeRequest,
 	#[cfg(feature = "actual-preview")]
 	#[error(transparent)]
 	Preview(#[from] dmgez_runtime::preview::actual::RenderError),
@@ -236,138 +324,63 @@ impl ImageSnapshot {
 }
 
 fn browse_image(source: impl ReadAt, request: Request) -> Result<Observation, Error> {
-	let volume = match &request {
-		Request::Page { location, .. } => location.volume,
-		Request::Details { folder, .. } => folder.volume,
-		Request::Search { location, .. } => location.volume,
-		#[cfg(feature = "actual-preview")]
-		Request::Preview { location, .. } => location.volume,
-	};
 	with_logical_disk(source, Encoding::Udif(Limits::default()), |logical| {
-		let mut disk = Disk::discover(logical, DiskLimits::default())?;
-		let selected = disk.select_volume(Some(volume))?;
-		let limits = browse::Limits {
-			max_read_requests: MAX_FS_READS,
-			max_read_bytes: MAX_FS_READ_BYTES,
-			..browse::Limits::default()
-		};
-		match request {
-			Request::Page { location, offset } => {
-				browse::with_view_signature(&mut disk, selected, limits, |view, filesystem| {
-					folder_page(view, location, filesystem, offset)
-				})?
-			}
-			Request::Details { folder, name } => {
-				browse::with_view(&mut disk, selected, limits, |view| {
-					entry_details(view, &folder, name)
-				})?
-			}
-			Request::Search { location, query } => {
-				browse::with_view(&mut disk, selected, limits, |view| {
-					search::folder_search(view, location, query)
-				})?
-			}
+		let location = match &request {
+			Request::Page { location, .. }
+			| Request::Search { location, .. }
+			| Request::Details {
+				folder: location, ..
+			} => location,
 			#[cfg(feature = "actual-preview")]
-			Request::Preview {
-				location,
-				max_side,
-				visibility,
-			} => preview::render(&mut disk, selected, limits, location, max_side, visibility),
+			Request::Preview { location, .. } => location,
+			#[cfg(feature = "apfs-read")]
+			Request::ApfsCatalog(window) => return apfs::discover(logical, *window),
+		};
+		let volume = location.volume;
+		#[cfg(feature = "apfs-read")]
+		if let Some(selection) = location.apfs {
+			return apfs::browse(logical, volume, selection, request);
+		}
+		#[cfg(feature = "hfsplus-read")]
+		{
+			browse_hfs(logical, volume, request)
+		}
+		#[cfg(not(feature = "hfsplus-read"))]
+		{
+			Err(Error::UnsupportedVolumeRequest)
 		}
 	})
 }
 
-fn folder<B: VolumeBackend<Error = browse::Error>>(
-	view: &mut VolumeView<B>,
-	location: &Location,
-) -> Result<NodeHandle<B::Id>, Error> {
-	if location.path.len() > MAX_DEPTH {
-		return Err(Error::DepthLimit);
-	}
-	let mut node = view.root()?;
-	for name in &location.path {
-		let entry = view
-			.lookup(&node, name.as_lookup())?
-			.filter(|entry| entry.name == *name)
-			.ok_or(Error::EntryChanged)?;
-		if entry.kind != NodeKind::Directory {
-			return Err(Error::NotDirectory);
-		}
-		node = entry.node;
-	}
-	Ok(node)
-}
-
-fn folder_page(
-	view: &mut VolumeView<impl VolumeBackend<Error = browse::Error>>,
-	location: Location,
-	filesystem: VolumeSignature,
-	offset: u64,
+#[cfg(feature = "hfsplus-read")]
+fn browse_hfs(
+	logical: &mut dyn LogicalDisk,
+	volume: VolumeId,
+	request: Request,
 ) -> Result<Observation, Error> {
-	if offset > MAX_LIST_OFFSET {
-		return Err(Error::OffsetLimit);
-	}
-	let node = folder(view, &location)?;
-	let mut reader = view.read_dir(&node)?;
-	let end = offset + PAGE_ENTRIES;
-	let mut scanned = 0;
-	let mut entries = Vec::new();
-	while scanned <= end {
-		// Read one extra catalog entry to distinguish a final page with no spare rows.
-		let remaining = (end + 1 - scanned).min(u64::from(SCAN_BATCH_ENTRIES)) as u16;
-		let page = reader.next_page(NonZeroU16::new(remaining).ok_or(Error::StalledDirectory)?)?;
-		if page.entries.is_empty() && !page.complete {
-			return Err(Error::StalledDirectory);
-		}
-		for entry in page.entries {
-			if (offset..end).contains(&scanned) {
-				entries.push(Entry {
-					name: entry.name,
-					kind: entry.kind,
-				});
-			}
-			scanned += 1;
-		}
-		if page.complete {
-			break;
-		}
-	}
-	let more = scanned > end;
-	Ok(Observation::Page(Page {
-		location,
-		filesystem,
-		entries,
-		offset,
-		next: (more && end <= MAX_LIST_OFFSET).then_some(end),
-		truncated: more && end > MAX_LIST_OFFSET,
-	}))
-}
-
-fn entry_details(
-	view: &mut VolumeView<impl VolumeBackend<Error = browse::Error>>,
-	location: &Location,
-	name: RawName,
-) -> Result<Observation, Error> {
-	let parent = folder(view, location)?;
-	let entry = view
-		.lookup(&parent, name.as_lookup())?
-		.filter(|entry| entry.name == name)
-		.ok_or(Error::EntryChanged)?;
-	let metadata = view.stat(&entry.node)?;
-	let native_id = view.numeric_id(&entry.node)?;
-	let link_target = if metadata.kind == NodeKind::Symlink {
-		Some(view.read_link(&entry.node)?)
-	} else {
-		None
+	let mut disk = Disk::discover(logical, DiskLimits::default())?;
+	let selected = disk.select_volume(Some(volume))?;
+	let limits = browse::Limits {
+		max_read_requests: MAX_FS_READS,
+		max_read_bytes: MAX_FS_READ_BYTES,
+		..browse::Limits::default()
 	};
-	let storage = Box::new(inspect_storage(view, &entry, MAX_ENTRY_ATTRIBUTES));
-	Ok(Observation::Details(Details {
-		name,
-		native_id,
-		metadata,
-		link_target,
-		storage,
-	}))
+	#[cfg(feature = "actual-preview")]
+	if let Request::Preview {
+		location,
+		max_side,
+		visibility,
+	} = request
+	{
+		return preview::render(&mut disk, selected, limits, location, max_side, visibility);
+	}
+	browse::with_view_signature(&mut disk, selected, limits, |view, filesystem| {
+		let filesystem = match filesystem {
+			VolumeSignature::HfsPlus => Filesystem::HfsPlus,
+			VolumeSignature::HfsX => Filesystem::HfsX,
+		};
+		query::query_volume(view, filesystem, request, search::hfs)
+	})?
 }
 
 pub(crate) fn label(name: &RawName) -> String {
@@ -415,4 +428,6 @@ impl ReadAt for CancellableSource<'_> {
 }
 
 #[cfg(test)]
+mod test_support;
+#[cfg(all(test, feature = "hfsplus-read"))]
 mod tests;

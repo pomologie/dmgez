@@ -44,13 +44,19 @@ impl App {
 		};
 		let browser = &mut image.browser;
 		match result {
+			#[cfg(feature = "apfs-read")]
+			Ok(Observation::ApfsCatalog(catalog)) => browser.apfs = Some(catalog),
 			Ok(Observation::Page(page)) => {
 				#[cfg(feature = "actual-preview")]
-				let next_preview = browser.preview.as_ref().map(|preview| Request::Preview {
-					location: page.location.clone(),
-					max_side: ctx.input(|input| input.max_texture_side),
-					visibility: preview.visibility,
-				});
+				let next_preview = browser
+					.preview
+					.as_ref()
+					.filter(|_| page.filesystem.supports_finder_preview())
+					.map(|preview| Request::Preview {
+						location: page.location.clone(),
+						max_side: ctx.input(|input| input.max_texture_side),
+						visibility: preview.visibility,
+					});
 				let arrived = browser.show_page(page, direction);
 				#[cfg(feature = "actual-preview")]
 				if arrived && let Some(request) = next_preview {

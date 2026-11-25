@@ -16,7 +16,7 @@ pub use apfs::with_apfs_path_verified;
 #[cfg(feature = "apfs-volume")]
 pub use apfs::{
 	ApfsView, ApfsVolumes, UncertainCheckpoint, apfs_volumes, require_apfs_checkpoint,
-	with_apfs_disk, with_apfs_volume,
+	with_apfs_disk, with_apfs_volume, with_apfs_window,
 };
 #[cfg(feature = "hfsplus-volume")]
 mod hfsplus;

@@ -18,7 +18,7 @@ pub(crate) struct ImageTab {
 	pub verification: Option<Arc<VerificationReport>>,
 	pub exported: Option<PathBuf>,
 	pub run_navigation: RunNavigation,
-	#[cfg(feature = "hfsplus-read")]
+	#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 	pub browser: browse::Browser,
 }
 
@@ -37,7 +37,7 @@ impl RunNavigation {
 	}
 }
 
-#[cfg(feature = "hfsplus-read")]
+#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 pub(crate) mod browse;
 pub(crate) mod exports;
 
@@ -59,7 +59,7 @@ impl ImageTab {
 			verification: None,
 			exported: None,
 			run_navigation: RunNavigation::default(),
-			#[cfg(feature = "hfsplus-read")]
+			#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 			browser: browse::Browser::default(),
 		})
 	}

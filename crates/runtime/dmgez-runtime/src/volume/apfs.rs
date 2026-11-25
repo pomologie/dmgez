@@ -48,9 +48,41 @@ pub fn with_apfs_disk<T>(
 	xid: Option<TransactionId>,
 	read: impl FnOnce(VolumeId, &ApfsContainer<'_, &mut dyn LogicalDisk>) -> T,
 ) -> Result<T, Error> {
+	with_discovered_apfs_disk(
+		logical,
+		xid,
+		|disk| Ok(disk::select_volume(disk, partition)?),
+		read,
+	)
+}
+
+/// Opens the exact whole disk or partition selected by an image frontend.
+///
+/// # Errors
+/// Returns disk layout, selection or APFS container admission failures.
+pub fn with_apfs_window<T>(
+	logical: &mut dyn LogicalDisk,
+	window: VolumeId,
+	xid: Option<TransactionId>,
+	read: impl FnOnce(VolumeId, &ApfsContainer<'_, &mut dyn LogicalDisk>) -> T,
+) -> Result<T, Error> {
+	with_discovered_apfs_disk(
+		logical,
+		xid,
+		|disk| Ok(disk.select_volume(Some(window))?),
+		read,
+	)
+}
+
+fn with_discovered_apfs_disk<T>(
+	logical: &mut dyn LogicalDisk,
+	xid: Option<TransactionId>,
+	select: impl FnOnce(&Disk<&mut dyn LogicalDisk>) -> Result<VolumeId, Error>,
+	read: impl FnOnce(VolumeId, &ApfsContainer<'_, &mut dyn LogicalDisk>) -> T,
+) -> Result<T, Error> {
 	let mut disk = Disk::discover(logical, Limits::default())?;
 	disk.recognize_partitionless(Filesystem::Apfs, probe_partitionless)?;
-	let selected = disk::select_volume(&disk, partition)?;
+	let selected = select(&disk)?;
 	let container = ApfsContainer::open(disk.data_window(selected)?, xid)?;
 	Ok(read(selected, &container))
 }

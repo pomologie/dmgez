@@ -62,7 +62,7 @@ impl App {
 				if error.source_changed() {
 					image.verification = None;
 					image.run_navigation.select(None);
-					#[cfg(feature = "hfsplus-read")]
+					#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 					image.browser.invalidate();
 				}
 				*message = Some(format!("Could not export the image data. {error}"));

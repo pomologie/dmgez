@@ -135,12 +135,46 @@ class DesktopCompositionTests(unittest.TestCase):
         manifest = tomllib.loads(compose.compose_desktop_manifest(original))
         self.assertEqual(manifest["features"], {
             **base.get("features", {}),
-            compose.READ_FEATURE: [f"dep:{compose.ADAPTER}", "dep:dmgez-vfs"],
+            compose.READ_FEATURE: [f"dep:{compose.ADAPTER}", "dep:dmgez-vfs", "dmgez-runtime/hfsplus-volume"],
             compose.ACTUAL_PREVIEW_FEATURE: [compose.READ_FEATURE, "dmgez-runtime/actual-preview"],
         })
         self.assertEqual(manifest["dependencies"][compose.ADAPTER]["features"], ["browse"])
         self.assertTrue(manifest["dependencies"][compose.ADAPTER]["optional"])
         self.assertEqual(manifest["dev-dependencies"], base["dev-dependencies"])
+
+    def test_apfs_only_desktop_has_no_hfsplus_dependency(self):
+        original = (compose.ROOT / compose.DESKTOP / compose.MANIFEST).read_text(encoding="utf-8")
+        manifest = tomllib.loads(compose.compose_desktop_manifest(original, reader=False, apfs=True))
+        self.assertEqual(manifest["features"][compose.APFS_FEATURE], [
+            f"dep:{compose.APFS_ADAPTER}", "dep:dmgez-vfs", "dmgez-runtime/apfs-volume",
+        ])
+        self.assertNotIn(compose.READ_FEATURE, manifest["features"])
+        self.assertNotIn(compose.ACTUAL_PREVIEW_FEATURE, manifest["features"])
+        self.assertNotIn(compose.ADAPTER, manifest["dependencies"])
+        self.assertTrue(manifest["dependencies"][compose.APFS_ADAPTER]["optional"])
+
+    def test_apfs_desktop_resolves_only_supplied_readers(self):
+        root = Path("local")
+        for hfsplus in (False, True):
+            args = ["compose_filesystem_cli.py", "--apfs", str(root), "--desktop", "--test"]
+            apfs_packages = {compose.APFS_READER: root}
+            hfsplus_packages = {compose.HFSPLUS_READER: root} if hfsplus else {}
+            if hfsplus:
+                args.extend(("--hfsplus", str(root)))
+            with (
+                self.subTest(hfsplus=hfsplus),
+                patch.object(sys, "argv", args),
+                patch.object(compose, "resolve_packages", return_value=apfs_packages),
+                patch.object(compose, "resolve_hfsplus", return_value=hfsplus_packages) as resolve_hfsplus,
+                patch.object(compose, "prepare_workspace"),
+                patch.object(compose, "resolve_lock"),
+                patch.object(compose, "run_desktop") as run,
+            ):
+                self.assertEqual(compose.main(), 0)
+                self.assertEqual(resolve_hfsplus.called, hfsplus)
+                _, _, options, packages = run.call_args.args
+                self.assertEqual(packages, hfsplus_packages | apfs_packages)
+                self.assertEqual(options.target_dir.name, "hfsplus-apfs-desktop" if hfsplus else "apfs-desktop")
 
     def test_desktop_project_build_uses_the_composed_runtime(self):
         original = (compose.ROOT / compose.DESKTOP / compose.MANIFEST).read_text(encoding="utf-8")
@@ -205,6 +239,18 @@ class DesktopCompositionTests(unittest.TestCase):
         command = run.call_args.args[0]
         self.assertEqual(command[:5], ["cargo", "test", "--frozen", "--package", compose.DESKTOP_PACKAGE])
         self.assertEqual(command[-4:], ["--features", compose.READ_FEATURE, "--bin", compose.DESKTOP_PACKAGE])
+
+    def test_desktop_apfs_tests_get_the_matching_fixture_directory(self):
+        directory = Path.cwd()
+        options = SimpleNamespace(
+            test=True, target_dir=directory, release=False, no_default_features=False, features=[],
+        )
+        with patch.object(compose.subprocess, "run") as run:
+            compose.run_desktop(["cargo"], directory, options, {compose.APFS_READER: directory})
+        self.assertEqual(run.call_args.args[0][-4:], [
+            "--features", compose.APFS_FEATURE, "--bin", compose.DESKTOP_PACKAGE,
+        ])
+        self.assertIn(compose.APFS_FIXTURES_ENV, run.call_args.kwargs["env"])
 
 
 class WindowsCompositionTests(unittest.TestCase):

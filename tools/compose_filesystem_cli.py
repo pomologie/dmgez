@@ -263,24 +263,40 @@ def compose_cli_manifest(manifest, reader, build, apfs):
     return before_features + feature_section + feature_text + dependency_section + dependencies
 
 
-def compose_desktop_manifest(manifest, *, build=False):
+def compose_desktop_manifest(manifest, *, reader=True, build=False, apfs=False):
     parsed = tomllib.loads(manifest)
-    if ({READ_FEATURE, ACTUAL_PREVIEW_FEATURE, PROJECT_BUILD_FEATURE}.intersection(parsed.get("features", {}))
-            or ADAPTER in parsed["dependencies"] or "dmgez-vfs" in parsed["dependencies"]):
+    if ({READ_FEATURE, ACTUAL_PREVIEW_FEATURE, PROJECT_BUILD_FEATURE, APFS_FEATURE}.intersection(
+            parsed.get("features", {}))
+            or {ADAPTER, APFS_ADAPTER, "dmgez-vfs"}.intersection(parsed["dependencies"])):
         raise ValueError("desktop manifest already has filesystem composition settings")
     feature_section = "\n[features]\n"
     dependency_section = "\n[dependencies]\n"
     development_section = "\n[dev-dependencies]\n"
     if dependency_section not in manifest or development_section not in manifest:
         raise ValueError("could not find the desktop dependencies sections")
-    read = render_feature(READ_FEATURE, [f"dep:{ADAPTER}", "dep:dmgez-vfs"])
-    preview = render_feature(ACTUAL_PREVIEW_FEATURE, [READ_FEATURE, "dmgez-runtime/actual-preview"])
-    group = f"# HFS+ volume access\n{read}\n{preview}\n"
+    groups = []
+    dependencies = ["dmgez-vfs = { workspace = true, optional = true }\n"]
+    if reader:
+        read = render_feature(READ_FEATURE, [f"dep:{ADAPTER}", "dep:dmgez-vfs", "dmgez-runtime/hfsplus-volume"])
+        preview = render_feature(ACTUAL_PREVIEW_FEATURE, [READ_FEATURE, "dmgez-runtime/actual-preview"])
+        groups.append(f"# HFS+ volume access\n{read}\n{preview}\n")
+        dependencies.append(
+            f'{ADAPTER} = {{ path = "../../crates/{COMPOSED_CRATE_GROUPS[ADAPTER]}/{ADAPTER}", '
+            'optional = true, default-features = false, features = ["browse"] }\n'
+        )
+    if apfs:
+        read = render_feature(APFS_FEATURE, [f"dep:{APFS_ADAPTER}", "dep:dmgez-vfs", "dmgez-runtime/apfs-volume"])
+        groups.append(f"# APFS volume access\n{read}\n")
+        dependencies.append(
+            f'{APFS_ADAPTER} = {{ path = "../../crates/{COMPOSED_CRATE_GROUPS[APFS_ADAPTER]}/{APFS_ADAPTER}", '
+            'optional = true, default-features = false }\n'
+        )
     if build:
         project = render_feature(PROJECT_BUILD_FEATURE, [
             "dmgez-runtime/project-build", "dmgez-runtime/finder-write", "dmgez-runtime/hfsplus-parallel",
         ])
-        group += f"\n# HFS+ project build\n{project}\n"
+        groups.append(f"# HFS+ project build\n{project}\n")
+    group = "\n".join(groups)
     if feature_section in manifest:
         manifest = manifest.replace(feature_section, feature_section + group, 1)
     else:
@@ -288,9 +304,7 @@ def compose_desktop_manifest(manifest, *, build=False):
     return manifest.replace(
         development_section,
         "\n# Composed filesystem dependencies\n"
-        f'{ADAPTER} = {{ path = "../../crates/{COMPOSED_CRATE_GROUPS[ADAPTER]}/{ADAPTER}", '
-        'optional = true, default-features = false, features = ["browse"] }\n'
-        "dmgez-vfs = { workspace = true, optional = true }\n"
+        + "".join(dependencies)
         + development_section,
         1,
     )
@@ -387,7 +401,9 @@ def prepare_workspace(directory, packages, *, desktop=False):
         manifest, reader=reader, build=build, apfs=apfs,
     ))
     if desktop:
-        replace_manifest(directory, DESKTOP, lambda manifest: compose_desktop_manifest(manifest, build=build))
+        replace_manifest(directory, DESKTOP, lambda manifest: compose_desktop_manifest(
+            manifest, reader=reader, build=build, apfs=apfs,
+        ))
     else:
         replace_manifest(directory, CLI, lambda manifest: compose_cli_manifest(
             manifest,
@@ -488,11 +504,16 @@ def run_cli(cargo, directory, options, packages):
 
 def run_desktop(cargo, directory, options, packages):
     command = cargo_command(cargo, options, DESKTOP_PACKAGE)
-    command.extend(("--features", READ_FEATURE))
+    readers = (
+        (HFSPLUS_READER, READ_FEATURE, HFSPLUS_FIXTURES_ENV),
+        (APFS_READER, APFS_FEATURE, APFS_FIXTURES_ENV),
+    )
+    environment = os.environ.copy()
+    for package, feature, fixtures in readers:
+        if package in packages:
+            command.extend(("--features", feature))
+            environment.setdefault(fixtures, str(packages[package] / "tests" / "fixtures"))
     if options.test:
-        environment = os.environ.copy()
-        fixtures = packages[HFSPLUS_READER] / "tests" / "fixtures"
-        environment.setdefault(HFSPLUS_FIXTURES_ENV, str(fixtures))
         subprocess.run([*command, "--bin", DESKTOP_PACKAGE], cwd=directory, env=environment, check=True)
         return
     run_binary(command, directory, DESKTOP_PACKAGE)
@@ -529,7 +550,7 @@ def main():
         help="Cargo artifact directory (defaults to a target directory for the selected profile)",
     )
     parser.add_argument("--release", action="store_true", help="build the optimized binary")
-    parser.add_argument("--desktop", action="store_true", help="compose the desktop app with the HFS+ reader and optional project-build")
+    parser.add_argument("--desktop", action="store_true", help="compose the desktop app with the supplied filesystem readers")
     parser.add_argument("--test", action="store_true", help="run the selected composed app tests")
     parser.add_argument(
         "--fetch", action="store_true",
@@ -542,18 +563,22 @@ def main():
     use_apfs = options.apfs is not None or options.apfs_packages is not None
     if not (use_hfsplus or use_apfs):
         parser.error("supply an HFS+ or APFS package source")
-    if options.desktop and (not use_hfsplus or use_apfs):
-        parser.error("desktop composition requires only an HFS+ package source")
+    if options.desktop and has_feature(options, PROJECT_BUILD_FEATURE, DESKTOP_PACKAGE) and not use_hfsplus:
+        parser.error("desktop project-build requires --hfsplus or --hfsplus-packages")
     for feature in APFS_PROFILES:
         if has_feature(options, feature) and not use_apfs:
             parser.error(f"{feature} requires --apfs or --apfs-packages")
     for feature in (ACTUAL_PREVIEW_FEATURE, HFS_ANALYSIS_FEATURE, INSTALL_FEATURE, MOUNT_WATCH_FEATURE, PROJECT_EDIT_FEATURE, IMAGE_EDIT_FEATURE, PARTITION_WRITE_FEATURE):
         if has_feature(options, feature) and not use_hfsplus:
             parser.error(f"{feature} requires --hfsplus or --hfsplus-packages")
-    if use_apfs and not any(has_feature(options, feature) for feature in APFS_PROFILES):
+    if use_apfs and not options.desktop and not any(has_feature(options, feature) for feature in APFS_PROFILES):
         options.features.append(APFS_FEATURE)
     if options.target_dir is None:
-        profile = "hfsplus-desktop" if options.desktop else "apfs-cli" if use_apfs else "hfsplus-cli"
+        if options.desktop:
+            readers = [name for name, enabled in (("hfsplus", use_hfsplus), ("apfs", use_apfs)) if enabled]
+            profile = "-".join([*readers, "desktop"])
+        else:
+            profile = "apfs-cli" if use_apfs else "hfsplus-cli"
         options.target_dir = ROOT / "target" / profile
     explicit_read = any(has_feature(options, name) for name in (*READ_PROFILES, VERIFY_FEATURE, MOUNT_WATCH_FEATURE)) or (
         use_hfsplus and (

@@ -6,7 +6,9 @@ use std::{
 
 use dmgez_udif::writer::{Profile, WriteOptions, write_image};
 use dmgez_vfs::{PartitionId, Scheme};
-use eframe::egui::{self, accesskit};
+use eframe::egui;
+
+use super::test_support::activate;
 
 use super::*;
 use crate::{
@@ -58,6 +60,14 @@ fn page(tab: &ImageTab, location: Location, offset: u64) -> Page {
 	page
 }
 
+fn hfs_storage(details: &Details) -> &StorageMetadata<browse::Error> {
+	match details.storage.as_ref() {
+		Storage::Hfs(storage) => storage,
+		#[cfg(feature = "apfs-read")]
+		Storage::Apfs(_) => panic!("expected HFS storage metadata"),
+	}
+}
+
 fn partition(slot: u32) -> Location {
 	Location::root(VolumeId::Partition(PartitionId {
 		scheme: Scheme::Apple,
@@ -73,7 +83,7 @@ fn browses_only_an_admitted_native_partition_data_window() {
 	image.write_all(NATIVE_APM).unwrap();
 	let tab = ImageTab::open(image).unwrap();
 	let observed = page(&tab, partition(NATIVE_HFS_PARTITION), 0);
-	assert_eq!(observed.filesystem, VolumeSignature::HfsPlus);
+	assert_eq!(observed.filesystem, Filesystem::HfsPlus);
 	assert_eq!(observed.location, partition(NATIVE_HFS_PARTITION));
 	assert!(matches!(
 		tab.snapshot.browse(
@@ -131,10 +141,11 @@ fn native_catalog_pages_and_directory_components_retain_exact_stored_names() {
 	assert_eq!(details.name, entry.name);
 	assert_eq!(details.metadata.kind, NodeKind::RegularFile);
 	assert!(details.native_id.is_some());
-	let forks = details.storage.forks.as_ref().unwrap();
+	let storage = hfs_storage(&details);
+	let forks = storage.forks.as_ref().unwrap();
 	assert!(matches!(forks.data, Ok(Some(bytes)) if bytes == NATIVE_NESTED_PAYLOAD.len() as u64));
 	assert!(matches!(forks.resource, Ok(Some(0))));
-	assert!(matches!(&details.storage.xattrs, Ok(Some(names)) if names.is_empty()));
+	assert!(matches!(&storage.xattrs, Ok(Some(names)) if names.is_empty()));
 	let file = folder.child(&entry.name).unwrap();
 	assert!(matches!(
 		tab.snapshot
@@ -156,7 +167,7 @@ fn hfsx_keeps_case_distinct_directories_and_file_names() {
 	let fixture = fixture(HFSX);
 	let tab = wrap(&materialize_sparse(&fixture));
 	let root = page(&tab, Location::root(VolumeId::WholeDisk), 0);
-	assert_eq!(root.filesystem, VolumeSignature::HfsX);
+	assert_eq!(root.filesystem, Filesystem::HfsX);
 	let names: Vec<_> = root
 		.entries
 		.iter()
@@ -338,55 +349,6 @@ fn catalog_details_controls_share_a_column_on_separate_rows() {
 	};
 	assert!((first.x0 - second.x0).abs() < 1.0, "{first:?}, {second:?}");
 	assert!((first.y0 - second.y0).abs() >= 1.0, "{first:?}, {second:?}");
-}
-
-fn activate(tab: &mut ImageTab, title: &str) -> Action {
-	let context = egui::Context::default();
-	context.enable_accesskit();
-	let viewport = egui::Rect::from_min_size(
-		egui::Pos2::ZERO,
-		egui::vec2(crate::INITIAL_SIZE[0], 1_600.0),
-	);
-	let mut initial = context.run_ui(
-		egui::RawInput {
-			screen_rect: Some(viewport),
-			..Default::default()
-		},
-		|ui| assert!(inspector::show(ui, tab, true).is_none()),
-	);
-	let update = initial.platform_output.accesskit_update.take().unwrap();
-	initial.drop_without_applying_deltas();
-	let target_node = update
-		.nodes
-		.into_iter()
-		.find(|(_, node)| {
-			node.label() == Some(title) && node.supports_action(accesskit::Action::Click)
-		})
-		.unwrap_or_else(|| panic!("missing reachable {title} control"))
-		.0;
-	let mut action = None;
-	context
-		.run_ui(
-			egui::RawInput {
-				screen_rect: Some(viewport),
-				events: vec![egui::Event::AccessKitActionRequest(
-					accesskit::ActionRequest {
-						action: accesskit::Action::Click,
-						target_tree: accesskit::TreeId::ROOT,
-						target_node,
-						data: None,
-					},
-				)],
-				..Default::default()
-			},
-			|ui| {
-				if let Some(emitted) = inspector::show(ui, tab, true) {
-					action = Some(emitted);
-				}
-			},
-		)
-		.drop_without_applying_deltas();
-	action.unwrap_or_else(|| panic!("no action emitted from {title}"))
 }
 
 // Encoding specified by the sibling reader's native-hfsx-case-sensitive.json ledger.

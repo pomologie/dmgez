@@ -2,7 +2,7 @@ use dmgez_udif::Cancellation;
 use dmgez_vfs::{VolumeId, volume::RawName};
 use eframe::egui;
 
-use super::{activate, fixture, materialize_sparse, page, wrap};
+use super::{activate, fixture, hfs_storage, materialize_sparse, page, wrap};
 use crate::{
 	image::{
 		ImageTab,
@@ -42,13 +42,13 @@ fn shows_native_backing_fork_lengths_for_visible_hard_links() {
 	for name in ["one", "two"] {
 		let details = details(&tab, name);
 		assert!(details.metadata.hard_link.is_some());
-		let forks = details.storage.forks.as_ref().unwrap();
+		let forks = hfs_storage(&details).forks.as_ref().unwrap();
 		assert!(matches!(forks.data, Ok(Some(bytes)) if bytes == HARD_LINK_DATA.len() as u64));
 		assert!(
 			matches!(forks.resource, Ok(Some(bytes)) if bytes == HARD_LINK_RESOURCE.len() as u64)
 		);
 	}
-	assert!(details(&tab, "nested").storage.forks.is_none());
+	assert!(hfs_storage(&details(&tab, "nested")).forks.is_none());
 }
 
 #[test]
@@ -69,7 +69,7 @@ fn shows_exact_attribute_names_and_resource_size_even_without_a_data_decoder() {
 	let Observation::Details(details) = observation else {
 		panic!("expected item details from the selected row");
 	};
-	let forks = details.storage.forks.as_ref().unwrap();
+	let forks = hfs_storage(&details).forks.as_ref().unwrap();
 	assert!(matches!(
 		forks.resource,
 		Ok(Some(COMPRESSED_RESOURCE_BYTES))
@@ -82,7 +82,12 @@ fn shows_exact_attribute_names_and_resource_size_even_without_a_data_decoder() {
 		}
 		Ok(None) => panic!("expected a data fork or a decoder error"),
 	}
-	let names = details.storage.xattrs.as_ref().unwrap().as_ref().unwrap();
+	let names = hfs_storage(&details)
+		.xattrs
+		.as_ref()
+		.unwrap()
+		.as_ref()
+		.unwrap();
 	assert!(names.contains(&RawName::Utf16(
 		COMPRESSION_ATTRIBUTE.encode_utf16().collect()
 	)));

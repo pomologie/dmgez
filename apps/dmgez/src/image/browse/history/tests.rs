@@ -1,5 +1,6 @@
-use dmgez_hfsplus::browse::VolumeSignature;
 use dmgez_vfs::{VolumeId, volume::RawName};
+
+use crate::image::browse::Filesystem;
 
 use super::*;
 
@@ -8,7 +9,10 @@ fn page(name: &str, offset: u64) -> Page {
 	let name = RawName::Utf16(name.encode_utf16().collect());
 	Page {
 		location: root.child(&name).unwrap(),
-		filesystem: VolumeSignature::HfsPlus,
+		#[cfg(feature = "hfsplus-read")]
+		filesystem: Filesystem::HfsPlus,
+		#[cfg(not(feature = "hfsplus-read"))]
+		filesystem: Filesystem::Apfs,
 		entries: Vec::new(),
 		offset,
 		next: None,

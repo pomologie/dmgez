@@ -58,6 +58,19 @@ Add `--test` to the composer command to run the desktop suite with the sibling r
 
 On arm64 macOS 14.7.2 (23H311), the composed desktop opened a UDRO image of the sibling reader’s synthetic catalog fixture through the file picker. The live Files view showed vertically aligned rows on pages 1–64 and 65–97. Opening `Nested` showed the stored decomposed name `Résumé.txt` with its mode, owner and catalog ID in **Details**. The fixture’s SHA-256 matched before and after browsing.
 
+### Browse APFS files
+
+Compose the desktop with the sibling APFS reader.
+
+```sh
+python3 tools/compose_filesystem_cli.py --apfs ../apfs --desktop
+target/apfs-desktop/debug/dmgez-gui archive.dmg
+```
+
+In **Files**, check the whole disk or select a partition to check for an APFS container. Choose a volume from the displayed checkpoint. Folder navigation and item details retain that checkpoint and volume identity throughout the opened image session. Search matches the exact stored spelling and case in the current folder. Add `--hfsplus ../hfsplus` to compose both readers in `target/hfsplus-apfs-desktop`.
+
+Add `--test` for native APFS fixture tests. Finder layout rendering is available for HFS+ and HFSX.
+
 ### Desktop smoke checks
 
 The desktop tests cover bounded project input, native GPT fixture inspection, copy publication and no-clobber behavior, cancelled or failed opens, and grouped position edits with undo and redo. Tests for the run navigation portion of D-GUI-03 cover bounded pages, preservation of the open source, simulated accessibility activation, and cancellation. Verification tests use the native UDZO fixture and a copy with a changed payload byte.

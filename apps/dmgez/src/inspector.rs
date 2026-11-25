@@ -9,7 +9,7 @@ use crate::image::{
 	exports::{Kind as Export, selected_run},
 };
 
-#[cfg(feature = "hfsplus-read")]
+#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 mod browse;
 
 const SUMMARY_WIDTH: f32 = 264.0;
@@ -21,15 +21,15 @@ pub(crate) enum Action {
 	LocateRun(u64),
 	Verify,
 	Export(Export),
-	#[cfg(feature = "hfsplus-read")]
+	#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 	ShowContainer,
-	#[cfg(feature = "hfsplus-read")]
+	#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 	ShowFiles,
 	#[cfg(feature = "actual-preview")]
 	ShowList,
-	#[cfg(feature = "hfsplus-read")]
+	#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 	History(crate::image::browse::history::Direction),
-	#[cfg(feature = "hfsplus-read")]
+	#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 	Browse(crate::image::browse::Request),
 }
 
@@ -38,9 +38,9 @@ pub(crate) fn show(ui: &mut Ui, image: &mut ImageTab, idle: bool) -> Option<Acti
 	let verify = Panel::left("image_summary")
 		.default_size(SUMMARY_WIDTH)
 		.show(ui, |ui| {
-			#[cfg(feature = "hfsplus-read")]
+			#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 			let navigation = browse::navigation(ui, &image.browser, idle);
-			#[cfg(not(feature = "hfsplus-read"))]
+			#[cfg(not(any(feature = "hfsplus-read", feature = "apfs-read")))]
 			let navigation = None;
 			let container = &report.container;
 			ui.heading("Disk image");
@@ -102,7 +102,7 @@ pub(crate) fn show(ui: &mut Ui, image: &mut ImageTab, idle: bool) -> Option<Acti
 			navigation.or(verify).or(inspection).or(verification)
 		})
 		.inner;
-	#[cfg(feature = "hfsplus-read")]
+	#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 	if image.browser.showing
 		&& let Some(details) = &image.browser.details
 	{
@@ -112,7 +112,7 @@ pub(crate) fn show(ui: &mut Ui, image: &mut ImageTab, idle: bool) -> Option<Acti
 		.show(ui, |ui| {
 			ScrollArea::both()
 				.show(ui, |ui| {
-					#[cfg(feature = "hfsplus-read")]
+					#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 					if image.browser.showing {
 						return browse::show(ui, &mut image.browser, report.disk.as_ref(), idle);
 					}

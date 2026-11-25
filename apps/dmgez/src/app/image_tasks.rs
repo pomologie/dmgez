@@ -2,19 +2,19 @@ use dmgez_inspector::{RunPage, VerificationReport};
 use dmgez_udif::{Cancellation, Error};
 use eframe::egui::Context;
 
-#[cfg(feature = "hfsplus-read")]
+#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 use crate::image::browse::{self, Observation, history::Direction};
 use crate::inspector::Action;
 
 use super::{App, Completion, Document, Opened};
 
-#[cfg(feature = "hfsplus-read")]
+#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 mod folder;
 
 pub(super) enum ImageCompletion {
 	Runs(Result<(RunPage, Option<usize>), Error>),
 	Checked(Box<VerificationReport>),
-	#[cfg(feature = "hfsplus-read")]
+	#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 	Browsed {
 		direction: Option<Direction>,
 		result: Result<Observation, browse::Error>,
@@ -54,7 +54,7 @@ impl App {
 				});
 			}
 			Action::Export(kind) => self.start_image_export(ctx, kind),
-			#[cfg(feature = "hfsplus-read")]
+			#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 			Action::ShowContainer => {
 				image.browser.showing = false;
 				#[cfg(feature = "actual-preview")]
@@ -62,17 +62,17 @@ impl App {
 					image.browser.preview = None;
 				}
 			}
-			#[cfg(feature = "hfsplus-read")]
+			#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 			Action::ShowFiles => image.browser.showing = true,
 			#[cfg(feature = "actual-preview")]
 			Action::ShowList => image.browser.preview = None,
-			#[cfg(feature = "hfsplus-read")]
+			#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 			Action::History(direction) => {
 				if let Some(request) = image.browser.history.request(direction) {
 					self.start_browse(ctx, snapshot, request, Some(direction));
 				}
 			}
-			#[cfg(feature = "hfsplus-read")]
+			#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 			Action::Browse(request) => {
 				self.start_browse(ctx, snapshot, request, None);
 			}
@@ -80,7 +80,7 @@ impl App {
 	}
 
 	pub(super) fn finish_image(&mut self, ctx: &Context, completion: ImageCompletion) {
-		#[cfg(not(feature = "hfsplus-read"))]
+		#[cfg(not(any(feature = "hfsplus-read", feature = "apfs-read")))]
 		let _ = ctx;
 		let Some(Opened {
 			document: Document::Image(image),
@@ -99,7 +99,7 @@ impl App {
 					if matches!(error, Error::SourceChanged) {
 						image.verification = None;
 						image.run_navigation.select(None);
-						#[cfg(feature = "hfsplus-read")]
+						#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 						image.browser.invalidate();
 					}
 					self.error = Some(format!("Could not load the run page. {error}"));
@@ -108,7 +108,7 @@ impl App {
 			ImageCompletion::Checked(report) => {
 				if matches!(report.cause(), Some(Error::SourceChanged)) {
 					image.run_navigation.select(None);
-					#[cfg(feature = "hfsplus-read")]
+					#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 					image.browser.invalidate();
 				}
 				image.verification = Some(report.into());
@@ -116,7 +116,7 @@ impl App {
 			ImageCompletion::Exported(result) => {
 				Self::finish_image_export(image, &mut self.error, result);
 			}
-			#[cfg(feature = "hfsplus-read")]
+			#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 			ImageCompletion::Browsed { direction, result } => {
 				self.finish_browse(ctx, direction, result);
 			}

@@ -1,5 +1,8 @@
-use dmgez_hfsplus::browse::{Error as HfsError, VolumeSignature};
-use dmgez_inspector::{DiskReport, DiskScheme, RecognizedFilesystem};
+use std::error::Error as StdError;
+
+#[cfg(feature = "hfsplus-read")]
+use dmgez_inspector::RecognizedFilesystem;
+use dmgez_inspector::{DiskReport, DiskScheme, volume_queries::StorageMetadata};
 use dmgez_vfs::{
 	PartitionId, Scheme, VolumeId,
 	volume::{NodeKind, ViewError},
@@ -7,13 +10,15 @@ use dmgez_vfs::{
 use eframe::egui::{self, Grid, Panel, ScrollArea, Ui};
 
 use crate::image::browse::{
-	Browser, Details, Entry, Location, PAGE_ENTRIES, Page, Request,
+	Browser, Details, Entry, Location, PAGE_ENTRIES, Page, Request, Storage,
 	history::{Direction, History},
 	label,
 };
 
 use super::{Action, bytes, field};
 
+#[cfg(feature = "apfs-read")]
+mod apfs;
 #[cfg(feature = "actual-preview")]
 mod preview;
 mod search;
@@ -48,15 +53,27 @@ pub(super) fn show(
 	idle: bool,
 ) -> Option<Action> {
 	ui.add_enabled_ui(idle, |ui| {
-		let variants = volume_choices(disk);
-		let selected = browser.page.as_ref().map(|page| page.location.volume);
-		ui.horizontal_wrapped(|ui| {
-			ui.heading("Files");
-			choose_volume(ui, &variants, selected)
-		})
-		.inner
-		.map(Action::Browse)
-		.or_else(|| {
+		let partitions = partition_windows(disk);
+		let request = ui
+			.horizontal_wrapped(|ui| {
+				ui.heading("Files");
+				#[cfg(feature = "hfsplus-read")]
+				{
+					let selected = browser.page.as_ref();
+					#[cfg(feature = "apfs-read")]
+					let selected = selected.filter(|page| page.location.apfs.is_none());
+					let selected = selected.map(|page| page.location.volume);
+					choose_volume(ui, hfs_windows(disk, &partitions), selected)
+				}
+				#[cfg(not(feature = "hfsplus-read"))]
+				{
+					None
+				}
+			})
+			.inner;
+		#[cfg(feature = "apfs-read")]
+		let request = request.or_else(|| apfs::show(ui, disk, &partitions, browser));
+		request.map(Action::Browse).or_else(|| {
 			let page = browser.page.as_ref()?;
 			let navigation = folder_navigation(ui, page, &browser.history);
 			let (results_visible, search) = search::show(ui, &page.location, &mut browser.search);
@@ -65,12 +82,14 @@ pub(super) fn show(
 				return navigation;
 			}
 			#[cfg(feature = "actual-preview")]
-			let navigation = {
+			let navigation = if page.filesystem.supports_finder_preview() {
 				let action = preview::show(ui, &page.location, browser.preview.as_ref());
 				if browser.preview.is_some() {
 					return navigation.or(action);
 				}
 				navigation.or(action)
+			} else {
+				navigation
 			};
 			navigation.or_else(|| show_folder_entries(ui, page).map(Action::Browse))
 		})
@@ -78,6 +97,7 @@ pub(super) fn show(
 	.inner
 }
 
+#[cfg(feature = "hfsplus-read")]
 fn choose_volume(
 	ui: &mut Ui,
 	variants: &[VolumeId],
@@ -127,12 +147,23 @@ fn choose_volume(
 	}
 }
 
-fn volume_choices(disk: Option<&DiskReport>) -> Vec<VolumeId> {
-	match disk {
+#[cfg(feature = "hfsplus-read")]
+fn hfs_windows<'a>(disk: Option<&DiskReport>, partitions: &'a [VolumeId]) -> &'a [VolumeId] {
+	if matches!(
+		disk,
 		Some(DiskReport::Partitionless {
 			filesystem: RecognizedFilesystem::HfsPlus | RecognizedFilesystem::HfsX,
 			..
-		}) => vec![VolumeId::WholeDisk],
+		})
+	) {
+		&[VolumeId::WholeDisk]
+	} else {
+		partitions
+	}
+}
+
+fn partition_windows(disk: Option<&DiskReport>) -> Vec<VolumeId> {
+	match disk {
 		Some(DiskReport::Partitioned {
 			scheme, partitions, ..
 		}) => {
@@ -168,10 +199,14 @@ fn volume_label(id: VolumeId) -> String {
 fn folder_navigation(ui: &mut Ui, page: &Page, history: &History) -> Option<Action> {
 	let at_root = page.location.path.is_empty();
 	ui.horizontal_wrapped(|ui| {
-		ui.label(match page.filesystem {
-			VolumeSignature::HfsPlus => "HFS+",
-			VolumeSignature::HfsX => "HFSX",
-		});
+		ui.label(page.filesystem.label());
+		#[cfg(feature = "apfs-read")]
+		if let Some(selection) = page.location.apfs {
+			ui.label(format!(
+				"Object {} · XID {}",
+				selection.object_id.0, selection.checkpoint.0
+			));
+		}
 		let mut action = None;
 		for (direction, title) in [(Direction::Back, "Back"), (Direction::Forward, "Forward")] {
 			if ui
@@ -304,16 +339,19 @@ fn show_details(ui: &mut Ui, details: &Details) {
 	field(ui, "Mode", format!("{:06o}", metadata.mode));
 	field(ui, "Owner ID", metadata.uid.to_string());
 	field(ui, "Group ID", metadata.gid.to_string());
+	let (identity, backing) = ("Catalog ID", "Backing catalog ID");
+	#[cfg(feature = "apfs-read")]
+	let (identity, backing) = if details.folder.apfs.is_some() {
+		("Inode ID", "Backing inode ID")
+	} else {
+		(identity, backing)
+	};
 	if let Some(id) = details.native_id {
-		field(ui, "Catalog ID", id.to_string());
+		field(ui, identity, id.to_string());
 	}
 	if let Some(hard_link) = &metadata.hard_link {
 		field(ui, "Hard links", hard_link.count.to_string());
-		field(
-			ui,
-			"Backing catalog ID",
-			hard_link.storage.native_id().to_string(),
-		);
+		field(ui, backing, hard_link.storage.native_id().to_string());
 	}
 	if let Some(target) = &details.link_target {
 		let escaped: String = target
@@ -323,13 +361,22 @@ fn show_details(ui: &mut Ui, details: &Details) {
 			.collect();
 		field(ui, "Stored link target", escaped);
 	}
-	if let Some(forks) = &details.storage.forks {
+	match details.storage.as_ref() {
+		#[cfg(feature = "hfsplus-read")]
+		Storage::Hfs(storage) => show_storage(ui, storage),
+		#[cfg(feature = "apfs-read")]
+		Storage::Apfs(storage) => show_storage(ui, storage),
+	}
+}
+
+fn show_storage<E: StdError + 'static>(ui: &mut Ui, storage: &StorageMetadata<E>) {
+	if let Some(forks) = &storage.forks {
 		show_fork_size(ui, "Data fork", &forks.data);
 		show_fork_size(ui, "Resource fork", &forks.resource);
 	}
 	ui.separator();
 	ui.strong("Extended attributes");
-	match &details.storage.xattrs {
+	match &storage.xattrs {
 		Ok(Some(names)) if names.is_empty() => {
 			ui.label("None recorded");
 		}
@@ -347,7 +394,11 @@ fn show_details(ui: &mut Ui, details: &Details) {
 	}
 }
 
-fn show_fork_size(ui: &mut Ui, title: &str, size: &Result<Option<u64>, ViewError<HfsError>>) {
+fn show_fork_size<E: StdError + 'static>(
+	ui: &mut Ui,
+	title: &str,
+	size: &Result<Option<u64>, ViewError<E>>,
+) {
 	let value = match size {
 		Ok(Some(length)) => bytes(*length),
 		Ok(None) => "Absent".into(),
@@ -356,7 +407,7 @@ fn show_fork_size(ui: &mut Ui, title: &str, size: &Result<Option<u64>, ViewError
 	field(ui, title, value);
 }
 
-fn storage_error(error: &ViewError<HfsError>) -> String {
+fn storage_error<E: StdError + 'static>(error: &ViewError<E>) -> String {
 	match error {
 		ViewError::Backend(cause) => format!("Unavailable ({cause})"),
 		_ => format!("Unavailable ({error})"),
