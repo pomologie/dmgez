@@ -36,6 +36,8 @@ pub struct BuildCapabilities {
 	pub finder_custom_icon: Availability,
 	/// Application of explicit hidden and hide-extension filesystem flags.
 	pub finder_flags: Availability,
+	/// Merge a declared AppleDouble file with native source metadata before sealing.
+	pub metadata_sidecar: Availability,
 	/// Independent container and filesystem verification before publication.
 	pub verify: Availability,
 	/// Staged replacement with source-identity and alias protection.

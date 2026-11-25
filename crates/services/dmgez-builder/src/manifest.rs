@@ -94,12 +94,10 @@ impl Manifest {
 			.chain(&self.auxiliary_sources)
 	}
 
-	#[cfg(feature = "finder-write")]
 	pub(crate) fn auxiliary_source(&self, index: usize) -> &SourceSnapshot {
 		&self.auxiliary_sources[index]
 	}
 
-	#[cfg(feature = "finder-write")]
 	pub(crate) fn capture_auxiliary_regular(
 		&mut self,
 		input: &LocalPath,

@@ -4,7 +4,7 @@ use std::{collections::TryReserveError, io::Write, mem::size_of, path::Path};
 use dmgez_builder::metadata as host_metadata;
 use dmgez_builder::{
 	execution::{BuildPlan, BuildReport, ExecuteError, OutputVerifier},
-	metadata::{Attribute, policy},
+	metadata::{Attribute, policy, sidecar},
 	planning::{self, PreparedBuild},
 	preflight::{
 		Availability, BuildCapabilities, ExecutionProfile, FilesystemProfile, PreflightError,
@@ -86,6 +86,12 @@ pub enum Error {
 		#[source]
 		cause: host_metadata::Error,
 	},
+	#[error("could not merge the AppleDouble sidecar for {path:?}")]
+	Sidecar {
+		path: String,
+		#[source]
+		cause: sidecar::Error,
+	},
 	#[error("unsupported source kind or missing source at {path:?}")]
 	UnsupportedEntry { path: String },
 	#[error("requested Finder flag overrides are unavailable at {path:?}")]
@@ -146,6 +152,9 @@ pub fn capabilities() -> BuildCapabilities {
 	let mut capabilities = BuildCapabilities::default();
 	capabilities.hfsplus_unicode = Availability::Available;
 	capabilities.hfsplus_ascii = Availability::Available;
+	if cfg!(any(target_os = "linux", target_os = "macos")) {
+		capabilities.metadata_sidecar = Availability::Available;
+	}
 	capabilities.atomic_replace = if cfg!(windows) {
 		Availability::Unavailable
 	} else {
@@ -334,6 +343,7 @@ fn seal<'build>(
 		policy: &policy,
 		links: &links,
 		project,
+		prepared,
 		supports_file_hard_links,
 		remaining: &mut remaining,
 		losses: &mut losses,

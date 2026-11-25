@@ -13,6 +13,7 @@ use thiserror::Error;
 
 use crate::{
 	manifest::{self, Limits, Manifest, discover_for_output},
+	metadata::sidecar::{self, Binding},
 	preflight::{ExecutionProfile, OutputIntent, PreflightError, PreflightOptions, preflight},
 	progress::BuildProgress,
 };
@@ -30,6 +31,7 @@ pub struct PreparedBuild {
 	profile: ExecutionProfile,
 	manifest: Manifest,
 	output_path: Option<PathBuf>,
+	sidecar: Option<Binding>,
 	#[cfg(feature = "finder-write")]
 	finder_assets: PreparedAssets,
 }
@@ -49,6 +51,15 @@ impl PreparedBuild {
 	#[must_use]
 	pub fn output_path(&self) -> Option<&Path> {
 		self.output_path.as_deref()
+	}
+
+	/// Captured AppleDouble source for a matching regular data source, if declared.
+	#[must_use]
+	pub fn metadata_sidecar_for(
+		&self,
+		source: &manifest::SourceSnapshot,
+	) -> Option<&manifest::SourceSnapshot> {
+		self.sidecar.as_ref()?.sidecar_for(source, &self.manifest)
 	}
 
 	#[cfg(feature = "finder-write")]
@@ -129,6 +140,8 @@ pub enum Error {
 	NotDirectory,
 	#[error(transparent)]
 	Manifest(#[from] manifest::Error),
+	#[error(transparent)]
+	MetadataSidecar(#[from] sidecar::Error),
 	#[cfg(feature = "finder-write")]
 	#[error(transparent)]
 	Presentation(#[from] presentation::Error),
@@ -182,7 +195,7 @@ pub fn prepare_with_progress(
 	if profile.write_options().cancellation.is_cancelled() {
 		return Err(Error::Cancelled);
 	}
-	let manifest = discover_for_output(
+	let mut manifest = discover_for_output(
 		project,
 		&config_dir,
 		Limits {
@@ -201,13 +214,23 @@ pub fn prepare_with_progress(
 	if profile.write_options().cancellation.is_cancelled() {
 		return Err(Error::Cancelled);
 	}
+	let sidecar = if let Some(input) = &project.metadata.sidecar {
+		Some(Binding::resolve(
+			&mut manifest,
+			input,
+			&config_dir,
+			path,
+			limits.max_metadata_bytes as u64,
+		)?)
+	} else {
+		None
+	};
 	#[cfg(feature = "finder-write")]
-	let (manifest, finder_assets) = {
-		let mut manifest = manifest;
+	let finder_assets = {
 		#[cfg(feature = "volume-icon")]
 		let volume_icon =
 			presentation::volume_icon::capture_sources(&mut manifest, &profile, &config_dir, path)?;
-		let assets = presentation::prepare(
+		presentation::prepare(
 			project,
 			&mut manifest,
 			&profile,
@@ -215,8 +238,7 @@ pub fn prepare_with_progress(
 			path,
 			#[cfg(feature = "volume-icon")]
 			volume_icon,
-		)?;
-		(manifest, assets)
+		)?
 	};
 	#[cfg(feature = "finder-write")]
 	if finder_assets.count() != 0 {
@@ -231,6 +253,7 @@ pub fn prepare_with_progress(
 		profile,
 		manifest,
 		output_path: path.map(|path| path.resolve(&config_dir)),
+		sidecar,
 		#[cfg(feature = "finder-write")]
 		finder_assets,
 	})

@@ -142,6 +142,10 @@ pub enum PreflightError {
 	SerialWorkers,
 	#[error("a stream has no destination file to overwrite")]
 	OverwriteStream,
+	#[error(
+		"metadata sidecar requires preserving Finder information, resource forks, or attributes"
+	)]
+	MetadataSidecarIgnored,
 	#[error("pre-publication verification requires a staged path output")]
 	VerifyStream,
 	#[error("release stages require a staged path output")]
@@ -217,9 +221,21 @@ pub fn preflight(
 		return Err(PreflightError::FeatureNotCompiled(BuildFeature::License));
 	}
 	if project.metadata.sidecar.is_some() {
-		return Err(PreflightError::FeatureNotCompiled(
-			BuildFeature::MetadataSidecar,
-		));
+		capabilities
+			.metadata_sidecar
+			.require(BuildFeature::MetadataSidecar)?;
+		if !cfg!(any(target_os = "linux", target_os = "macos")) {
+			return Err(PreflightError::BackendUnavailable(
+				BuildFeature::MetadataSidecar,
+			));
+		}
+		let requests = &project.metadata;
+		if !(requests.preserve_finder_info
+			|| requests.preserve_resource_forks
+			|| requests.preserve_extended_attributes)
+		{
+			return Err(PreflightError::MetadataSidecarIgnored);
+		}
 	}
 
 	let limits = limits(project)?;

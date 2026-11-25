@@ -6,7 +6,8 @@ use std::mem::size_of;
 use dmgez_builder::metadata::{self, AttributeLimits};
 use dmgez_builder::{
 	manifest,
-	metadata::{Attribute, policy},
+	metadata::{Attribute, policy, sidecar},
+	planning::PreparedBuild,
 };
 use dmgez_config::Project;
 use hfsplus_builder::volume::{self, EntryKind, EntryMetadata, ForkSource, ManifestEntry};
@@ -26,6 +27,7 @@ pub(super) struct Capture<'scope, 'config, 'build> {
 	pub(super) policy: &'scope policy::Policy<'config>,
 	pub(super) links: &'scope policy::HardLinks,
 	pub(super) project: &'config Project,
+	pub(super) prepared: &'build PreparedBuild,
 	pub(super) supports_file_hard_links: bool,
 	pub(super) remaining: &'scope mut usize,
 	pub(super) losses: &'scope mut Vec<MetadataLoss<'build>>,
@@ -54,6 +56,15 @@ impl<'build> Capture<'_, '_, 'build> {
 		if let Some(source) = &entry.source {
 			let is_file = matches!(&entry.kind, manifest::EntryKind::File);
 			let attributes = self.capture_attributes(entry, source, is_file)?;
+			let attributes =
+				match self.prepared.metadata_sidecar_for(source) {
+					Some(snapshot) => sidecar::merge(attributes, snapshot, self.remaining)
+						.map_err(|cause| Error::Sidecar {
+							path: entry.destination.as_str().into(),
+							cause,
+						})?,
+					None => attributes,
+				};
 			let mut admitted = self
 				.policy
 				.admit(

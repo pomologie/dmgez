@@ -3,6 +3,7 @@
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod capture;
 pub mod policy;
+pub mod sidecar;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use capture::{Error, capture_regular};
