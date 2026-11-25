@@ -10,8 +10,8 @@ description = "Compose the versioned HFS+ builder with dmgez image planning"
 [features]
 default = ["finder-write", "parallel"]
 badge-icons = ["volume-icon", "dmgez-builder/badge-icons"]
-finder-write = ["dmgez-builder/finder-write"]
-image-edit = ["dmgez-config/project-edit", "dep:dmgez-finder", "dep:hfsplus-reader"]
+finder-write = ["dep:dmgez-finder", "dep:dmgez-macho", "dmgez-builder/finder-write"]
+image-edit = ["dmgez-config/project-edit", "dep:dmgez-finder", "dep:dmgez-macho", "dep:hfsplus-reader"]
 lzfse = ["dmgez-builder/lzfse"]
 lzma = ["dmgez-builder/lzma"]
 parallel = ["dmgez-builder/parallel"]
@@ -19,6 +19,7 @@ volume-icon = ["finder-write", "dmgez-builder/volume-icon"]
 
 [target.'cfg(any(target_os = "linux", target_os = "macos", windows))'.dependencies]
 # Workspace formats
+dmgez-macho = { version = "=0.1.0", path = "../../formats/dmgez-macho", optional = true }
 dmgez-udif = { version = "=0.1.0", path = "../../formats/dmgez-udif", default-features = false, features = ["write"] }
 
 # Workspace foundation

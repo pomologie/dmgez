@@ -1,5 +1,12 @@
 use std::process::Command;
 
+#[cfg(all(
+	feature = "project-build",
+	feature = "finder-write",
+	feature = "hfsplus-read"
+))]
+#[path = "project_build/finder_flags.rs"]
+mod finder_flags;
 #[cfg(feature = "project-release")]
 #[path = "project_build/release.rs"]
 mod release;

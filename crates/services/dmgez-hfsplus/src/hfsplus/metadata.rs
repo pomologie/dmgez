@@ -10,6 +10,10 @@ use dmgez_builder::{
 	planning::PreparedBuild,
 };
 use dmgez_config::Metadata;
+#[cfg(feature = "finder-write")]
+use dmgez_finder::finder_info::DisplayFlags;
+#[cfg(feature = "finder-write")]
+use dmgez_macho::bundle::is_signing_attribute;
 use hfsplus_builder::volume::{self, EntryKind, EntryMetadata, ForkSource, ManifestEntry};
 
 use super::{Error, Payload, charge, relative};
@@ -58,13 +62,20 @@ impl Capture<'_, '_> {
 		entry: &'build manifest::Entry,
 		generated_seconds: u32,
 		prepared: &PreparedBuild,
+		#[cfg(feature = "finder-write")] flags: DisplayFlags,
 	) -> Result<CapturedEntry<'build>, Error> {
 		let path = relative(&entry.destination)?;
 		let sidecar = entry
 			.source
 			.as_ref()
 			.and_then(|source| prepared.metadata_sidecar_for(source));
-		let captured = self.metadata(entry, generated_seconds, sidecar)?;
+		let captured = self.metadata(
+			entry,
+			generated_seconds,
+			sidecar,
+			#[cfg(feature = "finder-write")]
+			flags,
+		)?;
 		let kind = match &entry.kind {
 			manifest::EntryKind::Directory => EntryKind::Folder,
 			manifest::EntryKind::File => EntryKind::File {
@@ -96,6 +107,7 @@ impl Capture<'_, '_> {
 		entry: &manifest::Entry,
 		generated_seconds: u32,
 		sidecar: Option<&manifest::SourceSnapshot>,
+		#[cfg(feature = "finder-write")] flags: DisplayFlags,
 	) -> Result<CapturedMetadata, Error> {
 		validate_finder_overrides(entry)?;
 		let mode = match &entry.kind {
@@ -105,8 +117,11 @@ impl Capture<'_, '_> {
 			_ => return Err(unsupported(entry)),
 		};
 		let Some(source) = &entry.source else {
+			let metadata = generated_metadata(mode, generated_seconds);
+			#[cfg(feature = "finder-write")]
+			let metadata = with_display_flags(metadata, flags);
 			return Ok(CapturedMetadata {
-				metadata: generated_metadata(mode, generated_seconds),
+				metadata,
 				resource: None,
 				attributes: Vec::new(),
 				losses: Vec::new(),
@@ -125,6 +140,16 @@ impl Capture<'_, '_> {
 			}
 			None => attributes,
 		};
+		#[cfg(feature = "finder-write")]
+		if flags != DisplayFlags::default()
+			&& let policy::AttributeCapture::Known(attributes) = &attributes
+			&& attributes
+				.extended
+				.iter()
+				.any(|attribute| is_signing_attribute(&attribute.name))
+		{
+			return Err(super::finder_flags::signing_attributes(entry));
+		}
 		let admitted = self
 			.policy
 			.admit(
@@ -145,6 +170,8 @@ impl Capture<'_, '_> {
 			admitted.metadata.finder_info,
 			&admitted.metadata,
 		)?;
+		#[cfg(feature = "finder-write")]
+		let metadata = with_display_flags(metadata, flags);
 		Ok(CapturedMetadata {
 			metadata,
 			resource: admitted.metadata.resource_fork,
@@ -235,8 +262,8 @@ fn validate_icon_source(
 }
 
 pub(super) fn validate_finder_overrides(entry: &manifest::Entry) -> Result<(), Error> {
-	if entry.finder.hidden.is_some()
-		|| entry.finder.hide_extension.is_some()
+	if (!cfg!(feature = "finder-write")
+		&& (entry.finder.hidden.is_some() || entry.finder.hide_extension.is_some()))
 		|| ((!cfg!(feature = "volume-icon") || cfg!(windows)) && entry.finder.custom_icon.is_some())
 	{
 		return Err(Error::FinderFlags {
@@ -244,6 +271,12 @@ pub(super) fn validate_finder_overrides(entry: &manifest::Entry) -> Result<(), E
 		});
 	}
 	Ok(())
+}
+
+#[cfg(feature = "finder-write")]
+fn with_display_flags(mut metadata: EntryMetadata, flags: DisplayFlags) -> EntryMetadata {
+	flags.apply(&mut metadata.finder_info);
+	metadata
 }
 
 fn metadata_capabilities(is_file: bool, supports_file_hard_links: bool) -> policy::Capabilities {

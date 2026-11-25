@@ -325,6 +325,7 @@ dependencies = [
  "dmgez-config",
  "dmgez-core",
  "dmgez-finder",
+ "dmgez-macho",
  "dmgez-udif",
  "flate2",
  "fs_at",
@@ -390,12 +391,18 @@ dependencies = [
  "dmgez-builder",
  "dmgez-config",
  "dmgez-core",
+ "dmgez-finder",
+ "dmgez-macho",
  "dmgez-udif",
  "hfsplus-builder",
  "hfsplus-format",
  "hfsplus-pomologie-core",
  "thiserror",
 ]
+
+[[package]]
+name = "dmgez-macho"
+version = "0.1.0"
 
 [[package]]
 name = "dmgez-udif"

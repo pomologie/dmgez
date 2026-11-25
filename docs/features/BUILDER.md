@@ -17,6 +17,8 @@ The canonical external document is `dmg.toml`, `schema_version=1` (draft until r
 
 The current macOS and Linux `build` command shares the HFS+ preparation, sealing, and publication service with the compatibility runner. Its CLI tests exercise the dry-run and publication paths under D-BUILD-01 and D-BUILD-05. The local composition tool resolves exact versioned HFS+ packages from explicitly supplied sources and compiles a standalone binary. The ordinary workspace can link the same service when the HFS+ packages are available from the release registry. See the [local build instructions](../../README.md#build-from-a-toml-project) and [CLI tests](../../apps/dmgez-cli/tests/project_build_cli.rs).
 
+With `finder-write` enabled, `hidden` and `hide_extension` apply to file, directory and symlink catalog records after host metadata capture. Set either option to `false` to clear its bit. Omit an option to preserve the captured value. Hard-link aliases share FinderInfo, so conflicting explicit values are rejected. The builder checks affected paths and sources for signing-sensitive content before applying display overrides. [Apple code-signing restrictions](https://developer.apple.com/library/archive/qa/qa1940/_index.html)
+
 ### Import one AppleDouble sidecar
 
 On macOS and Linux, set `sidecar = "sources/._Manual.pdf"` under `[metadata]` to supplement the single included regular source `sources/Manual.pdf`. The association follows the host source name, so the file can have a different image name. When copying a directory, exclude the named sidecar from image content. The build rejects ambiguous associations, hard-linked targets, and custom icons on the same file.

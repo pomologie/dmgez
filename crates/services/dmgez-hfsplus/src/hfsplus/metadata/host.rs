@@ -127,7 +127,13 @@ fn capture_entry(
 ) -> Result<HostEntry, Error> {
 	let source = entry.source.as_ref().ok_or_else(|| unsupported(entry))?;
 	source.validate().map_err(planning::Error::from)?;
-	let captured = capture.metadata(entry, MISSING_HFS_DATE, None)?;
+	let captured = capture.metadata(
+		entry,
+		MISSING_HFS_DATE,
+		None,
+		#[cfg(feature = "finder-write")]
+		Default::default(),
+	)?;
 	let kind = match &entry.kind {
 		EntryKind::Directory => HostKind::Directory,
 		EntryKind::File => {

@@ -1,14 +1,11 @@
-use std::{collections::TryReserveError, io::Write, mem::size_of, path::Path};
+use std::{io::Write, mem::size_of, path::Path};
 
-#[cfg(not(windows))]
-use dmgez_builder::metadata as host_metadata;
 use dmgez_builder::{
-	execution::{BuildPlan, BuildReport, ExecuteError, OutputVerifier},
-	metadata::{Attribute, policy, sidecar},
+	execution::{BuildPlan, BuildReport, OutputVerifier},
+	metadata::{Attribute, policy},
 	planning::{self, PreparedBuild},
 	preflight::{
-		Availability, BuildCapabilities, ExecutionProfile, FilesystemProfile, PreflightError,
-		PreflightOptions,
+		Availability, BuildCapabilities, ExecutionProfile, FilesystemProfile, PreflightOptions,
 	},
 	progress::BuildProgress,
 };
@@ -16,13 +13,15 @@ use dmgez_config::{Capacity, Project, VirtualPath};
 use dmgez_udif::writer::{Cancellation, WriteOptions};
 use hfsplus_builder::{
 	SealedPlan,
-	volume::{self, CapacityError, CapacityPolicy, ManifestEntry, VolumeError, VolumeOptions},
+	volume::{self, CapacityPolicy, ManifestEntry, VolumeOptions},
 };
 use hfsplus_core::ByteLen;
-use thiserror::Error;
 
+mod error;
 #[cfg(feature = "finder-write")]
 mod finder;
+#[cfg(feature = "finder-write")]
+mod finder_flags;
 mod hard_links;
 #[cfg(feature = "volume-icon")]
 mod item_icons;
@@ -30,6 +29,7 @@ mod metadata;
 mod release_stage;
 mod source;
 
+pub use error::Error;
 use metadata::{Capture, DEFAULT_FOLDER_MODE, MISSING_HFS_DATE, epoch_seconds, generated_metadata};
 use source::Payload;
 
@@ -42,87 +42,6 @@ pub(crate) use source::read_host_source;
 
 const ALLOCATION_BLOCK_BYTES: u32 = 4096;
 const IMAGE_PATH_SEPARATOR: char = '/';
-
-#[derive(Debug, Error)]
-#[non_exhaustive]
-pub enum Error {
-	#[error(transparent)]
-	Prepare(#[from] planning::Error),
-	#[error(transparent)]
-	Filesystem(#[from] VolumeError),
-	#[error(transparent)]
-	Capacity(#[from] CapacityError),
-	#[error(transparent)]
-	Profile(#[from] PreflightError),
-	#[error(transparent)]
-	Execute(#[from] ExecuteError),
-	#[cfg(feature = "finder-write")]
-	#[error(transparent)]
-	Finder(#[from] dmgez_builder::presentation::Error),
-	#[cfg(feature = "finder-write")]
-	#[error("a reserved Finder background identity is missing at {path:?}")]
-	BackgroundIdentity { path: String },
-	#[cfg(feature = "finder-write")]
-	#[error("the stored HFS+ volume name cannot be represented in a Finder alias")]
-	BackgroundVolumeName(#[source] std::string::FromUtf16Error),
-	#[error("build was cancelled while sealing the HFS+ image")]
-	Cancelled,
-	#[error("build metadata exceeds the available byte budget")]
-	MetadataBudget,
-	#[error("could not reserve bounded adapter metadata")]
-	Reserve(#[from] TryReserveError),
-	#[error("HFS+ adapter received an unsupported build profile")]
-	UnsupportedProfile,
-	#[error("virtual path is outside the HFS+ manifest profile: {path:?}")]
-	Path { path: String },
-	#[error("source metadata policy failed for {path:?}")]
-	Policy {
-		path: String,
-		#[source]
-		cause: policy::Error,
-	},
-	#[error("hard-link grouping failed")]
-	HardLinks(#[source] policy::Error),
-	#[error("hard-link source validation failed")]
-	LinkSource(#[source] dmgez_builder::manifest::Error),
-	#[error("hard-link aliases have inconsistent source metadata at {path:?}")]
-	LinkMetadata { path: String },
-	#[cfg(not(windows))]
-	#[error("could not capture regular-source metadata for {path:?}")]
-	Capture {
-		path: String,
-		#[source]
-		cause: host_metadata::Error,
-	},
-	#[error("could not merge the AppleDouble sidecar for {path:?}")]
-	Sidecar {
-		path: String,
-		#[source]
-		cause: sidecar::Error,
-	},
-	#[error("unsupported source kind or missing source at {path:?}")]
-	UnsupportedEntry { path: String },
-	#[error("requested Finder flag overrides are unavailable at {path:?}")]
-	FinderFlags { path: String },
-	#[cfg(feature = "volume-icon")]
-	#[error("a custom Finder icon cannot be applied to the item at {path:?}")]
-	CustomIconTarget { path: String },
-	#[cfg(feature = "volume-icon")]
-	#[error("a custom Finder icon cannot change shared hard-link metadata at {path:?}")]
-	CustomIconHardLink { path: String },
-	#[cfg(feature = "volume-icon")]
-	#[error("a custom Finder icon would replace an existing resource fork at {path:?}")]
-	CustomIconResourceFork { path: String },
-	#[cfg(all(feature = "volume-icon", not(windows)))]
-	#[error("a custom Finder icon would invalidate native code-signing metadata at {path:?}")]
-	CustomIconSigningMetadata { path: String },
-	#[error("HFS+ timestamp exceeds the representable epoch")]
-	Timestamp,
-	#[error("admitted build has no output path")]
-	OutputPath,
-	#[error("admitted attribute name cannot be represented in HFS+")]
-	AttributeName(#[from] std::str::Utf8Error),
-}
 
 /// One explicit metadata omission or loss and the corresponding image entry.
 #[derive(Debug)]
@@ -169,6 +88,7 @@ pub fn capabilities() -> BuildCapabilities {
 		Availability::Available
 	};
 	if cfg!(feature = "finder-write") {
+		capabilities.finder_flags = Availability::Available;
 		capabilities.finder_layout = Availability::Available;
 		capabilities.finder_image_background = Availability::Available;
 	}
@@ -313,6 +233,8 @@ fn seal<'build>(
 		&mut remaining,
 		usize::try_from(manifest.metadata_bytes()).map_err(|_| Error::MetadataBudget)?,
 	)?;
+	#[cfg(feature = "finder-write")]
+	let finder_flag_targets = finder_flags::signed_targets(manifest.entries(), &mut remaining)?;
 	let links = policy::HardLinks::discover(manifest, remaining).map_err(Error::HardLinks)?;
 	charge(&mut remaining, links.accounted_bytes())?;
 	let supports_file_hard_links = profile.filesystem() == FilesystemProfile::HfsplusUnicode;
@@ -362,7 +284,23 @@ fn seal<'build>(
 			members.push(member);
 			continue;
 		}
-		let captured = capture.entry(entry, generated_seconds, prepared)?;
+		#[cfg(feature = "finder-write")]
+		let flags = {
+			let flags = finder_flags::overrides(entry);
+			if flags != Default::default()
+				&& let Some(targets) = &finder_flag_targets
+			{
+				finder_flags::validate_target(targets, entry)?;
+			}
+			flags
+		};
+		let captured = capture.entry(
+			entry,
+			generated_seconds,
+			prepared,
+			#[cfg(feature = "finder-write")]
+			flags,
+		)?;
 		let catalog_entry = captured.entry;
 		if !captured.losses.is_empty() {
 			losses.push(MetadataLoss {
@@ -390,8 +328,9 @@ fn seal<'build>(
 		&mut pending_attrs,
 		&mut losses,
 		generated_seconds,
-		cancellation,
 		prepared,
+		#[cfg(feature = "finder-write")]
+		finder_flag_targets.as_ref(),
 	)?;
 	#[cfg(feature = "finder-write")]
 	finder::reserve_assets(prepared, &mut entries, generated_seconds, cancellation)?;
