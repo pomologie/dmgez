@@ -135,7 +135,7 @@ pub struct FilesystemObjectId(pub u64);
 
 impl Serialize for FilesystemObjectId {
 	fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
-		crate::decimal(&self.0, serializer)
+		crate::schema::decimal(&self.0, serializer)
 	}
 }
 
@@ -196,9 +196,9 @@ pub struct FilesystemCheckReport {
 	/// The entire image's filesystem layer passed when this field is true.
 	pub all_filesystems_checked: bool,
 	/// Reads admitted under the budget, including any failed source read.
-	#[serde(serialize_with = "crate::decimal")]
+	#[serde(serialize_with = "crate::schema::decimal")]
 	pub charged_read_requests: u64,
-	#[serde(serialize_with = "crate::decimal")]
+	#[serde(serialize_with = "crate::schema::decimal")]
 	pub charged_read_bytes: u64,
 }
 

@@ -7,9 +7,10 @@ use dmgez_udif::{
 use serde::Serialize;
 
 use crate::{
-	CAPABILITIES, Capabilities, CheckStatus, ContainerSummary, Coverage, Diagnostic, ErrorCategory,
+	Capabilities, CheckStatus, ContainerSummary, Coverage, Diagnostic, ErrorCategory,
 	FilesystemCheckError, FilesystemCheckReport, FilesystemEvidence, FilesystemOptions,
 	FilesystemSource, ReportOperation, SCHEMA_VERSION, Stage, filesystem::verify_window,
+	schema::CAPABILITIES,
 };
 
 /// Work requested by the caller.

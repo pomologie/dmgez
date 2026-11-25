@@ -6,7 +6,9 @@ use dmgez_udif::{
 };
 use serde::{Serialize, Serializer};
 
-use crate::{CAPABILITIES, Capabilities, Coverage, DiskReport, ReportOperation, SCHEMA_VERSION};
+use crate::{
+	Capabilities, Coverage, DiskReport, ReportOperation, SCHEMA_VERSION, schema::CAPABILITIES,
+};
 
 const SINGLE_SEGMENT_COUNT: u32 = 1;
 
@@ -17,9 +19,9 @@ pub const MAX_RUN_PAGE_SIZE: usize = 1024;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[non_exhaustive]
 pub struct ByteRange {
-	#[serde(serialize_with = "crate::decimal")]
+	#[serde(serialize_with = "crate::schema::decimal")]
 	pub offset_bytes: u64,
-	#[serde(serialize_with = "crate::decimal")]
+	#[serde(serialize_with = "crate::schema::decimal")]
 	pub length_bytes: u64,
 }
 
@@ -88,9 +90,9 @@ pub struct ContainerSummary {
 	pub segment_id: SegmentId,
 	pub variant: u32,
 	pub sector_bytes: u64,
-	#[serde(serialize_with = "crate::decimal")]
+	#[serde(serialize_with = "crate::schema::decimal")]
 	pub physical_bytes: u64,
-	#[serde(serialize_with = "crate::decimal")]
+	#[serde(serialize_with = "crate::schema::decimal")]
 	pub logical_bytes: u64,
 	pub data_fork: ByteRange,
 	pub resource_xml: ByteRange,
@@ -235,7 +237,7 @@ impl RunWindow {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[non_exhaustive]
 pub struct RunPage {
-	#[serde(serialize_with = "crate::decimal")]
+	#[serde(serialize_with = "crate::schema::decimal")]
 	pub offset: u64,
 	pub next_offset: Option<usize>,
 	pub runs: Vec<Run>,

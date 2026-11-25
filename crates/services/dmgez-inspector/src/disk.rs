@@ -116,7 +116,7 @@ pub enum PartitionDetails {
 		name: String,
 		type_guid: PartitionGuid,
 		unique_guid: PartitionGuid,
-		#[serde(serialize_with = "crate::decimal")]
+		#[serde(serialize_with = "crate::schema::decimal")]
 		attributes: u64,
 	},
 	Mbr {

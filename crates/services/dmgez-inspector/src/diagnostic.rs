@@ -58,25 +58,25 @@ impl ErrorCategory {
 pub enum DiagnosticDetail {
 	UnsupportedRun {
 		code: u32,
-		#[serde(serialize_with = "crate::decimal")]
+		#[serde(serialize_with = "crate::schema::decimal")]
 		logical_sector: u64,
 	},
 	InvalidZlib {
-		#[serde(serialize_with = "crate::decimal")]
+		#[serde(serialize_with = "crate::schema::decimal")]
 		physical_offset_bytes: u64,
-		#[serde(serialize_with = "crate::decimal")]
+		#[serde(serialize_with = "crate::schema::decimal")]
 		logical_offset_bytes: u64,
 	},
 	InvalidLzfse {
-		#[serde(serialize_with = "crate::decimal")]
+		#[serde(serialize_with = "crate::schema::decimal")]
 		physical_offset_bytes: u64,
-		#[serde(serialize_with = "crate::decimal")]
+		#[serde(serialize_with = "crate::schema::decimal")]
 		logical_offset_bytes: u64,
 	},
 	InvalidLzma {
-		#[serde(serialize_with = "crate::decimal")]
+		#[serde(serialize_with = "crate::schema::decimal")]
 		physical_offset_bytes: u64,
-		#[serde(serialize_with = "crate::decimal")]
+		#[serde(serialize_with = "crate::schema::decimal")]
 		logical_offset_bytes: u64,
 	},
 	ChecksumMismatch {
@@ -88,13 +88,13 @@ pub enum DiagnosticDetail {
 	},
 	LogicalRange {
 		requested: ByteRange,
-		#[serde(serialize_with = "crate::decimal")]
+		#[serde(serialize_with = "crate::schema::decimal")]
 		available_bytes: u64,
 	},
 	/// Byte request relative to the admitted filesystem data window.
 	FilesystemWindowRange {
 		requested: ByteRange,
-		#[serde(serialize_with = "crate::decimal")]
+		#[serde(serialize_with = "crate::schema::decimal")]
 		available_bytes: u64,
 	},
 	VolumeSelection {

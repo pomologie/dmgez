@@ -8,9 +8,9 @@ use crate::{Coverage, ReportOperation, SCHEMA_VERSION};
 #[non_exhaustive]
 pub struct RunSpace {
 	pub count: usize,
-	#[serde(serialize_with = "crate::decimal")]
+	#[serde(serialize_with = "crate::schema::decimal")]
 	pub logical_bytes: u64,
-	#[serde(serialize_with = "crate::decimal")]
+	#[serde(serialize_with = "crate::schema::decimal")]
 	pub stored_bytes: u64,
 }
 
@@ -57,13 +57,13 @@ pub struct AnalysisReport {
 	pub schema_version: u32,
 	pub operation: ReportOperation,
 	/// Complete physical image length. Divide by `runs.logical_bytes` for its storage ratio.
-	#[serde(serialize_with = "crate::decimal")]
+	#[serde(serialize_with = "crate::schema::decimal")]
 	pub container_bytes: u64,
 	/// Bytes outside the data fork, including metadata and any intervening gaps.
-	#[serde(serialize_with = "crate::decimal")]
+	#[serde(serialize_with = "crate::schema::decimal")]
 	pub outside_data_fork_bytes: u64,
 	/// Bytes inside the data fork that no normalized run references.
-	#[serde(serialize_with = "crate::decimal")]
+	#[serde(serialize_with = "crate::schema::decimal")]
 	pub unmapped_data_fork_bytes: u64,
 	/// Sum across all runs. The mapped storage ratio is `stored_bytes / logical_bytes`.
 	pub runs: RunSpace,
