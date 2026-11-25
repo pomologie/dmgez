@@ -4,12 +4,12 @@ These are scope and evidence gates, not dates. Every release claims only the sup
 
 | Release | Scope | Required gates (requirement families) | Nonblocking deferrals |
 |---|---|---|---|
-| 0.1.0 | Native UDIF UDRO/UDZO read/write, single-segment, raw-sector streaming; integrate independently qualified HFS+ sealed plan to produce first mountable image | D-UDIF-01..04, H-FMT/BUILD/READ initial profiles; native attach, fsck, verify, raw-byte comparison, malformed inputs | Finder parity, GUI, APFS |
-| 0.2.0 | Functional minimal builder: TOML, arbitrary content, Mac metadata, basic Finder layout, bounded Rayon default, progress/dry-run | D-BUILD-01..05, D-FINDER-01, D-PERF-01, D-CI-01; build on all three hosts and attach on macOS | Advanced layout, complete read CLI |
+| 0.1.0 | `dmg.toml` to a partitionless HFS+ image in single-segment UDRO or UDZO, with dry-run, offline ad hoc signing, verification, and standalone CLI archives | D-UDIF-01..04, initial H-FMT/BUILD/READ profiles, native attach and read-only fsck, independent raw-byte comparison, malformed inputs, cross-host project and archive checks | Finder parity, GUI, APFS |
+| 0.2.0 | Expand the project builder to arbitrary content, Mac metadata, basic Finder layout, bounded Rayon default, and progress reporting | D-BUILD-01..05, D-FINDER-01, D-PERF-01, D-CI-01; build on all three hosts and attach on macOS | Advanced layout, complete read CLI |
 | 0.3.0 | Practical dmgbuild replacement for modern HFS+ installers; complete applicable root-view settings, multi-res assets, list view, icons, import, performance baselines | D-FINDER-02..03, D-UDIF-05 (ULFO qualified opt-in), compatibility inventory (all applicable settings mapped, test or explicit defer); D-PERF-02 unsigned reproducibility | APFS, sparse, legacy/EULA, deprecated unsupported views; clearly documented differences |
 | 0.4.0 | Deep inspection, VFS, verify, extract, partition detection, native reference comparisons, HFSX read where qualified | D-READ-01..05, D-UDIF-06 (signed metadata/multi-table qualified as applicable); malformed images and safe extraction | No OS mount required |
 | 0.5.0 | GUI builder, actual DMG explorer, technical inspector, shared headless preview, project round-trip | D-GUI-01..03; GUI works without mount drivers; native Finder oracle and keyboard/accessibility | OS drag-out integration later |
-| 0.6.0 | Default Rust ad hoc DMG signing on macOS, Linux and Windows, opt-in native Developer ID signing and notarization, release gates, semantic diff and lint | D-REL-01..04, protected native tests, explicit trust vs structural states | Cross-platform Gatekeeper evaluation impossible; report unavailable |
+| 0.6.0 | Opt-in native Developer ID signing and notarization, advanced release gates, semantic diff and lint | D-REL-01..04, protected native tests, explicit trust vs structural states | Cross-platform Gatekeeper evaluation impossible; report unavailable |
 | 0.7.0 | Edit/rebuild, format convert, optimize, analyze, incremental block cache | D-OPS-01..02, D-PERF-03; source immutable, metadata loss policy, signature invalidation | Unsafe in-place compressed edits |
 | 0.8.0 | Virtual install and drag-out, optional host mounting, managed install monitoring & safe ejection | D-MOUNT-01..03; separate per-OS backend qualification, no forced eject | Writable mount, no automatic DMG code execution |
 | 0.9.0 | MCP, remote range-backed image inspect, ULMO/UDRW and partitioned layouts as qualified | D-OPS-03..04; gated remote/MCP permissions and cross-platform tests; modern codec matrix | Any unqualified variant remains deferred |
@@ -18,6 +18,8 @@ These are scope and evidence gates, not dates. Every release claims only the sup
 **First major payoff is 0.3.0.** Once it builds actual signed app installers on all three host OSes, subsequent services are independent opt-in releases. First gate is raw UDRO then UDZO, not a polished GUI. HFS+ build/release qualification may occur concurrently with UDIF; native `newfs_hfs` fixtures allow UDIF development before HFS+ writer. HFS+ 0.1 read-only subset supports verification tests but need not link into default dmgez. Start APFS container research in parallel only if resources permit. Never block HFS+ releases on Charles integration.
 
 ## Milestone acceptance procedure
+
+The [v0.1.0 release profile](../features/RELEASE.md#v010-release-profile) records the project workflow and its current evidence.
 
 1. Open `docs/reference/requirements.json`, select all relevant requirement IDs and mandatory acceptance cases in `test-catalog.json`. Check owning spec, version, evidence IDs and prerequisites.
 2. Implement only current scope, update capability graph and ledger; test negative cases early. Run docs validator, unit/property/fuzz smoke, dependency graph and cross-target feature jobs.
