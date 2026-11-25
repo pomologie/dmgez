@@ -5,7 +5,9 @@ use rmcp::schemars::{self, JsonSchema};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 
-use super::{Issue, ProjectRoot};
+use crate::local::LocalRoot;
+
+use super::Issue;
 
 const SHA256_HEX_BYTES: usize = 64;
 
@@ -26,7 +28,7 @@ pub(crate) enum Reading {
 	Busy,
 }
 
-impl ProjectRoot {
+impl LocalRoot {
 	pub(crate) fn read(&self, file_name: &str) -> Reading {
 		match self.parse_manifest(file_name) {
 			Ok((project, input)) => Reading::Read {

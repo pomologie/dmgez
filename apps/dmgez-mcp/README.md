@@ -13,9 +13,13 @@ Configure the client to launch the binary with `--project-root` and the physical
 
 `project_read` returns the SHA-256 of the exact admitted file bytes, byte count, content count, image format, filesystem, and reproducibility setting. `project_validate` returns the content count for a valid manifest.
 
-`capabilities` reports schema versions and resource limits. The server accepts a 1 MiB manifest, a 32 KiB incoming stdio frame, 32 outstanding requests, and one project operation at a time. The transport pauses reading while the output pipe has reached the outstanding request limit. The client can retry a `busy` response later. All four tools are read-only.
+Supply `--image-root /physical/path/to/images` to authorize a separate directory for the read-only `image_inspect` and `image_verify` tools. Both take `file_name`, a single `.dmg` name in that directory. The image root is held open for the session and uses the same direct regular-file admission as the project root. The server lists the image tools only when the image root is configured.
 
-The stdio integration tests cover part of D-OPS-04-T01, including the MCP initialization handshake, typed schemas, denied mutations, path confinement, untrusted text, bounded listing, and revision changes. D-OPS-04-T02 depends on a future approved build tool. Windows support needs a separately qualified handle-relative file adapter.
+`image_inspect` summarizes the admitted unsigned UDIF container with byte counts and block map and run counts. `image_verify` checks the trailer and block map structure in quick mode. Its coverage fields report payload, filesystem, and signature checks as `not_checked`. Both operations read at most two metadata ranges totaling 1 MiB plus the 512-byte trailer. Responses report numeric metadata and typed outcome codes.
+
+`capabilities` reports schema versions, resource limits, and whether image inspection is available. The server accepts a 1 MiB manifest, a 32 KiB incoming stdio frame, 32 outstanding requests, and one local file operation at a time. The transport pauses reading while the output pipe has reached the outstanding request limit. The client can retry a `busy` response later. All tools are read-only.
+
+The stdio integration tests cover part of D-OPS-04-T01, including the MCP initialization handshake, typed schemas, denied mutations, path confinement, untrusted text, bounded listing, manifest revision changes, and confined UDIF metadata reads. D-OPS-04-T02 depends on a future approved build tool. Windows support needs a separately qualified handle-relative file adapter.
 
 ```sh
 cargo test --locked -p dmgez-mcp

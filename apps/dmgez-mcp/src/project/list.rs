@@ -5,7 +5,9 @@ use rustix::{
 };
 use serde::Serialize;
 
-use super::{ProjectRoot, is_direct_manifest, project_name, same_observation};
+use crate::local::{LocalRoot, is_direct_file, same_observation};
+
+use super::project_name;
 
 pub(crate) const MAX_DIRECTORY_ENTRIES: usize = 4096;
 pub(crate) const MAX_PAGE_SIZE: usize = 16;
@@ -33,7 +35,7 @@ pub(crate) enum ListIssue {
 	DirectoryScanLimit,
 }
 
-impl ProjectRoot {
+impl LocalRoot {
 	pub(crate) fn list(&self, after: Option<&str>, page_size: Option<usize>) -> Listing {
 		match self.manifest_names(after, page_size.unwrap_or(MAX_PAGE_SIZE)) {
 			Ok((file_names, next_after)) => Listing::Listed {
@@ -79,7 +81,7 @@ impl ProjectRoot {
 					ListIssue::DirectoryUnavailable
 				}
 			})?;
-			if is_direct_manifest(&stat) {
+			if is_direct_file(&stat) {
 				if stat.st_ino != entry.ino() {
 					return Err(ListIssue::DirectoryChanged);
 				}

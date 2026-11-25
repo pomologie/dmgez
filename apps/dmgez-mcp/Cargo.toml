@@ -8,9 +8,15 @@ repository.workspace = true
 description = "Local MCP tools for dmgez projects"
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+# Workspace formats
+dmgez-udif = { workspace = true, features = ["read"] }
+
 # Workspace foundation
 dmgez-config.workspace = true
 dmgez-core = { workspace = true, features = ["source"] }
+
+# Workspace services
+dmgez-inspector.workspace = true
 
 # Hashes and checksums
 sha2.workspace = true

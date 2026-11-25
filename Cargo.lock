@@ -1257,6 +1257,8 @@ dependencies = [
  "clap",
  "dmgez-config",
  "dmgez-core",
+ "dmgez-inspector",
+ "dmgez-udif",
  "rmcp",
  "rustix 1.1.6",
  "serde",

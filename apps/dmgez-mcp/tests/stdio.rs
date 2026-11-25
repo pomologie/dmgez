@@ -1,5 +1,8 @@
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 
+#[path = "stdio/images.rs"]
+mod images;
+
 use std::{
 	collections::BTreeSet,
 	fs::{self, File},
@@ -78,6 +81,7 @@ fn serves_only_typed_read_only_tools_and_uses_the_shared_project_parser() {
 	let report = client.tool(CAPABILITIES, json!({}));
 	assert_eq!(report["schema_version"], 1);
 	assert_eq!(report["manifest_schema_version"], 1);
+	assert_eq!(report["image_inspection"], false);
 	assert_eq!(
 		client.validate(VALID_FILE),
 		json!({"status":"valid", "content_entries":1})
@@ -338,9 +342,16 @@ struct Client {
 
 impl Client {
 	fn start(root: &Path) -> Self {
-		let mut process = Command::new(env!("CARGO_BIN_EXE_dmgez-mcp"))
-			.arg("--project-root")
-			.arg(root)
+		Self::start_with_images(root, None)
+	}
+
+	fn start_with_images(project_root: &Path, image_root: Option<&Path>) -> Self {
+		let mut command = Command::new(env!("CARGO_BIN_EXE_dmgez-mcp"));
+		command.arg("--project-root").arg(project_root);
+		if let Some(root) = image_root {
+			command.arg("--image-root").arg(root);
+		}
+		let mut process = command
 			.stdin(Stdio::piped())
 			.stdout(Stdio::piped())
 			.spawn()

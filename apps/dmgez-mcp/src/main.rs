@@ -1,6 +1,10 @@
 use std::process::ExitCode;
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
+mod image;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod local;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 mod project;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 mod server;
