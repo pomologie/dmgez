@@ -6,8 +6,7 @@
 
 mod background_alias;
 pub mod edit;
-#[cfg(feature = "volume-icon")]
-mod finder_info;
+pub mod finder_info;
 pub mod inspection;
 #[cfg(feature = "volume-icon")]
 pub mod item_icon;
