@@ -98,6 +98,22 @@ pub enum ForkKind {
 	Resource,
 }
 
+/// Whether the checked source objects carry a recorded quarantine marker.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum Quarantine {
+	Clear,
+	Marked,
+	Unavailable,
+}
+
+/// Scope for a quarantine marker check.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+pub enum QuarantineScope {
+	Object,
+	/// Check the object and every containing directory through the volume root.
+	Ancestors,
+}
+
 /// Engine operator that advances one bounded directory scan.
 pub trait DirectoryReader {
 	type Id: Copy;
@@ -126,6 +142,15 @@ pub trait VolumeBackend {
 	/// A numeric engine-native identity, when its identifier has such a representation.
 	fn numeric_id(&self, _node: Self::Id) -> Option<u64> {
 		None
+	}
+
+	/// Queries source quarantine without opening the object's data fork.
+	fn quarantine(
+		&mut self,
+		_node: Self::Id,
+		_scope: QuarantineScope,
+	) -> Result<Quarantine, Self::Error> {
+		Ok(Quarantine::Unavailable)
 	}
 
 	/// Finds one child in a directory without resolving a symbolic link.
@@ -301,6 +326,21 @@ impl<B: VolumeBackend> VolumeView<B> {
 	/// Rejects an object handle from another view.
 	pub fn numeric_id(&self, node: &NodeHandle<B::Id>) -> Result<Option<u64>, ViewError<B::Error>> {
 		Ok(self.backend.numeric_id(self.require_session(node)?))
+	}
+
+	/// Checks the recorded quarantine state of an admitted object.
+	///
+	/// # Errors
+	/// Rejects foreign handles and propagates a backend attribute or lookup failure.
+	pub fn quarantine(
+		&mut self,
+		node: &NodeHandle<B::Id>,
+		scope: QuarantineScope,
+	) -> Result<Quarantine, ViewError<B::Error>> {
+		let local = self.require_session(node)?;
+		self.backend
+			.quarantine(local, scope)
+			.map_err(ViewError::Backend)
 	}
 
 	/// Gets effective metadata with any storage group scoped to this view.

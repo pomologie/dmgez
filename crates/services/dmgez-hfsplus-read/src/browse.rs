@@ -8,13 +8,14 @@ use dmgez_vfs::{
 	Disk, LogicalDisk, VolumeId, Window,
 	volume::{
 		DirectoryEntry, DirectoryPage, DirectoryReader, ForkKind, ForkReader, HardLink, LookupName,
-		Metadata, NodeKind, RawName, VolumeBackend, VolumeView,
+		Metadata, NodeKind, Quarantine, QuarantineScope, RawName, VolumeBackend, VolumeView,
 	},
 };
 use hfsplus_core::{ByteLen, ByteOffset, ReadAt};
 use hfsplus_format::volume::CatalogId;
 use hfsplus_reader::{
 	Volume,
+	attributes::AttributeReadError,
 	catalog::{
 		Catalog, CatalogError, CatalogLimits, Directory, Entry, EntryKind, HardLinkError,
 		HardLinkLimits, RegularFile,
@@ -22,6 +23,8 @@ use hfsplus_reader::{
 	decmpfs::{LogicalDataError, LogicalDataLimits},
 	overflow::{ForkKind as HfsFork, OverflowError, OverflowLimits},
 };
+
+mod quarantine;
 
 const BSD_TYPE_MASK: u16 = 0o170000;
 const BSD_REGULAR_FILE: u16 = 0o100000;
@@ -75,6 +78,8 @@ pub enum Error {
 	StoredFork(#[from] OverflowError<SourceError>),
 	#[error(transparent)]
 	LogicalData(#[from] LogicalDataError<SourceError>),
+	#[error(transparent)]
+	Attributes(#[from] AttributeReadError<SourceError>),
 	#[error(transparent)]
 	Allocation(#[from] TryReserveError),
 	#[error("unsupported HFS+ lookup encoding")]
@@ -210,6 +215,10 @@ impl<'volume, 'disk, S: LogicalDisk> VolumeBackend for HfsBackend<'volume, 'disk
 
 	fn numeric_id(&self, id: CatalogId) -> Option<u64> {
 		Some(u64::from(id.0))
+	}
+
+	fn quarantine(&mut self, node: CatalogId, scope: QuarantineScope) -> Result<Quarantine, Error> {
+		self.check_quarantine(node, scope)
 	}
 
 	fn lookup(
