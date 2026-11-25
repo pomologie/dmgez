@@ -11,6 +11,8 @@ use super::{
 	Record, Value, first_leaf, fork_start, fs, hfsplus, open_output, options,
 };
 
+#[path = "color_background.rs"]
+mod color;
 #[path = "retina_background.rs"]
 mod retina;
 
