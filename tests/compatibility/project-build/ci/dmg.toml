@@ -4,7 +4,7 @@ schema_version = 1
 name = "Pomologie CI"
 output = "installer.dmg"
 format = "udzo"
-size = "4MiB"
+size = "4096k"
 
 [[contents]]
 source = "release nôtes.bin"
