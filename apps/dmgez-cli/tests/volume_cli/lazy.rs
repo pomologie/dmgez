@@ -4,10 +4,11 @@ use serde_json::Value;
 
 use super::{
 	browse::{
-		FIXTURE_HARD_LINKS, HARD_LINK_DATA, HARD_LINK_RESOURCE, HARD_LINK_VOLUME_BYTES,
-		hfsplus_fixture, materialize_sparse, report, success,
+		FIXTURE_HARD_LINKS, HARD_LINK_DATA, HARD_LINK_RESOURCE, HARD_LINK_VOLUME_BYTES, report,
+		success,
 	},
 	invoke,
+	native_hfsplus::{hfsplus_fixture, materialize_sparse},
 };
 
 const WRITER_CHUNK_BYTES: usize = 1024 * 1024;

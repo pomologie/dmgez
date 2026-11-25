@@ -23,6 +23,7 @@ APFS_VERIFY_TEST = "apfs_verify_cli"
 APFS_EXTRACT_TEST = "apfs_extract_cli"
 EXTRACT_TEST = "extract_cli"
 DECMPFS_TEST = "hfs_decmpfs_cli"
+SEMANTIC_DIFF_TEST = "semantic_diff_cli"
 TOOLCHAIN = "rust-toolchain.toml"
 MANIFEST = "Cargo.toml"
 LOCK = "Cargo.lock"
@@ -42,6 +43,7 @@ READ_FEATURE = "hfsplus-read"
 VERIFY_FEATURE = "hfsplus-verify"
 EXTRACT_FEATURE = "hfsplus-extract"
 DECMPFS_FEATURE = "hfsplus-decmpfs"
+DIFF_FEATURE = "diff"
 READ_PROFILES = (READ_FEATURE, EXTRACT_FEATURE, DECMPFS_FEATURE)
 APFS_READER = "apfs-reader"
 APFS_PACKAGES = {
@@ -225,8 +227,13 @@ def run_cli(cargo, directory, options, packages):
             command.extend(("--test", APFS_VERIFY_TEST))
             if has_cli_feature(options, APFS_EXTRACT_FEATURE):
                 command.extend(("--test", APFS_EXTRACT_TEST))
-        if APFS_READER in packages or any(has_cli_feature(options, name) for name in READ_PROFILES):
+        browse = APFS_READER in packages or any(
+            has_cli_feature(options, name) for name in READ_PROFILES
+        )
+        if browse:
             command.extend(("--test", READ_TEST))
+            if has_cli_feature(options, DIFF_FEATURE):
+                command.extend(("--test", SEMANTIC_DIFF_TEST))
         if HFSPLUS_READER in packages:
             fixtures = packages[HFSPLUS_READER] / "tests" / "fixtures"
             environment.setdefault(HFSPLUS_FIXTURES_ENV, str(fixtures))

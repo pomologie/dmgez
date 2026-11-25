@@ -13,6 +13,10 @@ mod apfs;
 #[path = "volume_cli/lazy.rs"]
 mod lazy;
 
+#[cfg(feature = "hfsplus-read")]
+#[path = "support/native_hfsplus.rs"]
+mod native_hfsplus;
+
 #[cfg(not(all(feature = "hfsplus-read", feature = "apfs-read")))]
 #[path = "volume_cli/unavailable.rs"]
 mod unavailable;
@@ -28,13 +32,13 @@ fn invoke(command: &str, image: &Path, options: &[&str]) -> Output {
 
 #[cfg(feature = "hfsplus-read")]
 mod browse {
-	use std::{collections::BTreeSet, env, fs, path::PathBuf};
+	use std::{collections::BTreeSet, fs};
 
 	use serde_json::Value;
 
+	use super::native_hfsplus::{hfsplus_fixture, materialize_sparse};
 	use super::*;
 
-	const FIXTURE_DIRECTORY_ENV: &str = "DMGEZ_HFSPLUS_FIXTURES";
 	const FIXTURE_APM: &[u8] =
 		include_bytes!("../../../crates/foundation/dmgez-vfs/tests/fixtures/native-apm.dmg");
 	pub(super) const FIXTURE_HARD_LINKS: &str = "native-chained-hardlinks.bin";
@@ -61,40 +65,6 @@ mod browse {
 	const MBR_HFS_TYPE: u8 = 0xaf;
 	const NATIVE_APM_HFS_SLOT: &str = "2";
 	const NATIVE_APM_METADATA_SLOT: &str = "1";
-
-	pub(super) fn hfsplus_fixture(name: &str) -> Vec<u8> {
-		let path = fixture_path(name);
-		fs::read(&path).unwrap_or_else(|error| panic!("{}: {error}", path.display()))
-	}
-
-	fn fixture_path(name: &str) -> PathBuf {
-		let root = env::var_os(FIXTURE_DIRECTORY_ENV).expect("composition supplies HFS+ fixtures");
-		PathBuf::from(root).join(name)
-	}
-
-	// Sibling fixture ledgers describe the sparse format and the independent
-	// filesystem oracles. The CLI receives reconstructed raw disk bytes.
-	pub(super) fn materialize_sparse(mut fixture: &[u8], expected_length: usize) -> Vec<u8> {
-		fn read_field<const WIDTH: usize>(input: &mut &[u8]) -> [u8; WIDTH] {
-			let (value, rest) = input.split_first_chunk().unwrap();
-			*input = rest;
-			*value
-		}
-
-		let len = usize::try_from(u64::from_be_bytes(read_field(&mut fixture))).unwrap();
-		assert_eq!(len, expected_length);
-		let runs = u16::from_be_bytes(read_field(&mut fixture));
-		let mut bytes = vec![0; len];
-		for _ in 0..runs {
-			let start = usize::try_from(u64::from_be_bytes(read_field(&mut fixture))).unwrap();
-			let count = usize::try_from(u32::from_be_bytes(read_field(&mut fixture))).unwrap();
-			let (record, rest) = fixture.split_at(count);
-			bytes[start..][..count].copy_from_slice(record);
-			fixture = rest;
-		}
-		assert!(fixture.is_empty());
-		bytes
-	}
 
 	pub(super) fn success(output: Output) -> Vec<u8> {
 		assert!(
