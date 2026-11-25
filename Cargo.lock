@@ -1105,8 +1105,11 @@ dependencies = [
 name = "dmgez-lint"
 version = "0.1.0"
 dependencies = [
+ "dmgez-builder",
  "dmgez-config",
  "dmgez-preview",
+ "plist",
+ "quick-xml 0.42.0",
  "serde",
  "serde_json",
  "thiserror 2.0.21",

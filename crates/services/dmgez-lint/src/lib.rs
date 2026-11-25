@@ -1,5 +1,7 @@
-//! Bounded diagnostics for the configured Finder icon layout (D-REL-04).
+//! Bounded diagnostics for dmgez projects (D-REL-04).
 
+#[cfg(feature = "installer")]
+pub mod installer;
 mod layout;
 mod report;
 

@@ -33,6 +33,7 @@ repository = "https://github.com/pomologie/dmgez"
 blake3 = { version = "=1.8.7", default-features = false, features = ["pure"] }
 clap = { version = "4.6.8", features = ["derive"] }
 crc32fast = "1.5.5"
+dmgez-builder = { path = "crates/services/dmgez-builder", default-features = false }
 dmgez-config = { path = "crates/foundation/dmgez-config" }
 dmgez-core = { path = "crates/foundation/dmgez-core", default-features = false }
 dmgez-diff = { path = "crates/services/dmgez-diff" }
@@ -52,7 +53,7 @@ icns = { version = "=0.5.0", default-features = false, features = ["pngio"] }
 lzfse_rust = { version = "=0.2.1", default-features = false }
 lzma-rust2 = { version = "=0.25.0", default-features = false, features = ["std", "xz", "encoder"] }
 part-tables = { version = "=0.1.0", default-features = false, features = ["apm", "mbr"] }
-plist = { version = "1.10.4", default-features = false }
+plist = { version = "=1.10.4", default-features = false }
 proptest = { version = "1.12.0", default-features = false, features = ["std"] }
 quick-xml = { version = "0.42.0", default-features = false }
 rayon = "1.12.0"
