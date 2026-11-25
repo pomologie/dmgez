@@ -55,6 +55,15 @@ python3 -B tests/compatibility/volume-read/check_semantic_diff.py --cli target/a
 
 The oracle creates one filesystem and compares its raw, UDRO, and UDZO representations. It then edits the disposable source and confirms the test changes on read-only mounts. dmgez identifies separate fork, mode, symlink, hard-link, and path changes. [Native comparison results](apfs/native-semantic-diff.json)
 
+The native extended-attribute oracle uses both APFS and HFS+ readers. It verifies complete attribute values on read-only macOS mounts and checks name-only difference reports.
+
+```sh
+python3 tools/compose_filesystem_cli.py --apfs ../apfs --hfsplus ../hfsplus --no-default-features --features diff,hfsplus-read
+python3 -B tests/compatibility/volume-read/check_xattr_diff.py --cli target/apfs-cli/debug/dmgez
+```
+
+[Native extended-attribute results](native-xattr-diff.json)
+
 ## Extraction name preflight
 
 Both recipes call `dmgez_operations::extract::preflight_names` on the real filesystem adapter. The HFS+ fixture constructed with a non-UTF-8 relative symlink target yields a portable name plan containing the link object and its source handle. The native APFS hard-link fixture preserves `Écho.bin` in the exact UTF-8 plan. The portable profile rejects that name with a typed encoding error. The APFS payload fixture provides targeted symlink lookup evidence. A full name scan of that fixture reaches uncaptured catalog block 408.

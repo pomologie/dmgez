@@ -41,6 +41,8 @@ target/apfs-cli/debug/dmgez diff left.dmg right.dmg --mode semantic --filesystem
 
 [Semantic diff policy and selectors](docs/features/RELEASE.md#compare-filesystem-contents)
 
+Add `--xattrs` in semantic mode to compare supported stored extended attributes. The report identifies changed names without exposing their values.
+
 The optional `lint` command checks configured Finder icon geometry in one declared project folder, starting at `/` unless `--folder` selects another. It reads the TOML manifest only. Use `--suppress RULE=REASON` to keep a finding in the report without failing on it. Exit codes are 0 when there are no unsuppressed warnings, 1 when warnings remain, and 2 when the requested layout cannot be evaluated.
 
 `import-appdmg` translates documented appdmg JSON settings into a new version-one TOML manifest. Relative asset paths keep their original settings directory. A relative `--image-output` is interpreted from the new manifest's directory. The command reports unmapped behavior and refuses to replace an existing manifest.
