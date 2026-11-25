@@ -45,13 +45,15 @@ Each list takes distinct absolute paths within the image. Use the exact destinat
 
 The recursive-copy visibility case of D-FINDER-01-T02 verified the UDIF with Apple's `hdiutil` on macOS 14.7.2 (23H311). 7-Zip decoded the image and read back the files. An independent catalog decoder matched the flags for three selected items and an unselected control. [Independent Finder flag check](../../tests/compatibility/project-build/check_finder_visibility.py)
 
-### Write an APM or GPT disk layout
+### Write an APM, GPT or MBR disk layout
 
-Compose the HFS+ CLI with `--features partition-write`, then set `partition = "apm"` or `partition = "gpt"` under `[image]` in `dmg.toml`. Both profiles place one sealed HFS+ or HFSX volume within a single-table UDRO or UDZO image. Add `lzfse` to the composition features for ULFO or `lzma` for ULMO. The default remains `partition = "none"`.
+Compose the HFS+ CLI with `--features partition-write`, then set `partition = "apm"`, `"gpt"`, or `"mbr"` under `[image]` in `dmg.toml`. Each profile places one sealed HFS+ volume within a single-table UDRO or UDZO image. Add `lzfse` to the composition features for ULFO or `lzma` for ULMO. The default remains `partition = "none"`.
 
-`image.size` describes the entire logical disk. The filesystem planner subtracts the map reservations from that size and applies `free_space` within the volume. The dry run reports the selected map and whole disk size. APM reserves 64 sectors before the volume. GPT reserves 40 sectors at each end and derives reproducible identifiers from the sealed volume bytes. Map generation uses the qualified APM and GPT libraries. [Partition build tests](../../apps/dmgez-cli/tests/project_build/partitions.rs)
+`image.size` describes the entire logical disk. The filesystem planner subtracts the map reservations from that size and applies `free_space` within the volume. The dry run reports the selected map and whole disk size. APM reserves 64 sectors before the volume. GPT reserves 40 sectors at each end and derives reproducible identifiers from the sealed volume bytes. MBR reserves eight sectors and writes one non-bootable primary `Apple_HFS` entry in slot 1, with a 4 KiB-aligned start and a 32-bit disk sector limit. The partition tests cover disk geometry and feature admission for D-BUILD-01-T01. [Partition build tests](../../apps/dmgez-cli/tests/project_build/partitions.rs)
 
-On arm64 macOS 14.7.2, Apple’s `hdiutil verify -nocache` and `hdiutil pmap` accepted freshly built APM and GPT images in UDRO, UDZO, ULFO and ULMO. The test checks that compressed images contain a run in the selected codec. Apple’s UDRW export matched dmgez’s whole logical disk export. The volume bytes also matched a separate partitionless UDRW build from the same project. [Native oracle in the project test](../../apps/dmgez-cli/tests/project_build/partitions.rs)
+On arm64 macOS 14.7.2 (23H311), Apple’s `hdiutil verify -nocache` and `hdiutil pmap` accepted freshly built APM, GPT and MBR images in UDRO, UDZO, ULFO and ULMO. The test checks that compressed images contain a run in the selected codec. Apple’s UDRW export matched dmgez’s whole logical disk export. The volume bytes also matched a separate partitionless UDRW build from the same project. [Native oracle in the project test](../../apps/dmgez-cli/tests/project_build/partitions.rs)
+
+A separate 4 MiB MBR/UDZO project release used the default Rust ad hoc signer. Portable container and signature verification, `hdiutil verify -nocache`, and `codesign --verify --strict` all passed. Apple’s raw export matched the unsigned build’s complete logical disk.
 
 ### Import one AppleDouble sidecar
 

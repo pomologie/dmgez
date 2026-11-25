@@ -9,10 +9,13 @@ use thiserror::Error;
 mod apm;
 #[cfg(feature = "partition-write")]
 mod gpt;
+#[cfg(feature = "partition-write")]
+mod mbr;
 
 const ALLOCATION_BLOCK_BYTES: u64 = 4096;
 const APM_HEAD_SECTORS: u64 = 64;
 const GPT_EDGE_SECTORS: u64 = 40;
+const MBR_HEAD_SECTORS: u64 = ALLOCATION_BLOCK_BYTES / SECTOR_BYTES;
 // Covers the retained maps and either map serialization or volume hashing.
 const MAP_WORK_BYTES: usize = 64 << 10;
 #[cfg(feature = "partition-write")]
@@ -26,13 +29,14 @@ pub enum Layout {
 	Partitionless,
 	Apm,
 	Gpt,
+	Mbr,
 }
 
 impl Layout {
 	pub(crate) const fn work_bytes(self) -> usize {
 		match self {
 			Self::Partitionless => 0,
-			Self::Apm | Self::Gpt => MAP_WORK_BYTES,
+			Self::Apm | Self::Gpt | Self::Mbr => MAP_WORK_BYTES,
 		}
 	}
 
@@ -43,6 +47,7 @@ impl Layout {
 			Self::Partitionless => 0,
 			Self::Apm => APM_HEAD_SECTORS * SECTOR_BYTES,
 			Self::Gpt => 2 * GPT_EDGE_SECTORS * SECTOR_BYTES,
+			Self::Mbr => MBR_HEAD_SECTORS * SECTOR_BYTES,
 		}
 	}
 
@@ -50,7 +55,7 @@ impl Layout {
 	#[must_use]
 	pub const fn max_disk_bytes(self) -> u64 {
 		match self {
-			Self::Apm => u32::MAX as u64 * SECTOR_BYTES,
+			Self::Apm | Self::Mbr => u32::MAX as u64 * SECTOR_BYTES,
 			_ => u64::MAX,
 		}
 	}
@@ -98,6 +103,8 @@ impl Envelope {
 			Layout::Apm => apm::generate(volume_bytes, disk_bytes),
 			#[cfg(feature = "partition-write")]
 			Layout::Gpt => gpt::generate(volume_bytes, disk_bytes, open_volume(), cancellation),
+			#[cfg(feature = "partition-write")]
+			Layout::Mbr => mbr::generate(volume_bytes),
 			#[cfg(not(feature = "partition-write"))]
 			_ => {
 				let _ = (disk_bytes, open_volume, cancellation);

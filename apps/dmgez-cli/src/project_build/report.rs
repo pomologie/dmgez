@@ -160,6 +160,7 @@ const fn partition_name(layout: Layout) -> &'static str {
 		Layout::Partitionless => "none",
 		Layout::Apm => "apm",
 		Layout::Gpt => "gpt",
+		Layout::Mbr => "mbr",
 		_ => "unknown",
 	}
 }

@@ -81,7 +81,7 @@ fn rejects_declared_and_final_sizes_outside_admitted_run_budget() {
 }
 
 #[test]
-fn rejects_unsupported_filesystems_formats_partitions_and_catalog_names() {
+fn rejects_unsupported_filesystems_formats_and_catalog_names() {
 	for filesystem in [Filesystem::Hfsx, Filesystem::Apfs] {
 		let mut project = project("");
 		project.image.filesystem = filesystem;
@@ -91,12 +91,6 @@ fn rejects_unsupported_filesystems_formats_partitions_and_catalog_names() {
 		));
 	}
 	let mut unsupported = project("");
-	unsupported.image.partition = Partition::Mbr;
-	assert!(matches!(
-		preflight(&unsupported, options()),
-		Err(PreflightError::Partition(Partition::Mbr))
-	));
-	unsupported.image.partition = Partition::None;
 	unsupported.image.format = ImageFormat::Raw;
 	assert!(matches!(
 		preflight(&unsupported, options()),

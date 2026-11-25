@@ -7,20 +7,25 @@ const SECTOR_BYTES: usize = 512;
 const COMPRESSIBLE_PAYLOAD_BYTES: usize = 128 << 10;
 const APM_VOLUME_START: usize = 32 << 10;
 const GPT_EDGE_BYTES: usize = 20 << 10;
+const MBR_VOLUME_START: usize = 4 << 10;
 const APM_VOLUME_SLOT: usize = 2;
 const GPT_VOLUME_SLOT: usize = 1;
+const MBR_VOLUME_SLOT: usize = 1;
+const MBR_APPLE_HFS: u8 = 0xaf;
 const IMAGE_NAME: &str = "partitioned.dmg";
 const RAW_VOLUME: &str = "volume.dmg";
 const WHOLE_EXPORT: &str = "whole.raw";
 const VOLUME_EXPORT: &str = "volume.raw";
 const PAYLOAD: &str = "payload.txt";
-const SETTINGS: &str = r#"
+const IMAGE_SETTINGS: &str = r#"
 schema_version = 1
 [image]
 name = "Partitioned Fixture"
 output = "partitioned.dmg"
 format = "udro"
 size = "4MiB"
+"#;
+const CONTENT_SETTINGS: &str = r#"
 [[contents]]
 source = "payload.txt"
 destination = "/Payload.txt"
@@ -59,20 +64,23 @@ fn check_partitioned_projects(formats: &[(&str, Option<&str>)]) {
 				IMAGE_BYTES - GPT_EDGE_BYTES,
 				GPT_VOLUME_SLOT,
 			),
+			("mbr", "Mbr", MBR_VOLUME_START, IMAGE_BYTES, MBR_VOLUME_SLOT),
 		] {
 			let temp = tempfile::tempdir().unwrap();
 			let root = temp.path();
-			write_project(root);
+			write_project(root, scheme);
 			fs::write(root.join(PAYLOAD), vec![b'z'; COMPRESSIBLE_PAYLOAD_BYTES]).unwrap();
-			let map = format!("image.partition={scheme}");
 			let codec = format!("image.format={format}");
-			let build = ["build", MANIFEST_NAME, "--set", &map, "--set", &codec];
+			let build = ["build", MANIFEST_NAME, "--set", &codec];
 			let mut preview = build.to_vec();
 			preview.push("--dry-run");
 			let report = cli(root, &preview);
 			assert!(report.contains(&format!("partition={label}\n")));
 			assert!(report.contains(&format!("logical_bytes={IMAGE_BYTES}\n")));
 			assert!(!root.join(IMAGE_NAME).exists());
+			preview.push("--json");
+			let plan: serde_json::Value = serde_json::from_str(&cli(root, &preview)).unwrap();
+			assert_eq!(plan["partition"], scheme);
 			cli(root, &build);
 
 			let report = cli(root, &["inspect", IMAGE_NAME, "--partitions", "--json"]);
@@ -87,6 +95,12 @@ fn check_partitioned_projects(formats: &[(&str, Option<&str>)]) {
 			let volume = &report["disk"]["partitions"][slot - 1];
 			assert_eq!(volume["id"]["slot"], slot);
 			assert_eq!(volume["logical"]["offset_bytes"], start.to_string());
+			assert_eq!(volume["logical"]["length_bytes"], (end - start).to_string());
+			if scheme == "mbr" {
+				assert_eq!(report["disk"]["partitions"].as_array().unwrap().len(), 1);
+				assert_eq!(volume["details"]["type_code"], MBR_APPLE_HFS);
+				assert_eq!(volume["details"]["bootable"], false);
+			}
 			cli(root, &["unwrap-raw", IMAGE_NAME, "-o", WHOLE_EXPORT]);
 			cli(
 				root,
@@ -112,6 +126,8 @@ fn check_partitioned_projects(formats: &[(&str, Option<&str>)]) {
 					"--set",
 					"image.format=udrw",
 					"--set",
+					"image.partition=none",
+					"--set",
 					&format!("image.output={RAW_VOLUME}"),
 					"--set",
 					&format!("image.size={}B", end - start),
@@ -135,15 +151,13 @@ fn gpt_identity_is_reproducible_and_changes_with_sealed_payload() {
 	const GUID_BYTES: usize = 16;
 	let temp = tempfile::tempdir().unwrap();
 	let root = temp.path();
-	write_project(root);
+	write_project(root, "gpt");
 	let build = |output: &str| {
 		cli(
 			root,
 			&[
 				"build",
 				MANIFEST_NAME,
-				"--set",
-				"image.partition=gpt",
 				"--set",
 				&format!("image.output={output}"),
 			],
@@ -169,8 +183,12 @@ fn gpt_identity_is_reproducible_and_changes_with_sealed_payload() {
 	}
 }
 
-fn write_project(root: &Path) {
-	fs::write(root.join(MANIFEST_NAME), SETTINGS).unwrap();
+fn write_project(root: &Path, partition: &str) {
+	fs::write(
+		root.join(MANIFEST_NAME),
+		format!("{IMAGE_SETTINGS}partition = \"{partition}\"\n{CONTENT_SETTINGS}"),
+	)
+	.unwrap();
 	fs::write(root.join(PAYLOAD), b"original bytes").unwrap();
 }
 

@@ -13,6 +13,7 @@ pub(super) fn partition_layout(
 		Partition::None => return Ok(Layout::Partitionless),
 		Partition::Apm => Layout::Apm,
 		Partition::Gpt => Layout::Gpt,
+		Partition::Mbr => Layout::Mbr,
 		_ => return Err(PreflightError::Partition(partition)),
 	};
 	if !cfg!(feature = "partition-write") {
