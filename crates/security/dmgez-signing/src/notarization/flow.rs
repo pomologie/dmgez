@@ -4,7 +4,10 @@ use std::{
 	time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-use crate::native::{notary_artifact::PreparedArtifact, notary_tool::Tool};
+use crate::{
+	is_valid_keychain_profile_name,
+	native::{notary_artifact::PreparedArtifact, notary_tool::Tool},
+};
 
 use super::{CallError, Error, Id, Issue, LogSummary, Report, Status, store::Store, valid_digest};
 
@@ -59,13 +62,18 @@ pub(super) fn submit(
 }
 
 pub(super) fn status(
-	id: Id,
+	id: Option<Id>,
 	record: Option<&Path>,
 	profile: &str,
 	wait: bool,
 ) -> Result<Report, Error> {
-	let mut service = Tool::new(profile).map_err(tool_error)?;
-	status_with(&mut service, id, record, pause_for(wait))
+	if !is_valid_keychain_profile_name(profile) {
+		return Err(tool_error(CallError::InvalidProfile));
+	}
+	query_with(id, record, |id, store, report| {
+		let mut service = Tool::new(profile).map_err(tool_error)?;
+		poll(&mut service, id, store, report, None, pause_for(wait))
+	})
 }
 
 fn submit_with(
@@ -99,26 +107,33 @@ fn submit_with(
 	)
 }
 
-fn status_with(
-	service: &mut impl Service,
-	id: Id,
+fn query_with(
+	requested_id: Option<Id>,
 	record: Option<&Path>,
-	pause: impl FnMut() -> Pause,
+	query: impl FnOnce(Id, Option<&mut Store>, Report) -> Result<Report, Error>,
 ) -> Result<Report, Error> {
 	if let Some(path) = record {
 		let (mut store, report) = Store::open(path).map_err(record_error)?;
-		if report
-			.submission_id
-			.as_ref()
-			.is_some_and(|known| known != &id)
-		{
-			return Err(Error::UnrelatedId);
+		let id = match (requested_id, &report.submission_id) {
+			(Some(requested), Some(known)) if &requested != known => {
+				return Err(Error::UnrelatedId);
+			}
+			(Some(requested), _) => requested,
+			(None, Some(known)) => known.clone(),
+			(None, None) => return Err(Error::MissingSubmissionId),
+		};
+		// Keep a digest-confirmed terminal result through tool failures or
+		// conflicting subsequent service observations. Store::open validates
+		// the state, including log evidence, before this return.
+		if report.status.terminal() {
+			return Ok(report);
 		}
-		poll(service, id, Some(&mut store), report, None, pause)
+		query(id, Some(&mut store), report)
 	} else {
+		let id = requested_id.ok_or(Error::MissingSubmissionId)?;
 		let mut report = Report::unbound(now()?);
 		report.submission_id = Some(id.clone());
-		poll(service, id, None, report, None, pause)
+		query(id, None, report)
 	}
 }
 

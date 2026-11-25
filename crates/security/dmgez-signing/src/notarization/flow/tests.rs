@@ -79,6 +79,17 @@ fn begin(
 	)
 }
 
+fn status_with(
+	service: &mut Mock<'_>,
+	id: Id,
+	record: Option<&Path>,
+	pause: impl FnMut() -> Pause,
+) -> Result<Report, Error> {
+	query_with(Some(id), record, |id, store, report| {
+		poll(service, id, store, report, None, pause)
+	})
+}
+
 #[test]
 fn ambiguous_upload_is_reserved_and_recovered_only_by_matching_digest() {
 	let temp = tempfile::tempdir().unwrap();
@@ -90,6 +101,12 @@ fn ambiguous_upload_is_reserved_and_recovered_only_by_matching_digest() {
 	assert_eq!(report.issue, Some(Issue::UploadUnconfirmed));
 	assert!(begin(&mut service, &record, || Pause::Disabled).is_err());
 	assert_eq!(service.submits, 1);
+	assert!(matches!(
+		query_with(None, Some(&record), |_, _, _| panic!(
+			"record has no bound ID"
+		)),
+		Err(Error::MissingSubmissionId)
+	));
 
 	service.statuses.push_back(Status::Pending);
 	let pending = status_with(&mut service, ID.parse().unwrap(), Some(&record), || {
@@ -199,4 +216,68 @@ fn rejection_is_preserved_without_logging_private_wire_details() {
 			warnings: 1
 		})
 	);
+}
+
+#[test]
+fn resumes_the_recorded_pending_id_without_another_upload() {
+	let temp = tempfile::tempdir().unwrap();
+	let record = temp.path().join(RECORD);
+	let id = ID.parse::<Id>().unwrap();
+	let mut service = mock(
+		&record,
+		Ok(Submission {
+			id: id.clone(),
+			status: Status::Pending,
+		}),
+	);
+	let pending = begin(&mut service, &record, || Pause::Disabled).unwrap();
+	assert_eq!(pending.status, Status::Pending);
+	service.statuses.push_back(Status::Accepted);
+	service.receipt = Some(receipt(SHA256));
+	let accepted = query_with(None, Some(&record), |bound, store, report| {
+		assert_eq!(bound, id);
+		poll(&mut service, bound, store, report, None, || Pause::Disabled)
+	})
+	.unwrap();
+	assert!(accepted.digest_verified);
+	assert_eq!(accepted.status, Status::Accepted);
+	assert_eq!(service.submits, 1);
+	assert_eq!(Store::open(&record).unwrap().1, accepted);
+}
+
+#[test]
+fn returns_verified_terminal_records_without_contacting_the_service_or_rewriting() {
+	let temp = tempfile::tempdir().unwrap();
+	let id = ID.parse::<Id>().unwrap();
+	for terminal in [Status::Accepted, Status::Rejected] {
+		let record = temp.path().join(terminal.as_str());
+		let mut service = mock(
+			&record,
+			Ok(Submission {
+				id: id.clone(),
+				status: terminal,
+			}),
+		);
+		service.receipt = Some(Receipt {
+			status: terminal,
+			..receipt(SHA256)
+		});
+		let saved = begin(&mut service, &record, || Pause::Disabled).unwrap();
+		let contents = std::fs::read(&record).unwrap();
+		for requested in [None, Some(id.clone())] {
+			let result = query_with(requested, Some(&record), |_, _, _| {
+				panic!("verified local evidence does not query the service")
+			})
+			.unwrap();
+			assert_eq!(result, saved);
+			assert_eq!(std::fs::read(&record).unwrap(), contents);
+		}
+		let wrong = UNRELATED_ID.parse::<Id>().unwrap();
+		assert!(matches!(
+			query_with(Some(wrong), Some(&record), |_, _, _| panic!(
+				"unrelated submission ID"
+			)),
+			Err(Error::UnrelatedId)
+		));
+	}
 }

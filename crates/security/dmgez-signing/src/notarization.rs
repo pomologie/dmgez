@@ -198,6 +198,8 @@ pub enum Error {
 	InvalidId,
 	#[error("the submission ID does not match the local record")]
 	UnrelatedId,
+	#[error("the local record has no bound submission ID; supply a recovered Apple submission ID")]
+	MissingSubmissionId,
 	#[error("the system clock precedes the Unix epoch")]
 	Clock,
 	#[error("could not prepare the signed disk image")]
@@ -242,7 +244,7 @@ pub fn submit(image: &Path, record: &Path, profile: &str, wait: bool) -> Result<
 ///
 /// Terminal status for a local record requires a matching artifact digest in
 /// the Apple log. An ID recovered after an ambiguous upload is bound only by
-/// that evidence.
+/// that evidence. A verified terminal record is returned as saved.
 ///
 /// # Errors
 /// Fails for an invalid ID, unavailable tooling, or an unusable record.
@@ -250,11 +252,32 @@ pub fn status(id: &str, record: Option<&Path>, profile: &str, wait: bool) -> Res
 	let id = id.parse::<Id>()?;
 	#[cfg(target_os = "macos")]
 	{
-		flow::status(id, record, profile, wait)
+		flow::status(Some(id), record, profile, wait)
 	}
 	#[cfg(not(target_os = "macos"))]
 	{
 		let _ = (id, record, profile, wait);
+		Err(Error::Unavailable)
+	}
+}
+
+/// Resumes the submission bound to an existing private local record.
+///
+/// Verified terminal evidence is returned without contacting Apple. A pending
+/// record queries only its recorded ID, with bounded polling when requested.
+/// An ambiguous reservation without a bound ID requires [`status`] with an
+/// explicitly recovered ID.
+///
+/// # Errors
+/// Fails for an unusable record, an unbound reservation, or unavailable tooling.
+pub fn status_from_record(record: &Path, profile: &str, wait: bool) -> Result<Report, Error> {
+	#[cfg(target_os = "macos")]
+	{
+		flow::status(None, Some(record), profile, wait)
+	}
+	#[cfg(not(target_os = "macos"))]
+	{
+		let _ = (record, profile, wait);
 		Err(Error::Unavailable)
 	}
 }
