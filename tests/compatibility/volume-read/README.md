@@ -71,7 +71,7 @@ python3 -B tests/compatibility/volume-read/check_xattr_diff.py --cli target/apfs
 
 [Native extended-attribute results](native-xattr-diff.json)
 
-The native per-object FinderInfo check uses `diff` and both readers. Use APFS sources with the dedicated `VolumeView::finder_info` API, or unpack the four APFS 0.1.0 archives built from `52768a7`. The HFS+ 0.1.0 archives from `11740d3` provide the required catalog API.
+The native per-object FinderInfo check uses `diff` and both readers. Use APFS sources with the dedicated `VolumeView::finder_info` API, or unpack the four APFS 0.1.0 archives built from `52768a7`. The HFS+ 0.1.0 archives from `fb11b35` provide the catalog APIs for current reader composition.
 
 ```sh
 python3 tools/compose_filesystem_cli.py --apfs ../apfs --hfsplus ../hfsplus --no-default-features --features diff,hfsplus-read
@@ -88,6 +88,17 @@ python3 -B tests/compatibility/volume-read/check_finder_diff.py --cli target/apf
 ```
 
 The oracle verifies and mounts three disposable UDZO images read-only. Its independent decoder checks an icon position and a column width in both list-view representations. It also checks that the default policy detects unused store bytes and that the Finder policy finds the same decoded records. [Native Finder layout results](apfs/native-finder-diff.json)
+
+## Native path comparison
+
+Compose with `diff` and `hfsplus-read` against HFS+ sources with `NameCollation::key`, or archives built from `fb11b35`. The macOS check verifies native path resolution and exact file bytes on disposable HFS+ and binary HFSX images mounted read-only.
+
+```sh
+python3 tools/compose_filesystem_cli.py --hfsplus ../hfsplus --no-default-features --features diff,hfsplus-read
+python3 -B tests/compatibility/volume-read/check_native_paths_diff.py --cli target/hfsplus-cli/debug/dmgez
+```
+
+The oracle checks both stored spellings, exact mode, the native profile's path pairings, and unchanged image digests. Use `--native-only` to run the independent image checks. [Native path reports](native-paths-diff.json)
 
 ## Extraction name preflight
 

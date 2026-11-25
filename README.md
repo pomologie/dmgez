@@ -41,6 +41,8 @@ target/apfs-cli/debug/dmgez diff left.dmg right.dmg --mode semantic --filesystem
 
 [Semantic diff policy and selectors](docs/features/RELEASE.md#compare-filesystem-contents)
 
+Use `--paths native` to compare path components using compatible on-disk name rules. This covers case-folded HFS+ and HFSX catalogs, binary HFSX catalogs, and bytewise APFS catalogs with both name-insensitivity flags clear.
+
 Build with `diff-hash` to enable `--contents blake3` or `--contents blake3-exact` and `--infer-renames` in semantic mode. Inferred pairs are listed alongside the added and removed paths.
 
 Add `--xattrs` in semantic mode to compare supported stored extended attributes. The report identifies changed names without exposing their values.
