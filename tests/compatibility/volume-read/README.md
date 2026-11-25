@@ -2,6 +2,8 @@
 
 Run the filesystem compatibility suite with Python 3, the dmgez toolchain, and a populated Cargo cache. The runner builds a temporary Cargo project from the chosen dependency paths, verifies each native fixture's SHA-256 digest, and runs locked, offline tests.
 
+Use the current sibling engine checkouts or matching 0.1.0 packages. The revisions cited in the oracle results below document earlier test runs and fixture provenance.
+
 ```sh
 python3 tests/compatibility/volume-read/run.py --dmgez . --hfsplus /path/to/hfsplus
 python3 tests/compatibility/volume-read/run.py --dmgez . --hfsplus-packages /path/to/unpacked
@@ -73,7 +75,7 @@ python3 -B tests/compatibility/volume-read/check_xattr_diff.py --cli target/apfs
 
 [Native extended-attribute results](native-xattr-diff.json)
 
-The native per-object FinderInfo check uses `diff` and both readers. Unpack the four APFS 0.1.0 archives built from `78f8586` and the HFS+ 0.1.0 archives built from `fb11b35` for the reader APIs used by current composition. The sibling source checkouts support the same recipe.
+The native per-object FinderInfo check uses `diff` and both readers. The original archive run used APFS `78f8586` and HFS+ `fb11b35`. Use the current sibling source checkouts for the recipe below.
 
 ```sh
 python3 tools/compose_filesystem_cli.py --apfs ../apfs --hfsplus ../hfsplus --no-default-features --features diff,hfsplus-read
