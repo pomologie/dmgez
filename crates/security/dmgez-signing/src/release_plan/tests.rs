@@ -40,11 +40,11 @@ fn verify_unsigned(run: &mut ReleaseRun, unsigned: &ImageIdentity) {
 		.unwrap();
 }
 
-fn ready_to_submit() -> (ReleaseRun, ImageIdentity, ImageIdentity) {
-	let mut run = plan().start().unwrap();
-	let unsigned = image('a', UNSIGNED_BYTES);
-	let signed = image('b', SIGNED_BYTES);
-	let applications = ReleaseApplications::Sign(BACKEND);
+fn build_with_applications(
+	run: &mut ReleaseRun,
+	unsigned: &ImageIdentity,
+	applications: ReleaseApplications,
+) {
 	assert!(matches!(
 		run.begin(None).unwrap(),
 		Some(ReleaseAction::PrepareApplications(got)) if got == applications
@@ -58,7 +58,28 @@ fn ready_to_submit() -> (ReleaseRun, ImageIdentity, ImageIdentity) {
 	));
 	run.complete(ReleaseReceipt::Built(unsigned.clone()))
 		.unwrap();
+}
+
+fn verify_applications(run: &mut ReleaseRun, unsigned: &ImageIdentity, count: usize) {
+	assert!(matches!(
+		run.begin(Some(unsigned)).unwrap(),
+		Some(ReleaseAction::VerifyApplications { backend, input }) if backend == BACKEND && input == unsigned
+	));
+	run.complete(ReleaseReceipt::ApplicationsVerified {
+		backend: BACKEND,
+		input: unsigned.clone(),
+		count,
+	})
+	.unwrap();
+}
+
+fn ready_to_submit() -> (ReleaseRun, ImageIdentity, ImageIdentity) {
+	let mut run = plan().start().unwrap();
+	let unsigned = image('a', UNSIGNED_BYTES);
+	let signed = image('b', SIGNED_BYTES);
+	build_with_applications(&mut run, &unsigned, ReleaseApplications::Sign(BACKEND));
 	verify_unsigned(&mut run, &unsigned);
+	verify_applications(&mut run, &unsigned, 2);
 	assert!(matches!(
 		run.begin(Some(&unsigned)).unwrap(),
 		Some(ReleaseAction::SignImage { backend, input }) if input == &unsigned && backend == BACKEND
@@ -126,6 +147,10 @@ fn passes_the_exact_stapled_image_through_final_checks_and_publication() {
 	assert!(run.begin(Some(&stapled)).unwrap().is_none());
 	assert_eq!(run.report().unsigned.as_ref(), Some(&unsigned));
 	assert_eq!(run.report().artifact.as_ref(), Some(&stapled));
+	let applications = run.report().verified_applications.as_ref().unwrap();
+	assert_eq!(applications.backend, BACKEND);
+	assert_eq!(applications.input, unsigned);
+	assert_eq!(applications.count, 2);
 	assert_eq!(run.report().notarization.as_ref().unwrap().image, signed);
 	assert!(
 		run.report()
@@ -133,6 +158,72 @@ fn passes_the_exact_stapled_image_through_final_checks_and_publication() {
 			.iter()
 			.all(|step| step.status == StageStatus::Passed)
 	);
+}
+
+#[test]
+fn verifies_assembled_applications_even_without_disk_signing() {
+	let unsigned = image('a', UNSIGNED_BYTES);
+	let applications = ReleaseApplications::Verify(BACKEND);
+	let unsigned_plan = ReleasePlan {
+		applications,
+		sign_image: None,
+		notarize: None,
+		staple: None,
+		assess_native_policy: false,
+	};
+	for count in [0, 2] {
+		let mut run = unsigned_plan.start().unwrap();
+		build_with_applications(&mut run, &unsigned, applications);
+		verify_applications(&mut run, &unsigned, count);
+		let evidence = run.report().verified_applications.as_ref().unwrap();
+		assert_eq!(evidence.input, unsigned);
+		assert_eq!(evidence.count, count);
+		assert!(matches!(
+			run.begin(Some(&unsigned)).unwrap(),
+			Some(ReleaseAction::VerifyImage(input)) if input == &unsigned
+		));
+		run.complete(ReleaseReceipt::Verified(unsigned.clone()))
+			.unwrap();
+		assert!(matches!(
+			run.begin(Some(&unsigned)).unwrap(),
+			Some(ReleaseAction::Publish(input)) if input == &unsigned
+		));
+	}
+}
+
+#[test]
+fn a_failed_or_mismatched_app_verification_cannot_admit_signing() {
+	let unsigned = image('a', UNSIGNED_BYTES);
+	let same_size_replacement = image('b', UNSIGNED_BYTES);
+	let mut release = plan();
+	release.applications = ReleaseApplications::Verify(BACKEND);
+	for wrong_image in [false, true] {
+		let mut run = release.start().unwrap();
+		build_with_applications(&mut run, &unsigned, release.applications);
+		verify_unsigned(&mut run, &unsigned);
+		assert!(matches!(
+			run.begin(Some(&unsigned)).unwrap(),
+			Some(ReleaseAction::VerifyApplications { .. })
+		));
+		if wrong_image {
+			assert_eq!(
+				run.complete(ReleaseReceipt::ApplicationsVerified {
+					backend: BACKEND,
+					input: same_size_replacement.clone(),
+					count: 1,
+				}),
+				Err(ReleaseError::MismatchedReceipt)
+			);
+		} else {
+			run.fail(StageFailure::Failed).unwrap();
+		}
+		assert!(run.report().verified_applications.is_none());
+		assert!(run.begin(Some(&unsigned)).unwrap().is_none());
+		assert_eq!(
+			run.complete(ReleaseReceipt::Published(unsigned.clone())),
+			Err(ReleaseError::NoStage)
+		);
+	}
 }
 
 #[test]

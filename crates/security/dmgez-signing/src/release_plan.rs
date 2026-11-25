@@ -5,7 +5,7 @@ use thiserror::Error;
 
 use crate::ResolvedBackend;
 
-const STAGE_COUNT: usize = 9;
+const STAGE_COUNT: usize = 10;
 
 mod identity;
 mod notary_evidence;
@@ -33,6 +33,7 @@ pub enum ReleaseStage {
 	Applications,
 	BuildUnsigned,
 	VerifyUnsignedImage,
+	VerifyApplications,
 	SignImage,
 	Notarize,
 	Staple,
@@ -103,6 +104,10 @@ pub enum ReleaseAction<'run> {
 	PrepareApplications(ReleaseApplications),
 	BuildUnsigned,
 	VerifyUnsignedImage(&'run ImageIdentity),
+	VerifyApplications {
+		backend: ResolvedBackend,
+		input: &'run ImageIdentity,
+	},
 	SignImage {
 		backend: ResolvedBackend,
 		input: &'run ImageIdentity,
@@ -132,6 +137,11 @@ pub enum ReleaseReceipt {
 	ApplicationsPrepared(ReleaseApplications),
 	Built(ImageIdentity),
 	UnsignedVerified(ImageIdentity),
+	ApplicationsVerified {
+		backend: ResolvedBackend,
+		input: ImageIdentity,
+		count: usize,
+	},
 	Signed {
 		backend: ResolvedBackend,
 		input: ImageIdentity,
@@ -149,12 +159,22 @@ pub enum ReleaseReceipt {
 	Published(ImageIdentity),
 }
 
+/// Successful signature verification of the application bundles in an unsigned image.
+#[derive(Debug, Serialize)]
+pub struct ApplicationVerification {
+	pub backend: ResolvedBackend,
+	pub input: ImageIdentity,
+	/// Number of application bundles that passed verification, including zero.
+	pub count: usize,
+}
+
 /// Progress, including the current image digest and any remote submission.
 #[derive(Debug, Serialize)]
 pub struct ReleaseReport {
 	pub schema_version: u16,
 	pub steps: [Step; STAGE_COUNT],
 	pub unsigned: Option<ImageIdentity>,
+	pub verified_applications: Option<ApplicationVerification>,
 	pub artifact: Option<ImageIdentity>,
 	pub notarization: Option<NotaryEvidence>,
 }
@@ -332,6 +352,23 @@ impl ReleaseRun {
 				self.report.artifact = Some(image);
 			}
 			(
+				ReleaseStage::VerifyApplications,
+				ReleaseReceipt::ApplicationsVerified {
+					backend,
+					input,
+					count,
+				},
+			) if step.backend == Some(backend)
+				&& current == Some(&input)
+				&& self.report.unsigned.as_ref() == Some(&input) =>
+			{
+				self.report.verified_applications = Some(ApplicationVerification {
+					backend,
+					input,
+					count,
+				});
+			}
+			(
 				ReleaseStage::SignImage,
 				ReleaseReceipt::Signed {
 					backend,
@@ -423,6 +460,10 @@ fn action<'run>(
 		ReleaseStage::Applications => ReleaseAction::PrepareApplications(applications),
 		ReleaseStage::BuildUnsigned => ReleaseAction::BuildUnsigned,
 		ReleaseStage::VerifyUnsignedImage => ReleaseAction::VerifyUnsignedImage(input?),
+		ReleaseStage::VerifyApplications => ReleaseAction::VerifyApplications {
+			backend: step.backend?,
+			input: input?,
+		},
 		ReleaseStage::SignImage => ReleaseAction::SignImage {
 			backend: step.backend?,
 			input: input?,

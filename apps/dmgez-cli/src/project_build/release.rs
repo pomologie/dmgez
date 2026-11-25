@@ -349,7 +349,9 @@ fn execute<'build>(
 			release_artifact::publish(artifacts.path()?, identity, output)?;
 			Ok(ReleaseReceipt::Published(identity.clone()))
 		}
-		ReleaseAction::PrepareApplications(_) | ReleaseAction::Poll { .. } => {
+		ReleaseAction::PrepareApplications(_)
+		| ReleaseAction::VerifyApplications { .. }
+		| ReleaseAction::Poll { .. } => {
 			Err("release stage is unavailable in this build".into())
 		}
 	}

@@ -28,9 +28,9 @@ impl ReleasePlan {
 			return Err(ReleaseError::SignedImageRequired);
 		}
 		let applications = match self.applications {
-			ReleaseApplications::Preserve => Step::skipped(ReleaseStage::Applications),
+			ReleaseApplications::Preserve => None,
 			ReleaseApplications::Verify(backend) | ReleaseApplications::Sign(backend) => {
-				Step::required(ReleaseStage::Applications, Some(backend))
+				Some(backend)
 			}
 		};
 		let assess = self.assess_native_policy.then_some(ResolvedBackend::Native);
@@ -44,9 +44,10 @@ impl ReleasePlan {
 			report: ReleaseReport {
 				schema_version: REPORT_VERSION,
 				steps: [
-					applications,
+					Step::with_backend(ReleaseStage::Applications, applications),
 					Step::required(ReleaseStage::BuildUnsigned, None),
 					verify_unsigned,
+					Step::with_backend(ReleaseStage::VerifyApplications, applications),
 					Step::with_backend(ReleaseStage::SignImage, self.sign_image),
 					Step::with_backend(ReleaseStage::Notarize, self.notarize),
 					Step::with_backend(ReleaseStage::Staple, self.staple),
@@ -55,6 +56,7 @@ impl ReleasePlan {
 					Step::required(ReleaseStage::Publish, None),
 				],
 				unsigned: None,
+				verified_applications: None,
 				artifact: None,
 				notarization: None,
 			},
