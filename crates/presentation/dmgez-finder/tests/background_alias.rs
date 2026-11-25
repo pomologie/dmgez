@@ -171,6 +171,11 @@ fn preserves_full_unicode_names_and_exact_dates_in_the_generated_alias() {
 	assert!(extras.contains(&ExtraPayload::UnicodeVolumeName(LABEL.to_owned())));
 	assert!(extras.contains(&ExtraPayload::UnicodeTargetName(FILE_NAME.to_owned())));
 	assert!(
+		extras.contains(&ExtraPayload::PortableOperatingSystemInterfaceVolumePath(
+			format!("/Volumes/{LABEL}").into_bytes(),
+		))
+	);
+	assert!(
 		extras.contains(&ExtraPayload::HighResolutionVolumeCreationDate(
 			HfsTimestamp(0)
 		))
@@ -183,6 +188,41 @@ fn preserves_full_unicode_names_and_exact_dates_in_the_generated_alias() {
 			.extras()
 			.any(|extra| extra.tag() == ExtrasTag::CatalogNodeIdPath)
 	);
+}
+
+#[test]
+fn limits_the_volume_label_and_total_alias_size() {
+	const HFS_NAME_LIMIT: usize = 255;
+	let label = "界".repeat(HFS_NAME_LIMIT);
+	let alias = build_image_background_alias(ImageBackgroundIdentity {
+		volume_name: &label,
+		..GENERATED_ALIAS
+	})
+	.unwrap();
+	let mount_path = ExtraPayload::PortableOperatingSystemInterfaceVolumePath(
+		format!("/Volumes/{label}").into_bytes(),
+	);
+	assert!(
+		alias
+			.extras()
+			.any(|extra| extra.payload().unwrap() == mount_path)
+	);
+	let overlong_label = "界".repeat(HFS_NAME_LIMIT + 1);
+	assert!(matches!(
+		build_image_background_alias(ImageBackgroundIdentity {
+			volume_name: &overlong_label,
+			..GENERATED_ALIAS
+		}),
+		Err(BackgroundAliasError::VolumeName)
+	));
+	let overlong_alias_path = "/a".repeat(9_000);
+	assert!(matches!(
+		build_image_background_alias(ImageBackgroundIdentity {
+			volume_relative_path: &overlong_alias_path,
+			..GENERATED_ALIAS
+		}),
+		Err(BackgroundAliasError::Size)
+	));
 }
 
 #[test]

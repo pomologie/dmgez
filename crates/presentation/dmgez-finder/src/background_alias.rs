@@ -1,6 +1,7 @@
 use dmg_layout::{
 	AliasHeader, AliasKind, AliasRecord, AliasTarget, AliasVolume, CatalogNodeId, DiskImageError,
 	DiskType, ExtraEntry, FilesystemSignature, HfsTimestamp, HfsTimestampSeconds, VolumeAttributes,
+	VolumeMountPath,
 	layout::{TARGET_NAME_WIDTH, VOLUME_NAME_WIDTH},
 };
 use dmgez_config::{FinderOptions, VirtualPath};
@@ -9,6 +10,7 @@ use thiserror::Error;
 use crate::store::{self, LayoutItem};
 
 const PATH_SEPARATOR: char = '/';
+const MACOS_VOLUME_MOUNT_DIRECTORY: &str = "/Volumes";
 const CARBON_VOLUME_SEPARATOR: u8 = b':';
 const CARBON_PATH_SEPARATOR: &[u8] = b":\0";
 const INVALID_VOLUME_CHARACTERS: [char; 3] = [PATH_SEPARATOR, ':', '\0'];
@@ -60,7 +62,7 @@ pub enum BackgroundAliasError {
 	Encoding(#[from] DiskImageError),
 }
 
-/// Builds a version-2 file Alias without opening a host file or deriving a mount path.
+/// Builds a version-2 file Alias with a standard `/Volumes/<label>` mount hint.
 /// Its Unicode names preserve the complete label and filename. A file one folder
 /// below the root carries that folder's ID as its complete directory CNID trail.
 /// Deeper files retain their full paths and direct parent CNID in the header.
@@ -112,6 +114,10 @@ pub fn build_image_background_alias(
 	)?;
 	let mut header = AliasHeader::new(volume, target);
 	header.volume_attributes = NO_VOLUME_ATTRIBUTES;
+	let volume_path = VolumeMountPath::new(format!(
+		"{MACOS_VOLUME_MOUNT_DIRECTORY}{PATH_SEPARATOR}{}",
+		identity.volume_name
+	))?;
 	let mut extras = vec![
 		ExtraEntry::carbon_folder_name(parent_name)?,
 		ExtraEntry::high_resolution_volume_creation_date(alias_timestamp(
@@ -131,6 +137,7 @@ pub fn build_image_background_alias(
 		ExtraEntry::unicode_target_name(target_name)?,
 		ExtraEntry::unicode_volume_name(identity.volume_name)?,
 		ExtraEntry::portable_operating_system_interface_path(path.as_str())?,
+		ExtraEntry::portable_operating_system_interface_volume_path(volume_path.as_bytes())?,
 	]);
 	let alias = AliasRecord::new(header, extras).map_err(|error| match error {
 		DiskImageError::RecordTooLarge { .. } => BackgroundAliasError::Size,

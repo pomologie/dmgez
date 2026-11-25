@@ -4,7 +4,7 @@
 
 The writer accepts printable ASCII item names. It supports icon view and list view as the default. Column view, cover flow, gallery view, template backgrounds, and editing existing stores require additional qualification. The caller resolves folder inheritance and reserves the generated store before planning catalog IDs.
 
-`write_store_with_background_identity` writes an image-background record from the final HFS+ volume label, catalog IDs, stored creation dates, and the file's path on the volume. The version-2 Alias carries complete Unicode names, Carbon and POSIX paths, and the direct parent CNID trail for a file one folder below the volume root. It leaves the mount path unset. The independent oracle compares the emitted alias against `mac_alias` bytes. Native Finder lookup remains a separate qualification. [mac_alias implementation](https://github.com/dmgbuild/mac_alias/blob/v2.2.3/src/mac_alias/alias.py)
+`write_store_with_background_identity` writes an image-background record from the final HFS+ volume label, catalog IDs, stored creation dates, and the file's path on the volume. The version-2 Alias carries complete Unicode names, Carbon and volume-relative POSIX paths, and the direct parent CNID trail for a file one folder below the volume root. Its mount hint uses `/Volumes/<label>` with the complete Unicode label. The independent oracle compares the emitted alias against `mac_alias` bytes. Native Finder lookup remains a separate qualification. [mac_alias implementation](https://github.com/dmgbuild/mac_alias/blob/v2.2.3/src/mac_alias/alias.py)
 
 ## List view
 
