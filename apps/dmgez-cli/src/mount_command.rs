@@ -6,9 +6,13 @@ use crate::CliResult;
 
 #[cfg(all(feature = "mount-system", target_os = "macos"))]
 mod native;
+#[cfg(all(feature = "mount-watch", target_os = "macos"))]
+mod watch;
 
 pub(super) const FEATURE: &str = "mount-system";
 pub(super) const COMPILED: bool = cfg!(all(feature = "mount-system", target_os = "macos"));
+pub(super) const WATCH_FEATURE: &str = "mount-watch";
+pub(super) const WATCH_COMPILED: bool = cfg!(all(feature = "mount-watch", target_os = "macos"));
 
 const SESSION_OPTION_CONFLICT: &str =
 	"mount session commands cannot take an image, mountpoint, backend or detach flag";
@@ -42,6 +46,29 @@ enum Action {
 	Status { id: String },
 	/// Request a non-forced detach of a recorded session.
 	Stop { id: String },
+	/// Verify fresh copies from one recorded mount session in the foreground.
+	Watch(WatchArguments),
+}
+
+#[derive(Args)]
+struct WatchArguments {
+	/// Session ID returned by dmgez mount.
+	id: String,
+	/// Application path in the image, paired with each destination in order.
+	#[arg(long = "watch-install", required = true, value_name = "IMAGE_APP")]
+	applications: Vec<String>,
+	/// Exact expected host application path, paired with each image path in order.
+	#[arg(long, required = true, value_name = "HOST_APP")]
+	destination: Vec<PathBuf>,
+	/// Finish when any one pair has a freshly verified matching copy.
+	#[arg(long)]
+	match_any: bool,
+	/// Request a normal detach after the selected fresh copies have been verified.
+	#[arg(long)]
+	auto_eject: bool,
+	/// Copy verification deadline in seconds.
+	#[arg(long, default_value_t = 300, value_parser = clap::value_parser!(u64).range(2..=3600))]
+	timeout: u64,
 }
 
 #[derive(Args)]
@@ -72,6 +99,9 @@ pub(super) fn run(arguments: &Arguments) -> CliResult {
 	}
 	if arguments.action.is_none() && arguments.image.is_none() {
 		return Err(IMAGE_REQUIRED.into());
+	}
+	if matches!(arguments.action, Some(Action::Watch(_))) && !WATCH_COMPILED {
+		return Err(format!("feature not compiled: {WATCH_FEATURE}").into());
 	}
 	let admitted = require_backend(arguments.backend.unwrap_or(Backend::Auto));
 	#[cfg(all(feature = "mount-system", target_os = "macos"))]

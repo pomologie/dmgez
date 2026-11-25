@@ -36,6 +36,20 @@ class ReleaseCompositionTests(unittest.TestCase):
         self.assertIn('[dev-dependencies]\n# Workspace presentation\ndmgez-finder.workspace = true\n', text)
         tomllib.loads(text)
 
+    def test_watch_requires_selected_mount_and_installation_services(self):
+        manifest = (compose.ROOT / compose.CLI / compose.MANIFEST).read_text(encoding="utf-8")
+        for reader in (False, True):
+            with self.subTest(reader=reader):
+                text = compose.compose_cli_manifest(manifest, reader=reader, build=False, apfs=False)
+                features = tomllib.loads(text)["features"]
+                self.assertNotIn(compose.MOUNT_WATCH_FEATURE, features["default"])
+                self.assertEqual(compose.MOUNT_WATCH_FEATURE in features, reader)
+                if reader:
+                    self.assertEqual(
+                        features[compose.MOUNT_WATCH_FEATURE],
+                        [compose.INSTALL_FEATURE, "mount-system", "dmgez-mount/watch"],
+                    )
+
     def test_installer_test_uses_only_the_composed_filesystem_readers(self):
         manifest = (compose.ROOT / compose.CLI / compose.MANIFEST).read_text(encoding="utf-8")
         for reader in (False, True):

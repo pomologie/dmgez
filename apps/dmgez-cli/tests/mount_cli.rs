@@ -34,6 +34,24 @@ fn recognizes_a_session_command_and_rejects_unrelated_attach_arguments() {
 	require_failure(output, "mount session commands cannot take");
 }
 
+#[cfg(not(all(feature = "mount-watch", target_os = "macos")))]
+#[test]
+fn watch_feature_is_checked_before_opening_the_session_registry() {
+	let output = Command::new(CLI)
+		.args([
+			"mount",
+			"watch",
+			"invalid-fixture-id",
+			"--watch-install",
+			"/Example.app",
+			"--destination",
+			"/missing/Example.app",
+		])
+		.output()
+		.unwrap();
+	require_failure(output, "feature not compiled: mount-watch");
+}
+
 #[cfg(not(all(feature = "mount-system", target_os = "macos")))]
 #[test]
 fn system_mount_and_unmount_are_gated_before_accessing_paths() {
@@ -97,6 +115,23 @@ mod native {
 		require_failure(
 			mount_command(&root, &["unmount", &id]),
 			"no confirmed attachment",
+		);
+		#[cfg(feature = "mount-watch")]
+		require_failure(
+			mount_command(
+				&root,
+				&[
+					"mount",
+					"watch",
+					&id,
+					"--watch-install",
+					"/Example.app",
+					"--destination",
+					"/missing/Example.app",
+					"--auto-eject",
+				],
+			),
+			"monitoring requires a confirmed read-only attachment",
 		);
 	}
 }

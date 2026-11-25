@@ -109,7 +109,8 @@
       "mount"
     ],
     "mount-watch": [
-      "mount"
+      "mount-system",
+      "hfsplus-install"
     ],
     "install": [
       "extract"
@@ -172,6 +173,9 @@
   ],
   "platform_only": {
     "mount-system": [
+      "macos"
+    ],
+    "mount-watch": [
       "macos"
     ],
     "mount-fuse": [

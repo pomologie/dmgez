@@ -69,6 +69,7 @@ pub(super) fn write() {
 		(install::APFS_FEATURE, install::APFS_COMPILED),
 		(installer_test::FEATURE, installer_test::COMPILED),
 		(mount_command::FEATURE, mount_command::COMPILED),
+		(mount_command::WATCH_FEATURE, mount_command::WATCH_COMPILED),
 		(ANALYZE_COMMAND, cfg!(feature = "inspect")),
 		(
 			HFSPLUS_ANALYSIS_CAPABILITY,

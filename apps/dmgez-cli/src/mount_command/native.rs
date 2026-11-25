@@ -33,11 +33,15 @@ pub(super) fn run(arguments: &Arguments) -> CliResult {
 		}
 		Some(Action::Status { id }) => status(id.parse()?, arguments.json),
 		Some(Action::Stop { id }) => stop(id, arguments.json),
+		#[cfg(feature = "mount-watch")]
+		Some(Action::Watch(watch)) => super::watch::run(watch, arguments.json),
+		#[cfg(not(feature = "mount-watch"))]
+		Some(Action::Watch(_)) => Err(format!("feature not compiled: {}", super::WATCH_FEATURE).into()),
 		None => start(arguments),
 	}
 }
 
-fn open_store() -> CliResult<SessionStore> {
+pub(super) fn open_store() -> CliResult<SessionStore> {
 	let directory = env::temp_dir().canonicalize()?.join(SESSION_ROOT);
 	Ok(SessionStore::open(&directory)?)
 }

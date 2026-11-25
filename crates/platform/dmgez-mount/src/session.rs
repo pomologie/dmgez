@@ -147,6 +147,12 @@ impl SessionRecord {
 		&self.id
 	}
 
+	/// Committed revision, for callers that release and later reacquire the registry lock.
+	#[must_use]
+	pub const fn revision(&self) -> u64 {
+		self.revision
+	}
+
 	/// The absolute source path supplied for this session.
 	#[must_use]
 	pub fn image(&self) -> &Path {

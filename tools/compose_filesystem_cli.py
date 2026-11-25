@@ -49,6 +49,8 @@ VERIFY_FEATURE = "hfsplus-verify"
 EXTRACT_FEATURE = "hfsplus-extract"
 DECMPFS_FEATURE = "hfsplus-decmpfs"
 INSTALL_FEATURE = "hfsplus-install"
+MOUNT_WATCH_FEATURE = "mount-watch"
+MOUNT_TEST = "mount_cli"
 INSTALLER_TEST_FEATURE = "installer-test"
 DIFF_FEATURE = "diff"
 DIFF_HASH_FEATURE = "diff-hash"
@@ -155,6 +157,7 @@ def compose_cli_manifest(manifest, reader, build, apfs):
             INSTALL_FEATURE: [
                 READ_FEATURE, "dep:dmgez-config", "dep:dmgez-operations", "dmgez-operations/install",
             ],
+            MOUNT_WATCH_FEATURE: [INSTALL_FEATURE, "mount-system", "dmgez-mount/watch"],
         }
         forwarding[INSTALLER_TEST_FEATURE] = [READ_FEATURE]
         if build:
@@ -323,6 +326,8 @@ def run_cli(cargo, directory, options, packages):
                 command.extend(("--test", EXTRACT_TEST))
         if any(has_cli_feature(options, name) for name in (INSTALL_FEATURE, APFS_INSTALL_FEATURE)):
             command.extend(("--test", INSTALL_TEST))
+        if has_cli_feature(options, MOUNT_WATCH_FEATURE):
+            command.extend(("--test", MOUNT_TEST))
         if has_cli_feature(options, INSTALLER_TEST_FEATURE):
             command.extend(("--test", INSTALLER_TEST))
         if HFSPLUS_BUILDER in packages:
@@ -383,14 +388,14 @@ def main():
     for feature in APFS_PROFILES:
         if has_cli_feature(options, feature) and not use_apfs:
             parser.error(f"{feature} requires --apfs or --apfs-packages")
-    for feature in (HFS_ANALYSIS_FEATURE, INSTALL_FEATURE, PROJECT_EDIT_FEATURE, IMAGE_EDIT_FEATURE):
+    for feature in (HFS_ANALYSIS_FEATURE, INSTALL_FEATURE, MOUNT_WATCH_FEATURE, PROJECT_EDIT_FEATURE, IMAGE_EDIT_FEATURE):
         if has_cli_feature(options, feature) and not use_hfsplus:
             parser.error(f"{feature} requires --hfsplus or --hfsplus-packages")
     if use_apfs and not any(has_cli_feature(options, feature) for feature in APFS_PROFILES):
         options.features.append(APFS_FEATURE)
     if options.target_dir is None:
         options.target_dir = ROOT / "target" / ("apfs-cli" if use_apfs else "hfsplus-cli")
-    explicit_read = any(has_cli_feature(options, name) for name in (*READ_PROFILES, VERIFY_FEATURE)) or (
+    explicit_read = any(has_cli_feature(options, name) for name in (*READ_PROFILES, VERIFY_FEATURE, MOUNT_WATCH_FEATURE)) or (
         use_hfsplus and (
             has_cli_feature(options, INSTALLER_TEST_FEATURE) or
             sys.platform == "darwin" and has_cli_feature(options, PROJECT_RELEASE_FEATURE)

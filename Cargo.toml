@@ -141,4 +141,4 @@ proptest = { version = "1.12.0", default-features = false, features = ["std"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(feature, values("project-build", "project-release", "project-edit", "image-edit", "finder-write", "compression-cache", "hfsplus-read", "hfsplus-analysis", "hfsplus-verify", "hfsplus-extract", "hfsplus-decmpfs", "hfsplus-install", "apfs-read", "apfs-extract", "apfs-install"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(feature, values("project-build", "project-release", "project-edit", "mount-watch", "image-edit", "finder-write", "compression-cache", "hfsplus-read", "hfsplus-analysis", "hfsplus-verify", "hfsplus-extract", "hfsplus-decmpfs", "hfsplus-install", "apfs-read", "apfs-extract", "apfs-install"))'] }
