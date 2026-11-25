@@ -56,6 +56,9 @@ lint = ["dep:dmgez-config", "dep:dmgez-lint", "dep:dmgez-preview", "dep:serde", 
 installer-lint = ["lint", "dmgez-lint/installer"]
 installer-test = ["inspect", "dep:dmgez-operations", "dmgez-operations/install"]
 
+# Host mount sessions
+mount-system = ["dep:dmgez-mount", "dmgez-mount/system", "dep:serde", "dep:serde_json"]
+
 # Signing and notarization
 signing-native = ["dep:dmgez-signing", "dmgez-signing/native", "dep:serde", "dep:serde_json"]
 notarization-native = ["signing-native", "dmgez-signing/notarization-native"]
@@ -73,6 +76,9 @@ dmgez-udif = { workspace = true, optional = true }
 dmgez-config = { workspace = true, optional = true }
 dmgez-core = { workspace = true, optional = true, features = ["staging"] }
 dmgez-vfs = { workspace = true, optional = true }
+
+# Workspace platform
+dmgez-mount = { workspace = true, optional = true }
 
 # Workspace presentation
 dmgez-preview = { workspace = true, optional = true }

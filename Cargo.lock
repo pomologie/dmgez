@@ -1085,6 +1085,7 @@ dependencies = [
  "dmgez-diff",
  "dmgez-inspector",
  "dmgez-lint",
+ "dmgez-mount",
  "dmgez-operations",
  "dmgez-preview",
  "dmgez-signing",

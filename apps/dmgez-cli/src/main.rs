@@ -19,6 +19,7 @@ mod install;
 mod installer_test;
 #[cfg(feature = "lint")]
 mod lint;
+mod mount_command;
 mod native_assessment;
 mod notarize;
 #[cfg(feature = "convert")]
@@ -34,6 +35,7 @@ mod project_input;
 	feature = "project-release",
 	feature = "project-edit",
 	feature = "image-edit",
+	all(feature = "mount-system", target_os = "macos"),
 	all(feature = "installer-lint", any(unix, windows)),
 ))]
 mod report_output;
@@ -212,6 +214,10 @@ enum Command {
 	/// Copy one selected application bundle to an existing directory without mounting the image.
 	#[command(name = install::COMMAND)]
 	Install(install::Arguments),
+	/// Attach an explicitly selected image read-only, or manage a dmgez mount session.
+	Mount(mount_command::Arguments),
+	/// Detach one verified dmgez mount session without forcing it.
+	Unmount(mount_command::UnmountArguments),
 	/// Export the decoded disk or one partition to a regular file.
 	#[command(name = UNWRAP_RAW_COMMAND)]
 	UnwrapRaw {
@@ -428,6 +434,8 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		Command::Volumes(arguments) => volume_commands::volumes(&arguments),
 		Command::Extract(arguments) => extract::run(&arguments),
 		Command::Install(arguments) => install::run(&arguments),
+		Command::Mount(arguments) => mount_command::run(&arguments),
+		Command::Unmount(arguments) => mount_command::unmount(&arguments),
 		Command::Test(arguments) => return installer_test::run(&arguments),
 		#[cfg(feature = "inspect")]
 		Command::UnwrapRaw {

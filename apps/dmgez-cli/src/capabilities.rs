@@ -4,7 +4,8 @@ use super::{
 	INSTALLER_LINT_FEATURE, LINT_COMMAND, LZFSE_FEATURE, LZMA_FEATURE, NOT_COMPILED,
 	OPTIMIZE_COMMAND, PARALLEL_FEATURE, UNWRAP_RAW_COMMAND, VERIFY_APFS_CAPABILITY,
 	VERIFY_CONTAINER_CAPABILITY, VERIFY_HFSPLUS_CAPABILITY, WRAP_RAW_COMMAND, diff, extract,
-	image_edit, install, installer_test, notarize, project_edit, signing, volume_commands,
+	image_edit, install, installer_test, mount_command, notarize, project_edit, signing,
+	volume_commands,
 };
 
 const COMPRESSION_CACHE_CAPABILITY: &str = "compression-cache";
@@ -66,6 +67,7 @@ pub(super) fn write() {
 		(install::HFSPLUS_FEATURE, install::HFSPLUS_COMPILED),
 		(install::APFS_FEATURE, install::APFS_COMPILED),
 		(installer_test::FEATURE, installer_test::COMPILED),
+		(mount_command::FEATURE, mount_command::COMPILED),
 		(ANALYZE_COMMAND, cfg!(feature = "inspect")),
 		(
 			HFSPLUS_ANALYSIS_CAPABILITY,
