@@ -1,3 +1,5 @@
+#[cfg(feature = "content-hash")]
+use std::cell::Cell;
 use std::{
 	collections::BTreeMap,
 	io,
@@ -14,9 +16,13 @@ use dmgez_vfs::{
 
 use super::{ChangeKind, Error, Field, Limits, Outcome, compare};
 
+#[cfg(feature = "content-hash")]
+mod content_hash;
 mod finder_info;
 #[cfg(feature = "finder-layout")]
 mod finder_layout;
+#[cfg(feature = "content-hash")]
+mod renames;
 mod xattrs;
 
 const ROOT: u32 = 1;
@@ -147,6 +153,8 @@ struct TestNode<'data> {
 	kind: NodeKind,
 	mode: u16,
 	data: Option<&'data [u8]>,
+	#[cfg(feature = "content-hash")]
+	bytes_read: Option<&'data Cell<u64>>,
 	resource: Option<&'static [u8]>,
 	hard_link: Option<HardLink<u64>>,
 	target: Option<&'static [u8]>,
@@ -161,6 +169,8 @@ impl TestNode<'_> {
 			kind: NodeKind::RegularFile,
 			mode: FILE_MODE,
 			data: Some(SHARED_BYTE_CONTENT),
+			#[cfg(feature = "content-hash")]
+			bytes_read: None,
 			resource: None,
 			hard_link: None,
 			target: None,
@@ -303,7 +313,13 @@ impl VolumeBackend for TestTree<'_> {
 			ForkKind::Resource => node.resource,
 			_ => panic!("unrecognized test fork"),
 		};
-		Ok(fork.map(|bytes| read(&mut Fork(bytes))))
+		Ok(fork.map(|bytes| {
+			read(&mut Fork {
+				bytes,
+				#[cfg(feature = "content-hash")]
+				bytes_read: node.bytes_read,
+			})
+		}))
 	}
 
 	fn read_link(&mut self, node: u32) -> io::Result<Option<Vec<u8>>> {
@@ -332,7 +348,13 @@ impl VolumeBackend for TestTree<'_> {
 			.iter()
 			.find(|xattr| xattr.name.as_lookup() == name)
 			.and_then(|xattr| xattr.value)
-			.map(|bytes| read(&mut Fork(bytes))))
+			.map(|bytes| {
+				read(&mut Fork {
+					bytes,
+					#[cfg(feature = "content-hash")]
+					bytes_read: None,
+				})
+			}))
 	}
 }
 
@@ -353,18 +375,26 @@ impl DirectoryReader for Page<'_> {
 	}
 }
 
-struct Fork<'data>(&'data [u8]);
+struct Fork<'data> {
+	bytes: &'data [u8],
+	#[cfg(feature = "content-hash")]
+	bytes_read: Option<&'data Cell<u64>>,
+}
 
 impl ForkReader for Fork<'_> {
 	type Error = io::Error;
 
 	fn len(&self) -> u64 {
-		self.0.len() as u64
+		self.bytes.len() as u64
 	}
 
 	fn read_exact_at(&mut self, offset: u64, output: &mut [u8]) -> io::Result<()> {
 		let start = offset as usize;
-		output.copy_from_slice(&self.0[start..start + output.len()]);
+		output.copy_from_slice(&self.bytes[start..start + output.len()]);
+		#[cfg(feature = "content-hash")]
+		if let Some(bytes_read) = self.bytes_read {
+			bytes_read.set(bytes_read.get() + output.len() as u64);
+		}
 		Ok(())
 	}
 }
