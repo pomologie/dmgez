@@ -4,7 +4,7 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-use crate::{CliResult, project_input};
+use crate::project_input;
 
 pub(super) const SHA256_BYTES: usize = 32;
 pub(super) const SHA256_HEX_BYTES: usize = SHA256_BYTES * 2;
@@ -16,7 +16,7 @@ pub(super) struct Snapshot {
 }
 
 impl Snapshot {
-	pub(super) fn open(path: &Path, limit: usize) -> CliResult<Self> {
+	pub(super) fn open(path: &Path, limit: usize) -> io::Result<Self> {
 		let path = path.canonicalize()?;
 		let text = project_input::read_limited(&path, limit)?;
 		Ok(Self { path, text, limit })
@@ -39,7 +39,9 @@ impl Snapshot {
 	}
 }
 
-pub(super) fn encode_sha256(digest: &[u8; SHA256_BYTES]) -> String {
+/// Encode a SHA-256 digest as lowercase hexadecimal for an edit report.
+#[must_use]
+pub fn encode_sha256(digest: &[u8; SHA256_BYTES]) -> String {
 	let mut encoded = String::with_capacity(SHA256_HEX_BYTES);
 	for byte in digest {
 		write!(encoded, "{byte:02x}").expect("writing to a string is infallible");

@@ -1,118 +1,54 @@
 use std::{borrow::Cow, io::Write};
 
-use dmgez_builder::preflight::{Availability, ReleasePlan};
-use dmgez_config::{
-	MAX_MANIFEST_BYTES,
-	project_edit::{MAX_EDIT_BATCH_BYTES, ProjectEdit, parse_edit_batch},
+use dmgez_runtime::{
+	project_build::{BuildEvent, BuildMode},
+	project_edit::{self, EditReport, EditRequest},
 };
-use dmgez_operations::edit::{ProjectRebuildRequest, plan_project_rebuild};
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 
 use crate::{
 	CliResult,
-	edit_input::{SHA256_HEX_BYTES, Snapshot, encode_sha256},
 	project_build::{Progress, report_losses},
 	project_input,
 	report_output::{EscapedText, write_report},
-	staged_image::verify_stage,
 };
 
 use super::Arguments;
 
 const SCHEMA_VERSION: u16 = 1;
-const EXPECTED_DIGEST_FORMAT: &str = "expected project SHA-256 must contain 64 hexadecimal digits";
-const EXPECTED_DIGEST_MISMATCH: &str = "project SHA-256 does not match the expected revision";
 const UNSIGNED_TRUST: &str = "unsigned";
 
 pub(super) fn run(arguments: &Arguments) -> CliResult {
-	let source = Snapshot::open(&arguments.project, MAX_MANIFEST_BYTES)?;
-	let project_sha256 = encode_sha256(&Sha256::digest(source.text.as_bytes()).into());
-	check_expected(arguments.expect_project_sha256.as_deref(), &project_sha256)?;
-	let changes = Snapshot::open(&arguments.changes, MAX_EDIT_BATCH_BYTES)?;
-	let mut edits = parse_edit_batch(&changes.text)?;
-	let edit_count = edits.len();
-	edits.try_reserve(1)?;
-	edits.push(ProjectEdit::SetOutputPath(arguments.output.clone()));
-	let mut capabilities = dmgez_hfsplus::capabilities();
-	capabilities.verify = Availability::Available;
-	let config_dir = source
-		.path
-		.parent()
-		.ok_or("project path has no parent directory")?;
-	let plan = plan_project_rebuild(ProjectRebuildRequest {
-		expected_source: &source.text,
-		current_source: &source.text,
-		config_dir,
-		defines: project_input::definitions(&arguments.define)?,
-		edits: &edits,
-		capabilities,
-		host_threads: std::thread::available_parallelism()?,
-	})?;
-	let mut project = plan.project().clone();
-	// An edit always checks the new container and the input revisions before
-	// the ordinary builder may publish the no-clobber stage.
-	project.build.verify_output = true;
+	let mode = if arguments.dry_run {
+		BuildMode::Plan
+	} else {
+		BuildMode::Publish
+	};
 	let progress = Progress::default();
-	let prepared = dmgez_hfsplus::prepare_with_progress(
-		&project,
-		plan.config_dir(),
-		plan.options(),
+	let report = project_edit::rebuild(
+		EditRequest {
+			project: &arguments.project,
+			changes: &arguments.changes,
+			output: arguments.output.clone(),
+			expected_project_sha256: arguments.expect_project_sha256.as_deref(),
+			definitions: project_input::definitions(&arguments.define)?,
+			mode,
+		},
 		Default::default(),
-		|event| progress.update(event),
+		|event| match event {
+			BuildEvent::Progress(event) => progress.update(event),
+			BuildEvent::MetadataLosses(entries) => {
+				report_losses(entries);
+			}
+		},
 	)?;
-	let image = prepared.seal()?;
-	let mut report = Report {
-		schema_version: SCHEMA_VERSION,
-		project_sha256,
-		output: plan.output_path().to_string_lossy(),
-		edits: edit_count,
-		entries: prepared.prepared().manifest().entries().len(),
-		logical_bytes: image.logical_bytes(),
-		physical_bytes: None,
-		metadata_losses: report_losses(image.metadata_losses()),
-		published: false,
-		verified: false,
-		trust: UNSIGNED_TRUST,
-		release_stages_deferred: prepared.prepared().profile().release()
-			== ReleasePlan::ConfiguredStagesDeferred,
-	};
-	source.validate()?;
-	changes.validate()?;
-	if !arguments.dry_run {
-		let built = image.publish_with_progress(
-			Some(&|stage, written| {
-				verify_stage(stage, written)?;
-				source.validate()?;
-				changes.validate()
-			}),
-			|event| progress.update(event),
-		)?;
-		report.published = true;
-		report.verified = built.report.verified;
-		report.physical_bytes = Some(built.report.image.physical_bytes);
-	}
-	report.write(arguments.json)
-}
-
-fn check_expected(expected: Option<&str>, actual: &str) -> CliResult {
-	let Some(expected) = expected else {
-		return Ok(());
-	};
-	if expected.len() != SHA256_HEX_BYTES || !expected.bytes().all(|byte| byte.is_ascii_hexdigit())
-	{
-		return Err(EXPECTED_DIGEST_FORMAT.into());
-	}
-	if !expected.eq_ignore_ascii_case(actual) {
-		return Err(EXPECTED_DIGEST_MISMATCH.into());
-	}
-	Ok(())
+	Report::from(&report).write(arguments.json)
 }
 
 #[derive(Serialize)]
 struct Report<'path> {
 	schema_version: u16,
-	project_sha256: String,
+	project_sha256: &'path str,
 	output: Cow<'path, str>,
 	edits: usize,
 	entries: usize,
@@ -123,6 +59,26 @@ struct Report<'path> {
 	verified: bool,
 	trust: &'static str,
 	release_stages_deferred: bool,
+}
+
+impl<'path> From<&'path EditReport> for Report<'path> {
+	fn from(report: &'path EditReport) -> Self {
+		let publication = report.publication.as_ref();
+		Self {
+			schema_version: SCHEMA_VERSION,
+			project_sha256: &report.project_sha256,
+			output: report.output.to_string_lossy(),
+			edits: report.edits,
+			entries: report.entries,
+			logical_bytes: report.logical_bytes,
+			physical_bytes: publication.map(|outcome| outcome.physical_bytes),
+			metadata_losses: report.metadata_losses,
+			published: publication.is_some(),
+			verified: publication.is_some_and(|outcome| outcome.verified),
+			trust: UNSIGNED_TRUST,
+			release_stages_deferred: report.release_stages_deferred,
+		}
+	}
 }
 
 impl Report<'_> {

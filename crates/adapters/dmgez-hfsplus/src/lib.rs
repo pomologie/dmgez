@@ -8,6 +8,8 @@ mod hfsplus;
 #[cfg(feature = "image-edit")]
 pub mod rebuild;
 
+#[cfg(feature = "image-edit")]
+pub use hfsplus::HostCopyMetadataLoss;
 pub use hfsplus::{
 	Error, HfsBuildReport, HfsImage, MetadataLoss, PreparedHfsBuild, capabilities, prepare,
 	prepare_with_progress,

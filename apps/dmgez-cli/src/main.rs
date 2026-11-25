@@ -7,8 +7,6 @@ mod capabilities;
 #[cfg(feature = "convert")]
 mod convert;
 mod diff;
-#[cfg(any(feature = "image-edit", feature = "project-edit"))]
-mod edit_input;
 mod extract;
 mod image_edit;
 #[cfg(feature = "appdmg-import")]

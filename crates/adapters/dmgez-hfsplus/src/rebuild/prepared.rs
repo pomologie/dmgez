@@ -120,6 +120,12 @@ impl PreparedEdit {
 		&self.losses
 	}
 
+	/// Take ownership of the captured host metadata loss report.
+	#[must_use]
+	pub fn into_metadata_losses(self) -> Vec<HostCopyMetadataLoss> {
+		self.losses
+	}
+
 	/// Revalidate every captured host entry, including directories and symlinks.
 	/// # Errors
 	/// Returns an error if a source changed or can no longer be inspected.

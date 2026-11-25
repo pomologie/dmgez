@@ -261,6 +261,6 @@ impl PlanSummary {
 	}
 }
 
-fn metadata_loss_count(entries: &[MetadataLoss<'_>]) -> usize {
+pub(crate) fn metadata_loss_count(entries: &[MetadataLoss<'_>]) -> usize {
 	entries.iter().map(|entry| entry.details.len()).sum()
 }
