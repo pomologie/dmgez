@@ -70,7 +70,7 @@ def main():
                         help="use the serial profile without Finder store generation")
     parser.add_argument("--lzma", action="store_true", help="enable the optional ULMO codec")
     parser.add_argument("--volume-icon", action="store_true",
-                        help="enable prebuilt ICNS volume icons")
+                        help="enable prebuilt or PNG-set volume icons")
     options = parser.parse_args()
     if not (sys.platform == "darwin" or sys.platform.startswith("linux")):
         parser.error("the development adapter requires a macOS or Linux host metadata adapter")
