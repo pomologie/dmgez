@@ -12,7 +12,7 @@ default = []
 
 # Source access and output staging
 source = ["dep:thiserror"]
-staging = ["dep:tempfile", "dep:thiserror", "dep:rustix"]
+staging = ["dep:tempfile", "dep:thiserror", "dep:rustix", "dep:same-file"]
 
 # Native host operations
 native-directory-privacy = ["dep:rustix"]
@@ -28,6 +28,10 @@ thiserror = { workspace = true, optional = true }
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
 # Filesystem access and staging
 rustix = { workspace = true, optional = true }
+
+[target.'cfg(windows)'.dependencies]
+# Filesystem identity
+same-file = { workspace = true, optional = true }
 
 [lints.rust]
 unsafe_code = "deny"

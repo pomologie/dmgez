@@ -85,6 +85,43 @@ fn publishes_a_verified_unsigned_release_and_binds_the_report_to_its_bytes() {
 	assert_eq!(fs::read(image_path).unwrap(), image);
 }
 
+#[cfg(feature = "signing-rust")]
+#[test]
+fn signs_the_verified_unsigned_stage_and_cleans_up_before_returning() {
+	const SIGNING: &str = r#"
+[signing]
+enabled = true
+mode = "ad-hoc"
+dmg = true
+identifier = "com.example.release-fixture"
+"#;
+	let directory = tempfile::tempdir().unwrap();
+	fs::write(
+		directory.path().join(MANIFEST_NAME),
+		format!("{PROJECT}{SIGNING}"),
+	)
+	.unwrap();
+
+	let output = run(directory.path(), &[]);
+	assert!(
+		output.status.success(),
+		"{}",
+		String::from_utf8_lossy(&output.stderr),
+	);
+	let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+	assert_ne!(report["unsigned"], report["artifact"]);
+	let signing = report["steps"]
+		.as_array()
+		.unwrap()
+		.iter()
+		.find(|step| step["stage"] == "sign_image")
+		.unwrap();
+	assert_eq!(signing["backend"], "rust");
+	assert_eq!(signing["status"], "passed");
+	assert!(directory.path().join(OUTPUT_NAME).is_file());
+	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 2);
+}
+
 #[test]
 fn rejects_a_requested_unavailable_backend_and_an_implicit_overwrite() {
 	let directory = tempfile::tempdir().unwrap();

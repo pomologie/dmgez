@@ -29,6 +29,8 @@ pub enum PublishError<E> {
 	Rewind(#[source] io::Error),
 	#[error("staged output did not pass prepublication checks")]
 	Validate(#[source] E),
+	#[error("could not retain the verified stage with read-only access")]
+	ReadOnly(#[source] io::Error),
 	#[error("could not publish staged output without replacing an existing entry")]
 	Commit(#[source] io::Error),
 }
@@ -73,6 +75,29 @@ impl<T> StagedOutput<T> {
 		let file = self.file.as_file_mut();
 		file.rewind()?;
 		Ok(StagedReader(file))
+	}
+
+	/// Close the writer while retaining a read-only handle and stage cleanup.
+	/// This lets a Windows consumer open the stage while denying write sharing.
+	/// # Errors
+	/// Returns an error if the path cannot be reopened as the same file.
+	#[cfg(windows)]
+	pub fn into_read_only(self) -> io::Result<Self> {
+		use same_file::Handle;
+
+		let read_only = File::open(self.file.path())?;
+		let original = Handle::from_file(self.file.as_file().try_clone()?)?;
+		let reopened = Handle::from_file(read_only.try_clone()?)?;
+		if original != reopened {
+			return Err(io::Error::new(
+				io::ErrorKind::InvalidData,
+				"the staged output no longer names the verified file",
+			));
+		}
+		Ok(Self {
+			file: NamedTempFile::from_parts(read_only, self.file.into_temp_path()),
+			report: self.report,
+		})
 	}
 }
 

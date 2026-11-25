@@ -101,6 +101,10 @@ impl<'plan, R: Read> BuildPlan<'plan, R> {
 				validate_sources(self.manifest, self.profile)
 			},
 		)?;
+		#[cfg(windows)]
+		let output = output
+			.into_read_only()
+			.map_err(dmgez_core::output::PublishError::ReadOnly)?;
 		Ok(StagedRelease {
 			output,
 			manifest: self.manifest,
