@@ -11,6 +11,8 @@ use super::*;
 #[cfg(feature = "badge-icons")]
 #[path = "badge_icon.rs"]
 mod badge;
+#[path = "item_icon.rs"]
+mod item;
 
 const ICON_SOURCE: &str = "source.icns";
 const ICON_ASSET: &str = ".VolumeIcon.icns";

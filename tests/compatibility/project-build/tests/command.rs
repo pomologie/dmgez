@@ -202,6 +202,41 @@ output = 'image.dmg'
 	assert!(!root.path().join(IMAGE_NAME).exists());
 }
 
+#[cfg(not(feature = "volume-icon"))]
+#[test]
+fn refuses_custom_item_icons_before_discovering_sources_when_disabled() {
+	const PROJECT: &str = r#"
+schema_version = 1
+
+[image]
+name = 'Item icon feature test'
+output = 'image.dmg'
+
+[[contents]]
+source = 'absent.txt'
+custom_icon = 'absent.icns'
+"#;
+	const PROJECT_NAME: &str = "item-icon.toml";
+	const IMAGE_NAME: &str = "image.dmg";
+	let root = tempfile::tempdir().unwrap();
+	fs::write(root.path().join(PROJECT_NAME), PROJECT).unwrap();
+	let output = Command::new(BINARY)
+		.current_dir(root.path())
+		.arg("--working-directory")
+		.arg(root.path())
+		.args([PROJECT_NAME, "--dry-run"])
+		.output()
+		.unwrap();
+	assert!(!output.status.success());
+	let stderr = String::from_utf8(output.stderr).unwrap();
+	assert!(
+		stderr.contains("feature not compiled: Finder custom item icon"),
+		"{stderr}"
+	);
+	assert!(!stderr.contains("Discovering source paths"));
+	assert!(!root.path().join(IMAGE_NAME).exists());
+}
+
 #[cfg(not(feature = "badge-icons"))]
 #[test]
 fn refuses_a_volume_badge_before_discovering_sources_when_disabled() {
