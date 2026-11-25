@@ -136,7 +136,7 @@ pub fn capture_disk<S: LogicalDisk>(
 	limits.max_read_requests = limits.max_read_requests.min(MAX_PREVIEW_READS);
 	limits.max_read_bytes = limits.max_read_bytes.min(MAX_PREVIEW_READ_BYTES);
 	browse::with_catalog(disk, selected, limits, |volume, catalog| {
-		let mut view = browse::view_for_catalog(selected, volume, catalog, limits);
+		let mut view = browse::view_for_catalog(selected, catalog, limits);
 		let directory = open_folder(&mut view, components)?;
 		let entries = capture_entries(&mut view, &directory)?;
 		let store = inspect_store(&mut view, &directory);

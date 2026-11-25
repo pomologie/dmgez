@@ -15,7 +15,6 @@ use hfsplus_core::{ByteOffset, ReadAt, names::NameError};
 pub use hfsplus_format::volume::Signature as VolumeSignature;
 use hfsplus_format::{bsd, symlink::MAX_SYMLINK_TARGET_BYTES, volume::CatalogId};
 use hfsplus_reader::{
-	Volume,
 	attributes::AttributeReadError,
 	catalog::{
 		Catalog, CatalogError, CatalogLimits, Directory, Entry, EntryKind, HardLinkError,
@@ -129,7 +128,6 @@ impl From<SymlinkError<SourceError>> for Error {
 
 /// Backend admitted on a single selected partition or whole-disk volume.
 pub struct HfsBackend<'volume, 'disk, S> {
-	volume: &'volume Volume<WindowSource<'disk, S>>,
 	catalog: Catalog<'volume, WindowSource<'disk, S>>,
 	limits: Limits,
 }
@@ -167,7 +165,7 @@ pub fn with_view_signature<S: LogicalDisk, T>(
 ) -> Result<T, Error> {
 	with_catalog(disk, selected, limits, |volume, catalog| {
 		read(
-			&mut view_for_catalog(selected, volume, catalog, limits),
+			&mut view_for_catalog(selected, catalog, limits),
 			volume.header().signature,
 		)
 	})
@@ -175,18 +173,10 @@ pub fn with_view_signature<S: LogicalDisk, T>(
 
 pub(crate) fn view_for_catalog<'volume, 'disk, S: LogicalDisk>(
 	selected: VolumeId,
-	volume: &'volume Volume<WindowSource<'disk, S>>,
 	catalog: Catalog<'volume, WindowSource<'disk, S>>,
 	limits: Limits,
 ) -> HfsView<'volume, 'disk, S> {
-	VolumeView::new(
-		selected,
-		HfsBackend {
-			volume,
-			catalog,
-			limits,
-		},
-	)
+	VolumeView::new(selected, HfsBackend { catalog, limits })
 }
 
 impl<'volume, 'disk, S: LogicalDisk> HfsBackend<'volume, 'disk, S> {

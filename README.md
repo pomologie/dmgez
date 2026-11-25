@@ -80,12 +80,12 @@ Compose `installer-test` to check the finished image with `dmgez test installer.
 
 ## Build from a TOML project
 
-The ordinary Cargo workspace builds the raw-image CLI. To enable `dmgez build`, compose the standalone CLI with the unpublished HFS+ packages on macOS, Linux, or Windows. Use Python 3.11 or newer and the Rust toolchain pinned in this checkout. Supply a sibling `hfsplus` checkout containing commit `c4333788f96978d514409ea308b9a4ea43af97b6`.
+The ordinary Cargo workspace builds the raw-image CLI. To enable `dmgez build`, compose the standalone CLI with the unpublished HFS+ packages on macOS, Linux, or Windows. Use Python 3.11 or newer and the Rust toolchain pinned in this checkout. Supply a sibling `hfsplus` checkout containing commit `1e7f360ddf386165668634cc9ee017214900b646`.
 
 Run from the dmgez checkout. Set the manifest and output paths for your project. The build resolves `[image].output` and asset paths relative to `dmg.toml`. Upload the verified output file from that path in your CI job.
 
 ```sh
-git -C ../hfsplus checkout --detach c4333788f96978d514409ea308b9a4ea43af97b6
+git -C ../hfsplus checkout --detach 1e7f360ddf386165668634cc9ee017214900b646
 python3 tools/compose_hfsplus_cli.py --hfsplus ../hfsplus --fetch --release --features inspect
 target/hfsplus-cli/release/dmgez build path/to/dmg.toml --dry-run
 target/hfsplus-cli/release/dmgez build path/to/dmg.toml
@@ -95,7 +95,7 @@ target/hfsplus-cli/release/dmgez verify path/to/installer.dmg --container
 On Windows, place `dmg.toml` and its assets in a project directory on local NTFS, such as `$env:LOCALAPPDATA\Temp\dmgez-project`. Keep the output on the same local filesystem. The Windows adapter reports metadata it cannot observe. Strict builds refuse required metadata loss. [Windows source profile](docs/reference/WINDOWS_SOURCES.md)
 
 ```powershell
-git -C ..\hfsplus checkout --detach c4333788f96978d514409ea308b9a4ea43af97b6
+git -C ..\hfsplus checkout --detach 1e7f360ddf386165668634cc9ee017214900b646
 py -3 tools\compose_hfsplus_cli.py --hfsplus ..\hfsplus --fetch --release --features inspect
 $projectDirectory = Join-Path $env:LOCALAPPDATA 'Temp\dmgez-project'
 $manifest = Join-Path $projectDirectory 'dmg.toml'
