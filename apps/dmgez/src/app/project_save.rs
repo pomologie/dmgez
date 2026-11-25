@@ -25,10 +25,14 @@ impl App {
 			self.save_project(ui.ctx());
 		}
 		if ui.button("Save copy…").clicked() {
-			self.copy_name.clear();
-			self.copy_name.push_str(PROJECT_COPY);
-			self.save_copy = true;
+			self.ask_save_copy();
 		}
+	}
+
+	pub(super) fn ask_save_copy(&mut self) {
+		self.copy_name.clear();
+		self.copy_name.push_str(PROJECT_COPY);
+		self.save_copy = true;
 	}
 
 	pub(super) fn save_shortcut(&mut self, ctx: &Context) -> bool {
@@ -39,7 +43,7 @@ impl App {
 		true
 	}
 
-	fn save_project(&mut self, ctx: &Context) {
+	pub(super) fn save_project(&mut self, ctx: &Context) {
 		if let Some(Opened {
 			path,
 			document: Document::Project(project),

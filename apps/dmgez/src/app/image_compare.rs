@@ -42,8 +42,12 @@ impl App {
 			})
 		) && ui.button("Compare…").clicked()
 		{
-			self.comparison.open = true;
+			self.open_comparison();
 		}
+	}
+
+	pub(super) fn open_comparison(&mut self) {
+		self.comparison.open = true;
 	}
 
 	pub(super) fn show_comparison(&mut self, ctx: &Context) {

@@ -42,11 +42,15 @@ impl BuildPanel {
 impl App {
 	pub(super) fn build_actions(&mut self, ui: &mut Ui) {
 		if ui.button("Plan build").clicked() {
-			self.start_project_build(ui.ctx(), BuildMode::Plan, choose_output);
+			self.build_from_editor(ui.ctx(), BuildMode::Plan);
 		}
 		if ui.button("Build image…").clicked() {
-			self.start_project_build(ui.ctx(), BuildMode::Publish, choose_output);
+			self.build_from_editor(ui.ctx(), BuildMode::Publish);
 		}
+	}
+
+	pub(super) fn build_from_editor(&mut self, ctx: &Context, mode: BuildMode) {
+		self.start_project_build(ctx, mode, choose_output);
 	}
 
 	fn start_project_build(

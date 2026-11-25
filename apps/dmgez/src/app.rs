@@ -18,6 +18,7 @@ mod image_exports;
 mod image_tasks;
 #[cfg(test)]
 mod import_tests;
+mod palette;
 mod project_save;
 #[cfg(feature = "project-build")]
 mod project_tasks;
@@ -42,6 +43,7 @@ pub(crate) struct App {
 	copy_name: String,
 	closing: bool,
 	error: Option<String>,
+	palette: Option<palette::Palette>,
 	comparison: image_compare::ComparePanel,
 	recent: recent_files::RecentFiles,
 	#[cfg(feature = "project-build")]
@@ -109,6 +111,7 @@ impl App {
 			copy_name: String::new(),
 			closing: false,
 			error: None,
+			palette: None,
 			comparison: image_compare::ComparePanel::default(),
 			recent: recent_files::RecentFiles::default(),
 			#[cfg(feature = "project-build")]
@@ -279,6 +282,7 @@ impl App {
 						self.ask_open(ui.ctx());
 					}
 					self.recent_menu(ui);
+					self.palette_button(ui);
 					self.compare_action(ui);
 					if matches!(
 						&self.opened,
@@ -381,6 +385,9 @@ impl App {
 		if self.worker.is_some() || self.confirm.is_some() || self.save_copy {
 			return;
 		}
+		if self.palette_shortcut(ctx) {
+			return;
+		}
 		if ctx.input_mut(|input| input.consume_key(Modifiers::COMMAND, FILE_OPEN_KEY)) {
 			self.ask_open(ctx);
 			return;
@@ -457,6 +464,7 @@ impl eframe::App for App {
 			self.image_action(&ctx, action);
 		}
 		self.show_comparison(&ctx);
+		self.show_palette(&ctx);
 		self.modal(&ctx);
 	}
 }
