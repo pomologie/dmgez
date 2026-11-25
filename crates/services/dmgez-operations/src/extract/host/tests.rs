@@ -1,5 +1,7 @@
 //! Host capability coverage from D-READ-05-T01 and D-READ-05-T03.
 
+#[cfg(feature = "install")]
+mod directory_stage;
 mod fixture;
 mod publication;
 

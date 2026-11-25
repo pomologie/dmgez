@@ -1,4 +1,4 @@
-//! Descriptor-relative publication of a selected fork into an absent file.
+//! Descriptor-relative staging and no-clobber publication under a held destination.
 //!
 //! The caller authorizes a stable local destination namespace before admission.
 //! A directory descriptor pins the authorized identity. Path rechecks detect
@@ -8,6 +8,8 @@
 //! during extraction. The resulting file holds the selected fork's bytes.
 
 mod directory;
+#[cfg(feature = "install")]
+mod directory_stage;
 mod quarantine;
 mod stage;
 
@@ -20,6 +22,8 @@ use super::HostName;
 use stage::Stage;
 
 pub use directory::{DestinationDirectory, HostError, StableDestination};
+#[cfg(feature = "install")]
+pub(crate) use directory_stage::DirectoryStage;
 pub use quarantine::check_source_quarantine;
 
 const MAX_CHUNK_BYTES: usize = 1 << 20;

@@ -479,3 +479,7 @@ fn applies_bounds_and_cancellation_before_reading_bundle_bytes() {
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 #[path = "virtual_install/destination.rs"]
 mod destination;
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[path = "virtual_install/execute.rs"]
+mod execute;

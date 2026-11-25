@@ -8,6 +8,11 @@ pub use copy_plan::{
 	prepare_copy,
 };
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod execute;
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub use execute::{HostMetadataError, InstallError, InstallFailure, execute_copy};
+
 use std::{collections::TryReserveError, error::Error as StdError, hash::Hash};
 
 use dmgez_config::VirtualPath;

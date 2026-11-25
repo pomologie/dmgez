@@ -18,7 +18,7 @@ const DIRECTORY_FLAGS: OFlags = OFlags::RDONLY
 	.union(OFlags::DIRECTORY)
 	.union(OFlags::NOFOLLOW)
 	.union(OFlags::CLOEXEC);
-const PRIVATE_DIRECTORY: Mode = Mode::RUSR.union(Mode::WUSR).union(Mode::XUSR);
+pub(super) const PRIVATE_DIRECTORY: Mode = Mode::RUSR.union(Mode::WUSR).union(Mode::XUSR);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) struct Identity {
@@ -128,6 +128,28 @@ pub enum HostError {
 	NoClobberUnavailable(#[source] io::Error),
 	#[error("could not publish the staged extraction file")]
 	Commit(#[source] io::Error),
+	#[cfg(feature = "install")]
+	#[error("could not create the installation stage")]
+	CreateDirectoryStage(#[source] io::Error),
+	#[cfg(feature = "install")]
+	#[error("installation stage {name:?} may remain after failed admission")]
+	DirectoryStageUnavailable {
+		name: HostName,
+		#[source]
+		source: Box<HostError>,
+	},
+	#[cfg(feature = "install")]
+	#[error("the installation stage changed or is no longer available")]
+	DirectoryStageChanged,
+	#[cfg(feature = "install")]
+	#[error("could not publish the staged installation directory")]
+	CommitDirectoryStage(#[source] io::Error),
+	#[cfg(feature = "install")]
+	#[error("could not confirm the published installation directory")]
+	PublishedDirectoryUnavailable(#[source] Box<HostError>),
+	#[cfg(feature = "install")]
+	#[error("could not remove the empty installation stage")]
+	RemoveDirectoryStage(#[source] io::Error),
 }
 
 impl<'root> DestinationDirectory<'root> {
@@ -209,7 +231,7 @@ impl<'root> DestinationDirectory<'root> {
 		Ok(())
 	}
 
-	pub(super) fn descriptor(&self) -> &OwnedFd {
+	pub(crate) fn descriptor(&self) -> &OwnedFd {
 		self.fd.as_ref().unwrap_or(&self.root.fd)
 	}
 

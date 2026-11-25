@@ -1,5 +1,5 @@
 use std::{
-	ffi::OsString,
+	ffi::{OsStr, OsString},
 	fs::File,
 	io::{self, Write},
 	path::Path,
@@ -43,30 +43,11 @@ impl<'dir> Stage<'dir> {
 		path: &Path,
 		target: &HostName,
 	) -> Result<Self, HostError> {
-		// Choose a different first digit from the admitted destination name.
-		// That keeps the temporary name distinct under either name profile.
-		let prefix = match target.as_str().bytes().find(u8::is_ascii_digit) {
-			Some(ZERO_DIGIT) => STAGING_PREFIX_ONE,
-			_ => STAGING_PREFIX_ZERO,
-		};
-		let mut attempts = 0;
-		let named = Builder::new()
-			.prefix(prefix)
-			.rand_bytes(TEMP_RANDOM_BYTES)
-			.disable_cleanup(true)
-			.make_in(path, |candidate| {
-				if attempts == MAX_STAGE_ATTEMPTS {
-					return Err(io::Error::other("could not reserve a unique stage name"));
-				}
-				attempts += 1;
-				// The helper only supplies a name. Open and cleanup are
-				// relative to the retained destination descriptor.
-				let name = candidate.file_name().ok_or(io::ErrorKind::InvalidInput)?;
-				let fd = fs::openat(directory, name, STAGE_FLAGS, PRIVATE_FILE)?;
-				Ok((File::from(fd), name.to_os_string()))
-			})
-			.map_err(HostError::CreateStage)?;
-		let ((file, name), _) = named.into_parts();
+		let (file, name) = with_stage_name(path, target, |name| {
+			let fd = fs::openat(directory, name, STAGE_FLAGS, PRIVATE_FILE)?;
+			Ok((File::from(fd), name.to_os_string()))
+		})
+		.map_err(HostError::CreateStage)?;
 		Ok(Self {
 			directory,
 			name,
@@ -128,6 +109,34 @@ impl<'dir> Stage<'dir> {
 		self.committed = true;
 		Ok(())
 	}
+}
+
+/// Generate a fresh candidate for a descriptor-relative exclusive create.
+pub(super) fn with_stage_name<T>(
+	path: &Path,
+	target: &HostName,
+	mut create: impl FnMut(&OsStr) -> io::Result<T>,
+) -> io::Result<T> {
+	// A different first digit keeps the generated name distinct from the
+	// admitted target under either name profile.
+	let prefix = match target.as_str().bytes().find(u8::is_ascii_digit) {
+		Some(ZERO_DIGIT) => STAGING_PREFIX_ONE,
+		_ => STAGING_PREFIX_ZERO,
+	};
+	let mut attempts = 0;
+	let named = Builder::new()
+		.prefix(prefix)
+		.rand_bytes(TEMP_RANDOM_BYTES)
+		.disable_cleanup(true)
+		.make_in(path, |candidate| {
+			if attempts == MAX_STAGE_ATTEMPTS {
+				return Err(io::Error::other("could not reserve a unique stage name"));
+			}
+			attempts += 1;
+			let name = candidate.file_name().ok_or(io::ErrorKind::InvalidInput)?;
+			create(name)
+		})?;
+	Ok(named.into_parts().0)
 }
 
 impl Drop for Stage<'_> {
