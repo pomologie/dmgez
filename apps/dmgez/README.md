@@ -8,7 +8,22 @@ Enable **Show layout findings** to check the current folder's declared icon layo
 
 Use **Add files…** to add up to 256 selected files to the current folder layout. Files below the project directory keep project-relative source paths. Files outside it use absolute source paths. A successful selection is one undoable edit.
 
+### Build a project from the desktop
+
+Enable the HFS+ builder when composing the desktop app.
+
+```sh
+python3 tools/compose_filesystem_cli.py --hfsplus ../hfsplus --desktop --features project-build
+target/hfsplus-desktop/debug/dmgez-gui dmg.toml
+```
+
+**Plan build** checks the current project and shows the planned image geometry. **Build image…** asks where to publish a fresh unsigned image. Both use a snapshot of the editor, including unsaved changes, with source paths relative to the open project's directory. The build panel shows progress, cancellation and metadata omissions. Open a published UDIF image from its result to inspect it in the desktop.
+
+### Inspect a disk image
+
 The image workspace shows the inspector's observed UDIF metadata and partition discovery. Run details show logical and stored offsets in pages of 64. Use **Previous page**, **Next page**, or enter a page number in the page control. Paging uses the index from the opened file handle.
+
+Enter a decimal or `0x` hexadecimal offset in **Logical byte offset** and choose **Go to run** or press Enter. The inspector opens the page containing that byte and highlights its run using the retained index from the opened image.
 
 Choose **Verify container** to scan stored runs and declared container checksums in the background. The sidebar reports structure, payload, filesystem, and security coverage independently. Filesystem and security stay “Not checked” for a container scan. **Cancel** stops at the next verification boundary and keeps the last completed result. If the open file changes, reopen the image before relying on its observed metadata.
 
@@ -22,6 +37,8 @@ target/hfsplus-desktop/debug/dmgez-gui installer.dmg
 ```
 
 Choose **Files** to open a recognized whole-disk HFS+ or HFSX volume or select a partition data window to check. Folder listings show up to 64 entries per page and preserve the stored names. Use **Up**, **Root**, or the breadcrumbs to navigate. **Details** shows the entry type, owner, group, permissions, and available catalog and link information. Symlink targets are displayed as stored data. Folder reads run in the background on the opened DMG handle and can be cancelled.
+
+Regular file details report logical data and stored resource fork lengths separately. Extended attribute details show up to 64 stored names. The view distinguishes an empty inventory from an unavailable observation and reports the cause of a failed query.
 
 Add `--features lzfse,lzma` to enable ULFO and ULMO decoding for verification and filesystem reads. Container metadata remains visible when its decoder is unavailable.
 
