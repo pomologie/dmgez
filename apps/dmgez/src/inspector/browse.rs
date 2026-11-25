@@ -19,6 +19,7 @@ use super::{Action, bytes, field};
 
 #[cfg(feature = "apfs-read")]
 mod apfs;
+mod content;
 #[cfg(feature = "actual-preview")]
 mod preview;
 mod search;
@@ -323,12 +324,18 @@ fn show_entries(ui: &mut Ui, location: &Location, entries: &[Entry]) -> Option<R
 		.inner
 }
 
-pub(super) fn details_panel(ui: &mut Ui, details: &Details) {
+pub(super) fn details_panel(ui: &mut Ui, details: &Details, idle: bool) -> Option<Action> {
 	Panel::right("volume_entry_details")
 		.default_size(DETAILS_WIDTH)
 		.show(ui, |ui| {
-			ScrollArea::vertical().show(ui, |ui| show_details(ui, details));
-		});
+			ScrollArea::vertical()
+				.show(ui, |ui| {
+					show_details(ui, details);
+					content::show(ui, details, idle)
+				})
+				.inner
+		})
+		.inner
 }
 
 fn show_details(ui: &mut Ui, details: &Details) {

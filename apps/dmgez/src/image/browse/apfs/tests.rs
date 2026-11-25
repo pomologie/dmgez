@@ -12,7 +12,7 @@ use dmgez_vfs::{
 use crate::{
 	image::{
 		ImageTab,
-		browse::{Error, Filesystem, Storage, test_support::activate},
+		browse::{Error, Filesystem, Storage, content, test_support::activate},
 	},
 	inspector::Action,
 };
@@ -123,7 +123,7 @@ fn selects_the_native_apfs_checkpoint_and_browses_exact_files_through_files_view
 	}
 	let Observation::Details(details) = observe(
 		&tab,
-		Request::Details {
+		Request::Text {
 			folder: location.clone(),
 			name: RawName::Utf8(ALIAS.into()),
 		},
@@ -144,6 +144,13 @@ fn selects_the_native_apfs_checkpoint_and_browses_exact_files_through_files_view
 	);
 	assert!(
 		matches!(forks.resource, Ok(Some(bytes)) if bytes == (RESOURCE.len() * RESOURCE_REPETITIONS) as u64)
+	);
+	assert_eq!(
+		details.text,
+		Some(content::Preview::Text {
+			value: DATA.repeat(DATA_REPETITIONS),
+			extent: content::Extent::Complete,
+		})
 	);
 	selected.uuid[0] ^= 1;
 	let moved = Location {

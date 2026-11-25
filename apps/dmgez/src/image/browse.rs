@@ -26,6 +26,7 @@ use super::{ImageSnapshot, ImageSource};
 
 #[cfg(feature = "apfs-read")]
 pub(crate) mod apfs;
+pub(crate) mod content;
 pub(crate) mod history;
 #[cfg(feature = "actual-preview")]
 pub(crate) mod preview;
@@ -138,6 +139,10 @@ pub(crate) enum Request {
 		folder: Location,
 		name: RawName,
 	},
+	Text {
+		folder: Location,
+		name: RawName,
+	},
 	Search {
 		location: Location,
 		query: String,
@@ -194,6 +199,7 @@ pub(crate) struct Details {
 	pub metadata: Metadata<StorageId>,
 	pub link_target: Option<Vec<u8>>,
 	pub storage: Box<Storage>,
+	pub text: Option<content::Preview>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -329,6 +335,9 @@ fn browse_image(source: impl ReadAt, request: Request) -> Result<Observation, Er
 			Request::Page { location, .. }
 			| Request::Search { location, .. }
 			| Request::Details {
+				folder: location, ..
+			}
+			| Request::Text {
 				folder: location, ..
 			} => location,
 			#[cfg(feature = "actual-preview")]

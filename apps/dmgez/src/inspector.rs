@@ -103,11 +103,14 @@ pub(crate) fn show(ui: &mut Ui, image: &mut ImageTab, idle: bool) -> Option<Acti
 		})
 		.inner;
 	#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
-	if image.browser.showing
-		&& let Some(details) = &image.browser.details
-	{
-		browse::details_panel(ui, details);
-	}
+	let details = image
+		.browser
+		.details
+		.as_ref()
+		.filter(|_| image.browser.showing)
+		.and_then(|details| browse::details_panel(ui, details, idle));
+	#[cfg(not(any(feature = "hfsplus-read", feature = "apfs-read")))]
+	let details = None;
 	let page = egui::CentralPanel::default()
 		.show(ui, |ui| {
 			ScrollArea::both()
@@ -143,7 +146,7 @@ pub(crate) fn show(ui: &mut Ui, image: &mut ImageTab, idle: bool) -> Option<Acti
 				.inner
 		})
 		.inner;
-	verify.or(page)
+	verify.or(details).or(page)
 }
 
 fn show_runs(

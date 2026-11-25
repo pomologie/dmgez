@@ -24,11 +24,13 @@ The composed HFS+ desktop app provides a **Files** workspace with paged catalog 
 
 Entry details report the logical data fork length, stored resource fork length, and bounded extended attribute names through the shared inspector. A failed fork query retains its diagnostic alongside other storage observations. Native fixture tests cover hard links, compressed files and empty attribute inventories. [Storage detail tests](../../apps/dmgez/src/image/browse/tests/storage.rs)
 
+**Preview text** reads up to 64 KiB from the exact selected regular file on the document worker. The details pane shows complete or partial UTF-8 text and distinguishes a missing data fork, binary bytes, and unsupported encoding. [Text preview tests](../../apps/dmgez/src/image/browse/tests/text.rs)
+
 The optional `actual-preview` feature reads the observed Finder icon layout, catalog entries and qualified in-volume background artwork from the chosen HFS+ or HFSX folder. The CLI exports a PNG with an observation report. The desktop displays the same renderer’s output with visible fallback states. [Actual-image preview profile](../../crates/presentation/dmgez-preview/README.md#render-an-actual-disk-image)
 
 The desktop accepts pointer or keyboard activation on the rendered icon bounds and uses exact catalog names for folder navigation and item details. The hidden item control preserves the choice across folders. Search and folder history operate through the held image and retain exact catalog selections. [Preview activation tests](../../apps/dmgez/src/inspector/browse/preview/tests.rs)
 
-The optional APFS desktop profile shares the **Files** workspace for catalog pages, navigation, stored name search, and item details. It opens an explicit volume at the displayed checkpoint and rechecks that identity on each held-image query. Checkpoint diagnostics remain visible during volume selection. [Desktop APFS composition](../../apps/dmgez/README.md#browse-apfs-files)
+The optional APFS desktop profile shares the **Files** workspace for catalog pages, navigation, stored name search, item details, and bounded text previews. It opens an explicit volume at the displayed checkpoint and rechecks that identity on each held-image query. Checkpoint diagnostics remain visible during volume selection. [Desktop APFS composition](../../apps/dmgez/README.md#browse-apfs-files)
 
 ## Inspector workspace
 

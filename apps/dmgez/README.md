@@ -46,6 +46,8 @@ Choose **Files** to open a recognized whole-disk HFS+ or HFSX volume or select a
 
 Regular file details report logical data and stored resource fork lengths separately. Extended attribute details show up to 64 stored names. The view distinguishes an empty inventory from an unavailable observation and reports the cause of a failed query.
 
+Choose **Preview text** in a regular file’s details to read up to 64 KiB of its logical data fork. The preview shows selectable UTF-8 text and reports whether it reached the end of the file. Binary content and unsupported encodings receive separate messages.
+
 Use **Back** and **Forward** to revisit folders and their last catalog pages. **Find in folder** searches up to 4,096 immediate catalog entries and shows up to 64 matches in native catalog order. It uses the volume's name matching rules and indicates when a limit stops the search.
 
 Add `--features lzfse,lzma` to enable ULFO and ULMO decoding for verification and filesystem reads. Container metadata remains visible when its decoder is unavailable.
@@ -67,7 +69,7 @@ python3 tools/compose_filesystem_cli.py --apfs ../apfs --desktop
 target/apfs-desktop/debug/dmgez-gui archive.dmg
 ```
 
-In **Files**, check the whole disk or select a partition to check for an APFS container. Choose a volume from the displayed checkpoint. Folder navigation and item details retain that checkpoint and volume identity throughout the opened image session. Search matches the exact stored spelling and case in the current folder. Add `--hfsplus ../hfsplus` to compose both readers in `target/hfsplus-apfs-desktop`.
+In **Files**, check the whole disk or select a partition to check for an APFS container. Choose a volume from the displayed checkpoint. Folder navigation, details, and text preview retain that checkpoint and volume identity throughout the opened image session. Search matches the exact stored spelling and case in the current folder. Add `--hfsplus ../hfsplus` to compose both readers in `target/hfsplus-apfs-desktop`.
 
 Add `--test` for native APFS fixture tests. Finder layout rendering is available for HFS+ and HFSX.
 

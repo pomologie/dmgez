@@ -18,6 +18,7 @@ use crate::{
 
 mod search;
 mod storage;
+mod text;
 
 const NATIVE_APM: &[u8] =
 	include_bytes!("../../../../../crates/foundation/dmgez-vfs/tests/fixtures/native-apm.dmg");

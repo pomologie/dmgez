@@ -5,7 +5,7 @@ use dmgez_vfs::volume::{NodeHandle, NodeKind, RawName, ViewError, VolumeBackend,
 
 use super::{
 	Details, Entry, Error, Filesystem, Location, MAX_DEPTH, Observation, PAGE_ENTRIES, Page,
-	Request, Storage,
+	Request, Storage, content,
 };
 
 const SCAN_BATCH_ENTRIES: u16 = 128;
@@ -23,7 +23,12 @@ where
 {
 	match request {
 		Request::Page { location, offset } => folder_page(view, location, filesystem, offset),
-		Request::Details { folder, name } => entry_details(view, &folder, name),
+		Request::Details { folder, name } => {
+			entry_details(view, &folder, name, content::Request::MetadataOnly)
+		}
+		Request::Text { folder, name } => {
+			entry_details(view, &folder, name, content::Request::Text)
+		}
 		Request::Search { location, query } => search(view, location, query),
 		#[cfg(feature = "actual-preview")]
 		Request::Preview { .. } => Err(Error::UnsupportedVolumeRequest),
@@ -109,6 +114,7 @@ fn entry_details<B: VolumeBackend>(
 	view: &mut VolumeView<B>,
 	location: &Location,
 	name: RawName,
+	request: content::Request,
 ) -> Result<Observation, Error>
 where
 	Error: From<ViewError<B::Error>>,
@@ -127,6 +133,10 @@ where
 		None
 	};
 	let storage = Box::new(inspect_storage(view, &entry, MAX_ENTRY_ATTRIBUTES).into());
+	let text = match request {
+		content::Request::MetadataOnly => None,
+		content::Request::Text => Some(content::read(view, &entry.node, metadata.kind)?),
+	};
 	Ok(Observation::Details(Details {
 		folder: location.clone(),
 		name,
@@ -134,5 +144,6 @@ where
 		metadata,
 		link_target,
 		storage,
+		text,
 	}))
 }
