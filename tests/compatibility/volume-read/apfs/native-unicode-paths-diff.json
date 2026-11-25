@@ -1,0 +1,809 @@
+{
+  "dmgez_revision": "ad67343df44afc4cb268a457ef530add68ce270d",
+  "apfs_revision": "78f8586bd87f2b336f2ceeac2f609ec1725bcdfb",
+  "macos_version": "14.7.2",
+  "macos_build": "23H311",
+  "architecture": "arm64",
+  "profiles": {
+    "folded": {
+      "inputs_sha256": {
+        "initial.raw.cdr": "c332b08e5da922a72b5cfb82f952aa2410f3fefea3b94c9a0d26380ce1a7a6e4",
+        "initial.dmg": "c445fb1475a0f03c7e03ec4ae3b1fe17925481824cd90e30b08bd01c41b526ca",
+        "revised.dmg": "de70fee5694abc86c59c376c10888cb61fbf1b51c8663f15e318a48884d8bc21",
+        "collision.dmg": "d7f5a8f21cd8214b58f6cbd698d86820d6a172be72aff50407830da7883d2391",
+        "later-unicode.dmg": "7885a58a5d9c1891faa598589a48c4f70092fea5cb914ca754703d936c22bad5"
+      },
+      "inputs_unchanged": true,
+      "all_udzo_verifications_passed": true,
+      "fsck_exit": 0,
+      "native_keys": {
+        "incompatible_flags": "0x1",
+        "stored_hashes": {
+          "entry-234770544d80.txt": "0x22fbe7",
+          "entry-7b8525cba68d.txt": "0x22fbe7"
+        }
+      },
+      "native_facts": {
+        "initial.dmg": {
+          "stored_path": [
+            "Study-É",
+            "Straße-É.txt"
+          ],
+          "canonical_alias": [
+            "Study-É",
+            "Straße-É.txt"
+          ],
+          "casefold_alias": [
+            "study-é",
+            "strasse-é.txt"
+          ],
+          "casefold_alias_resolves": true,
+          "collision_directory_inode": 19,
+          "collision_inodes": {
+            "entry-234770544d80.txt": 20,
+            "entry-7b8525cba68d.txt": 21
+          },
+          "later_unicode_name": null
+        },
+        "revised.dmg": {
+          "stored_path": [
+            "study-é",
+            "STRASSE-É.txt"
+          ],
+          "canonical_alias": [
+            "study-é",
+            "STRASSE-É.txt"
+          ],
+          "casefold_alias": [
+            "study-é",
+            "strasse-é.txt"
+          ],
+          "casefold_alias_resolves": true,
+          "collision_directory_inode": 19,
+          "collision_inodes": {
+            "entry-234770544d80.txt": 20,
+            "entry-7b8525cba68d.txt": 21
+          },
+          "later_unicode_name": null
+        },
+        "collision.dmg": {
+          "stored_path": [
+            "study-é",
+            "STRASSE-É.txt"
+          ],
+          "canonical_alias": [
+            "study-é",
+            "STRASSE-É.txt"
+          ],
+          "casefold_alias": [
+            "study-é",
+            "strasse-é.txt"
+          ],
+          "casefold_alias_resolves": true,
+          "collision_directory_inode": 19,
+          "collision_inodes": {
+            "entry-234770544d80.txt": 20,
+            "entry-7b8525cba68d.txt": 21
+          },
+          "later_unicode_name": null
+        },
+        "later-unicode.dmg": {
+          "stored_path": [
+            "study-é",
+            "STRASSE-É.txt"
+          ],
+          "canonical_alias": [
+            "study-é",
+            "STRASSE-É.txt"
+          ],
+          "casefold_alias": [
+            "study-é",
+            "strasse-é.txt"
+          ],
+          "casefold_alias_resolves": true,
+          "collision_directory_inode": 19,
+          "collision_inodes": {
+            "entry-234770544d80.txt": 20,
+            "entry-7b8525cba68d.txt": 21
+          },
+          "later_unicode_name": "𑼄.txt"
+        }
+      },
+      "exact": {
+        "address_space": "filesystem",
+        "filesystem": "apfs",
+        "left": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "apfs_volume": {
+            "uuid": "b5361cb2-0ea0-4d7c-9341-5faa4c9f4947",
+            "object_id": "1026",
+            "checkpoint_xid": "4"
+          }
+        },
+        "right": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "apfs_volume": {
+            "uuid": "b5361cb2-0ea0-4d7c-9341-5faa4c9f4947",
+            "object_id": "1026",
+            "checkpoint_xid": "6"
+          }
+        },
+        "schema_version": 1,
+        "outcome": "different",
+        "policy": {
+          "paths": "exact_stored_text",
+          "contents": "exact_bytes",
+          "compared": [
+            "kind",
+            "mode",
+            "uid",
+            "gid",
+            "hard_link_topology",
+            "data_fork",
+            "resource_fork",
+            "symlink_target"
+          ],
+          "excluded": [
+            "timestamps",
+            "extended_attributes_except_resource_fork",
+            "access_control_lists",
+            "filesystem_flags",
+            "quarantine",
+            "finder_metadata",
+            "native_object_ids",
+            "filesystem_allocation",
+            "physical_container_layout",
+            "signatures",
+            "rename_inference"
+          ]
+        },
+        "limits": {
+          "max_entries": 16384,
+          "max_depth": 128,
+          "max_path_bytes": 4194304,
+          "max_bytes": "34359738368"
+        },
+        "left_entries": 7,
+        "right_entries": 7,
+        "compared_bytes": "10",
+        "changes": [
+          {
+            "path": [
+              "Study-É"
+            ],
+            "kind": "removed",
+            "fields": []
+          },
+          {
+            "path": [
+              "Study-É",
+              "Stable.bin"
+            ],
+            "kind": "removed",
+            "fields": []
+          },
+          {
+            "path": [
+              "Study-É",
+              "Straße-É.txt"
+            ],
+            "kind": "removed",
+            "fields": []
+          },
+          {
+            "path": [
+              "study-é"
+            ],
+            "kind": "added",
+            "fields": []
+          },
+          {
+            "path": [
+              "study-é",
+              "STRASSE-É.txt"
+            ],
+            "kind": "added",
+            "fields": []
+          },
+          {
+            "path": [
+              "study-é",
+              "Stable.bin"
+            ],
+            "kind": "added",
+            "fields": []
+          }
+        ]
+      },
+      "native": {
+        "address_space": "filesystem",
+        "filesystem": "apfs",
+        "left": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "apfs_volume": {
+            "uuid": "b5361cb2-0ea0-4d7c-9341-5faa4c9f4947",
+            "object_id": "1026",
+            "checkpoint_xid": "4"
+          }
+        },
+        "right": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "apfs_volume": {
+            "uuid": "b5361cb2-0ea0-4d7c-9341-5faa4c9f4947",
+            "object_id": "1026",
+            "checkpoint_xid": "6"
+          }
+        },
+        "schema_version": 1,
+        "outcome": "different",
+        "policy": {
+          "paths": "native",
+          "native_name_profile": "apfs_unicode9_folded",
+          "contents": "exact_bytes",
+          "compared": [
+            "kind",
+            "mode",
+            "uid",
+            "gid",
+            "hard_link_topology",
+            "data_fork",
+            "resource_fork",
+            "symlink_target"
+          ],
+          "excluded": [
+            "timestamps",
+            "extended_attributes_except_resource_fork",
+            "access_control_lists",
+            "filesystem_flags",
+            "quarantine",
+            "finder_metadata",
+            "native_object_ids",
+            "filesystem_allocation",
+            "physical_container_layout",
+            "signatures",
+            "rename_inference"
+          ]
+        },
+        "limits": {
+          "max_entries": 16384,
+          "max_depth": 128,
+          "max_path_bytes": 4194304,
+          "max_bytes": "34359738368"
+        },
+        "left_entries": 7,
+        "right_entries": 7,
+        "compared_bytes": "31",
+        "changes": [
+          {
+            "path": [
+              "Study-É",
+              "Straße-É.txt"
+            ],
+            "right_path": [
+              "study-é",
+              "STRASSE-É.txt"
+            ],
+            "kind": "changed",
+            "fields": [
+              "data_fork"
+            ]
+          }
+        ],
+        "equivalent_path_spellings": [
+          {
+            "left": [
+              "Study-É"
+            ],
+            "right": [
+              "study-é"
+            ]
+          },
+          {
+            "left": [
+              "Study-É",
+              "Stable.bin"
+            ],
+            "right": [
+              "study-é",
+              "Stable.bin"
+            ]
+          }
+        ]
+      },
+      "collision_control": {
+        "address_space": "filesystem",
+        "filesystem": "apfs",
+        "left": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "apfs_volume": {
+            "uuid": "b5361cb2-0ea0-4d7c-9341-5faa4c9f4947",
+            "object_id": "1026",
+            "checkpoint_xid": "6"
+          }
+        },
+        "right": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "apfs_volume": {
+            "uuid": "b5361cb2-0ea0-4d7c-9341-5faa4c9f4947",
+            "object_id": "1026",
+            "checkpoint_xid": "8"
+          }
+        },
+        "schema_version": 1,
+        "outcome": "different",
+        "policy": {
+          "paths": "native",
+          "native_name_profile": "apfs_unicode9_folded",
+          "contents": "exact_bytes",
+          "compared": [
+            "kind",
+            "mode",
+            "uid",
+            "gid",
+            "hard_link_topology",
+            "data_fork",
+            "resource_fork",
+            "symlink_target"
+          ],
+          "excluded": [
+            "timestamps",
+            "extended_attributes_except_resource_fork",
+            "access_control_lists",
+            "filesystem_flags",
+            "quarantine",
+            "finder_metadata",
+            "native_object_ids",
+            "filesystem_allocation",
+            "physical_container_layout",
+            "signatures",
+            "rename_inference"
+          ]
+        },
+        "limits": {
+          "max_entries": 16384,
+          "max_depth": 128,
+          "max_path_bytes": 4194304,
+          "max_bytes": "34359738368"
+        },
+        "left_entries": 7,
+        "right_entries": 7,
+        "compared_bytes": "31",
+        "changes": [
+          {
+            "path": [
+              "Collision",
+              "entry-234770544d80.txt"
+            ],
+            "kind": "changed",
+            "fields": [
+              "data_fork"
+            ]
+          }
+        ]
+      },
+      "later_unicode": {
+        "exit": 2,
+        "diagnostic": "error: could not match filesystem paths under the selected policy\n  caused by: could not obtain a native name key for the left path [\"𑼄.txt\"]\n  caused by: filesystem backend failed\n  caused by: could not derive an APFS native name key\n  caused by: scalar U+11F04 is outside the APFS Unicode 9 name profile",
+        "exact_outcome": "equal"
+      }
+    },
+    "normalized": {
+      "inputs_sha256": {
+        "initial.raw.cdr": "33088c8d253e89e9296fa100edc2fa1801dfeb1a1d7c8752987ed70a212671aa",
+        "initial.dmg": "f28adc6c4850d2ea67d76a2fd9b20613b753364811c5eade94f97c4b25924dfd",
+        "revised.dmg": "f9954465bd3c96de8f401a8e0c734ca4618eacf55ad995c2f9f32c4bf5d6bc22",
+        "collision.dmg": "d7c2fcdea51e7b6e6d4be85c571c3a768b3abb1b2e7f5e59c3a943e45ce1fc66",
+        "later-unicode.dmg": "2e509f9510fd826dcb307b82b9962589e08bed410c85f9096831daeeeb533a52"
+      },
+      "inputs_unchanged": true,
+      "all_udzo_verifications_passed": true,
+      "fsck_exit": 0,
+      "native_keys": {
+        "incompatible_flags": "0x8",
+        "stored_hashes": {
+          "entry-234770544d80.txt": "0x22fbe7",
+          "entry-7b8525cba68d.txt": "0x22fbe7"
+        }
+      },
+      "native_facts": {
+        "initial.dmg": {
+          "stored_path": [
+            "Study-É",
+            "Straße-É.txt"
+          ],
+          "canonical_alias": [
+            "Study-É",
+            "Straße-É.txt"
+          ],
+          "casefold_alias": [
+            "study-é",
+            "strasse-é.txt"
+          ],
+          "casefold_alias_resolves": false,
+          "collision_directory_inode": 19,
+          "collision_inodes": {
+            "entry-234770544d80.txt": 20,
+            "entry-7b8525cba68d.txt": 21
+          },
+          "later_unicode_name": null
+        },
+        "revised.dmg": {
+          "stored_path": [
+            "Study-É",
+            "Straße-É.txt"
+          ],
+          "canonical_alias": [
+            "Study-É",
+            "Straße-É.txt"
+          ],
+          "casefold_alias": [
+            "study-é",
+            "strasse-é.txt"
+          ],
+          "casefold_alias_resolves": false,
+          "collision_directory_inode": 19,
+          "collision_inodes": {
+            "entry-234770544d80.txt": 20,
+            "entry-7b8525cba68d.txt": 21
+          },
+          "later_unicode_name": null
+        },
+        "collision.dmg": {
+          "stored_path": [
+            "Study-É",
+            "Straße-É.txt"
+          ],
+          "canonical_alias": [
+            "Study-É",
+            "Straße-É.txt"
+          ],
+          "casefold_alias": [
+            "study-é",
+            "strasse-é.txt"
+          ],
+          "casefold_alias_resolves": false,
+          "collision_directory_inode": 19,
+          "collision_inodes": {
+            "entry-234770544d80.txt": 20,
+            "entry-7b8525cba68d.txt": 21
+          },
+          "later_unicode_name": null
+        },
+        "later-unicode.dmg": {
+          "stored_path": [
+            "Study-É",
+            "Straße-É.txt"
+          ],
+          "canonical_alias": [
+            "Study-É",
+            "Straße-É.txt"
+          ],
+          "casefold_alias": [
+            "study-é",
+            "strasse-é.txt"
+          ],
+          "casefold_alias_resolves": false,
+          "collision_directory_inode": 19,
+          "collision_inodes": {
+            "entry-234770544d80.txt": 20,
+            "entry-7b8525cba68d.txt": 21
+          },
+          "later_unicode_name": "𑼄.txt"
+        }
+      },
+      "exact": {
+        "address_space": "filesystem",
+        "filesystem": "apfs",
+        "left": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "apfs_volume": {
+            "uuid": "212d535d-a831-45ee-8268-7fd8745d21c0",
+            "object_id": "1026",
+            "checkpoint_xid": "4"
+          }
+        },
+        "right": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "apfs_volume": {
+            "uuid": "212d535d-a831-45ee-8268-7fd8745d21c0",
+            "object_id": "1026",
+            "checkpoint_xid": "6"
+          }
+        },
+        "schema_version": 1,
+        "outcome": "different",
+        "policy": {
+          "paths": "exact_stored_text",
+          "contents": "exact_bytes",
+          "compared": [
+            "kind",
+            "mode",
+            "uid",
+            "gid",
+            "hard_link_topology",
+            "data_fork",
+            "resource_fork",
+            "symlink_target"
+          ],
+          "excluded": [
+            "timestamps",
+            "extended_attributes_except_resource_fork",
+            "access_control_lists",
+            "filesystem_flags",
+            "quarantine",
+            "finder_metadata",
+            "native_object_ids",
+            "filesystem_allocation",
+            "physical_container_layout",
+            "signatures",
+            "rename_inference"
+          ]
+        },
+        "limits": {
+          "max_entries": 16384,
+          "max_depth": 128,
+          "max_path_bytes": 4194304,
+          "max_bytes": "34359738368"
+        },
+        "left_entries": 7,
+        "right_entries": 7,
+        "compared_bytes": "10",
+        "changes": [
+          {
+            "path": [
+              "Study-É"
+            ],
+            "kind": "added",
+            "fields": []
+          },
+          {
+            "path": [
+              "Study-É",
+              "Stable.bin"
+            ],
+            "kind": "added",
+            "fields": []
+          },
+          {
+            "path": [
+              "Study-É",
+              "Straße-É.txt"
+            ],
+            "kind": "added",
+            "fields": []
+          },
+          {
+            "path": [
+              "Study-É"
+            ],
+            "kind": "removed",
+            "fields": []
+          },
+          {
+            "path": [
+              "Study-É",
+              "Stable.bin"
+            ],
+            "kind": "removed",
+            "fields": []
+          },
+          {
+            "path": [
+              "Study-É",
+              "Straße-É.txt"
+            ],
+            "kind": "removed",
+            "fields": []
+          }
+        ]
+      },
+      "native": {
+        "address_space": "filesystem",
+        "filesystem": "apfs",
+        "left": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "apfs_volume": {
+            "uuid": "212d535d-a831-45ee-8268-7fd8745d21c0",
+            "object_id": "1026",
+            "checkpoint_xid": "4"
+          }
+        },
+        "right": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "apfs_volume": {
+            "uuid": "212d535d-a831-45ee-8268-7fd8745d21c0",
+            "object_id": "1026",
+            "checkpoint_xid": "6"
+          }
+        },
+        "schema_version": 1,
+        "outcome": "different",
+        "policy": {
+          "paths": "native",
+          "native_name_profile": "apfs_unicode9_normalized",
+          "contents": "exact_bytes",
+          "compared": [
+            "kind",
+            "mode",
+            "uid",
+            "gid",
+            "hard_link_topology",
+            "data_fork",
+            "resource_fork",
+            "symlink_target"
+          ],
+          "excluded": [
+            "timestamps",
+            "extended_attributes_except_resource_fork",
+            "access_control_lists",
+            "filesystem_flags",
+            "quarantine",
+            "finder_metadata",
+            "native_object_ids",
+            "filesystem_allocation",
+            "physical_container_layout",
+            "signatures",
+            "rename_inference"
+          ]
+        },
+        "limits": {
+          "max_entries": 16384,
+          "max_depth": 128,
+          "max_path_bytes": 4194304,
+          "max_bytes": "34359738368"
+        },
+        "left_entries": 7,
+        "right_entries": 7,
+        "compared_bytes": "31",
+        "changes": [
+          {
+            "path": [
+              "Study-É",
+              "Straße-É.txt"
+            ],
+            "right_path": [
+              "Study-É",
+              "Straße-É.txt"
+            ],
+            "kind": "changed",
+            "fields": [
+              "data_fork"
+            ]
+          }
+        ],
+        "equivalent_path_spellings": [
+          {
+            "left": [
+              "Study-É"
+            ],
+            "right": [
+              "Study-É"
+            ]
+          },
+          {
+            "left": [
+              "Study-É",
+              "Stable.bin"
+            ],
+            "right": [
+              "Study-É",
+              "Stable.bin"
+            ]
+          }
+        ]
+      },
+      "collision_control": {
+        "address_space": "filesystem",
+        "filesystem": "apfs",
+        "left": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "apfs_volume": {
+            "uuid": "212d535d-a831-45ee-8268-7fd8745d21c0",
+            "object_id": "1026",
+            "checkpoint_xid": "6"
+          }
+        },
+        "right": {
+          "input": "udif",
+          "window": {
+            "kind": "whole_disk"
+          },
+          "apfs_volume": {
+            "uuid": "212d535d-a831-45ee-8268-7fd8745d21c0",
+            "object_id": "1026",
+            "checkpoint_xid": "8"
+          }
+        },
+        "schema_version": 1,
+        "outcome": "different",
+        "policy": {
+          "paths": "native",
+          "native_name_profile": "apfs_unicode9_normalized",
+          "contents": "exact_bytes",
+          "compared": [
+            "kind",
+            "mode",
+            "uid",
+            "gid",
+            "hard_link_topology",
+            "data_fork",
+            "resource_fork",
+            "symlink_target"
+          ],
+          "excluded": [
+            "timestamps",
+            "extended_attributes_except_resource_fork",
+            "access_control_lists",
+            "filesystem_flags",
+            "quarantine",
+            "finder_metadata",
+            "native_object_ids",
+            "filesystem_allocation",
+            "physical_container_layout",
+            "signatures",
+            "rename_inference"
+          ]
+        },
+        "limits": {
+          "max_entries": 16384,
+          "max_depth": 128,
+          "max_path_bytes": 4194304,
+          "max_bytes": "34359738368"
+        },
+        "left_entries": 7,
+        "right_entries": 7,
+        "compared_bytes": "31",
+        "changes": [
+          {
+            "path": [
+              "Collision",
+              "entry-234770544d80.txt"
+            ],
+            "kind": "changed",
+            "fields": [
+              "data_fork"
+            ]
+          }
+        ]
+      },
+      "later_unicode": {
+        "exit": 2,
+        "diagnostic": "error: could not match filesystem paths under the selected policy\n  caused by: could not obtain a native name key for the left path [\"𑼄.txt\"]\n  caused by: filesystem backend failed\n  caused by: could not derive an APFS native name key\n  caused by: scalar U+11F04 is outside the APFS Unicode 9 name profile",
+        "exact_outcome": "equal"
+      }
+    }
+  }
+}
