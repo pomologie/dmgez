@@ -12,14 +12,14 @@ use dmgez_vfs::{
 	},
 };
 use hfsplus_core::{ByteOffset, ReadAt, names::NameError};
-use hfsplus_format::volume::CatalogId;
 pub use hfsplus_format::volume::Signature as VolumeSignature;
+use hfsplus_format::{bsd, symlink::MAX_SYMLINK_TARGET_BYTES, volume::CatalogId};
 use hfsplus_reader::{
 	Volume,
 	attributes::AttributeReadError,
 	catalog::{
 		Catalog, CatalogError, CatalogLimits, Directory, Entry, EntryKind, HardLinkError,
-		HardLinkLimits, RegularFile,
+		HardLinkLimits, RegularFile, SymlinkError,
 	},
 	decmpfs::{LogicalDataError, LogicalDataLimits},
 	overflow::{ForkKind as HfsFork, OverflowError, OverflowLimits},
@@ -33,12 +33,7 @@ mod xattrs;
 
 pub use session::{SourceError, WindowSource, with_catalog};
 
-const BSD_TYPE_MASK: u16 = 0o170000;
-const BSD_REGULAR_FILE: u16 = 0o100000;
-const BSD_SYMBOLIC_LINK: u16 = 0o120000;
-const BSD_COMPRESSED: u8 = 1 << 5;
-const LINK_FINDER_CODE: &[u8; 8] = b"slnkrhap";
-const HFS_SYMLINK_LIMIT: NonZeroUsize = NonZeroUsize::new(1024).unwrap();
+const HFS_SYMLINK_LIMIT: NonZeroUsize = NonZeroUsize::new(MAX_SYMLINK_TARGET_BYTES).unwrap();
 const DEFAULT_READ_REQUEST_LIMIT: u64 = 1_000_000;
 const DEFAULT_READ_BYTE_LIMIT: u64 = 1 << 32;
 
@@ -109,6 +104,22 @@ pub enum Error {
 	LinkLimit,
 	#[error("symbolic-link payload is empty or contains NUL")]
 	LinkPayload,
+	#[error(transparent)]
+	Symlink(SymlinkError<SourceError>),
+}
+
+impl From<SymlinkError<SourceError>> for Error {
+	fn from(error: SymlinkError<SourceError>) -> Self {
+		match error {
+			SymlinkError::Catalog(error) => Self::Catalog(error),
+			SymlinkError::UnsupportedProfile => Self::LinkProfile,
+			SymlinkError::TargetLimit { .. } => Self::LinkLimit,
+			SymlinkError::InvalidTarget(_) => Self::LinkPayload,
+			SymlinkError::Fork(error) => Self::StoredFork(error),
+			SymlinkError::Allocation(error) => Self::Allocation(error),
+			other => Self::Symlink(other),
+		}
+	}
 }
 
 /// Backend admitted on a single selected partition or whole-disk volume.
@@ -295,35 +306,11 @@ impl<'volume, 'disk, S: LogicalDisk> VolumeBackend for HfsBackend<'volume, 'disk
 	}
 
 	fn read_link(&mut self, node: CatalogId) -> Result<Option<Vec<u8>>, Error> {
-		let Some(entry) = self.catalog.entry(node)? else {
-			return Ok(None);
-		};
-		let EntryKind::File { data, resource } = entry.kind else {
-			return Err(Error::LinkProfile);
-		};
-		if node_kind(&entry) != NodeKind::Symlink
-			|| !entry.metadata.finder_info.starts_with(LINK_FINDER_CODE)
-			|| entry.metadata.permissions.owner_flags & BSD_COMPRESSED != 0
-			|| resource.logical_bytes != 0
-			|| resource.total_blocks != 0
-		{
-			return Err(Error::LinkProfile);
-		}
-		let size = usize::try_from(data.logical_bytes).map_err(|_| Error::LinkLimit)?;
-		if size > self.limits.link_bytes.get().min(HFS_SYMLINK_LIMIT.get()) {
-			return Err(Error::LinkLimit);
-		}
-		let fork = self
-			.volume
-			.open_fork(node, HfsFork::Data, &data, self.limits.stored_fork)?;
-		let mut bytes = Vec::new();
-		bytes.try_reserve_exact(size)?;
-		bytes.resize(size, 0);
-		fork.read_exact_at(ByteOffset(0), &mut bytes)?;
-		if bytes.is_empty() || bytes.contains(&0) {
-			return Err(Error::LinkPayload);
-		}
-		Ok(Some(bytes))
+		Ok(self
+			.catalog
+			.symlink(node, self.limits.link_bytes)?
+			.map(|symlink| symlink.read(self.limits.stored_fork))
+			.transpose()?)
 	}
 }
 
@@ -369,9 +356,9 @@ pub(crate) fn node_kind(entry: &Entry) -> NodeKind {
 	if matches!(entry.kind, EntryKind::Directory { .. }) {
 		return NodeKind::Directory;
 	}
-	match entry.metadata.permissions.mode & BSD_TYPE_MASK {
-		BSD_REGULAR_FILE => NodeKind::RegularFile,
-		BSD_SYMBOLIC_LINK => NodeKind::Symlink,
+	match entry.metadata.permissions.mode & bsd::TYPE_MASK {
+		bsd::REGULAR_FILE => NodeKind::RegularFile,
+		bsd::SYMLINK => NodeKind::Symlink,
 		_ => NodeKind::Other,
 	}
 }

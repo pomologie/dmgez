@@ -7,19 +7,18 @@ use std::{
 
 use dmgez_config::{VirtualPath, VirtualPathError};
 use dmgez_finder::{STORE_NAME, edit::StoreEditError};
-use hfsplus_builder::volume::{EntryMetadata, MAX_SYMLINK_TARGET_BYTES, VolumeError};
+use hfsplus_builder::volume::{EntryMetadata, VolumeError};
 use hfsplus_core::{
-	ByteOffset, ReadAt,
+	ReadAt,
 	names::{MAX_NAME_UNITS, NameError, NormalizedName, normalize, normalize_utf16},
 };
 use hfsplus_format::{
-	catalog::Metadata,
-	volume::{CatalogId, Fork},
+	bsd, catalog::Metadata, symlink::MAX_SYMLINK_TARGET_BYTES, volume::CatalogId,
 };
 use hfsplus_reader::{
 	Volume,
 	attributes::AttributeReadError,
-	catalog::{Catalog, CatalogError, Entry, EntryKind, HardLinkError},
+	catalog::{Catalog, CatalogError, Entry, EntryKind, HardLinkError, SymlinkError},
 	check::{CheckError, CheckLimits, StructuralReport},
 	overflow::{ForkKind, OverflowError},
 };
@@ -32,7 +31,6 @@ mod finder;
 mod metadata;
 
 use attributes::AttributeInventory;
-use metadata::{BSD_DIRECTORY, BSD_REGULAR_FILE, BSD_SYMLINK, BSD_TYPE_MASK};
 
 pub(super) const MAX_ENTRIES: usize = 64 << 10;
 pub(super) const MAX_DEPTH: usize = 64;
@@ -42,6 +40,7 @@ pub(super) const MAX_PATH_BYTES: usize =
 	MAX_DEPTH * (MAX_NAME_UNITS * MAX_UTF8_BYTES_PER_UTF16_UNIT + PATH_SEPARATOR.len_utf8());
 pub(super) const MAX_CAPTURE_BYTES: usize = 64 << 20;
 const PAGE_ENTRIES: NonZeroUsize = NonZeroUsize::MIN;
+const SYMLINK_TARGET_LIMIT: NonZeroUsize = NonZeroUsize::new(MAX_SYMLINK_TARGET_BYTES).unwrap();
 
 /// Failure to capture all supported metadata from a selected HFS+ volume.
 #[derive(Debug, Error)]
@@ -57,6 +56,8 @@ pub enum CaptureError<E: Error + 'static> {
 	HardLink(#[from] HardLinkError<E>),
 	#[error("HFS+ stored fork could not be read")]
 	Fork(#[from] OverflowError<E>),
+	#[error("HFS+ symbolic link target could not be read")]
+	Symlink(#[source] SymlinkError<E>),
 	#[error("HFS+ attributes could not be read")]
 	Attributes(#[from] AttributeReadError<E>),
 	#[error("HFS+ rebuild needs a clean, unjournaled volume with supported header fields")]
@@ -113,6 +114,20 @@ pub enum CaptureError<E: Error + 'static> {
 	Allocation(#[from] TryReserveError),
 }
 
+impl<E: Error + 'static> CaptureError<E> {
+	fn symlink(id: CatalogId, error: SymlinkError<E>) -> Self {
+		match error {
+			SymlinkError::Catalog(error) => Self::Catalog(error),
+			SymlinkError::UnsupportedProfile
+			| SymlinkError::TargetLimit { .. }
+			| SymlinkError::InvalidTarget(_) => Self::EntryKind(id),
+			SymlinkError::Fork(error) => Self::Fork(error),
+			SymlinkError::Allocation(error) => Self::Allocation(error),
+			other => Self::Symlink(other),
+		}
+	}
+}
+
 pub(super) fn capture<'volume, S: ReadAt>(
 	volume: &'volume Volume<S>,
 	catalog: &Catalog<'volume, S>,
@@ -147,7 +162,6 @@ where
 	let root_metadata = metadata::directory(&root)?;
 	let root_attributes = attributes.take(&root.metadata)?;
 	let mut capture = Capture {
-		volume,
 		catalog,
 		limits,
 		remaining,
@@ -184,7 +198,6 @@ where
 }
 
 struct Capture<'catalog, 'volume, S> {
-	volume: &'volume Volume<S>,
 	catalog: &'catalog Catalog<'volume, S>,
 	limits: CheckLimits,
 	remaining: usize,
@@ -279,17 +292,17 @@ where
 			.collation()
 			.compare(&entry.name, self.finder_store_name.as_units())
 			.is_eq();
-		let (metadata, kind) = match (entry.kind, raw.permissions.mode & BSD_TYPE_MASK) {
-			(EntryKind::File { .. }, BSD_REGULAR_FILE) => {
+		let (metadata, kind) = match (entry.kind, raw.permissions.mode & bsd::TYPE_MASK) {
+			(EntryKind::File { .. }, bsd::REGULAR_FILE) => {
 				return self.regular_file(raw, finder_store);
 			}
 			_ if finder_store => return Err(CaptureError::FinderReferences(raw.id)),
-			(EntryKind::Directory { .. }, BSD_DIRECTORY) => {
+			(EntryKind::Directory { .. }, bsd::DIRECTORY) => {
 				(metadata::directory(entry)?, Kind::Directory)
 			}
-			(EntryKind::File { data, resource }, BSD_SYMLINK) => {
+			(EntryKind::File { resource, .. }, bsd::SYMLINK) => {
 				let metadata = metadata::symlink(raw, &resource)?;
-				let target = self.link(raw.id, &data)?;
+				let target = self.link(raw.id)?;
 				(metadata, Kind::Symlink(target))
 			}
 			_ => return Err(CaptureError::EntryKind(raw.id)),
@@ -301,24 +314,16 @@ where
 		})
 	}
 
-	fn link(&mut self, id: CatalogId, data: &Fork) -> Result<Vec<u8>, CaptureError<S::Error>> {
-		let len = usize::try_from(data.logical_bytes)
-			.ok()
-			.filter(|len| (1..=MAX_SYMLINK_TARGET_BYTES).contains(len))
+	fn link(&mut self, id: CatalogId) -> Result<Vec<u8>, CaptureError<S::Error>> {
+		let symlink = self
+			.catalog
+			.symlink(id, SYMLINK_TARGET_LIMIT)
+			.map_err(|error| CaptureError::symlink(id, error))?
 			.ok_or(CaptureError::EntryKind(id))?;
-		charge(&mut self.remaining, len)?;
-		let mut target = Vec::new();
-		target.try_reserve_exact(len)?;
-		target.resize(len, 0);
-		let fork =
-			self.volume
-				.open_fork(id, ForkKind::Data, data, self.limits.allocation.overflow)?;
-		fork.read_exact_at(ByteOffset(0), &mut target)
-			.map_err(OverflowError::Read)?;
-		if target.contains(&0) {
-			return Err(CaptureError::EntryKind(id));
-		}
-		Ok(target)
+		charge(&mut self.remaining, symlink.target_bytes().get())?;
+		symlink
+			.read(self.limits.allocation.overflow)
+			.map_err(|error| CaptureError::symlink(id, error))
 	}
 
 	fn regular_file(

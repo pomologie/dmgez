@@ -1,12 +1,11 @@
 use std::ops::Range;
 
 use dmgez_vfs::volume::FINDER_INFO_BYTES;
+use hfsplus_format::symlink::FINDER_TYPE_AND_CREATOR;
 
-use super::{
-	CatalogId, Error, FinderInfo, HfsBackend, LINK_FINDER_CODE, LogicalDisk, NodeKind, node_kind,
-};
+use super::{CatalogId, Error, FinderInfo, HfsBackend, LogicalDisk, NodeKind, node_kind};
 
-const FILE_TYPE_AND_CREATOR: Range<usize> = 0..LINK_FINDER_CODE.len();
+const FILE_TYPE_AND_CREATOR: Range<usize> = 0..FINDER_TYPE_AND_CREATOR.len();
 const DOCUMENT_ID_AND_DATE_ADDED: Range<usize> = 16..24;
 const WRITE_GENERATION: Range<usize> = 28..FINDER_INFO_BYTES;
 const EMPTY_FINDER_INFO: [u8; FINDER_INFO_BYTES] = [0; FINDER_INFO_BYTES];

@@ -2,6 +2,7 @@ use std::error::Error;
 
 use hfsplus_builder::volume::EntryMetadata;
 use hfsplus_format::{
+	bsd,
 	catalog::{EncodeValue, FLAG_HAS_ATTRIBUTES, FLAG_THREAD_EXISTS, Metadata},
 	hard_links::{Neighbors, Stub},
 	volume::{CLEAN_UNMOUNT_ATTRIBUTE, CatalogId, Fork, Header, Signature},
@@ -13,15 +14,10 @@ use hfsplus_reader::{
 
 use super::CaptureError;
 
-pub(super) const BSD_TYPE_MASK: u16 = 0o170000;
-pub(super) const BSD_DIRECTORY: u16 = 0o040000;
-pub(super) const BSD_REGULAR_FILE: u16 = 0o100000;
-pub(super) const BSD_SYMLINK: u16 = 0o120000;
 const PERMISSION_MASK: u16 = 0o7777;
 const FINDER_ALIAS_FILE_TYPE: &[u8; 4] = b"alis";
 const FINDER_FLAGS_OFFSET: usize = 8;
 const FINDER_ALIAS_FLAG: u16 = 0x8000;
-const SYMLINK_FINDER_CODE: &[u8; 8] = b"slnkrhap";
 const VOLUME_FINDER_CATALOG_WORDS: usize = 6;
 const VOLUME_FINDER_CATALOG_BYTES: usize = VOLUME_FINDER_CATALOG_WORDS * size_of::<u32>();
 const MAC_ROMAN_ENCODING: u32 = 0;
@@ -72,7 +68,7 @@ pub(super) fn directory<E: Error + 'static>(
 	entry: &Entry,
 ) -> Result<EntryMetadata, CaptureError<E>> {
 	if !matches!(entry.kind, EntryKind::Directory { tail_word: 0, .. })
-		|| entry.metadata.permissions.mode & BSD_TYPE_MASK != BSD_DIRECTORY
+		|| entry.metadata.permissions.mode & bsd::TYPE_MASK != bsd::DIRECTORY
 	{
 		return Err(CaptureError::EntryMetadata(entry.metadata.id));
 	}
@@ -83,7 +79,8 @@ pub(super) fn symlink<E: Error + 'static>(
 	raw: &Metadata,
 	resource: &Fork,
 ) -> Result<EntryMetadata, CaptureError<E>> {
-	if !raw.finder_info.starts_with(SYMLINK_FINDER_CODE) || *resource != Fork::empty() {
+	// The rebuild would otherwise discard the resource fork's clump-size hint.
+	if *resource != Fork::empty() {
 		return Err(CaptureError::EntryKind(raw.id));
 	}
 	convert(raw, FLAG_THREAD_EXISTS | FLAG_HAS_ATTRIBUTES, 0)

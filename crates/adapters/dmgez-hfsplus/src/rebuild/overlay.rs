@@ -7,11 +7,12 @@ use dmgez_config::{
 	project_edit::{ContentDraft, ProjectEdit},
 };
 use dmgez_finder::edit::StoreEditError;
-use hfsplus_builder::volume::{EntryMetadata, MAX_SYMLINK_TARGET_BYTES};
+use hfsplus_builder::volume::EntryMetadata;
 use hfsplus_core::{
 	ReadAt,
 	names::{NameError, normalize},
 };
+use hfsplus_format::symlink::validate_target;
 use thiserror::Error;
 
 use super::{Kind, Node, Snapshot, background::Bindings, capture::MAX_ENTRIES};
@@ -341,7 +342,7 @@ fn add<'v, S>(
 			target,
 		} => {
 			let bytes = target.as_bytes();
-			if bytes.is_empty() || bytes.len() > MAX_SYMLINK_TARGET_BYTES || bytes.contains(&0) {
+			if validate_target(bytes).is_err() {
 				return Err(OverlayError::SymlinkTarget { index });
 			}
 			(destination, SYMLINK_MODE, Kind::Symlink(bytes.to_vec()))
