@@ -44,11 +44,13 @@ def build(cli, directory, preview):
     return image
 
 
-def verify_container(cli, image):
+def verify_container(cli, image, *, signed=False):
     report = json.loads(subprocess.check_output([cli, "verify", image, "--container", "--json"]))
     if (
         report["outcome"] != "passed"
         or report["coverage"]["payload"] != "passed"
+        or report["coverage"]["security"] != "not_checked"
+        or (report["container"]["embedded_signature"] is not None) != signed
         or int(report["container"]["logical_bytes"]) != LOGICAL_BYTES
         or report["container"]["runs"]["zlib"] == 0
         or report["checksums"]["data_fork"] != "passed"
@@ -148,11 +150,16 @@ def main():
         decode_image(seven_zip, image, raw)
         verify_files(seven_zip, raw)
         signed_image, signed = build_signed(cli, image.parent, unsigned)
+        verify_container(cli, signed_image, signed=True)
         verify_signature(cli, signed_image)
         signed_raw = workspace / "installer-adhoc.hfs"
         decode_image(seven_zip, signed_image, signed_raw)
         if not filecmp.cmp(raw, signed_raw, shallow=False):
             raise RuntimeError("signing changed the independently decoded HFS+ image")
+        exported = workspace / "exported.hfs"
+        subprocess.run([cli, "unwrap-raw", signed_image, "-o", exported], check=True)
+        if not filecmp.cmp(signed_raw, exported, shallow=False):
+            raise RuntimeError("dmgez and 7-Zip decoded different bytes from the signed DMG")
         if image.read_bytes() != data:
             raise RuntimeError("the signing release changed the existing unsigned DMG")
         if sys.platform == "darwin":

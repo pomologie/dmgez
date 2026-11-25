@@ -1162,7 +1162,7 @@
       "milestone": "0.6.0",
       "scenario": "Build the default CLI on Linux, Windows and macOS, check the backend selected by auto, and exercise ordinary build with no signing action.",
       "oracle": "Cargo dependency trees, host CLI smoke tests and signing and timestamp spies",
-      "expected": "Linux and Windows defaults include and select Rust signing. macOS defaults and explicit no-default builds omit it. Ordinary build uses no signing credentials or timestamp service.",
+      "expected": "macOS, Linux and Windows defaults include Rust signing and select it for ad hoc DMG signing. Explicit no-default builds omit it. Ordinary build uses no signing credentials or timestamp service.",
       "status": "planned",
       "evidence": null
     },
