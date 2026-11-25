@@ -6,11 +6,20 @@ use eframe::egui::{self, Grid, Panel, RichText, ScrollArea, Ui};
 
 use crate::image::{ImageTab, RUN_PAGE_SIZE};
 
+#[cfg(feature = "hfsplus-read")]
+mod browse;
+
 const SUMMARY_WIDTH: f32 = 264.0;
 
 pub(crate) enum Action {
 	Page(usize),
 	Verify,
+	#[cfg(feature = "hfsplus-read")]
+	ShowContainer,
+	#[cfg(feature = "hfsplus-read")]
+	ShowFiles,
+	#[cfg(feature = "hfsplus-read")]
+	Browse(crate::image::browse::Request),
 }
 
 pub(crate) fn show(ui: &mut Ui, image: &ImageTab, idle: bool) -> Option<Action> {
@@ -18,6 +27,10 @@ pub(crate) fn show(ui: &mut Ui, image: &ImageTab, idle: bool) -> Option<Action> 
 	let verify = Panel::left("image_summary")
 		.default_size(SUMMARY_WIDTH)
 		.show(ui, |ui| {
+			#[cfg(feature = "hfsplus-read")]
+			let navigation = browse::navigation(ui, &image.browser, idle);
+			#[cfg(not(feature = "hfsplus-read"))]
+			let navigation = None;
 			let container = &report.container;
 			ui.heading("Disk image");
 			ui.strong(match container.format {
@@ -53,15 +66,27 @@ pub(crate) fn show(ui: &mut Ui, image: &ImageTab, idle: bool) -> Option<Action> 
 			if let Some(cause) = image.verification.as_ref().and_then(|check| check.cause()) {
 				ui.label(cause.to_string());
 			}
-			ui.add_enabled(idle, egui::Button::new("Verify container"))
+			let verify = ui
+				.add_enabled(idle, egui::Button::new("Verify container"))
 				.clicked()
-				.then_some(Action::Verify)
+				.then_some(Action::Verify);
+			navigation.or(verify)
 		})
 		.inner;
+	#[cfg(feature = "hfsplus-read")]
+	if image.browser.showing
+		&& let Some(details) = &image.browser.details
+	{
+		browse::details_panel(ui, details);
+	}
 	let page = egui::CentralPanel::default()
 		.show(ui, |ui| {
 			ScrollArea::both()
 				.show(ui, |ui| {
+					#[cfg(feature = "hfsplus-read")]
+					if image.browser.showing {
+						return browse::show(ui, &image.browser, report.disk.as_ref(), idle);
+					}
 					show_disk(ui, report.disk.as_ref());
 					ui.separator();
 					ui.heading("Container");

@@ -113,6 +113,55 @@ class ReleaseCompositionTests(unittest.TestCase):
         resolve.assert_called_once_with(root, None, reader=True, build=False)
 
 
+class DesktopCompositionTests(unittest.TestCase):
+    def test_injects_the_optional_hfsplus_browse_feature(self):
+        original = (compose.ROOT / compose.DESKTOP / compose.MANIFEST).read_text(encoding="utf-8")
+        base = tomllib.loads(original)
+        manifest = tomllib.loads(compose.compose_desktop_manifest(original))
+        self.assertEqual(manifest["features"], {
+            **base.get("features", {}),
+            compose.READ_FEATURE: [f"dep:{compose.READ_ADAPTER}", "dep:dmgez-vfs"],
+        })
+        self.assertEqual(manifest["dependencies"][compose.READ_ADAPTER]["features"], ["browse"])
+        self.assertTrue(manifest["dependencies"][compose.READ_ADAPTER]["optional"])
+        self.assertEqual(manifest["dev-dependencies"], base["dev-dependencies"])
+
+    def test_resolves_and_tests_only_the_desktop_reader_on_each_host(self):
+        root = Path("local")
+        args = ["compose_filesystem_cli.py", "--hfsplus", str(root), "--desktop", "--test"]
+        packages = {compose.HFSPLUS_READER: root}
+        for platform in ("darwin", "linux", "win32"):
+            with (
+                self.subTest(platform=platform),
+                patch.object(sys, "argv", args),
+                patch.object(sys, "platform", platform),
+                patch.object(compose, "resolve_hfsplus", return_value=packages) as resolve,
+                patch.object(compose, "prepare_workspace") as prepare,
+                patch.object(compose, "resolve_lock"),
+                patch.object(compose, "run_desktop") as run,
+                patch.object(compose, "run_cli") as cli,
+            ):
+                self.assertEqual(compose.main(), 0)
+                resolve.assert_called_once_with(root, None, reader=True, build=False)
+                _, workspace, options, resolved = run.call_args.args
+                prepare.assert_called_once_with(workspace, packages, desktop=True)
+                self.assertEqual(resolved, packages)
+                self.assertTrue(options.test)
+                self.assertEqual(options.target_dir.name, "hfsplus-desktop")
+                cli.assert_not_called()
+
+    def test_test_mode_selects_the_desktop_binary(self):
+        directory = Path.cwd()
+        options = SimpleNamespace(
+            test=True, target_dir=directory, release=False, no_default_features=False, features=[],
+        )
+        with patch.object(compose.subprocess, "run") as run:
+            compose.run_desktop(["cargo"], directory, options, {compose.HFSPLUS_READER: directory})
+        command = run.call_args.args[0]
+        self.assertEqual(command[:5], ["cargo", "test", "--frozen", "--package", compose.DESKTOP_PACKAGE])
+        self.assertEqual(command[-4:], ["--features", compose.READ_FEATURE, "--bin", compose.DESKTOP_PACKAGE])
+
+
 class WindowsCompositionTests(unittest.TestCase):
     def test_fetch_preloads_the_checked_in_lockfile_before_composition(self):
         root = Path("sibling hfsplus")

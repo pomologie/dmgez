@@ -41,8 +41,10 @@ fn cancelled_check_discards_a_completed_result_awaiting_delivery() {
 	let result = image.snapshot.verify(&cancellation);
 	assert!(result.passed());
 	let (send, receiver) = mpsc::sync_channel(1);
-	send.send(Completion::ImageChecked(Box::new(result)))
-		.unwrap();
+	send.send(Completion::Image(ImageCompletion::Checked(Box::new(
+		result,
+	))))
+	.unwrap();
 	cancellation.cancel();
 	app.worker = Some(Worker {
 		receiver,

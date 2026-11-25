@@ -17,6 +17,8 @@ ROOT = Path(__file__).resolve().parents[1]
 CLI = Path("apps/dmgez-cli")
 CLI_PACKAGE = "dmgez-cli"
 CLI_BINARY = "dmgez"
+DESKTOP = Path("apps/dmgez")
+DESKTOP_PACKAGE = "dmgez-gui"
 CLI_TEST = "project_build_cli"
 WINDOWS_CLI_TEST = "windows_project_build_cli"
 VERIFY_TEST = "hfs_verify_cli"
@@ -230,7 +232,34 @@ def compose_cli_manifest(manifest, reader, build, apfs):
     return before_features + feature_section + feature_text + dependency_section + dependencies
 
 
-def prepare_workspace(directory, packages):
+def compose_desktop_manifest(manifest):
+    parsed = tomllib.loads(manifest)
+    if (READ_FEATURE in parsed.get("features", {})
+            or READ_ADAPTER in parsed["dependencies"] or "dmgez-vfs" in parsed["dependencies"]):
+        raise ValueError("desktop manifest already has filesystem composition settings")
+    feature_section = "\n[features]\n"
+    dependency_section = "\n[dependencies]\n"
+    development_section = "\n[dev-dependencies]\n"
+    if dependency_section not in manifest or development_section not in manifest:
+        raise ValueError("could not find the desktop dependencies sections")
+    features = render_feature(READ_FEATURE, [f"dep:{READ_ADAPTER}", "dep:dmgez-vfs"])
+    group = f"# HFS+ volume access\n{features}\n"
+    if feature_section in manifest:
+        manifest = manifest.replace(feature_section, feature_section + group, 1)
+    else:
+        manifest = manifest.replace(dependency_section, feature_section + group + dependency_section, 1)
+    return manifest.replace(
+        development_section,
+        "\n# Composed filesystem services\n"
+        f'{READ_ADAPTER} = {{ path = "../../crates/services/{READ_ADAPTER}", '
+        'optional = true, default-features = false, features = ["browse"] }\n'
+        "dmgez-vfs = { workspace = true, optional = true }\n"
+        + development_section,
+        1,
+    )
+
+
+def prepare_workspace(directory, packages, *, desktop=False):
     for name in SOURCE_DIRS:
         shutil.copytree(
             ROOT / name,
@@ -253,17 +282,21 @@ def prepare_workspace(directory, packages):
     )
 
     # Replace the copied entry or symlink without writing through to the checkout.
-    cli_manifest = directory / CLI / MANIFEST
-    if not cli_manifest.parent.resolve().is_relative_to(directory.resolve()):
-        raise ValueError("copied CLI directory points outside the temporary workspace")
-    text = compose_cli_manifest(
-        cli_manifest.read_text(encoding="utf-8"),
-        reader=HFSPLUS_READER in packages,
-        build=HFSPLUS_BUILDER in packages,
-        apfs=APFS_READER in packages,
-    )
-    cli_manifest.unlink()
-    cli_manifest.write_text(text, encoding="utf-8")
+    app_manifest = directory / (DESKTOP if desktop else CLI) / MANIFEST
+    if not app_manifest.parent.resolve().is_relative_to(directory.resolve()):
+        raise ValueError("copied app directory points outside the temporary workspace")
+    original = app_manifest.read_text(encoding="utf-8")
+    if desktop:
+        text = compose_desktop_manifest(original)
+    else:
+        text = compose_cli_manifest(
+            original,
+            reader=HFSPLUS_READER in packages,
+            build=HFSPLUS_BUILDER in packages,
+            apfs=APFS_READER in packages,
+        )
+    app_manifest.unlink()
+    app_manifest.write_text(text, encoding="utf-8")
 
 
 def registry_packages(lock):
@@ -290,9 +323,9 @@ def resolve_lock(cargo, directory, packages):
         raise ValueError("temporary lockfile did not resolve all local filesystem packages")
 
 
-def run_cli(cargo, directory, options, packages):
+def cargo_command(cargo, options, package):
     command = [
-        *cargo, "test" if options.test else "build", "--frozen", "--package", CLI_PACKAGE,
+        *cargo, "test" if options.test else "build", "--frozen", "--package", package,
         "--target-dir", str(options.target_dir.resolve()),
     ]
     if options.release:
@@ -301,6 +334,11 @@ def run_cli(cargo, directory, options, packages):
         command.append("--no-default-features")
     for features in options.features:
         command.extend(("--features", features))
+    return command
+
+
+def run_cli(cargo, directory, options, packages):
+    command = cargo_command(cargo, options, CLI_PACKAGE)
 
     if options.test:
         environment = os.environ.copy()
@@ -345,20 +383,36 @@ def run_cli(cargo, directory, options, packages):
         subprocess.run(command, cwd=directory, env=environment, check=True)
         return
 
-    command.extend(("--bin", CLI_BINARY, "--message-format=json-render-diagnostics"))
+    run_binary(command, directory, CLI_BINARY)
+
+
+def run_desktop(cargo, directory, options, packages):
+    command = cargo_command(cargo, options, DESKTOP_PACKAGE)
+    command.extend(("--features", READ_FEATURE))
+    if options.test:
+        environment = os.environ.copy()
+        fixtures = packages[HFSPLUS_READER] / "tests" / "fixtures"
+        environment.setdefault(HFSPLUS_FIXTURES_ENV, str(fixtures))
+        subprocess.run([*command, "--bin", DESKTOP_PACKAGE], cwd=directory, env=environment, check=True)
+        return
+    run_binary(command, directory, DESKTOP_PACKAGE)
+
+
+def run_binary(command, directory, binary):
+    command.extend(("--bin", binary, "--message-format=json-render-diagnostics"))
     artifact = None
     with subprocess.Popen(command, cwd=directory, stdout=subprocess.PIPE, encoding="utf-8") as process:
         for line in process.stdout:
             message = json.loads(line)
             if message.get("reason") == "compiler-artifact" and message.get("executable"):
                 target = message["target"]
-                if target["name"] == CLI_BINARY and target["kind"] == ["bin"]:
+                if target["name"] == binary and target["kind"] == ["bin"]:
                     artifact = message["executable"]
         status = process.wait()
     if status:
         raise subprocess.CalledProcessError(status, command)
     if artifact is None:
-        raise ValueError("Cargo did not report a dmgez binary")
+        raise ValueError(f"Cargo did not report a {binary} binary")
     print(artifact)
 
 
@@ -372,10 +426,11 @@ def main():
     apfs.add_argument("--apfs-packages", type=Path, help="unpacked APFS crate archives")
     parser.add_argument(
         "--target-dir", type=Path,
-        help="Cargo artifact directory (default: target/apfs-cli or target/hfsplus-cli)",
+        help="Cargo artifact directory (defaults to a target directory for the selected profile)",
     )
     parser.add_argument("--release", action="store_true", help="build the optimized binary")
-    parser.add_argument("--test", action="store_true", help="run the selected composed CLI tests")
+    parser.add_argument("--desktop", action="store_true", help="compose the desktop app with the HFS+ reader")
+    parser.add_argument("--test", action="store_true", help="run the selected composed app tests")
     parser.add_argument(
         "--fetch", action="store_true",
         help="download dependencies from the checked-in Cargo lockfile before offline composition",
@@ -387,6 +442,8 @@ def main():
     use_apfs = options.apfs is not None or options.apfs_packages is not None
     if not (use_hfsplus or use_apfs):
         parser.error("supply an HFS+ or APFS package source")
+    if options.desktop and (not use_hfsplus or use_apfs):
+        parser.error("desktop composition requires only an HFS+ package source")
     for feature in APFS_PROFILES:
         if has_cli_feature(options, feature) and not use_apfs:
             parser.error(f"{feature} requires --apfs or --apfs-packages")
@@ -396,7 +453,8 @@ def main():
     if use_apfs and not any(has_cli_feature(options, feature) for feature in APFS_PROFILES):
         options.features.append(APFS_FEATURE)
     if options.target_dir is None:
-        options.target_dir = ROOT / "target" / ("apfs-cli" if use_apfs else "hfsplus-cli")
+        profile = "hfsplus-desktop" if options.desktop else "apfs-cli" if use_apfs else "hfsplus-cli"
+        options.target_dir = ROOT / "target" / profile
     explicit_read = any(has_cli_feature(options, name) for name in (*READ_PROFILES, VERIFY_FEATURE, MOUNT_WATCH_FEATURE)) or (
         use_hfsplus and (
             has_cli_feature(options, INSTALLER_TEST_FEATURE) or
@@ -404,17 +462,17 @@ def main():
         )
     )
     if sys.platform == "win32":
-        if use_apfs or explicit_read:
+        if not options.desktop and (use_apfs or explicit_read):
             parser.error("Windows composition supports HFS+ project builds and image editing only")
     elif sys.platform != "darwin" and not sys.platform.startswith("linux"):
         parser.error("filesystem CLI composition requires a macOS, Linux, or Windows host")
 
     try:
         image_edit = has_cli_feature(options, IMAGE_EDIT_FEATURE)
-        reader = explicit_read or image_edit
-        build = image_edit or not reader or not options.no_default_features or any(
+        reader = options.desktop or explicit_read or image_edit
+        build = not options.desktop and (image_edit or not reader or not options.no_default_features or any(
             has_cli_feature(options, name) for name in ("build", *PROJECT_FEATURES, *FINDER_FEATURES)
-        )
+        ))
         packages = {}
         if use_hfsplus:
             packages.update(resolve_hfsplus(
@@ -427,9 +485,12 @@ def main():
             subprocess.run([*cargo, "fetch", "--locked"], cwd=ROOT, check=True)
         with TemporaryDirectory(prefix="dmgez-filesystem-cli.") as temporary:
             directory = Path(temporary)
-            prepare_workspace(directory, packages)
+            if options.desktop:
+                prepare_workspace(directory, packages, desktop=True)
+            else:
+                prepare_workspace(directory, packages)
             resolve_lock(cargo, directory, packages)
-            run_cli(cargo, directory, options, packages)
+            (run_desktop if options.desktop else run_cli)(cargo, directory, options, packages)
     except subprocess.CalledProcessError as error:
         return error.returncode
     except (OSError, ValueError, KeyError) as error:

@@ -4,22 +4,20 @@ use std::{
 };
 
 use dmgez_config::project_edit::{ProjectEdit, RevisionId};
-use dmgez_inspector::{RunPage, VerificationReport};
 use dmgez_udif::Cancellation;
 use eframe::egui::{
 	self, Color32, Context, Id, Key, Modifiers, Panel, RichText, TextEdit, Ui, ViewportCommand,
 };
 
 use crate::document::{self, Document, IMAGE_EXTENSION, Opened, PROJECT_EXTENSION};
-use crate::{
-	import,
-	inspector::{self, Action},
-};
+use crate::{import, inspector};
 
+mod image_tasks;
 #[cfg(test)]
 mod import_tests;
 mod worker;
 
+use image_tasks::ImageCompletion;
 use worker::Worker;
 
 const PROJECT_COPY: &str = "project-copy.toml";
@@ -55,8 +53,7 @@ enum Completion {
 		revision: RevisionId,
 		edits: Result<Vec<ProjectEdit>, import::Error>,
 	},
-	ImagePage(Result<RunPage, dmgez_udif::Error>),
-	ImageChecked(Box<VerificationReport>),
+	Image(ImageCompletion),
 	Cancelled,
 	Failed(document::Error),
 }
@@ -131,32 +128,7 @@ impl App {
 			Completion::Opened(opened) => self.opened = Some(opened),
 			Completion::Cancelled => {}
 			Completion::Failed(error) => self.error = Some(error.to_string()),
-			Completion::ImagePage(result) => {
-				if let Some(Opened {
-					document: Document::Image(image),
-					..
-				}) = &mut self.opened
-				{
-					match result {
-						Ok(page) => image.report.run_page = Some(page),
-						Err(error) => {
-							if matches!(error, dmgez_udif::Error::SourceChanged) {
-								image.verification = None;
-							}
-							self.error = Some(format!("Could not load the run page. {error}"));
-						}
-					}
-				}
-			}
-			Completion::ImageChecked(report) => {
-				if let Some(Opened {
-					document: Document::Image(image),
-					..
-				}) = &mut self.opened
-				{
-					image.verification = Some(report);
-				}
-			}
+			Completion::Image(result) => self.finish_image(result),
 			Completion::Saved { path, revision } => {
 				if let Some(Opened {
 					document: Document::Project(project),
@@ -179,28 +151,6 @@ impl App {
 						Err(error) => self.error = Some(error.to_string()),
 					}
 				}
-			}
-		}
-	}
-
-	fn image_action(&mut self, ctx: &Context, action: Action) {
-		let Some(Opened {
-			document: Document::Image(image),
-			..
-		}) = &self.opened
-		else {
-			return;
-		};
-		let snapshot = image.snapshot.clone();
-		match action {
-			Action::Page(offset) => self.start(ctx, move || {
-				Completion::ImagePage(snapshot.run_page(offset))
-			}),
-			Action::Verify => {
-				let cancellation = Cancellation::default();
-				self.start_worker(ctx, Some(cancellation.clone()), move || {
-					Completion::ImageChecked(Box::new(snapshot.verify(&cancellation)))
-				});
 			}
 		}
 	}
@@ -329,8 +279,8 @@ impl App {
 							ui.label("Cancelling…");
 						}
 						Some(cancellation) => {
-							ui.label("Checking container…");
-							if ui.button("Cancel check").clicked() {
+							ui.label("Working…");
+							if ui.button("Cancel").clicked() {
 								cancellation.cancel();
 							}
 						}

@@ -15,7 +15,12 @@ pub(crate) struct ImageTab {
 	pub snapshot: Arc<ImageSnapshot>,
 	pub report: InspectionReport,
 	pub verification: Option<Box<VerificationReport>>,
+	#[cfg(feature = "hfsplus-read")]
+	pub browser: browse::Browser,
 }
+
+#[cfg(feature = "hfsplus-read")]
+pub(crate) mod browse;
 
 impl ImageTab {
 	pub(crate) fn open(file: File) -> Result<Self, Error> {
@@ -31,6 +36,8 @@ impl ImageTab {
 			snapshot: Arc::new(ImageSnapshot { source, image }),
 			report,
 			verification: None,
+			#[cfg(feature = "hfsplus-read")]
+			browser: browse::Browser::default(),
 		})
 	}
 }
