@@ -15,6 +15,7 @@ mod image_edit;
 mod import_appdmg;
 #[cfg(feature = "inspect")]
 mod inspect;
+mod inspect_command;
 mod install;
 mod installer_test;
 #[cfg(feature = "lint")]
@@ -81,7 +82,6 @@ const VERIFY_CONTAINER_CAPABILITY: &str = "verify-container";
 const VERIFY_HFSPLUS_CAPABILITY: &str = "verify-hfsplus";
 const VERIFY_APFS_CAPABILITY: &str = "verify-apfs";
 const HFSPLUS_DECMPFS_CAPABILITY: &str = "hfsplus-decmpfs";
-const RUN_LIMIT_ARG: &str = "run_limit";
 const PARTITION_SLOT_VALUE: &str = "SLOT";
 const COMPILED: &str = "compiled";
 const NOT_COMPILED: &str = "not_compiled";
@@ -177,20 +177,7 @@ enum Command {
 	},
 	/// Show UDIF metadata and optionally probe the decoded partition map.
 	#[command(name = INSPECT_COMMAND)]
-	Inspect {
-		image: PathBuf,
-		#[arg(long)]
-		json: bool,
-		/// Report logical disk partitions or recognized partitionless geometry.
-		#[arg(long)]
-		partitions: bool,
-		/// First logical run in the optional detail page.
-		#[arg(long, requires = RUN_LIMIT_ARG)]
-		run_offset: Option<usize>,
-		/// Maximum number of runs in the optional detail page.
-		#[arg(long, id = RUN_LIMIT_ARG)]
-		run_limit: Option<usize>,
-	},
+	Inspect(inspect_command::Arguments),
 	/// Measure run space and optionally check HFS+ allocation and file sizes.
 	#[command(name = ANALYZE_COMMAND)]
 	Analyze(analyze_command::Arguments),
@@ -416,14 +403,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		Command::ImportAppdmg { .. } => {
 			Err(format!("feature not compiled: {APPDMG_IMPORT_FEATURE}").into())
 		}
-		#[cfg(feature = "inspect")]
-		Command::Inspect {
-			image,
-			json,
-			partitions,
-			run_offset,
-			run_limit,
-		} => inspect::show(&image, json, partitions, run_offset.unwrap_or(0), run_limit),
+		Command::Inspect(arguments) => inspect_command::run(&arguments),
 		Command::Analyze(arguments) => analyze_command::run(&arguments),
 		#[cfg(feature = "inspect")]
 		Command::Verify(arguments) => verify_command::run(&arguments),
@@ -444,9 +424,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 			partition,
 		} => inspect::unwrap(&image, &output, partition),
 		#[cfg(not(feature = "inspect"))]
-		Command::Inspect { .. } | Command::Verify(_) | Command::UnwrapRaw { .. } => {
-			Err("feature not compiled: inspect".into())
-		}
+		Command::Verify(_) | Command::UnwrapRaw { .. } => Err("feature not compiled: inspect".into()),
 	};
 	result.map(|()| ExitCode::SUCCESS)
 }

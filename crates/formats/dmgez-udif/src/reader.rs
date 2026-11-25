@@ -290,6 +290,14 @@ impl<S: ReadAt> Image<S> {
 		&self.descriptor
 	}
 
+	/// Revalidate the source before publishing results derived from this image.
+	///
+	/// # Errors
+	/// Returns a source error if the admitted identity cannot be confirmed.
+	pub fn check_source_unchanged(&self) -> Result<(), Error> {
+		self.source.check_unchanged()
+	}
+
 	/// Inspect the normalized map in logical order without reading any data fork payload.
 	pub fn runs(&self) -> impl ExactSizeIterator<Item = RunDescriptor> + '_ {
 		self.logical_order.iter().map(|&index| {

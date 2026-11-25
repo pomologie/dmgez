@@ -12,11 +12,11 @@ use dmgez_inspector::{
 	CheckStatus, ChecksumDeclaration, DiagnosticDetail, DiskLimits, DiskReport, MAX_RUN_PAGE_SIZE,
 	RunWindow, VerificationMode, VerificationOutcome, VerificationReport,
 };
-use dmgez_udif::reader::{FileSource, Image, Limits};
+use dmgez_udif::reader::{FileSource, Image, Limits, ReadAt};
 use dmgez_vfs::{Disk, Layout, PartitionId, VolumeId};
 use serde::Serialize;
 
-use crate::{CliResult, verify_command, volume_commands::Filesystem};
+use crate::{CliResult, inspect_command::Arguments, verify_command, volume_commands::Filesystem};
 
 #[cfg(feature = "apfs-read")]
 mod apfs;
@@ -79,29 +79,29 @@ pub(super) fn open_source(path: &Path) -> Result<FileSource, dmgez_udif::Error> 
 	FileSource::new(File::open(path)?)
 }
 
-pub(crate) fn show(
-	path: &Path,
-	json: bool,
-	partitions: bool,
-	offset: usize,
-	limit: Option<usize>,
+pub(super) fn show<S: ReadAt>(
+	arguments: &Arguments,
+	open: impl FnOnce() -> Result<S, Box<dyn Error>>,
 ) -> CliResult {
-	let window = match limit {
-		Some(limit) => Some(RunWindow::new(offset, limit).ok_or_else(|| {
-			io::Error::new(
-				io::ErrorKind::InvalidInput,
-				format!("run limit must be between 1 and {MAX_RUN_PAGE_SIZE}"),
-			)
-		})?),
+	let window = match arguments.run_limit {
+		Some(limit) => Some(
+			RunWindow::new(arguments.run_offset.unwrap_or(0), limit).ok_or_else(|| {
+				io::Error::new(
+					io::ErrorKind::InvalidInput,
+					format!("run limit must be between 1 and {MAX_RUN_PAGE_SIZE}"),
+				)
+			})?,
+		),
 		None => None,
 	};
-	let mut image = Image::open(open_source(path)?, Limits::default())?;
-	let report = if partitions {
+	let mut image = Image::open(open()?, Limits::default())?;
+	let report = if arguments.partitions {
 		dmgez_inspector::inspect_disk(&mut image, window, DiskLimits::default())
 	} else {
 		dmgez_inspector::inspect(&image, window)
 	};
-	if json {
+	image.check_source_unchanged()?;
+	if arguments.json {
 		return print_json(&report);
 	}
 	let container = report.container;

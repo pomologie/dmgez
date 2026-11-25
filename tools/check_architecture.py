@@ -11,6 +11,8 @@ PROFILES = {
     "serial": (["--no-default-features", "--features", "build"], {"dmgez-core", "dmgez-udif", "flate2"}),
     "default": ([], {"dmgez-core", "dmgez-udif", "flate2", "rayon"}),
     "inspection": (["--no-default-features", "--features", "inspect"], {"dmgez-core", "dmgez-inspector", "dmgez-udif", "dmgez-vfs", "flate2", "serde_json"}),
+    "remote_inspection": (["--no-default-features", "--features", "remote"],
+                          {"dmgez-core", "dmgez-inspector", "dmgez-udif", "dmgez-vfs", "flate2", "rustls", "serde_json", "ureq"}),
     "conversion": (["--no-default-features", "--features", "convert"], {"dmgez-core", "dmgez-operations", "dmgez-udif", "flate2"}),
     "parallel_conversion": (["--no-default-features", "--features", "convert,parallel"], {"dmgez-core", "dmgez-operations", "dmgez-udif", "flate2", "rayon"}),
     "comparison": (["--no-default-features", "--features", "diff"], {"dmgez-core", "dmgez-diff", "dmgez-udif", "dmgez-vfs", "flate2", "serde_json"}),
@@ -30,7 +32,7 @@ OUTSIDE_DEFAULT = {
     "hfsplus-reader", "lzfse_rust", "lzma-rust2", "notify",
     "reqwest", "rmcp", "tokio", "udif", "winfsp",
 }
-PROFILE_DEPS = {"blake3", "dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-inspector", "dmgez-lint", "dmgez-macho", "dmgez-operations", "dmgez-preview", "dmgez-signing", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "rayon", "serde_json", "sha2"}
+PROFILE_DEPS = {"blake3", "dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-inspector", "dmgez-lint", "dmgez-macho", "dmgez-operations", "dmgez-preview", "dmgez-signing", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "rayon", "rustls", "serde_json", "sha2", "ureq"}
 
 
 def main():
@@ -56,7 +58,7 @@ def main():
             for feature in ("read", "write", "parallel", "zlib", "lzfse", "lzma"):
                 active = f'dmgez-udif feature "{feature}"' in features
                 expected_active = {
-                    "read": profile in ("inspection", "conversion", "parallel_conversion", "comparison", "hash_comparison", "finder_comparison"),
+                    "read": profile in ("inspection", "remote_inspection", "conversion", "parallel_conversion", "comparison", "hash_comparison", "finder_comparison"),
                     "write": profile in ("serial", "default", "conversion", "parallel_conversion", "installer_lint"),
                     "parallel": profile in ("default", "parallel_conversion"),
                     "zlib": profile not in ("installer_lint", "native_signing", "native_notarization"), "lzfse": False, "lzma": False,

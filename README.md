@@ -28,6 +28,8 @@ cargo run --locked --no-default-features --features appdmg-import -- import-appd
 
 The CLI stages outputs in the destination directory and refuses to replace existing files. `unwrap-raw --partition` takes a one-based slot reported by `inspect --partitions` and exports that slot's complete logical extent. The default writer uses bounded parallel compression. A serial-only CLI can be built with `--no-default-features --features build`.
 
+Build with `remote` to inspect an explicit HTTP or HTTPS image URL with `dmgez inspect --url URL --json`. The remote endpoint must support bounded byte ranges and a strong ETag. [Remote inspection](docs/features/ADVANCED.md#remote-reader)
+
 The optional `convert` command rebuilds qualified unsigned UDRO and UDZO containers. It verifies the source and compares the staged output's decoded data and admitted metadata before publication. It refuses inputs carrying opaque resources, signatures, or unqualified block maps.
 
 The same feature enables `optimize`. It samples aligned windows within `--max-sample-chunks` and `--max-sample-bytes`, chooses the smaller measured UDRO or UDZO sample result, and publishes a verified conversion. It reports sampled offsets, wrapped sample sizes, and observed encoder times. Those measurements apply to the sampled windows.
