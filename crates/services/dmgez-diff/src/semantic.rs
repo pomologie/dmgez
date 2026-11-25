@@ -8,6 +8,8 @@ use thiserror::Error;
 use crate::{SCHEMA_VERSION, Side};
 
 mod catalog;
+#[cfg(feature = "finder-layout")]
+mod finder_layout;
 mod links;
 mod payloads;
 mod report;
@@ -17,10 +19,14 @@ mod xattrs;
 mod tests;
 
 pub use catalog::CatalogError;
+#[cfg(feature = "finder-layout")]
+pub use finder_layout::FinderLayoutError;
 pub use report::{
 	Change, ChangeKind, ContentComparison, Field, Limits, Outcome, PathMatching, Policy, Report,
 	Uncompared, XattrChange, XattrPolicy,
 };
+#[cfg(feature = "finder-layout")]
+pub use report::{FinderLayoutPolicy, FinderLayoutUncompared, FinderRecordChange};
 pub use xattrs::XattrError;
 
 use catalog::{Entry, collect};
@@ -60,6 +66,20 @@ pub enum Error<L: StdError + 'static, R: StdError + 'static> {
 		#[source]
 		source: XattrError<R>,
 	},
+	#[cfg(feature = "finder-layout")]
+	#[error("could not compare the left Finder layout at {path:?}")]
+	LeftFinderLayout {
+		path: Vec<String>,
+		#[source]
+		source: FinderLayoutError<L>,
+	},
+	#[cfg(feature = "finder-layout")]
+	#[error("could not compare the right Finder layout at {path:?}")]
+	RightFinderLayout {
+		path: Vec<String>,
+		#[source]
+		source: FinderLayoutError<R>,
+	},
 	#[error("the {side} filesystem object at {path:?} has an unsupported kind")]
 	UnsupportedKind { side: Side, path: Vec<String> },
 	#[error("the {side} regular file at {path:?} has no logical data fork")]
@@ -98,7 +118,7 @@ where
 	L::Id: Eq + Hash,
 	R::Id: Eq + Hash,
 {
-	compare_with_scope(left, right, limits, None, cancelled)
+	compare_with_scope(left, right, limits, Policy::default(), cancelled)
 }
 
 /// Compares the visible trees and the supported stored extended attributes.
@@ -123,14 +143,45 @@ where
 	L::Id: Eq + Hash,
 	R::Id: Eq + Hash,
 {
-	compare_with_scope(left, right, limits, Some(Xattrs::default()), cancelled)
+	compare_with_scope(left, right, limits, Policy::with_xattrs(), cancelled)
+}
+
+/// Compares the visible trees, decoding the data forks of matched regular Finder stores.
+///
+/// The admitted single-leaf stores are compared by reported record facts and
+/// identities. Other data forks and all supported resource forks are compared
+/// exactly. Both stores share the logical payload budget with other forks,
+/// symlink targets, and any enabled extended attributes.
+/// # Errors
+/// Stops on the same failures as [`compare`] or [`compare_with_xattrs`], or if
+/// a matched store or its reported background alias fails the admitted profile.
+#[cfg(feature = "finder-layout")]
+pub fn compare_with_finder_layout<L, R>(
+	left: &mut VolumeView<L>,
+	right: &mut VolumeView<R>,
+	limits: Limits,
+	xattrs: bool,
+	cancelled: impl FnMut() -> bool,
+) -> Result<Report, Error<L::Error, R::Error>>
+where
+	L: VolumeBackend,
+	R: VolumeBackend,
+	L::Id: Eq + Hash,
+	R::Id: Eq + Hash,
+{
+	let policy = if xattrs {
+		Policy::with_xattrs()
+	} else {
+		Policy::default()
+	};
+	compare_with_scope(left, right, limits, policy.with_finder_layout(), cancelled)
 }
 
 fn compare_with_scope<L, R>(
 	left: &mut VolumeView<L>,
 	right: &mut VolumeView<R>,
 	limits: Limits,
-	mut xattrs: Option<Xattrs>,
+	policy: Policy,
 	mut cancelled: impl FnMut() -> bool,
 ) -> Result<Report, Error<L::Error, R::Error>>
 where
@@ -143,6 +194,7 @@ where
 	let right_catalog = collect(right, limits, &mut cancelled).map_err(Error::RightCatalog)?;
 	let topology = Topology::compare(&left_catalog, &right_catalog, &mut cancelled)?;
 	let mut payloads = Payloads::new(limits.max_bytes, cancelled);
+	let mut xattrs = policy.xattrs.map(|_| Xattrs::default());
 	let mut changes = Vec::new();
 
 	for (path, left_entry) in &left_catalog {
@@ -151,12 +203,14 @@ where
 			changes.push(Change::new(path, ChangeKind::Removed, Vec::new()));
 			continue;
 		};
-		let mut fields = compare_entry(
+		let mut entry = compare_entry(
 			(&mut *left, left_entry),
 			(&mut *right, right_entry),
 			path,
 			&topology,
 			&mut payloads,
+			#[cfg(feature = "finder-layout")]
+			policy.finder_layout,
 		)?;
 		let xattr_changes = if let Some(xattrs) = &mut xattrs {
 			xattrs.compare(
@@ -169,11 +223,15 @@ where
 			Vec::new()
 		};
 		if !xattr_changes.is_empty() {
-			fields.push(Field::ExtendedAttributes);
+			entry.fields.push(Field::ExtendedAttributes);
 		}
-		if !fields.is_empty() {
-			let mut change = Change::new(path, ChangeKind::Changed, fields);
+		if !entry.fields.is_empty() {
+			let mut change = Change::new(path, ChangeKind::Changed, entry.fields);
 			change.xattrs = xattr_changes;
+			#[cfg(feature = "finder-layout")]
+			{
+				change.finder_layout = entry.finder_layout;
+			}
 			changes.push(change);
 		}
 	}
@@ -193,11 +251,7 @@ where
 		} else {
 			Outcome::Different
 		},
-		policy: if xattrs.is_some() {
-			Policy::with_xattrs()
-		} else {
-			Policy::default()
-		},
+		policy,
 		limits,
 		left_entries: left_catalog.len(),
 		right_entries: right_catalog.len(),
@@ -206,18 +260,26 @@ where
 	})
 }
 
+#[derive(Default)]
+struct EntryChanges {
+	fields: Vec<Field>,
+	#[cfg(feature = "finder-layout")]
+	finder_layout: Vec<FinderRecordChange>,
+}
+
 fn compare_entry<L: VolumeBackend, R: VolumeBackend>(
 	left: (&mut VolumeView<L>, &Entry<L::Id>),
 	right: (&mut VolumeView<R>, &Entry<R::Id>),
 	path: &[String],
 	topology: &Topology<'_>,
 	payloads: &mut Payloads<impl FnMut() -> bool>,
-) -> Result<Vec<Field>, Error<L::Error, R::Error>> {
+	#[cfg(feature = "finder-layout")] finder_layout: Option<FinderLayoutPolicy>,
+) -> Result<EntryChanges, Error<L::Error, R::Error>> {
 	let (left_view, left) = left;
 	let (right_view, right) = right;
 	let l = &left.metadata;
 	let r = &right.metadata;
-	let mut fields = Vec::new();
+	let mut changes = EntryChanges::default();
 	for (same, field) in [
 		(l.kind == r.kind, Field::Kind),
 		(l.mode == r.mode, Field::Mode),
@@ -226,33 +288,55 @@ fn compare_entry<L: VolumeBackend, R: VolumeBackend>(
 		(topology.equivalent(l, r), Field::HardLinkTopology),
 	] {
 		if !same {
-			fields.push(field);
+			changes.fields.push(field);
 		}
 	}
 	match (l.kind, r.kind) {
 		(NodeKind::RegularFile, NodeKind::RegularFile) => {
-			for (kind, field) in [
-				(ForkKind::Data, Field::DataFork),
-				(ForkKind::Resource, Field::ResourceFork),
-			] {
-				if !payloads.fork(
-					(&mut *left_view, &left.node),
-					(&mut *right_view, &right.node),
-					kind,
+			let compare_data = true;
+			#[cfg(feature = "finder-layout")]
+			let compare_data = if finder_layout
+				.is_some_and(|policy| path.last().is_some_and(|name| name == policy.store_name))
+			{
+				changes.finder_layout = finder_layout::compare_stores(
+					(left_view, &left.node),
+					(right_view, &right.node),
+					path,
+					payloads,
+				)?;
+				if !changes.finder_layout.is_empty() {
+					changes.fields.push(Field::FinderLayout);
+				}
+				false
+			} else {
+				compare_data
+			};
+			if compare_data
+				&& !payloads.fork(
+					(left_view, &left.node),
+					(right_view, &right.node),
+					ForkKind::Data,
 					path,
 				)? {
-					fields.push(field);
-				}
+				changes.fields.push(Field::DataFork);
+			}
+			if !payloads.fork(
+				(left_view, &left.node),
+				(right_view, &right.node),
+				ForkKind::Resource,
+				path,
+			)? {
+				changes.fields.push(Field::ResourceFork);
 			}
 		}
 		(NodeKind::Symlink, NodeKind::Symlink)
 			if !payloads.link((left_view, &left.node), (right_view, &right.node), path)? =>
 		{
-			fields.push(Field::SymlinkTarget);
+			changes.fields.push(Field::SymlinkTarget);
 		}
 		_ => {}
 	}
-	Ok(fields)
+	Ok(changes)
 }
 
 fn require_kind<L: StdError + 'static, R: StdError + 'static>(

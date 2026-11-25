@@ -1032,6 +1032,7 @@ dependencies = [
 name = "dmgez-diff"
 version = "0.1.0"
 dependencies = [
+ "dmgez-finder",
  "dmgez-udif",
  "dmgez-vfs",
  "serde",

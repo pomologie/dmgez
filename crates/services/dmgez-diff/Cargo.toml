@@ -7,7 +7,11 @@ rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
 
+[features]
+finder-layout = ["dep:dmgez-finder"]
+
 [dependencies]
+dmgez-finder = { workspace = true, optional = true }
 dmgez-vfs.workspace = true
 serde.workspace = true
 thiserror.workspace = true

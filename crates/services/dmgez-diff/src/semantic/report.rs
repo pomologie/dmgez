@@ -68,6 +68,9 @@ pub enum PathMatching {
 #[serde(rename_all = "snake_case")]
 pub enum ContentComparison {
 	ExactBytes,
+	/// Exact byte comparison with decoded records for matched regular Finder stores.
+	#[cfg(feature = "finder-layout")]
+	ExactBytesWithFinderLayout,
 }
 
 /// A supported field that changed within one common path.
@@ -84,6 +87,8 @@ pub enum Field {
 	ResourceFork,
 	SymlinkTarget,
 	ExtendedAttributes,
+	#[cfg(feature = "finder-layout")]
+	FinderLayout,
 }
 
 impl Field {
@@ -99,6 +104,8 @@ impl Field {
 			Self::ResourceFork => "resource_fork",
 			Self::SymlinkTarget => "symlink_target",
 			Self::ExtendedAttributes => "extended_attributes",
+			#[cfg(feature = "finder-layout")]
+			Self::FinderLayout => "finder_layout",
 		}
 	}
 }
@@ -115,6 +122,8 @@ pub enum Uncompared {
 	Quarantine,
 	QuarantineAssessment,
 	FinderMetadata,
+	#[cfg(feature = "finder-layout")]
+	PerObjectFinderInfo,
 	NativeObjectIds,
 	FilesystemAllocation,
 	PhysicalContainerLayout,
@@ -142,7 +151,7 @@ const COMPARED_FIELDS_WITH_XATTRS: [Field; COMPARED_FIELDS.len() + 1] = {
 	fields
 };
 
-const UNCOMPARED_FIELDS: &[Uncompared] = &[
+const UNCOMPARED_FIELDS: [Uncompared; 11] = [
 	Uncompared::Timestamps,
 	Uncompared::ExtendedAttributesExceptResourceFork,
 	Uncompared::AccessControlLists,
@@ -156,7 +165,7 @@ const UNCOMPARED_FIELDS: &[Uncompared] = &[
 	Uncompared::RenameInference,
 ];
 
-const UNCOMPARED_FIELDS_WITH_XATTRS: &[Uncompared] = &[
+const UNCOMPARED_FIELDS_WITH_XATTRS: [Uncompared; 10] = [
 	Uncompared::Timestamps,
 	Uncompared::AccessControlLists,
 	Uncompared::FilesystemFlags,
@@ -189,13 +198,16 @@ pub struct Policy {
 	pub excluded: &'static [Uncompared],
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub xattrs: Option<XattrPolicy>,
+	#[cfg(feature = "finder-layout")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub finder_layout: Option<FinderLayoutPolicy>,
 }
 
 impl Policy {
 	pub(super) fn with_xattrs() -> Self {
 		Self {
 			compared: &COMPARED_FIELDS_WITH_XATTRS,
-			excluded: UNCOMPARED_FIELDS_WITH_XATTRS,
+			excluded: &UNCOMPARED_FIELDS_WITH_XATTRS,
 			xattrs: Some(XATTR_POLICY),
 			..Self::default()
 		}
@@ -208,11 +220,18 @@ impl Default for Policy {
 			paths: PathMatching::ExactStoredText,
 			contents: ContentComparison::ExactBytes,
 			compared: &COMPARED_FIELDS,
-			excluded: UNCOMPARED_FIELDS,
+			excluded: &UNCOMPARED_FIELDS,
 			xattrs: None,
+			#[cfg(feature = "finder-layout")]
+			finder_layout: None,
 		}
 	}
 }
+
+#[cfg(feature = "finder-layout")]
+pub use finder_layout::{FinderLayoutPolicy, FinderLayoutUncompared, FinderRecordChange};
+#[cfg(feature = "finder-layout")]
+mod finder_layout;
 
 /// Type of difference at a stored path.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -255,6 +274,10 @@ pub struct Change {
 	/// Stored attribute changes in lexicographic name order.
 	#[serde(skip_serializing_if = "Vec::is_empty")]
 	pub xattrs: Vec<XattrChange>,
+	/// Finder record identity changes in name and field order.
+	#[cfg(feature = "finder-layout")]
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub finder_layout: Vec<FinderRecordChange>,
 }
 
 impl Change {
@@ -264,6 +287,8 @@ impl Change {
 			kind,
 			fields,
 			xattrs: Vec::new(),
+			#[cfg(feature = "finder-layout")]
+			finder_layout: Vec::new(),
 		}
 	}
 }
@@ -280,7 +305,8 @@ pub struct Report {
 	pub left_entries: usize,
 	/// Number of paths scanned, including the root.
 	pub right_entries: usize,
-	/// Paired fork and attribute chunks counted once, with the larger length charged for links.
+	/// Paired fork and attribute chunks counted once. Whole link targets and
+	/// Finder stores are charged the larger of the two input lengths.
 	#[serde(serialize_with = "decimal")]
 	pub compared_bytes: u64,
 	/// Differences in lexicographic component order.

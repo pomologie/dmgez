@@ -142,7 +142,7 @@ fn attr(name: &str, value: Option<&'static [u8]>) -> TestXattr {
 	}
 }
 
-fn with_attrs<const N: usize>(xattrs: [TestXattr; N]) -> TestNode {
+fn with_attrs<const N: usize>(xattrs: [TestXattr; N]) -> TestNode<'static> {
 	TestNode {
 		xattrs: xattrs.into(),
 		..TestNode::file(2)

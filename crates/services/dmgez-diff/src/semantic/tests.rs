@@ -14,6 +14,8 @@ use dmgez_vfs::{
 
 use super::{ChangeKind, Error, Field, Limits, Outcome, compare};
 
+#[cfg(feature = "finder-layout")]
+mod finder_layout;
 mod xattrs;
 
 const ROOT: u32 = 1;
@@ -139,18 +141,18 @@ fn identical_forks_require_every_byte_under_the_budget() {
 	));
 }
 
-struct TestNode {
+struct TestNode<'data> {
 	id: u32,
 	kind: NodeKind,
 	mode: u16,
-	data: Option<&'static [u8]>,
+	data: Option<&'data [u8]>,
 	resource: Option<&'static [u8]>,
 	hard_link: Option<HardLink<u64>>,
 	target: Option<&'static [u8]>,
 	xattrs: Vec<TestXattr>,
 }
 
-impl TestNode {
+impl TestNode<'_> {
 	fn file(id: u32) -> Self {
 		Self {
 			id,
@@ -183,14 +185,16 @@ impl TestNode {
 	}
 }
 
-fn view<const N: usize>(children: [(&str, TestNode); N]) -> VolumeView<TestTree> {
+fn view<'data, const N: usize>(
+	children: [(&str, TestNode<'data>); N],
+) -> VolumeView<TestTree<'data>> {
 	view_with_attributes(children, true)
 }
 
-fn view_with_attributes<const N: usize>(
-	children: [(&str, TestNode); N],
+fn view_with_attributes<'data, const N: usize>(
+	children: [(&str, TestNode<'data>); N],
 	attributes_available: bool,
-) -> VolumeView<TestTree> {
+) -> VolumeView<TestTree<'data>> {
 	let mut entries = Vec::new();
 	let mut nodes = BTreeMap::new();
 	for (name, node) in children {
@@ -216,16 +220,19 @@ struct TestXattr {
 	value: Option<&'static [u8]>,
 }
 
-struct TestTree {
+struct TestTree<'data> {
 	entries: Vec<DirectoryEntry<u32>>,
-	nodes: BTreeMap<u32, TestNode>,
+	nodes: BTreeMap<u32, TestNode<'data>>,
 	attributes_available: bool,
 }
 
-impl VolumeBackend for TestTree {
+impl VolumeBackend for TestTree<'_> {
 	type Id = u32;
 	type Error = io::Error;
-	type Directory<'a> = Page<'a>;
+	type Directory<'a>
+		= Page<'a>
+	where
+		Self: 'a;
 
 	fn root(&mut self) -> io::Result<u32> {
 		Ok(ROOT)
@@ -325,9 +332,9 @@ impl DirectoryReader for Page<'_> {
 	}
 }
 
-struct Fork(&'static [u8]);
+struct Fork<'data>(&'data [u8]);
 
-impl ForkReader for Fork {
+impl ForkReader for Fork<'_> {
 	type Error = io::Error;
 
 	fn len(&self) -> u64 {

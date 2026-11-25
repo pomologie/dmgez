@@ -32,6 +32,17 @@ impl<F: FnMut() -> bool> Payloads<F> {
 		self.compared_bytes
 	}
 
+	pub(super) fn charge_bytes<L: StdError + 'static, R: StdError + 'static>(
+		&mut self,
+		read_bytes: u64,
+	) -> Result<(), Error<L, R>> {
+		if read_bytes > self.limit - self.compared_bytes {
+			return Err(Error::ByteLimit { limit: self.limit });
+		}
+		self.compared_bytes += read_bytes;
+		Ok(())
+	}
+
 	pub(super) fn poll<L: StdError + 'static, R: StdError + 'static>(
 		&mut self,
 	) -> Result<(), Error<L, R>> {
@@ -148,16 +159,12 @@ impl<F: FnMut() -> bool> Payloads<F> {
 			})?;
 		// VFS supplies bounded whole link targets. Account both reads even when
 		// the lengths alone would establish the difference.
-		let read_bytes = left.len().max(right.len()) as u64;
-		if read_bytes > self.limit - self.compared_bytes {
-			return Err(Error::ByteLimit { limit: self.limit });
-		}
-		self.compared_bytes += read_bytes;
+		self.charge_bytes(left.len().max(right.len()) as u64)?;
 		Ok(left == right)
 	}
 }
 
-fn missing_data<L: StdError + 'static, R: StdError + 'static>(
+pub(super) fn missing_data<L: StdError + 'static, R: StdError + 'static>(
 	side: Side,
 	path: &[String],
 ) -> Error<L, R> {
