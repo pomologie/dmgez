@@ -31,7 +31,7 @@ lzma = ["dmgez-udif?/lzma"]
 inspect = ["dep:dmgez-core", "dep:dmgez-inspector", "dmgez-inspector/zlib", "dep:dmgez-udif", "dmgez-udif/read", "dep:dmgez-vfs", "dep:serde", "dep:serde_json"]
 
 [dependencies]
-clap.workspace = true
+# Workspace crates
 dmgez-config = { workspace = true, optional = true }
 dmgez-core = { workspace = true, optional = true, features = ["staging"] }
 dmgez-diff = { workspace = true, optional = true }
@@ -42,6 +42,11 @@ dmgez-preview = { workspace = true, optional = true }
 dmgez-signing = { workspace = true, optional = true }
 dmgez-udif = { workspace = true, optional = true }
 dmgez-vfs = { workspace = true, optional = true }
+
+# Command-line interface
+clap.workspace = true
+
+# Serialization
 serde = { workspace = true, optional = true }
 serde_json = { workspace = true, optional = true }
 

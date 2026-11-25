@@ -12,9 +12,14 @@ default = ["zlib"]
 zlib = ["dmgez-udif/zlib"]
 
 [dependencies]
+# Workspace crates
 dmgez-udif = { workspace = true, features = ["read"] }
+
+# Partition tables
 gpt.workspace = true
 part-tables.workspace = true
+
+# Diagnostics
 thiserror.workspace = true
 
 [dev-dependencies]

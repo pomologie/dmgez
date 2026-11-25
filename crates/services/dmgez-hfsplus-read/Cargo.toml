@@ -14,10 +14,15 @@ decmpfs-zlib = ["hfsplus-reader/decmpfs-zlib"]
 verify = []
 
 [dependencies]
+# dmgez crates
 dmgez-vfs = { path = "../../foundation/dmgez-vfs", default-features = false, optional = true }
+
+# HFS+ libraries
 hfsplus-core = { package = "hfsplus-pomologie-core", version = "=0.1.0" }
 hfsplus-format = "=0.1.0"
 hfsplus-reader = "=0.1.0"
+
+# Diagnostics
 thiserror = "=2.0.21"
 
 [lints.rust]

@@ -13,7 +13,10 @@ source = ["dep:thiserror"]
 staging = ["dep:tempfile", "dep:thiserror", "dep:rustix"]
 
 [dependencies]
+# Filesystem access and staging
 tempfile = { workspace = true, optional = true }
+
+# Diagnostics
 thiserror = { workspace = true, optional = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]

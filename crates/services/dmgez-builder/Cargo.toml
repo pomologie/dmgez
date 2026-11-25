@@ -18,15 +18,22 @@ volume-icon = ["finder-write", "dmgez-finder/volume-icon", "dep:dmgez-macho"]
 zlib = ["dmgez-udif/zlib"]
 
 [dependencies]
+# Workspace crates
 dmgez-config.workspace = true
 dmgez-core = { workspace = true, features = ["source", "staging"] }
 dmgez-finder = { workspace = true, optional = true }
 dmgez-macho = { workspace = true, optional = true }
 dmgez-udif = { workspace = true, features = ["write"] }
+
+# Compression
 flate2 = { workspace = true, optional = true }
+
+# Finder metadata and images
 png = { version = "=0.18.1", optional = true }
-thiserror.workspace = true
 tiff = { workspace = true, optional = true }
+
+# Diagnostics
+thiserror.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 globset.workspace = true

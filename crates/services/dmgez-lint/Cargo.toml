@@ -11,12 +11,17 @@ description = "Typed layout and installer diagnostics for dmgez projects"
 installer = ["dep:dmgez-builder", "dep:plist", "dep:quick-xml"]
 
 [dependencies]
+# Workspace crates
 dmgez-builder = { workspace = true, optional = true }
 dmgez-config.workspace = true
 dmgez-preview.workspace = true
+
+# Serialization
 plist = { workspace = true, optional = true, features = ["enable_unstable_features_that_may_break_with_minor_version_bumps"] }
 quick-xml = { workspace = true, optional = true }
 serde.workspace = true
+
+# Diagnostics
 thiserror.workspace = true
 
 [dev-dependencies]

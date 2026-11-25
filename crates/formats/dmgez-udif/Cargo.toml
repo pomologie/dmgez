@@ -18,15 +18,26 @@ parallel = ["dep:rayon"]
 signature-integrity = ["dep:sha2"]
 
 [dependencies]
-crc32fast = { workspace = true, optional = true }
+# Workspace crates
 dmgez-core = { workspace = true, optional = true, features = ["source"] }
+
+# Compression
 flate2 = { workspace = true, optional = true }
 lzfse_rust = { workspace = true, optional = true }
 lzma-rust2 = { workspace = true, optional = true }
+
+# Hashes and checksums
+crc32fast = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+
+# Serialization
 plist = { workspace = true, optional = true }
 quick-xml = { workspace = true, optional = true }
+
+# Parallel execution
 rayon = { workspace = true, optional = true }
-sha2 = { workspace = true, optional = true }
+
+# Diagnostics
 thiserror.workspace = true
 
 [dev-dependencies]

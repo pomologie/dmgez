@@ -8,8 +8,11 @@ edition = "2024"
 cargo-fuzz = true
 
 [dependencies]
-libfuzzer-sys = "=0.4.13"
+# Workspace crates
 dmgez-udif = { path = "../crates/formats/dmgez-udif", default-features = false, features = ["read", "zlib", "lzfse", "lzma"] }
+
+# Fuzzing
+libfuzzer-sys = "=0.4.13"
 
 [[bin]]
 name = "udif"

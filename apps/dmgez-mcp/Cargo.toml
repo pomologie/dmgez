@@ -8,13 +8,20 @@ repository.workspace = true
 description = "Local MCP tools for dmgez projects"
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
-clap.workspace = true
+# Workspace crates
 dmgez-config.workspace = true
 dmgez-core = { workspace = true, features = ["source"] }
+
+# Command-line and MCP interfaces
+clap.workspace = true
 rmcp = { version = "=3.11.0", default-features = false, features = ["macros", "server"] }
-rustix.workspace = true
-serde.workspace = true
 tokio = { version = "1.54.1", default-features = false, features = ["io-std", "rt"] }
+
+# Filesystem access
+rustix.workspace = true
+
+# Serialization
+serde.workspace = true
 
 [dev-dependencies]
 serde_json.workspace = true

@@ -12,11 +12,14 @@ appdmg-import = ["dep:serde_json", "toml/display"]
 project-edit = ["dep:toml_edit"]
 
 [dependencies]
+# Serialization and configuration
 serde.workspace = true
 serde_json = { workspace = true, optional = true }
-thiserror.workspace = true
 toml.workspace = true
 toml_edit = { workspace = true, optional = true }
+
+# Diagnostics
+thiserror.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

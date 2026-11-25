@@ -5,18 +5,23 @@ members = [
 	"apps/dmgez",
 	"apps/dmgez-cli",
 	"apps/dmgez-mcp",
+
 	# Formats
 	"crates/formats/dmgez-macho",
 	"crates/formats/dmgez-udif",
+
 	# Foundation
 	"crates/foundation/dmgez-config",
 	"crates/foundation/dmgez-core",
 	"crates/foundation/dmgez-vfs",
+
 	# Presentation
 	"crates/presentation/dmgez-finder",
 	"crates/presentation/dmgez-preview",
+
 	# Security
 	"crates/security/dmgez-signing",
+
 	# Services
 	"crates/services/dmgez-builder",
 	"crates/services/dmgez-diff",
@@ -102,9 +107,11 @@ clap = { version = "4.6.8", features = ["derive"] }
 eframe = { version = "=0.37.0", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
 rfd = { version = "=0.17.2", default-features = false, features = ["xdg-portal", "wayland"] }
 
-# Diagnostics and testing
-proptest = { version = "1.12.0", default-features = false, features = ["std"] }
+# Diagnostics
 thiserror = "2.0.21"
+
+# Property testing
+proptest = { version = "1.12.0", default-features = false, features = ["std"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

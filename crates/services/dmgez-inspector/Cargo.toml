@@ -15,12 +15,18 @@ lzma = ["dmgez-udif/lzma"]
 remote = []
 
 [dependencies]
+# Workspace crates
 dmgez-udif = { workspace = true, features = ["read"] }
 dmgez-vfs.workspace = true
+
+# Serialization
 serde.workspace = true
 
 [dev-dependencies]
+# Workspace crates
 dmgez-udif = { workspace = true, features = ["write"] }
+
+# Serialization
 plist.workspace = true
 serde_json.workspace = true
 

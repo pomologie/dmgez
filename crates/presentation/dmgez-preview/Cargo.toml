@@ -8,7 +8,10 @@ repository.workspace = true
 description = "Headless preview geometry for dmgez"
 
 [dependencies]
+# Workspace crates
 dmgez-config.workspace = true
+
+# Diagnostics
 thiserror.workspace = true
 
 [dev-dependencies]

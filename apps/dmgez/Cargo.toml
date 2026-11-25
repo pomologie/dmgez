@@ -9,14 +9,19 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+# Workspace crates
 dmgez-config = { workspace = true, features = ["project-edit"] }
 dmgez-core = { workspace = true, features = ["staging"] }
 dmgez-inspector = { workspace = true, features = ["zlib"] }
 dmgez-lint.workspace = true
 dmgez-preview.workspace = true
 dmgez-udif = { workspace = true, features = ["read"] }
+
+# Desktop interface
 eframe.workspace = true
 rfd.workspace = true
+
+# Diagnostics
 thiserror.workspace = true
 
 [dev-dependencies]
