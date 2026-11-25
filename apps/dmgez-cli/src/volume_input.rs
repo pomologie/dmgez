@@ -122,9 +122,7 @@ fn encoding(raw: bool) -> Encoding {
 #[cfg(all(
 	feature = "hfsplus-install",
 	target_os = "macos",
-	any(
-		feature = "mount-watch",
-		all(feature = "project-release", feature = "signing-native")
-	)
+	feature = "project-release",
+	feature = "signing-native"
 ))]
 pub(super) use dmgez_runtime::volume::with_hfs_file_verified;

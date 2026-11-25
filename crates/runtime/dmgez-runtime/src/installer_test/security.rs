@@ -1,6 +1,11 @@
 use std::path::Path;
 
-use super::report::{Check, Status};
+use super::{Check, Status};
+
+#[cfg(not(feature = "signing-native"))]
+const SIGNING_FEATURE: &str = "signing-native";
+#[cfg(not(feature = "notarization-native"))]
+const TICKET_FEATURE: &str = "notarization-native";
 
 pub(super) fn signature(path: &Path) -> Check<&'static str> {
 	#[cfg(feature = "signing-native")]
@@ -26,7 +31,7 @@ pub(super) fn signature(path: &Path) -> Check<&'static str> {
 	#[cfg(not(feature = "signing-native"))]
 	{
 		let _ = path;
-		Check::detail(Status::Unavailable, crate::signing::NATIVE_FEATURE)
+		Check::detail(Status::Unavailable, SIGNING_FEATURE)
 	}
 }
 
@@ -50,7 +55,7 @@ pub(super) fn ticket(path: &Path) -> Check<&'static str> {
 	#[cfg(not(feature = "notarization-native"))]
 	{
 		let _ = path;
-		Check::detail(Status::Unavailable, crate::notarize::NATIVE_FEATURE)
+		Check::detail(Status::Unavailable, TICKET_FEATURE)
 	}
 }
 
@@ -82,6 +87,6 @@ pub(super) fn assess(path: &Path) -> Check<&'static str> {
 	#[cfg(not(feature = "signing-native"))]
 	{
 		let _ = path;
-		Check::detail(Status::Unavailable, crate::signing::NATIVE_FEATURE)
+		Check::detail(Status::Unavailable, SIGNING_FEATURE)
 	}
 }

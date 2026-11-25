@@ -19,8 +19,20 @@ pub mod inspection;
 	any(target_os = "linux", target_os = "macos")
 ))]
 pub mod installation;
+#[cfg(all(
+	feature = "installer-test",
+	any(target_os = "linux", target_os = "macos")
+))]
+pub mod installer_test;
 #[cfg(feature = "lint")]
 pub mod lint;
+#[cfg(all(
+	feature = "mount-watch",
+	feature = "hfsplus-volume",
+	feature = "verified-volume",
+	target_os = "macos"
+))]
+pub mod mount_watch;
 #[cfg(feature = "preview")]
 pub mod preview;
 #[cfg(feature = "project-build")]
