@@ -349,12 +349,34 @@ impl<S: ReadAt> Image<S> {
 	/// # Errors
 	/// Returns an error for a mismatched or unsupported checksum, unsupported run, or failed I/O.
 	pub fn verify(&mut self) -> Result<Verification, Error> {
+		self.verify_with(|| Ok(()))
+	}
+
+	/// Verify the same checksum domains as [`Self::verify`], checking for cancellation
+	/// before starting, between data chunks, and before reporting success.
+	///
+	/// # Errors
+	/// Returns [`Error::Cancelled`] when cancellation is requested. Other errors
+	/// are the same as in [`Self::verify`].
+	pub fn verify_with_cancellation(
+		&mut self,
+		cancellation: &crate::Cancellation,
+	) -> Result<Verification, Error> {
+		self.verify_with(|| cancellation.check())
+	}
+
+	fn verify_with(
+		&mut self,
+		check_cancellation: impl Fn() -> Result<(), Error>,
+	) -> Result<Verification, Error> {
+		check_cancellation()?;
 		// Require a fresh read of all verification inputs, including a cached compressed run.
 		self.cache = None;
 		let mut buffer = vec![0; STREAM_BUFFER_BYTES];
 		let mut physical = Hasher::new();
 		let mut offset = self.descriptor.data_fork.start;
 		while offset < self.descriptor.data_fork.end {
+			check_cancellation()?;
 			let len = (self.descriptor.data_fork.end - offset).min(buffer.len() as u64) as usize;
 			self.source.read_exact_at(offset, &mut buffer[..len])?;
 			physical.update(&buffer[..len]);
@@ -374,6 +396,7 @@ impl<S: ReadAt> Image<S> {
 				let range = self.runs[index].logical.clone();
 				let mut offset = range.start;
 				while offset < range.end {
+					check_cancellation()?;
 					let len = (range.end - offset).min(buffer.len() as u64) as usize;
 					self.read_run(index, offset, &mut buffer[..len])?;
 					crc.update(&buffer[..len]);
@@ -400,6 +423,7 @@ impl<S: ReadAt> Image<S> {
 			checksum::master_crc(declared),
 			|| "master image".into(),
 		)?;
+		check_cancellation()?;
 		Ok(Verification {
 			data_fork,
 			tables,

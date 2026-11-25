@@ -7,6 +7,7 @@
 mod binary;
 #[cfg(any(feature = "read", feature = "write"))]
 mod blkx;
+mod cancellation;
 #[cfg(any(feature = "read", feature = "write"))]
 mod checksum;
 #[cfg(all(any(feature = "read", feature = "write"), feature = "zlib"))]
@@ -37,6 +38,7 @@ pub mod reader;
 #[cfg(feature = "write")]
 pub mod writer;
 
+pub use cancellation::Cancellation;
 pub use error::Error;
 pub use geometry::SECTOR_BYTES;
 pub use signature_append::{

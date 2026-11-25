@@ -4,6 +4,7 @@ mod chunk;
 mod metadata;
 mod scheduler;
 
+pub use crate::Cancellation;
 pub(crate) use metadata::OutputMetadata;
 #[cfg(feature = "read")]
 pub use metadata::{RebuildMetadata, write_rebuilt_image};
@@ -11,10 +12,6 @@ pub use metadata::{RebuildMetadata, write_rebuilt_image};
 use std::{
 	io::{self, Read, Write},
 	num::NonZeroUsize,
-	sync::{
-		Arc,
-		atomic::{AtomicBool, Ordering},
-	},
 };
 
 use crc32fast::Hasher;
@@ -65,31 +62,6 @@ pub enum Execution {
 impl Execution {
 	/// Select a host- and budget-aware worker count for [`Execution::Parallel`].
 	pub const AUTO_WORKERS: usize = 0;
-}
-
-/// A shared flag for cooperative cancellation at chunk and output boundaries.
-#[derive(Debug, Default, Clone)]
-pub struct Cancellation(Arc<AtomicBool>);
-
-impl Cancellation {
-	/// Request termination of an in-progress write.
-	pub fn cancel(&self) {
-		self.0.store(true, Ordering::Relaxed);
-	}
-
-	/// Check whether termination was requested.
-	#[must_use]
-	pub fn is_cancelled(&self) -> bool {
-		self.0.load(Ordering::Relaxed)
-	}
-
-	fn check(&self) -> Result<(), Error> {
-		if self.is_cancelled() {
-			Err(Error::Cancelled)
-		} else {
-			Ok(())
-		}
-	}
 }
 
 /// Resource limits and deterministic encoding options.
