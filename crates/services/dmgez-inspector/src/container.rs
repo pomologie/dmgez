@@ -259,24 +259,29 @@ pub struct InspectionReport {
 	pub disk: Option<DiskReport>,
 }
 
+/// Reads a bounded page from the admitted logical run index without accessing payload bytes.
+#[must_use]
+pub fn inspect_runs<S: ReadAt>(image: &Image<S>, window: RunWindow) -> RunPage {
+	let runs = image.runs();
+	let total = runs.len();
+	let runs: Vec<_> = runs
+		.skip(window.offset)
+		.take(window.limit)
+		.map(Run::from)
+		.collect();
+	let next = window.offset + runs.len();
+	RunPage {
+		offset: window.offset as u64,
+		next_offset: (next < total).then_some(next),
+		runs,
+	}
+}
+
 /// Summarizes an opened image without reading or verifying payload bytes.
 #[must_use]
 pub fn inspect<S: ReadAt>(image: &Image<S>, window: Option<RunWindow>) -> InspectionReport {
 	let container = ContainerSummary::read(image);
-	let run_page = window.map(|window| {
-		let runs: Vec<_> = image
-			.runs()
-			.skip(window.offset)
-			.take(window.limit)
-			.map(Run::from)
-			.collect();
-		let next = window.offset + runs.len();
-		RunPage {
-			offset: window.offset as u64,
-			next_offset: (next < container.runs.total).then_some(next),
-			runs,
-		}
-	});
+	let run_page = window.map(|window| inspect_runs(image, window));
 	InspectionReport {
 		schema_version: SCHEMA_VERSION,
 		operation: ReportOperation::Inspect,

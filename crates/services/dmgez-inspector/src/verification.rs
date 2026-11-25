@@ -1,7 +1,7 @@
 use std::num::NonZeroU64;
 
 use dmgez_udif::{
-	Error,
+	Cancellation, Error,
 	reader::{
 		CheckStatus as UdifStatus, Checksum, Descriptor, Image, Limits, ReadAt, Verification,
 	},
@@ -179,7 +179,28 @@ impl VerificationReport {
 /// A full request requires filesystem checks and remains partial without them.
 #[must_use]
 pub fn verify(source: impl ReadAt, limits: Limits, mode: VerificationMode) -> VerificationReport {
-	let (mut report, next) = verify_container(source, limits, mode);
+	verify_requested(source, limits, mode, None)
+}
+
+/// Runs the same verification as [`verify`], stopping at metadata and checksum
+/// scan boundaries when the caller requests cancellation.
+#[must_use]
+pub fn verify_with_cancellation(
+	source: impl ReadAt,
+	limits: Limits,
+	mode: VerificationMode,
+	cancellation: &Cancellation,
+) -> VerificationReport {
+	verify_requested(source, limits, mode, Some(cancellation))
+}
+
+fn verify_requested(
+	source: impl ReadAt,
+	limits: Limits,
+	mode: VerificationMode,
+	cancellation: Option<&Cancellation>,
+) -> VerificationReport {
+	let (mut report, next) = verify_container(source, limits, mode, cancellation);
 	if next.is_some() && mode == VerificationMode::Full {
 		report.fail_with(
 			Diagnostic {
@@ -275,7 +296,7 @@ fn verify_prepared_filesystem<S: ReadAt>(
 	select: impl FnOnce(&mut Disk<Image<S>>, &mut ReadBudget) -> Result<Option<VolumeId>, Failure>,
 	checker: impl FnOnce(&mut dyn FilesystemSource) -> Result<FilesystemEvidence, FilesystemCheckError>,
 ) -> VerificationReport {
-	let (mut report, next) = verify_container(source, limits, VerificationMode::Full);
+	let (mut report, next) = verify_container(source, limits, VerificationMode::Full, None);
 	report.capabilities.filesystem = true;
 	let Some(image) = next else {
 		return report;
@@ -341,12 +362,20 @@ fn verify_container<S: ReadAt>(
 	source: S,
 	limits: Limits,
 	mode: VerificationMode,
+	cancellation: Option<&Cancellation>,
 ) -> (VerificationReport, Option<Image<S>>) {
 	let mut report = VerificationReport::new(mode);
+	if cancellation.is_some_and(Cancellation::is_cancelled) {
+		report.fail(Stage::Structure, Error::Cancelled);
+		return (report, None);
+	}
 	let image = source
 		.check_unchanged()
 		.and_then(|()| Image::open(source, limits));
 	let mut image = match image.and_then(|mut image| {
+		if cancellation.is_some_and(Cancellation::is_cancelled) {
+			return Err(Error::Cancelled);
+		}
 		// An empty checked read validates the backing source without a payload read.
 		image.read_exact_at(0, &mut [])?;
 		Ok(image)
@@ -365,7 +394,11 @@ fn verify_container<S: ReadAt>(
 		report.outcome = VerificationOutcome::Passed;
 		return (report, None);
 	}
-	match image.verify().and_then(|verified| {
+	let verified = match cancellation {
+		Some(cancellation) => image.verify_with_cancellation(cancellation),
+		None => image.verify(),
+	};
+	match verified.and_then(|verified| {
 		image.read_exact_at(0, &mut [])?;
 		Ok(verified)
 	}) {

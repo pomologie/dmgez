@@ -18,6 +18,7 @@ pub use analysis::{AnalysisReport, RunSpace, RunSpaceByEncoding, analyze};
 pub use container::{
 	ByteRange, ChecksumDeclaration, ContainerFormat, ContainerSummary, InspectionReport,
 	MAX_RUN_PAGE_SIZE, Run, RunEncoding, RunPage, RunSummary, RunWindow, SegmentId, inspect,
+	inspect_runs,
 };
 pub use diagnostic::{Diagnostic, DiagnosticDetail, ErrorCategory, Stage};
 pub use disk::{
@@ -34,4 +35,5 @@ pub use schema::{Capabilities, CheckStatus, Coverage, ReportOperation, SCHEMA_VE
 pub use verification::{
 	ChecksumChecks, VerificationMode, VerificationOutcome, VerificationReport, verify,
 	verify_filesystem, verify_filesystem_with_probe, verify_raw_filesystem,
+	verify_with_cancellation,
 };

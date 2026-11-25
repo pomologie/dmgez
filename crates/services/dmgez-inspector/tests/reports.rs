@@ -5,10 +5,10 @@ use std::io;
 use dmgez_inspector::{
 	CheckStatus, ChecksumDeclaration, DiagnosticDetail, ErrorCategory, MAX_RUN_PAGE_SIZE,
 	RunEncoding, RunWindow, SCHEMA_VERSION, Stage, VerificationMode, VerificationOutcome, inspect,
-	verify,
+	verify, verify_with_cancellation,
 };
 use dmgez_udif::{
-	Error,
+	Cancellation, Error,
 	reader::{Image, Limits, ReadAt},
 };
 use plist::Value;
@@ -75,6 +75,41 @@ fn scope_controls_the_verdict_and_leaves_unchecked_layers_explicit() {
 	let diagnostic = full.diagnostic.unwrap();
 	assert_eq!(diagnostic.stage, Stage::Filesystem);
 	assert_eq!(diagnostic.category, ErrorCategory::FeatureNotCompiled);
+}
+
+#[test]
+fn cancellation_before_admission_and_during_the_scan_is_never_reported_as_passed() {
+	struct CancelOnPayloadRead(Cancellation);
+	impl ReadAt for CancelOnPayloadRead {
+		fn len(&self) -> u64 {
+			UDZO.len() as u64
+		}
+
+		fn read_exact_at(&self, offset: u64, buffer: &mut [u8]) -> Result<(), Error> {
+			if offset < NATIVE_UDZO_FORK_BYTES && !buffer.is_empty() {
+				self.0.cancel();
+			}
+			UDZO.read_exact_at(offset, buffer)
+		}
+	}
+
+	for (cancel_before_start, stage) in [(true, Stage::Structure), (false, Stage::Payload)] {
+		let cancellation = Cancellation::default();
+		if cancel_before_start {
+			cancellation.cancel();
+		}
+		let report = verify_with_cancellation(
+			CancelOnPayloadRead(cancellation.clone()),
+			Limits::default(),
+			VerificationMode::Container,
+			&cancellation,
+		);
+		assert!(!report.passed());
+		assert!(matches!(report.cause(), Some(Error::Cancelled)));
+		let diagnostic = report.diagnostic.unwrap();
+		assert_eq!(diagnostic.category, ErrorCategory::Cancelled);
+		assert_eq!(diagnostic.stage, stage);
+	}
 }
 
 #[test]
