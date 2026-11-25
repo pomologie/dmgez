@@ -4,6 +4,7 @@ use super::{BINARY, MANIFEST_NAME};
 
 const IMAGE_BYTES: usize = 4 << 20;
 const SECTOR_BYTES: usize = 512;
+const COMPRESSIBLE_PAYLOAD_BYTES: usize = 128 << 10;
 const APM_VOLUME_START: usize = 32 << 10;
 const GPT_EDGE_BYTES: usize = 20 << 10;
 const APM_VOLUME_SLOT: usize = 2;
@@ -32,7 +33,23 @@ source_date_epoch = 1700000000
 
 #[test]
 fn builds_partitioned_project_images_and_exports_the_exact_hfsplus_volume() {
-	for format in ["udro", "udzo"] {
+	check_partitioned_projects(&[("udro", None), ("udzo", Some("zlib"))]);
+}
+
+#[cfg(feature = "lzfse")]
+#[test]
+fn builds_partitioned_ulfo_with_lzfse() {
+	check_partitioned_projects(&[("ulfo", Some("lzfse"))]);
+}
+
+#[cfg(feature = "lzma")]
+#[test]
+fn builds_partitioned_ulmo_with_lzma2() {
+	check_partitioned_projects(&[("ulmo", Some("lzma2"))]);
+}
+
+fn check_partitioned_projects(formats: &[(&str, Option<&str>)]) {
+	for &(format, encoding) in formats {
 		for (scheme, label, start, end, slot) in [
 			("apm", "Apm", APM_VOLUME_START, IMAGE_BYTES, APM_VOLUME_SLOT),
 			(
@@ -46,6 +63,7 @@ fn builds_partitioned_project_images_and_exports_the_exact_hfsplus_volume() {
 			let temp = tempfile::tempdir().unwrap();
 			let root = temp.path();
 			write_project(root);
+			fs::write(root.join(PAYLOAD), vec![b'z'; COMPRESSIBLE_PAYLOAD_BYTES]).unwrap();
 			let map = format!("image.partition={scheme}");
 			let codec = format!("image.format={format}");
 			let build = ["build", MANIFEST_NAME, "--set", &map, "--set", &codec];
@@ -60,6 +78,12 @@ fn builds_partitioned_project_images_and_exports_the_exact_hfsplus_volume() {
 			let report = cli(root, &["inspect", IMAGE_NAME, "--partitions", "--json"]);
 			let report: serde_json::Value = serde_json::from_str(&report).unwrap();
 			assert_eq!(report["disk"]["scheme"], scheme);
+			if let Some(encoding) = encoding {
+				assert!(
+					report["container"]["runs"][encoding].as_u64().unwrap() > 0,
+					"{scheme} {format} emitted no {encoding} runs"
+				);
+			}
 			let volume = &report["disk"]["partitions"][slot - 1];
 			assert_eq!(volume["id"]["slot"], slot);
 			assert_eq!(volume["logical"]["offset_bytes"], start.to_string());

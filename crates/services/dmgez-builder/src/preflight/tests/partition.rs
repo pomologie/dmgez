@@ -35,13 +35,44 @@ fn partition_admission_is_feature_gated_and_uses_the_outer_disk_geometry() {
 			Err(PreflightError::PartitionGeometry)
 		));
 	}
-	let mut unsupported = planned;
-	for format in [ImageFormat::Udrw, ImageFormat::Ulfo, ImageFormat::Ulmo] {
-		unsupported.image.format = format;
-		assert!(matches!(
-			preflight(&unsupported, options()),
-			Err(PreflightError::PartitionFormat { partition: Partition::Gpt, format: actual })
-				if actual == format
-		));
+	let mut raw_backed = planned;
+	raw_backed.image.format = ImageFormat::Udrw;
+	assert!(matches!(
+		preflight(&raw_backed, options()),
+		Err(PreflightError::PartitionFormat {
+			partition: Partition::Gpt,
+			format: ImageFormat::Udrw,
+		})
+	));
+}
+
+#[cfg(feature = "partition-write")]
+#[test]
+fn partitioned_modern_codecs_require_their_own_features() {
+	for (format, codec, profile, compiled) in [
+		(
+			ImageFormat::Ulfo,
+			BuildFeature::Lzfse,
+			Profile::Ulfo,
+			cfg!(feature = "lzfse"),
+		),
+		(
+			ImageFormat::Ulmo,
+			BuildFeature::Lzma,
+			Profile::Ulmo,
+			cfg!(feature = "lzma"),
+		),
+	] {
+		let mut plan = project("partition = 'gpt'\nsize = '4MiB'\n");
+		plan.image.format = format;
+		let result = preflight(&plan, options());
+		if compiled {
+			assert_eq!(result.unwrap().write_options().profile, profile);
+		} else {
+			assert!(matches!(
+				result,
+				Err(PreflightError::FeatureNotCompiled(feature)) if feature == codec
+			));
+		}
 	}
 }

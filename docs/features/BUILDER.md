@@ -21,11 +21,11 @@ With `finder-write` enabled, `hidden` and `hide_extension` apply to file, direct
 
 ### Write an APM or GPT disk layout
 
-Compose the HFS+ CLI with `--features partition-write`, then set `partition = "apm"` or `partition = "gpt"` under `[image]` in `dmg.toml`. Both profiles place one sealed HFS+ or HFSX volume within a single-table UDRO or UDZO image. The default remains `partition = "none"`.
+Compose the HFS+ CLI with `--features partition-write`, then set `partition = "apm"` or `partition = "gpt"` under `[image]` in `dmg.toml`. Both profiles place one sealed HFS+ or HFSX volume within a single-table UDRO or UDZO image. Add `lzfse` to the composition features for ULFO or `lzma` for ULMO. The default remains `partition = "none"`.
 
 `image.size` describes the entire logical disk. The filesystem planner subtracts the map reservations from that size and applies `free_space` within the volume. The dry run reports the selected map and whole disk size. APM reserves 64 sectors before the volume. GPT reserves 40 sectors at each end and derives reproducible identifiers from the sealed volume bytes. Map generation uses the qualified APM and GPT libraries. [Partition build tests](../../apps/dmgez-cli/tests/project_build/partitions.rs)
 
-On arm64 macOS 14.7.2, Apple’s `hdiutil verify -nocache` and `hdiutil pmap` accepted freshly built APM and GPT images in both UDRO and UDZO. Apple’s UDRW export matched dmgez’s whole logical disk export. The volume bytes also matched a separate partitionless UDRW build from the same project. [Native oracle in the project test](../../apps/dmgez-cli/tests/project_build/partitions.rs)
+On arm64 macOS 14.7.2, Apple’s `hdiutil verify -nocache` and `hdiutil pmap` accepted freshly built APM and GPT images in UDRO, UDZO, ULFO and ULMO. The test checks that compressed images contain a run in the selected codec. Apple’s UDRW export matched dmgez’s whole logical disk export. The volume bytes also matched a separate partitionless UDRW build from the same project. [Native oracle in the project test](../../apps/dmgez-cli/tests/project_build/partitions.rs)
 
 ### Import one AppleDouble sidecar
 

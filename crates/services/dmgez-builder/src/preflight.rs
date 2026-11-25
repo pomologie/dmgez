@@ -141,7 +141,7 @@ pub enum PreflightError {
 	Format(ImageFormat),
 	#[error("unsupported partition layout: {0:?}")]
 	Partition(Partition),
-	#[error("partition layout {partition:?} requires UDRO or UDZO, received {format:?}")]
+	#[error("partition layout {partition:?} does not support {format:?} output")]
 	PartitionFormat {
 		partition: Partition,
 		format: ImageFormat,

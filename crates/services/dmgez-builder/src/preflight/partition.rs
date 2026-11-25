@@ -20,7 +20,10 @@ pub(super) fn partition_layout(
 			BuildFeature::PartitionWrite,
 		));
 	}
-	if !matches!(format, ImageFormat::Udro | ImageFormat::Udzo) {
+	if !matches!(
+		format,
+		ImageFormat::Udro | ImageFormat::Udzo | ImageFormat::Ulfo | ImageFormat::Ulmo
+	) {
 		return Err(PreflightError::PartitionFormat { partition, format });
 	}
 	Ok(layout)
