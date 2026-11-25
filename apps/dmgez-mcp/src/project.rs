@@ -8,8 +8,14 @@ use std::{
 use dmgez_config::{ConfigError, Project};
 use dmgez_core::source::{CapturedFile, SourceError};
 use rmcp::schemars::{self, JsonSchema};
-use rustix::fs::{self, Mode, OFlags};
+use rustix::fs::{self, AtFlags, FileType, Mode, OFlags, Stat};
 use serde::Serialize;
+
+mod list;
+mod read;
+
+pub(super) use list::{Listing, MAX_DIRECTORY_ENTRIES, MAX_PAGE_SIZE};
+pub(super) use read::Reading;
 
 pub(super) const MAX_PROJECT_BYTES: usize = 1 << 20;
 pub(super) const MAX_FILE_NAME_BYTES: usize = 255;
@@ -67,33 +73,32 @@ impl ProjectRoot {
 	}
 
 	pub(super) fn validate(&self, file_name: &str) -> Validation {
-		match self
-			.read(file_name)
-			.and_then(|input| Project::parse(&input).map_err(config_issue))
-		{
-			Ok(project) => Validation::Valid {
+		match self.parse_manifest(file_name) {
+			Ok((project, _)) => Validation::Valid {
 				content_entries: project.contents.len(),
 			},
 			Err(issue) => Validation::Invalid { issue },
 		}
 	}
 
-	fn read(&self, file_name: &str) -> Result<String, Issue> {
-		let path = Path::new(file_name);
-		if file_name.len() > MAX_FILE_NAME_BYTES
-			|| file_name.contains(FORBIDDEN_FILE_NAME)
-			|| file_name.chars().any(char::is_control)
-			|| path.extension() != Some(FILE_EXTENSION.as_ref())
-		{
-			return Err(Issue::InvalidFileName);
+	fn parse_manifest(&self, file_name: &str) -> Result<(Project, String), Issue> {
+		let input = self.read_manifest(file_name)?;
+		let project = Project::parse(&input).map_err(config_issue)?;
+		Ok((project, input))
+	}
+
+	fn read_manifest(&self, file_name: &str) -> Result<String, Issue> {
+		let path = project_name(file_name).ok_or(Issue::InvalidFileName)?;
+		let named = fs::statat(&self.0, path, AtFlags::SYMLINK_NOFOLLOW)
+			.map_err(|_| Issue::ProjectUnavailable)?;
+		if !is_direct_manifest(&named) {
+			return Err(Issue::ProjectUnavailable);
 		}
 		let file = fs::openat(&self.0, path, FILE_FLAGS, Mode::empty())
 			.map_err(|_| Issue::ProjectUnavailable)?;
-		if fs::fstat(&file)
-			.map_err(|_| Issue::ProjectUnavailable)?
-			.st_nlink != 1
-		{
-			return Err(Issue::ProjectUnavailable);
+		let held = fs::fstat(&file).map_err(|_| Issue::ProjectUnavailable)?;
+		if !same_observation(&named, &held) {
+			return Err(Issue::ProjectChanged);
 		}
 		let captured = CapturedFile::new(File::from(file)).map_err(source_issue)?;
 		let byte_count = usize::try_from(captured.len())
@@ -104,8 +109,46 @@ impl ProjectRoot {
 		captured
 			.read_exact_at(0, &mut bytes)
 			.map_err(source_issue)?;
+		let observed = fs::statat(&self.0, path, AtFlags::SYMLINK_NOFOLLOW).map_err(|error| {
+			if error == rustix::io::Errno::NOENT {
+				Issue::ProjectChanged
+			} else {
+				Issue::ProjectUnavailable
+			}
+		})?;
+		if !same_observation(&held, &observed) {
+			return Err(Issue::ProjectChanged);
+		}
 		String::from_utf8(bytes).map_err(|_| Issue::InvalidUtf8)
 	}
+}
+
+fn project_name(file_name: &str) -> Option<&Path> {
+	let path = Path::new(file_name);
+	if file_name.len() > MAX_FILE_NAME_BYTES
+		|| file_name.contains(FORBIDDEN_FILE_NAME)
+		|| file_name.chars().any(char::is_control)
+		|| path.extension() != Some(FILE_EXTENSION.as_ref())
+	{
+		return None;
+	}
+	Some(path)
+}
+
+fn is_direct_manifest(stat: &Stat) -> bool {
+	FileType::from_raw_mode(stat.st_mode) == FileType::RegularFile && stat.st_nlink == 1
+}
+
+fn same_observation(first: &Stat, second: &Stat) -> bool {
+	first.st_dev == second.st_dev
+		&& first.st_ino == second.st_ino
+		&& first.st_mode == second.st_mode
+		&& first.st_nlink == second.st_nlink
+		&& first.st_size == second.st_size
+		&& first.st_mtime == second.st_mtime
+		&& first.st_mtime_nsec == second.st_mtime_nsec
+		&& first.st_ctime == second.st_ctime
+		&& first.st_ctime_nsec == second.st_ctime_nsec
 }
 
 fn source_issue(error: SourceError) -> Issue {

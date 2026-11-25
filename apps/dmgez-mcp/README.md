@@ -1,17 +1,21 @@
 # dmgez-mcp
 
-`dmgez-mcp` is a separate local stdio server for MCP clients. It uses the shared dmgez TOML parser to validate project manifests on macOS and Linux.
+`dmgez-mcp` is a separate local stdio server for MCP clients on macOS and Linux. It lists project candidates, reads validated manifest summaries, and validates manifests with the shared dmgez TOML parser.
 
 ```sh
 cargo build --locked -p dmgez-mcp
 target/debug/dmgez-mcp --project-root "$(pwd -P)"
 ```
 
-Configure the client to launch the binary with `--project-root` and the physical path of the directory you authorize. The server holds that directory open for the session. `project_validate` takes `file_name`, a single `.toml` name immediately inside the directory. It rejects absolute paths, subdirectories, symlinks, multiply linked files, and nonregular files. Manifest paths such as source assets and output destinations are parsed as settings without being opened. The response contains a versioned status, a content count for a valid manifest, or a diagnostic code for an invalid one. The server returns no document text or paths from the document.
+Configure the client to launch the binary with `--project-root` and the physical path of the directory you authorize. The server holds that directory open for the session. `project_read` and `project_validate` take `file_name`, a single `.toml` name immediately inside the directory. Both reject absolute paths, subdirectories, symlinks, multiply linked files, and nonregular files. Source and output paths are parsed as settings without being opened. Responses include schema versions and diagnostic codes.
 
-`capabilities` reports the tool and manifest schema versions and the request and file limits. The server accepts a 1 MiB manifest, 32 KiB stdio frame, 32 outstanding requests, and one validation at a time. The transport pauses reading while the output pipe has reached the outstanding request limit. The client can retry a `busy` validation response later. Both tools are read-only. The MCP capability list contains only the two implemented tools.
+`project_list` lists candidate manifest names in UTF-8 byte order from direct directory entries and their file types. Supply `page_size` from 1 through 16 or omit it for 16. Pass the returned `next_after` value as `after` for the next page. Each page observes the directory at request time. File additions or removals between calls can affect later pages. The scanner stops with `directory_scan_limit` if the directory exceeds its 4096-entry scan budget.
 
-The stdio integration tests cover part of D-OPS-04-T01, including the MCP initialization handshake, typed schemas, denied mutations, path confinement, untrusted text, and size limits. D-OPS-04-T02 depends on a future approved build tool. The current package serves on macOS and Linux. Windows support needs a separately qualified handle-relative file adapter.
+`project_read` returns the SHA-256 of the exact admitted file bytes, byte count, content count, image format, filesystem, and reproducibility setting. `project_validate` returns the content count for a valid manifest.
+
+`capabilities` reports schema versions and resource limits. The server accepts a 1 MiB manifest, a 32 KiB incoming stdio frame, 32 outstanding requests, and one project operation at a time. The transport pauses reading while the output pipe has reached the outstanding request limit. The client can retry a `busy` response later. All four tools are read-only.
+
+The stdio integration tests cover part of D-OPS-04-T01, including the MCP initialization handshake, typed schemas, denied mutations, path confinement, untrusted text, bounded listing, and revision changes. D-OPS-04-T02 depends on a future approved build tool. Windows support needs a separately qualified handle-relative file adapter.
 
 ```sh
 cargo test --locked -p dmgez-mcp

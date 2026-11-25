@@ -11,16 +11,19 @@ use rmcp::{
 use serde::{Deserialize, Serialize};
 use tokio::{runtime::Builder, sync::Semaphore};
 
-use crate::project::{MAX_FILE_NAME_BYTES, MAX_PROJECT_BYTES, ProjectRoot, Validation};
+use crate::project::{
+	Listing, MAX_DIRECTORY_ENTRIES, MAX_FILE_NAME_BYTES, MAX_PAGE_SIZE, MAX_PROJECT_BYTES,
+	ProjectRoot, Reading, Validation,
+};
 use crate::transport::{MAX_IN_FLIGHT, MAX_REQUEST_BYTES, stdio};
 
 const TOOL_SCHEMA_VERSION: u16 = 1;
-const MAX_VALIDATIONS: usize = 1;
+const MAX_PROJECT_OPERATIONS: usize = 1;
 
 #[derive(Parser)]
 #[command(version, about)]
 pub(super) struct Options {
-	/// Authorize validation of TOML files directly in this directory.
+	/// Authorize read-only access to TOML project files directly in this directory.
 	#[arg(long, value_name = "DIRECTORY")]
 	project_root: PathBuf,
 }
@@ -28,7 +31,7 @@ pub(super) struct Options {
 #[derive(Debug, Clone)]
 struct Server {
 	root: Arc<ProjectRoot>,
-	validation_slots: Arc<Semaphore>,
+	project_slots: Arc<Semaphore>,
 	tool_router: ToolRouter<Self>,
 }
 
@@ -43,26 +46,39 @@ struct CapabilitiesReport {
 	max_manifest_bytes: usize,
 	max_request_bytes: usize,
 	max_in_flight: usize,
+	max_directory_entries: usize,
+	max_project_page_size: usize,
 }
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
-struct ValidationRequest {
+struct ProjectNameRequest {
 	/// TOML file name relative to the configured project root.
 	#[schemars(length(min = 1, max = MAX_FILE_NAME_BYTES))]
 	file_name: String,
 }
 
+#[derive(Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct ProjectListRequest {
+	/// Continue strictly after this file name from the prior page.
+	#[schemars(length(min = 1, max = MAX_FILE_NAME_BYTES))]
+	after: Option<String>,
+	/// Return at most this many candidate project names. Defaults to the maximum.
+	#[schemars(range(min = 1, max = MAX_PAGE_SIZE))]
+	page_size: Option<usize>,
+}
+
 #[derive(Serialize, JsonSchema)]
-struct ValidationReport {
+struct ProjectReport<T> {
 	schema_version: u16,
-	outcome: Validation,
+	outcome: T,
 }
 
 #[tool_router]
 impl Server {
 	#[tool(annotations(read_only_hint = true, open_world_hint = false))]
-	/// Return the MCP tool schema version and project validation limits.
+	/// Return the MCP tool schema version and project operation limits.
 	fn capabilities(&self, _: Parameters<CapabilitiesRequest>) -> Json<CapabilitiesReport> {
 		Json(CapabilitiesReport {
 			schema_version: TOOL_SCHEMA_VERSION,
@@ -70,6 +86,8 @@ impl Server {
 			max_manifest_bytes: MAX_PROJECT_BYTES,
 			max_request_bytes: MAX_REQUEST_BYTES,
 			max_in_flight: MAX_IN_FLIGHT,
+			max_directory_entries: MAX_DIRECTORY_ENTRIES,
+			max_project_page_size: MAX_PAGE_SIZE,
 		})
 	}
 
@@ -77,21 +95,56 @@ impl Server {
 	/// Validate a project manifest in the configured directory. Only the TOML file is read.
 	async fn project_validate(
 		&self,
-		Parameters(request): Parameters<ValidationRequest>,
-	) -> Result<Json<ValidationReport>, ErrorData> {
-		let outcome = match self.validation_slots.clone().try_acquire_owned() {
+		Parameters(request): Parameters<ProjectNameRequest>,
+	) -> Result<Json<ProjectReport<Validation>>, ErrorData> {
+		self.project_operation(Validation::Busy, move |root| {
+			root.validate(&request.file_name)
+		})
+		.await
+	}
+
+	#[tool(annotations(read_only_hint = true, open_world_hint = false))]
+	/// Read a validated manifest summary and the SHA-256 revision of the exact file bytes.
+	async fn project_read(
+		&self,
+		Parameters(request): Parameters<ProjectNameRequest>,
+	) -> Result<Json<ProjectReport<Reading>>, ErrorData> {
+		self.project_operation(Reading::Busy, move |root| root.read(&request.file_name))
+			.await
+	}
+
+	#[tool(annotations(read_only_hint = true, open_world_hint = false))]
+	/// List candidate manifest names directly in the configured directory, in byte order.
+	async fn project_list(
+		&self,
+		Parameters(request): Parameters<ProjectListRequest>,
+	) -> Result<Json<ProjectReport<Listing>>, ErrorData> {
+		self.project_operation(Listing::Busy, move |root| {
+			root.list(request.after.as_deref(), request.page_size)
+		})
+		.await
+	}
+}
+
+impl Server {
+	async fn project_operation<T: Send + 'static>(
+		&self,
+		busy: T,
+		operation: impl FnOnce(&ProjectRoot) -> T + Send + 'static,
+	) -> Result<Json<ProjectReport<T>>, ErrorData> {
+		let outcome = match self.project_slots.clone().try_acquire_owned() {
 			Ok(permit) => {
 				let root = self.root.clone();
 				tokio::task::spawn_blocking(move || {
 					let _permit = permit;
-					root.validate(&request.file_name)
+					operation(&root)
 				})
 				.await
-				.map_err(|_| ErrorData::internal_error("validation worker failed", None))?
+				.map_err(|_| ErrorData::internal_error("project worker failed", None))?
 			}
-			Err(_) => Validation::Busy,
+			Err(_) => busy,
 		};
-		Ok(Json(ValidationReport {
+		Ok(Json(ProjectReport {
 			schema_version: TOOL_SCHEMA_VERSION,
 			outcome,
 		}))
@@ -113,7 +166,7 @@ impl ServerHandler for Server {
 pub(super) fn run(options: Options) -> Result<(), Box<dyn std::error::Error>> {
 	let server = Server {
 		root: Arc::new(ProjectRoot::open(&options.project_root)?),
-		validation_slots: Arc::new(Semaphore::new(MAX_VALIDATIONS)),
+		project_slots: Arc::new(Semaphore::new(MAX_PROJECT_OPERATIONS)),
 		tool_router: Server::tool_router(),
 	};
 	let runtime = Builder::new_current_thread().enable_time().build()?;

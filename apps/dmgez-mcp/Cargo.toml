@@ -12,6 +12,9 @@ description = "Local MCP tools for dmgez projects"
 dmgez-config.workspace = true
 dmgez-core = { workspace = true, features = ["source"] }
 
+# Hashes and checksums
+sha2.workspace = true
+
 # Serialization and configuration
 serde.workspace = true
 

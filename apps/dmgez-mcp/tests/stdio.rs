@@ -26,10 +26,14 @@ output = "../never-create.dmg"
 source = "../outside/never-open.app"
 "#;
 const VALID_FILE: &str = "project.toml";
+const VALID_PROJECT_SHA256: &str =
+	"e389ba9cb295f5c512b41a302a4da1f75ca18e31838d28ebae0774b3799783f7";
 const JSON_RPC: &str = "2.0";
 const REQUEST_PROTOCOL: &str = "2025-11-25";
 const CAPABILITIES: &str = "capabilities";
 const PROJECT_VALIDATE: &str = "project_validate";
+const PROJECT_READ: &str = "project_read";
+const PROJECT_LIST: &str = "project_list";
 const TOOLS_CALL: &str = "tools/call";
 const TOOLS_LIST: &str = "tools/list";
 const PING: &str = "ping";
@@ -46,7 +50,14 @@ fn serves_only_typed_read_only_tools_and_uses_the_shared_project_parser() {
 	let mut client = Client::start(&root);
 	let listing = client.call(TOOLS_LIST, json!({}));
 	let tools = listing["result"]["tools"].as_array().unwrap();
-	assert_eq!(tools.len(), 2);
+	let names = tools
+		.iter()
+		.map(|tool| tool["name"].as_str().unwrap())
+		.collect::<BTreeSet<_>>();
+	assert_eq!(
+		names,
+		BTreeSet::from([CAPABILITIES, PROJECT_LIST, PROJECT_READ, PROJECT_VALIDATE])
+	);
 	assert!(
 		tools
 			.iter()
@@ -71,6 +82,20 @@ fn serves_only_typed_read_only_tools_and_uses_the_shared_project_parser() {
 		client.validate(VALID_FILE),
 		json!({"status":"valid", "content_entries":1})
 	);
+	let read = client.tool(PROJECT_READ, json!({"file_name": VALID_FILE}));
+	assert_eq!(read["schema_version"], 1);
+	assert_eq!(
+		read["outcome"],
+		json!({
+			"status":"read",
+			"revision_sha256":VALID_PROJECT_SHA256,
+			"manifest_bytes":VALID_PROJECT.len(),
+			"content_entries":1,
+			"image_format":"udzo",
+			"filesystem":"hfsplus",
+			"reproducible":false,
+		}),
+	);
 	assert_eq!(
 		client.validate("wrong-version.toml")["issue"],
 		json!({"code":"unsupported_schema_version", "version":2})
@@ -78,11 +103,16 @@ fn serves_only_typed_read_only_tools_and_uses_the_shared_project_parser() {
 	let invalid = client.validate("invalid.toml");
 	assert_eq!(invalid["issue"]["code"], "invalid_toml");
 	assert!(!invalid.to_string().contains("confidential test sentinel"));
+	assert_eq!(client.read("invalid.toml")["issue"], invalid["issue"]);
 	assert!(!root.join("../never-create.dmg").exists());
 	assert_eq!(
 		fs::read_to_string(root.join(VALID_FILE)).unwrap(),
 		VALID_PROJECT
 	);
+	fs::write(root.join(VALID_FILE), format!("{VALID_PROJECT}\n# note\n")).unwrap();
+	let edited = client.read(VALID_FILE);
+	assert_eq!(edited["content_entries"], 1);
+	assert_ne!(edited["revision_sha256"], VALID_PROJECT_SHA256);
 	client.finish();
 }
 
@@ -117,13 +147,22 @@ fn rejects_unconfined_files_and_arguments_before_reading() {
 			client.validate(file_name)["issue"]["code"],
 			"invalid_file_name"
 		);
+		assert_eq!(client.read(file_name)["issue"]["code"], "invalid_file_name");
 	}
 	for file_name in ["alias.toml", "hardlink.toml", "folder.toml", "missing.toml"] {
 		assert_eq!(
 			client.validate(file_name)["issue"]["code"],
 			"project_unavailable"
 		);
+		assert_eq!(
+			client.read(file_name)["issue"]["code"],
+			"project_unavailable"
+		);
 	}
+	assert_eq!(
+		client.list(json!({})),
+		json!({"status":"listed", "file_names":[], "next_after":null}),
+	);
 	let malformed = client.call(
 		TOOLS_CALL,
 		json!({
@@ -157,6 +196,10 @@ fn pins_the_startup_directory_and_enforces_request_and_file_limits() {
 		client.validate("large.toml")["issue"]["code"],
 		"project_too_large"
 	);
+	assert_eq!(
+		client.read("large.toml")["issue"]["code"],
+		"project_too_large"
+	);
 
 	let oversize = request(
 		501,
@@ -172,7 +215,92 @@ fn pins_the_startup_directory_and_enforces_request_and_file_limits() {
 	fs::rename(&root, base.join("admitted")).unwrap();
 	fs::create_dir(&root).unwrap();
 	fs::write(root.join(VALID_FILE), "schema_version = 2").unwrap();
+	fs::write(root.join("replacement.toml"), VALID_PROJECT).unwrap();
 	assert_eq!(client.validate(VALID_FILE)["status"], "valid");
+	assert_eq!(
+		client.read(VALID_FILE)["revision_sha256"],
+		VALID_PROJECT_SHA256
+	);
+	assert_eq!(
+		client.list(json!({}))["file_names"],
+		json!(["large.toml", VALID_FILE])
+	);
+	client.finish();
+}
+
+#[test]
+fn lists_candidate_names_in_bounded_pages() {
+	let temp = tempfile::tempdir().unwrap();
+	let root = temp.path().canonicalize().unwrap();
+	for name in [
+		"third.toml",
+		"first.toml",
+		"second.toml",
+		"ignored.txt",
+		"x\n.toml",
+	] {
+		fs::write(root.join(name), "malformed candidate [=").unwrap();
+	}
+	#[cfg(target_os = "linux")]
+	{
+		use std::{ffi::OsStr, os::unix::ffi::OsStrExt};
+		fs::write(root.join(OsStr::from_bytes(b"x\xff.toml")), VALID_PROJECT).unwrap();
+	}
+	let mut client = Client::start(&root);
+	let first = client.list(json!({"page_size":2}));
+	assert_eq!(
+		first,
+		json!({
+			"status":"listed",
+			"file_names":["first.toml", "second.toml"],
+			"next_after":"second.toml",
+		}),
+	);
+	assert_eq!(
+		client.list(json!({"after":first["next_after"]})),
+		json!({"status":"listed", "file_names":["third.toml"], "next_after":null}),
+	);
+	assert_eq!(
+		client.list(json!({"after":"../first.toml"}))["issue"]["code"],
+		"invalid_cursor"
+	);
+	let limits = client.tool(CAPABILITIES, json!({}));
+	for invalid in [0, limits["max_project_page_size"].as_u64().unwrap() + 1] {
+		assert_eq!(
+			client.list(json!({"page_size":invalid}))["issue"]["code"],
+			"invalid_page_size"
+		);
+	}
+	client.finish();
+}
+
+#[test]
+fn bounds_listing_reply_bytes_and_total_directory_work() {
+	let temp = tempfile::tempdir().unwrap();
+	let root = temp.path().canonicalize().unwrap();
+	let mut client = Client::start(&root);
+	let limits = client.tool(CAPABILITIES, json!({}));
+	let max_page = limits["max_project_page_size"].as_u64().unwrap();
+	let max_frame = limits["max_request_bytes"].as_u64().unwrap() as usize;
+	for index in 0..=max_page {
+		let name = format!("{index:02}{}.toml", "\"".repeat(248));
+		fs::write(root.join(name), VALID_PROJECT).unwrap();
+	}
+	let page = client.call(TOOLS_CALL, json!({"name": PROJECT_LIST, "arguments": {}}));
+	let outcome = &page["result"]["structuredContent"]["outcome"];
+	assert_eq!(
+		outcome["file_names"].as_array().unwrap().len() as u64,
+		max_page
+	);
+	assert!(outcome["next_after"].is_string());
+	assert!(serde_json::to_vec(&page).unwrap().len() < max_frame);
+	for index in 0..limits["max_directory_entries"].as_u64().unwrap() {
+		File::create(root.join(format!("skipped-{index}.txt"))).unwrap();
+	}
+	assert_eq!(
+		client.list(json!({}))["issue"]["code"],
+		"directory_scan_limit"
+	);
 	client.finish();
 }
 
@@ -243,6 +371,14 @@ impl Client {
 
 	fn validate(&mut self, file_name: &str) -> Value {
 		self.tool(PROJECT_VALIDATE, json!({"file_name":file_name}))["outcome"].clone()
+	}
+
+	fn read(&mut self, file_name: &str) -> Value {
+		self.tool(PROJECT_READ, json!({"file_name":file_name}))["outcome"].clone()
+	}
+
+	fn list(&mut self, params: Value) -> Value {
+		self.tool(PROJECT_LIST, params)["outcome"].clone()
 	}
 
 	fn tool(&mut self, name: &str, arguments: Value) -> Value {
