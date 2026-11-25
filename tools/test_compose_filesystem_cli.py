@@ -142,6 +142,20 @@ class DesktopCompositionTests(unittest.TestCase):
         self.assertTrue(manifest["dependencies"][compose.READ_ADAPTER]["optional"])
         self.assertEqual(manifest["dev-dependencies"], base["dev-dependencies"])
 
+    def test_desktop_project_build_uses_the_composed_runtime(self):
+        original = (compose.ROOT / compose.DESKTOP / compose.MANIFEST).read_text(encoding="utf-8")
+        runtime = (compose.ROOT / compose.RUNTIME / compose.MANIFEST).read_text(encoding="utf-8")
+        manifest = tomllib.loads(compose.compose_desktop_manifest(original, build=True))
+        self.assertEqual(manifest["features"][compose.PROJECT_BUILD_FEATURE], [
+            "dmgez-runtime/project-build", "dmgez-runtime/finder-write", "dmgez-runtime/hfsplus-parallel",
+        ])
+        self.assertNotIn(compose.ADAPTER, manifest["dependencies"])
+        features = tomllib.loads(compose.compose_runtime_manifest(runtime, reader=True, build=True, apfs=False))[
+            "features"
+        ]
+        self.assertIn(f"{compose.ADAPTER}?/finder-write", features["finder-write"])
+        self.assertEqual(features["hfsplus-parallel"], [f"{compose.ADAPTER}/parallel"])
+
     def test_resolves_and_tests_only_the_desktop_reader_on_each_host(self):
         root = Path("local")
         args = ["compose_filesystem_cli.py", "--hfsplus", str(root), "--desktop", "--test"]
@@ -165,6 +179,21 @@ class DesktopCompositionTests(unittest.TestCase):
                 self.assertTrue(options.test)
                 self.assertEqual(options.target_dir.name, "hfsplus-desktop")
                 cli.assert_not_called()
+
+    def test_qualified_project_build_feature_resolves_desktop_writer(self):
+        root = Path("local")
+        feature = f"{compose.DESKTOP_PACKAGE}/{compose.PROJECT_BUILD_FEATURE}"
+        args = ["compose_filesystem_cli.py", "--hfsplus", str(root), "--desktop", "--features", feature]
+        packages = {compose.HFSPLUS_READER: root, compose.HFSPLUS_BUILDER: root}
+        with (
+            patch.object(sys, "argv", args),
+            patch.object(compose, "resolve_hfsplus", return_value=packages) as resolve,
+            patch.object(compose, "prepare_workspace"),
+            patch.object(compose, "resolve_lock"),
+            patch.object(compose, "run_desktop"),
+        ):
+            self.assertEqual(compose.main(), 0)
+            resolve.assert_called_once_with(root, None, reader=True, build=True)
 
     def test_test_mode_selects_the_desktop_binary(self):
         directory = Path.cwd()

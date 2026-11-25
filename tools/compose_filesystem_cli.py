@@ -87,8 +87,9 @@ IMAGE_EDIT_FEATURE = "image-edit"
 IMAGE_EDIT_TEST = "image_edit_cli"
 SOURCE_DIRS = ("apps", "crates", "tests", "third_party")
 RUNTIME = Path("crates/runtime/dmgez-runtime")
+PROJECT_BUILD_FEATURE = "project-build"
 PROJECT_FEATURES = {
-    "project-build": [
+    PROJECT_BUILD_FEATURE: [
         "dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config", "dep:dmgez-udif",
         "dep:serde", "dep:serde_json", "dmgez-runtime/project-build",
     ],
@@ -123,8 +124,8 @@ def load_toml(path):
         return tomllib.load(stream)
 
 
-def has_cli_feature(options, name):
-    names = {name, f"{CLI_PACKAGE}/{name}"}
+def has_feature(options, name, package=CLI_PACKAGE):
+    names = {name, f"{package}/{name}"}
     return any(names.intersection(argument.replace(",", " ").split()) for argument in options.features)
 
 
@@ -263,9 +264,9 @@ def compose_cli_manifest(manifest, reader, build, apfs):
     return before_features + feature_section + feature_text + dependency_section + dependencies
 
 
-def compose_desktop_manifest(manifest):
+def compose_desktop_manifest(manifest, *, build=False):
     parsed = tomllib.loads(manifest)
-    if ({READ_FEATURE, ACTUAL_PREVIEW_FEATURE}.intersection(parsed.get("features", {}))
+    if ({READ_FEATURE, ACTUAL_PREVIEW_FEATURE, PROJECT_BUILD_FEATURE}.intersection(parsed.get("features", {}))
             or READ_ADAPTER in parsed["dependencies"] or "dmgez-vfs" in parsed["dependencies"]):
         raise ValueError("desktop manifest already has filesystem composition settings")
     feature_section = "\n[features]\n"
@@ -276,6 +277,11 @@ def compose_desktop_manifest(manifest):
     read = render_feature(READ_FEATURE, [f"dep:{READ_ADAPTER}", "dep:dmgez-vfs"])
     preview = render_feature(ACTUAL_PREVIEW_FEATURE, [READ_FEATURE, "dmgez-runtime/actual-preview"])
     group = f"# HFS+ volume access\n{read}\n{preview}\n"
+    if build:
+        project = render_feature(PROJECT_BUILD_FEATURE, [
+            "dmgez-runtime/project-build", "dmgez-runtime/finder-write", "dmgez-runtime/hfsplus-parallel",
+        ])
+        group += f"\n# HFS+ project build\n{project}\n"
     if feature_section in manifest:
         manifest = manifest.replace(feature_section, feature_section + group, 1)
     else:
@@ -298,7 +304,7 @@ def compose_runtime_manifest(manifest, *, reader, build, apfs):
     if build:
         adapters.append(ADAPTER)
         features.update({
-            "project-build": [
+            PROJECT_BUILD_FEATURE: [
                 "project-input", "dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-udif", "dmgez-udif/write",
             ],
             PROJECT_EDIT_FEATURE: [
@@ -308,7 +314,8 @@ def compose_runtime_manifest(manifest, *, reader, build, apfs):
                 "project-build", "image", "stage-verification", "dep:dmgez-signing", "dep:sha2", "dep:tempfile",
                 "dmgez-core/source",
             ],
-            "finder-write": ["dmgez-builder?/finder-write"],
+            "finder-write": ["dmgez-builder?/finder-write", f"{ADAPTER}?/finder-write"],
+            "hfsplus-parallel": [f"{ADAPTER}/parallel"],
         })
     if reader:
         adapters.append(READ_ADAPTER)
@@ -380,7 +387,7 @@ def prepare_workspace(directory, packages, *, desktop=False):
         manifest, reader=reader, build=build, apfs=apfs,
     ))
     if desktop:
-        replace_manifest(directory, DESKTOP, compose_desktop_manifest)
+        replace_manifest(directory, DESKTOP, lambda manifest: compose_desktop_manifest(manifest, build=build))
     else:
         replace_manifest(directory, CLI, lambda manifest: compose_cli_manifest(
             manifest,
@@ -437,39 +444,39 @@ def run_cli(cargo, directory, options, packages):
             fixtures = packages[APFS_READER] / "tests" / "fixtures"
             environment.setdefault(APFS_FIXTURES_ENV, str(fixtures))
             command.extend(("--test", APFS_VERIFY_TEST))
-            if has_cli_feature(options, APFS_EXTRACT_FEATURE):
+            if has_feature(options, APFS_EXTRACT_FEATURE):
                 command.extend(("--test", APFS_EXTRACT_TEST))
         browse = APFS_READER in packages or any(
-            has_cli_feature(options, name) for name in READ_PROFILES
+            has_feature(options, name) for name in READ_PROFILES
         )
         if browse:
             command.extend(("--test", READ_TEST))
-            if any(has_cli_feature(options, name) for name in (DIFF_FEATURE, DIFF_HASH_FEATURE, FINDER_DIFF_FEATURE)):
+            if any(has_feature(options, name) for name in (DIFF_FEATURE, DIFF_HASH_FEATURE, FINDER_DIFF_FEATURE)):
                 command.extend(("--test", SEMANTIC_DIFF_TEST))
         if HFSPLUS_READER in packages:
             fixtures = packages[HFSPLUS_READER] / "tests" / "fixtures"
             environment.setdefault(HFSPLUS_FIXTURES_ENV, str(fixtures))
-            if has_cli_feature(options, VERIFY_FEATURE):
+            if has_feature(options, VERIFY_FEATURE):
                 command.extend(("--test", VERIFY_TEST))
-            if any(has_cli_feature(options, name) for name in READ_PROFILES):
+            if any(has_feature(options, name) for name in READ_PROFILES):
                 command.extend(("--test", DECMPFS_TEST))
-            if has_cli_feature(options, EXTRACT_FEATURE):
+            if has_feature(options, EXTRACT_FEATURE):
                 command.extend(("--test", EXTRACT_TEST))
-            if has_cli_feature(options, ACTUAL_PREVIEW_FEATURE):
+            if has_feature(options, ACTUAL_PREVIEW_FEATURE):
                 command.extend(("--test", PREVIEW_TEST))
-        if any(has_cli_feature(options, name) for name in (INSTALL_FEATURE, APFS_INSTALL_FEATURE)):
+        if any(has_feature(options, name) for name in (INSTALL_FEATURE, APFS_INSTALL_FEATURE)):
             command.extend(("--test", INSTALL_TEST))
-        if has_cli_feature(options, MOUNT_WATCH_FEATURE):
+        if has_feature(options, MOUNT_WATCH_FEATURE):
             command.extend(("--test", MOUNT_TEST))
-        if has_cli_feature(options, INSTALLER_TEST_FEATURE):
+        if has_feature(options, INSTALLER_TEST_FEATURE):
             command.extend(("--test", INSTALLER_TEST))
         if HFSPLUS_BUILDER in packages:
             command.extend(("--test", CLI_TEST))
-            if has_cli_feature(options, PROJECT_EDIT_FEATURE):
+            if has_feature(options, PROJECT_EDIT_FEATURE):
                 command.extend(("--test", PROJECT_EDIT_TEST))
-            if has_cli_feature(options, IMAGE_EDIT_FEATURE):
+            if has_feature(options, IMAGE_EDIT_FEATURE):
                 command.extend(("--test", IMAGE_EDIT_TEST))
-            if has_cli_feature(options, PROJECT_RELEASE_FEATURE):
+            if has_feature(options, PROJECT_RELEASE_FEATURE):
                 command.extend(("--bin", CLI_BINARY))
             if sys.platform == "win32":
                 command.extend(("--test", WINDOWS_CLI_TEST))
@@ -522,7 +529,7 @@ def main():
         help="Cargo artifact directory (defaults to a target directory for the selected profile)",
     )
     parser.add_argument("--release", action="store_true", help="build the optimized binary")
-    parser.add_argument("--desktop", action="store_true", help="compose the desktop app with the HFS+ reader")
+    parser.add_argument("--desktop", action="store_true", help="compose the desktop app with the HFS+ reader and optional project-build")
     parser.add_argument("--test", action="store_true", help="run the selected composed app tests")
     parser.add_argument(
         "--fetch", action="store_true",
@@ -538,20 +545,20 @@ def main():
     if options.desktop and (not use_hfsplus or use_apfs):
         parser.error("desktop composition requires only an HFS+ package source")
     for feature in APFS_PROFILES:
-        if has_cli_feature(options, feature) and not use_apfs:
+        if has_feature(options, feature) and not use_apfs:
             parser.error(f"{feature} requires --apfs or --apfs-packages")
     for feature in (ACTUAL_PREVIEW_FEATURE, HFS_ANALYSIS_FEATURE, INSTALL_FEATURE, MOUNT_WATCH_FEATURE, PROJECT_EDIT_FEATURE, IMAGE_EDIT_FEATURE, PARTITION_WRITE_FEATURE):
-        if has_cli_feature(options, feature) and not use_hfsplus:
+        if has_feature(options, feature) and not use_hfsplus:
             parser.error(f"{feature} requires --hfsplus or --hfsplus-packages")
-    if use_apfs and not any(has_cli_feature(options, feature) for feature in APFS_PROFILES):
+    if use_apfs and not any(has_feature(options, feature) for feature in APFS_PROFILES):
         options.features.append(APFS_FEATURE)
     if options.target_dir is None:
         profile = "hfsplus-desktop" if options.desktop else "apfs-cli" if use_apfs else "hfsplus-cli"
         options.target_dir = ROOT / "target" / profile
-    explicit_read = any(has_cli_feature(options, name) for name in (*READ_PROFILES, VERIFY_FEATURE, MOUNT_WATCH_FEATURE)) or (
+    explicit_read = any(has_feature(options, name) for name in (*READ_PROFILES, VERIFY_FEATURE, MOUNT_WATCH_FEATURE)) or (
         use_hfsplus and (
-            has_cli_feature(options, INSTALLER_TEST_FEATURE) or
-            sys.platform == "darwin" and has_cli_feature(options, PROJECT_RELEASE_FEATURE)
+            has_feature(options, INSTALLER_TEST_FEATURE) or
+            sys.platform == "darwin" and has_feature(options, PROJECT_RELEASE_FEATURE)
         )
     )
     if sys.platform == "win32":
@@ -561,11 +568,14 @@ def main():
         parser.error("filesystem CLI composition requires a macOS, Linux, or Windows host")
 
     try:
-        image_edit = has_cli_feature(options, IMAGE_EDIT_FEATURE)
+        image_edit = has_feature(options, IMAGE_EDIT_FEATURE)
         reader = options.desktop or explicit_read or image_edit
-        build = not options.desktop and (image_edit or not reader or not options.no_default_features or any(
-            has_cli_feature(options, name) for name in ("build", *PROJECT_FEATURES, *FINDER_FEATURES)
-        ))
+        if options.desktop:
+            build = has_feature(options, PROJECT_BUILD_FEATURE, DESKTOP_PACKAGE)
+        else:
+            build = image_edit or not reader or not options.no_default_features or any(
+                has_feature(options, name) for name in ("build", *PROJECT_FEATURES, *FINDER_FEATURES)
+            )
         packages = {}
         if use_hfsplus:
             packages.update(resolve_hfsplus(

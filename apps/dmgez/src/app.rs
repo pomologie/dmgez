@@ -15,6 +15,8 @@ use crate::{import, inspector};
 mod image_tasks;
 #[cfg(test)]
 mod import_tests;
+#[cfg(feature = "project-build")]
+mod project_tasks;
 mod worker;
 
 use image_tasks::ImageCompletion;
@@ -36,11 +38,15 @@ pub(crate) struct App {
 	copy_name: String,
 	closing: bool,
 	error: Option<String>,
+	#[cfg(feature = "project-build")]
+	build: project_tasks::BuildPanel,
 }
 
 enum Pending {
 	Open,
 	Close,
+	#[cfg(feature = "project-build")]
+	OpenBuiltImage(PathBuf),
 }
 
 enum Completion {
@@ -54,6 +60,8 @@ enum Completion {
 		edits: Result<Vec<ProjectEdit>, import::Error>,
 	},
 	Image(ImageCompletion),
+	#[cfg(feature = "project-build")]
+	Build(project_tasks::BuildCompletion),
 	Cancelled,
 	Failed(document::Error),
 }
@@ -74,6 +82,8 @@ impl App {
 			copy_name: String::new(),
 			closing: false,
 			error: None,
+			#[cfg(feature = "project-build")]
+			build: project_tasks::BuildPanel::default(),
 		};
 		if let Some(path) = initial_path {
 			app.start(ctx, move || open_outcome(path));
@@ -110,6 +120,9 @@ impl App {
 						.as_ref()
 						.is_some_and(Cancellation::is_cancelled);
 					self.worker = None;
+					#[cfg(feature = "project-build")]
+					// Publication may have completed before the cancellation reached the worker.
+					let cancelled = cancelled && !matches!(result, Completion::Build(_));
 					if !cancelled {
 						self.finish(ctx, result);
 					}
@@ -117,6 +130,8 @@ impl App {
 				Err(TryRecvError::Empty) => {}
 				Err(TryRecvError::Disconnected) => {
 					self.worker = None;
+					#[cfg(feature = "project-build")]
+					self.build.clear_progress();
 					self.error = Some("The document task stopped before completing.".into());
 				}
 			}
@@ -125,10 +140,18 @@ impl App {
 
 	fn finish(&mut self, ctx: &Context, completion: Completion) {
 		match completion {
-			Completion::Opened(opened) => self.opened = Some(opened),
+			Completion::Opened(opened) => {
+				self.opened = Some(opened);
+				#[cfg(feature = "project-build")]
+				{
+					self.build = project_tasks::BuildPanel::default();
+				}
+			}
 			Completion::Cancelled => {}
 			Completion::Failed(error) => self.error = Some(error.to_string()),
 			Completion::Image(result) => self.finish_image(ctx, result),
+			#[cfg(feature = "project-build")]
+			Completion::Build(result) => self.build.finish(result),
 			Completion::Saved { path, revision } => {
 				if let Some(Opened {
 					document: Document::Project(project),
@@ -250,6 +273,8 @@ impl App {
 						if ui.button("Save copy…").clicked() {
 							self.open_save_dialog();
 						}
+						#[cfg(feature = "project-build")]
+						self.build_actions(ui);
 						if let Some(Opened {
 							document: Document::Project(project),
 							..
@@ -293,6 +318,8 @@ impl App {
 			if let Some(error) = &self.error {
 				ui.colored_label(ERROR, error);
 			}
+			#[cfg(feature = "project-build")]
+			self.show_build(ui);
 		});
 	}
 
@@ -311,6 +338,10 @@ impl App {
 			if discard {
 				match self.confirm.take() {
 					Some(Pending::Open) => self.choose(ctx),
+					#[cfg(feature = "project-build")]
+					Some(Pending::OpenBuiltImage(path)) => {
+						self.start(ctx, move || project_tasks::open_built_outcome(path));
+					}
 					Some(Pending::Close) => {
 						self.closing = true;
 						ctx.send_viewport_cmd(ViewportCommand::Close);
@@ -376,11 +407,16 @@ impl eframe::App for App {
 
 	fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
 		let ctx = ui.ctx().clone();
-		if !self.closing && ctx.input(|input| input.viewport().close_requested()) && self.is_dirty()
-		{
-			ctx.send_viewport_cmd(ViewportCommand::CancelClose);
-			self.confirm = Some(Pending::Close);
-			self.save_copy = false;
+		if !self.closing && ctx.input(|input| input.viewport().close_requested()) {
+			#[cfg(feature = "project-build")]
+			let waiting_for_build = self.cancel_build_for_close(&ctx);
+			#[cfg(not(feature = "project-build"))]
+			let waiting_for_build = false;
+			if !waiting_for_build && self.is_dirty() {
+				ctx.send_viewport_cmd(ViewportCommand::CancelClose);
+				self.confirm = Some(Pending::Close);
+				self.save_copy = false;
+			}
 		}
 		self.shortcuts(&ctx);
 		self.toolbar(ui);

@@ -15,7 +15,6 @@ use dmgez_builder::{
 		Availability, FilesystemProfile, FinderPlan, OutputIntent, OutputPlan, PreflightOptions,
 		ReleaseIntent, ReleasePlan,
 	},
-	progress::BuildProgress,
 };
 use dmgez_config::{ConfigError, ConfigOverride, ImageFormat, OverrideError, Project};
 use dmgez_hfsplus::{self as hfsplus, HfsImage, MetadataLoss, PreparedHfsBuild};
@@ -24,7 +23,11 @@ use thiserror::Error;
 
 use crate::project_input::{self, InputError};
 
+pub use dmgez_builder::progress::BuildProgress;
+
 const OVERWRITE_ASSIGNMENT: &str = "build.overwrite=true";
+const NEW_OUTPUT_ASSIGNMENT: &str = "build.overwrite=false";
+const OUTPUT_ASSIGNMENT: &str = "image.output=";
 
 /// Manifest selection and explicit overrides for the requested build.
 pub struct ProjectRequest<'source> {
@@ -55,6 +58,10 @@ pub enum BuildError {
 	RelativeWorkingDirectory,
 	#[error("project path has no parent directory")]
 	MissingProjectDirectory,
+	#[error("project snapshot directory must be absolute")]
+	RelativeProjectDirectory,
+	#[error("the selected output path is not valid Unicode")]
+	OutputPathEncoding,
 	#[error("build.overwrite was requested more than once")]
 	DuplicateOverwrite,
 	#[error(transparent)]
@@ -151,6 +158,38 @@ impl BuildProject {
 		}
 		let project =
 			Project::parse_with_overrides(&input, definitions, &overrides, working_directory)?;
+		Ok(Self {
+			project,
+			directory: directory.to_owned(),
+		})
+	}
+
+	/// Admit in-memory project text with its existing base directory.
+	///
+	/// Relative manifest paths are resolved under `directory`. A supplied
+	/// destination overrides the manifest output. Snapshot builds always
+	/// require a new destination.
+	///
+	/// # Errors
+	/// Returns an error for invalid project text, a relative base directory,
+	/// or a destination that cannot be represented in the project format.
+	pub fn from_snapshot(
+		source: &str,
+		directory: &Path,
+		destination: Option<&Path>,
+	) -> Result<Self, BuildError> {
+		if !directory.is_absolute() {
+			return Err(BuildError::RelativeProjectDirectory);
+		}
+		let mut overrides = vec![ConfigOverride::parse(NEW_OUTPUT_ASSIGNMENT)?];
+		if let Some(destination) = destination {
+			let literal = destination.to_str().ok_or(BuildError::OutputPathEncoding)?;
+			overrides.push(ConfigOverride::parse(&format!(
+				"{OUTPUT_ASSIGNMENT}{literal}"
+			))?);
+		}
+		let project =
+			Project::parse_with_overrides(source, &BTreeMap::new(), &overrides, directory)?;
 		Ok(Self {
 			project,
 			directory: directory.to_owned(),

@@ -54,6 +54,15 @@ pub(crate) fn open(path: PathBuf) -> Result<Opened, Error> {
 	if !is_project && !extension.eq_ignore_ascii_case(IMAGE_EXTENSION) {
 		return Err(Error::Extension);
 	}
+	open_document(path, is_project)
+}
+
+#[cfg(feature = "project-build")]
+pub(crate) fn open_built_image(path: PathBuf) -> Result<Opened, Error> {
+	open_document(path, false)
+}
+
+fn open_document(path: PathBuf, is_project: bool) -> Result<Opened, Error> {
 	let canonical_path = path.canonicalize()?;
 	if !fs::metadata(&canonical_path)?.is_file() {
 		return Err(Error::NotFile);
