@@ -70,7 +70,7 @@ def main():
                         help="use the serial profile without Finder store generation")
     parser.add_argument("--lzma", action="store_true", help="enable the optional ULMO codec")
     parser.add_argument("--volume-icon", action="store_true",
-                        help="enable prebuilt or PNG-set volume icons")
+                        help="enable volume icons and per-item ICNS icons")
     parser.add_argument("--badge-icons", action="store_true",
                         help="enable volume icons rendered from a PNG badge")
     options = parser.parse_args()

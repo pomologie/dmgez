@@ -51,7 +51,7 @@ python3 check_finder_background.py --dmgez /path/to/dmgez --hfsplus /path/to/hfs
 
 The native check verifies each image with Apple tools, runs the HFS+ filesystem checker, and mounts the image read-only. Core Foundation resolves each alias without opening UI or mounting another volume. The test checks the catalog IDs and exact static PNG or prebuilt TIFF bytes. ImageIO compares both TIFF representations to the source pixels, and AppKit confirms their logical sizes and selection at 1× and 2×. The prebuilt case uses native `tiffutil` to create its input. [Core Foundation resolution options](https://developer.apple.com/documentation/corefoundation/bookmark-data-resolution-options?changes=l_2&language=objc)
 
-Use `--volume-icon` with a prebuilt ICNS or a set of PNG representations configured relative to the project.
+Use `--volume-icon` with a prebuilt ICNS, a set of PNG representations, or a per-item ICNS configured relative to the project.
 
 ```toml
 [volume_icon]
@@ -71,6 +71,27 @@ The native PNG-set check uses Apple's Swift compiler and `iconutil`. It publishe
 
 ```sh
 python3 check_finder_volume_icon.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplus
+```
+
+Set `custom_icon` on a regular file or a folder. The compatibility suite checks the resource map, catalog flags, exact ICNS bytes, the invisible folder helper, and output preservation when the project or icon source changes.
+
+```toml
+[[contents]]
+source = "Document.txt"
+destination = "/Document.txt"
+custom_icon = "artwork/Document.icns"
+
+[[contents]]
+type = "directory"
+destination = "/Documentation"
+custom_icon = "artwork/Folder.icns"
+```
+
+On macOS, the first check builds and mounts a disposable image read-only and reads both icons through AppKit. The second creates and verifies ad-hoc signed fixtures and checks publication refusal.
+
+```sh
+python3 check_finder_item_icons.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplus
+python3 check_signed_item_icon.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplus
 ```
 
 Use `--badge-icons` to enable badged volume icons in the runner. A standalone composed CLI enables it with `--features badge-icons` during composition.
