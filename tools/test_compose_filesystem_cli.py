@@ -83,6 +83,27 @@ class ReleaseCompositionTests(unittest.TestCase):
 
 
 class WindowsCompositionTests(unittest.TestCase):
+    def test_fetch_preloads_the_checked_in_lockfile_before_composition(self):
+        root = Path("sibling hfsplus")
+        args = ["compose_hfsplus_cli.py", "--hfsplus", str(root), "--fetch", "--release"]
+        packages = {compose.HFSPLUS_BUILDER: root}
+        with (
+            patch.object(sys, "argv", args),
+            patch.object(sys, "platform", "win32"),
+            patch.object(compose, "resolve_hfsplus", return_value=packages),
+            patch.object(compose.subprocess, "run") as run,
+            patch.object(compose, "prepare_workspace") as prepare,
+            patch.object(compose, "resolve_lock") as resolve_lock,
+            patch.object(compose, "run_cli"),
+        ):
+            prepare.side_effect = lambda *_: run.assert_called_once()
+            self.assertEqual(compose.main(), 0)
+
+        cargo, workspace, resolved = resolve_lock.call_args.args
+        run.assert_called_once_with([*cargo, "fetch", "--locked"], cwd=compose.ROOT, check=True)
+        self.assertEqual(resolved, packages)
+        self.assertNotEqual(workspace, compose.ROOT)
+
     def test_windows_composes_the_hfsplus_builder_for_local_project_tests(self):
         source = Path("Unpacked HFS+ packages")
         args = ["compose_hfsplus_cli.py", "--hfsplus-packages", str(source), "--test"]

@@ -368,6 +368,10 @@ def main():
     )
     parser.add_argument("--release", action="store_true", help="build the optimized binary")
     parser.add_argument("--test", action="store_true", help="run the selected composed CLI tests")
+    parser.add_argument(
+        "--fetch", action="store_true",
+        help="download dependencies from the checked-in Cargo lockfile before offline composition",
+    )
     parser.add_argument("--no-default-features", action="store_true", help="disable default CLI features")
     parser.add_argument("--features", action="append", default=[], help="enable Cargo features, repeatable")
     options = parser.parse_args()
@@ -411,6 +415,8 @@ def main():
         if use_apfs:
             packages.update(resolve_packages(options.apfs, options.apfs_packages, APFS_PACKAGES))
         cargo = ["rustup", "run", load_toml(ROOT / TOOLCHAIN)["toolchain"]["channel"], "cargo"]
+        if options.fetch:
+            subprocess.run([*cargo, "fetch", "--locked"], cwd=ROOT, check=True)
         with TemporaryDirectory(prefix="dmgez-filesystem-cli.") as temporary:
             directory = Path(temporary)
             prepare_workspace(directory, packages)
