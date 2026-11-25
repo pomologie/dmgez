@@ -54,6 +54,8 @@ Choose **Preview text** in a regular file’s details to read up to 64 KiB of it
 
 Choose **Preview PNG** to display one still 8-bit PNG directly from the selected file. The decoder reads up to 4 MiB of encoded data and permits up to 2,048 pixels along either side and 1,048,576 pixels in total. The preview uses the decoded color samples directly.
 
+Choose **Show covering runs** to open the Container view for the selected file's logical data. Ordinary HFS+ and HFSX files show the first 64 covering UDIF runs in logical disk order, with the original run numbers. The inspector reports unavailable coverage for APFS and compressed HFS file data.
+
 Use **Back** and **Forward** to revisit folders and their last catalog pages. **Find in folder** searches up to 4,096 immediate catalog entries and shows up to 64 matches in native catalog order. It uses the volume's name matching rules and indicates when a limit stops the search.
 
 Add `--features lzfse,lzma` to enable ULFO and ULMO decoding for verification and filesystem reads. Container metadata remains visible when its decoder is unavailable.

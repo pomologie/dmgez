@@ -75,7 +75,12 @@ impl App {
 				}
 			}
 			#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
-			Action::ShowFiles => image.browser.showing = true,
+			Action::ShowFiles => {
+				image.browser.showing = true;
+				if image.run_navigation.file_runs.is_some() {
+					image.run_navigation.select(None);
+				}
+			}
 			#[cfg(feature = "actual-preview")]
 			Action::ShowList => image.browser.preview = None,
 			#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]

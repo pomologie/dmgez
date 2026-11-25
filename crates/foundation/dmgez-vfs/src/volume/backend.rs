@@ -4,8 +4,8 @@ use std::{
 };
 
 use super::{
-	DirectoryEntry, DirectoryPage, FinderInfo, ForkKind, ForkReader, LookupName, Metadata,
-	NativeNameKey, NativeNameProfile, Quarantine, QuarantineScope, RawName,
+	DirectoryEntry, DirectoryPage, FileDataRanges, FinderInfo, ForkKind, ForkReader, LookupName,
+	Metadata, NativeNameKey, NativeNameProfile, Quarantine, QuarantineScope, RawName,
 };
 
 /// Engine operator that advances one bounded directory scan.
@@ -94,6 +94,16 @@ pub trait VolumeBackend {
 		kind: ForkKind,
 		read: impl FnOnce(&mut dyn ForkReader<Error = Self::Error>) -> T,
 	) -> Result<Option<T>, Self::Error>;
+
+	/// Observes stored byte ranges for the regular file's logical data stream.
+	/// Ranges are relative to the admitted volume or container, and omit holes and slack.
+	fn file_data_ranges(
+		&mut self,
+		_node: Self::Id,
+		_limit: NonZeroU16,
+	) -> Result<FileDataRanges, Self::Error> {
+		Ok(FileDataRanges::Unavailable)
+	}
 
 	/// Lists all exact stored extended-attribute names without reading their values.
 	/// Returns `None` when enumeration is unavailable. Rejects an over-limit

@@ -1,4 +1,6 @@
 use dmgez_inspector::{Run, RunPage};
+#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
+use dmgez_runtime::image::RunCoverage;
 use dmgez_runtime::image::{RunFilter, RunOrder};
 use eframe::egui::{self, Align, Grid, Key, TextEdit, Ui};
 
@@ -36,6 +38,10 @@ pub(super) fn show(
 	idle: bool,
 ) -> Option<Action> {
 	ui.separator();
+	#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
+	if navigation.file_runs.is_some() {
+		return show_coverage(ui, page, navigation, idle);
+	}
 	ui.heading("Runs");
 	let locate = show_run_lookup(ui, navigation, idle);
 	let query = query_controls(ui, navigation, idle);
@@ -76,6 +82,55 @@ pub(super) fn show(
 		navigation.select_displayed(Some(clicked));
 	}
 	locate.or(query).or(page_action).or(export)
+}
+
+#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
+fn show_coverage(
+	ui: &mut Ui,
+	page: &RunPage,
+	navigation: &mut RunNavigation,
+	idle: bool,
+) -> Option<Action> {
+	let locate = show_run_lookup(ui, navigation, idle);
+	let reveal = std::mem::take(&mut navigation.reveal_selected);
+	let file = navigation.file_runs.as_ref()?;
+	let heading = ui.heading(format!(
+		"Runs covering {}",
+		crate::image::browse::label(&file.name)
+	));
+	if reveal && navigation.selected.is_none() {
+		heading.scroll_to_me(Some(Align::Min));
+	}
+	let all = ui
+		.add_enabled(idle, egui::Button::new("Show all runs"))
+		.clicked()
+		.then_some(Action::Page(0));
+	let export = show_export(ui, page, navigation, idle);
+	match &file.coverage {
+		RunCoverage::Mapped(report) if report.rows.is_empty() => {
+			ui.label("No stored disk bytes cover this file's data.");
+		}
+		RunCoverage::Mapped(report) => {
+			if report.rows.len() < report.total {
+				ui.label(format!(
+					"Showing the first {} of {} covering runs.",
+					report.rows.len(),
+					report.total
+				));
+			}
+			let rows = report.rows.iter().map(|row| (row.ordinal, &row.run));
+			if let Some(ordinal) = rows_grid(ui, rows, navigation.selected, reveal, idle) {
+				navigation.select_displayed(Some(ordinal));
+			}
+		}
+		RunCoverage::Limit => {
+			ui.label("The file exceeds the coverage observation limit.");
+		}
+		_ => {
+			ui.label("Covering runs are unavailable for this storage profile.");
+		}
+	}
+	locate.or(all).or(export)
 }
 
 fn query_controls(ui: &mut Ui, navigation: &mut RunNavigation, idle: bool) -> Option<Action> {
@@ -142,7 +197,7 @@ fn show_export(
 	let selected = navigation.selected?;
 	ui.horizontal_wrapped(|ui| {
 		ui.label(format!("Selected run {}", selected + 1));
-		let exportable = displayed_run(page, navigation.query_page.as_ref(), Some(selected));
+		let exportable = displayed_run(page, navigation);
 		if ui
 			.add_enabled(
 				idle && exportable.is_some(),

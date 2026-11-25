@@ -13,11 +13,13 @@ use thiserror::Error;
 use crate::VolumeId;
 
 mod backend;
+mod data_ranges;
 mod finder_info;
 mod fork;
 mod native_names;
 
 pub use backend::{DirectoryReader, VolumeBackend};
+pub use data_ranges::FileDataRanges;
 pub use finder_info::{FINDER_INFO_BYTES, FinderInfo};
 pub use fork::{Fork, ForkReader};
 pub use native_names::{NativeNameKey, NativeNameProfile};

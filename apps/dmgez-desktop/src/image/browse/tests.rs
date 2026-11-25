@@ -16,6 +16,7 @@ use crate::{
 	inspector::{self, Action},
 };
 
+mod file_runs;
 mod png;
 mod search;
 mod storage;

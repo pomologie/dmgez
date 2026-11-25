@@ -9,7 +9,10 @@ use dmgez_inspector::DiskLimits;
 use dmgez_inspector::volume_queries::{SearchError, StorageMetadata};
 #[cfg(feature = "actual-preview")]
 use dmgez_preview::ItemVisibility;
-use dmgez_runtime::disk::{Encoding, with_logical_disk};
+use dmgez_runtime::{
+	disk::{Encoding, with_logical_disk},
+	image::RunCoverage,
+};
 use dmgez_udif::{
 	Cancellation, Error as ImageError,
 	reader::{Limits, ReadAt},
@@ -147,6 +150,10 @@ pub(crate) enum Request {
 		folder: Location,
 		name: RawName,
 	},
+	FileRuns {
+		folder: Location,
+		name: RawName,
+	},
 	Search {
 		location: Location,
 		query: String,
@@ -175,6 +182,7 @@ pub(crate) enum Observation {
 	Page(Page),
 	Details(Details),
 	Png(Box<content::png::Prepared>),
+	FileRuns(FileRuns),
 	Search(search::Report),
 	#[cfg(feature = "actual-preview")]
 	Preview(preview::Prepared),
@@ -194,6 +202,12 @@ pub(crate) struct Page {
 pub(crate) struct Entry {
 	pub name: RawName,
 	pub kind: NodeKind,
+}
+
+#[derive(Debug)]
+pub(crate) struct FileRuns {
+	pub name: RawName,
+	pub coverage: RunCoverage,
 }
 
 #[derive(Debug)]
@@ -326,7 +340,14 @@ impl ImageSnapshot {
 			cancellation,
 		};
 		source.check_unchanged()?;
-		let result = browse_image(source, request, cancellation);
+		let result = browse_image(
+			source,
+			request,
+			query::Context {
+				image: self,
+				cancellation,
+			},
+		);
 		self.source.check_unchanged()?;
 		if cancellation.is_cancelled() {
 			return Err(ImageError::Cancelled.into());
@@ -338,7 +359,7 @@ impl ImageSnapshot {
 fn browse_image(
 	source: impl ReadAt,
 	request: Request,
-	cancellation: &Cancellation,
+	context: query::Context<'_>,
 ) -> Result<Observation, Error> {
 	with_logical_disk(source, Encoding::Udif(Limits::default()), |logical| {
 		let location = match &request {
@@ -352,6 +373,9 @@ fn browse_image(
 			}
 			| Request::Png {
 				folder: location, ..
+			}
+			| Request::FileRuns {
+				folder: location, ..
 			} => location,
 			#[cfg(feature = "actual-preview")]
 			Request::Preview { location, .. } => location,
@@ -361,11 +385,11 @@ fn browse_image(
 		let volume = location.volume;
 		#[cfg(feature = "apfs-read")]
 		if let Some(selection) = location.apfs {
-			return apfs::browse(logical, volume, selection, request, cancellation);
+			return apfs::browse(logical, volume, selection, request, context);
 		}
 		#[cfg(feature = "hfsplus-read")]
 		{
-			browse_hfs(logical, volume, request, cancellation)
+			browse_hfs(logical, volume, request, context)
 		}
 		#[cfg(not(feature = "hfsplus-read"))]
 		{
@@ -379,10 +403,11 @@ fn browse_hfs(
 	logical: &mut dyn LogicalDisk,
 	volume: VolumeId,
 	request: Request,
-	cancellation: &Cancellation,
+	context: query::Context<'_>,
 ) -> Result<Observation, Error> {
 	let mut disk = Disk::discover(logical, DiskLimits::default())?;
 	let selected = disk.select_volume(Some(volume))?;
+	let window = disk.data_window(selected)?.logical_range();
 	let limits = browse::Limits {
 		max_read_requests: MAX_FS_READS,
 		max_read_bytes: MAX_FS_READ_BYTES,
@@ -402,7 +427,7 @@ fn browse_hfs(
 			VolumeSignature::HfsPlus => Filesystem::HfsPlus,
 			VolumeSignature::HfsX => Filesystem::HfsX,
 		};
-		query::query_volume(view, filesystem, request, search::hfs, cancellation)
+		query::query_volume(view, filesystem, request, search::hfs, context, window)
 	})?
 }
 

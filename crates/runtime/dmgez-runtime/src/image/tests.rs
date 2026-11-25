@@ -3,9 +3,11 @@ use std::cell::Cell;
 use super::*;
 
 const UDZO: &[u8] = include_bytes!("../../../../../tests/fixtures/images/tiny-UDZO.dmg");
+const HYBRID_UDZO: &[u8] = include_bytes!("../../../../../tests/fixtures/images/hybrid-UDZO.dmg");
 
 #[derive(Default)]
 struct Fixture {
+	image: Option<&'static [u8]>,
 	closed_to_reads: Cell<bool>,
 	revalidations: Cell<usize>,
 	changed: Cell<bool>,
@@ -14,7 +16,7 @@ struct Fixture {
 
 impl ReadAt for &Fixture {
 	fn len(&self) -> u64 {
-		UDZO.len() as u64
+		self.image.unwrap_or(UDZO).len() as u64
 	}
 
 	fn check_unchanged(&self) -> Result<(), Error> {
@@ -31,7 +33,7 @@ impl ReadAt for &Fixture {
 			!self.closed_to_reads.get(),
 			"run lookup read the image again"
 		);
-		UDZO.read_exact_at(offset, output)
+		self.image.unwrap_or(UDZO).read_exact_at(offset, output)
 	}
 }
 
@@ -95,6 +97,64 @@ fn locating_a_run_revalidates_the_image_and_uses_only_the_retained_index() {
 	fixture.changed.set(true);
 	assert!(matches!(
 		session.locate_run(0, 1),
+		Err(Error::SourceChanged)
+	));
+}
+
+#[test]
+fn file_coverage_offsets_a_volume_and_deduplicates_runs_without_image_reads() {
+	use dmgez_udif::Cancellation;
+	use dmgez_vfs::volume::FileDataRanges;
+
+	let fixture = Fixture {
+		image: Some(HYBRID_UDZO),
+		..Fixture::default()
+	};
+	let session =
+		ImageSession::open(&fixture, Limits::default(), MetadataBudget::ReaderLimits).unwrap();
+	let first = session.image.run_at(0).unwrap();
+	let boundary = first.logical.end;
+	let window = boundary - 2..boundary + 2;
+	let cancellation = Cancellation::default();
+	fixture.closed_to_reads.set(true);
+	let ranges = FileDataRanges::Mapped(vec![2..4, 0..3, 1..2]);
+	let before = fixture.revalidations.get();
+	let RunCoverage::Mapped(report) = session
+		.cover_file_data(window.clone(), &ranges, &cancellation)
+		.unwrap()
+	else {
+		panic!("expected known file backing");
+	};
+	assert_eq!(report.total, 2);
+	assert_eq!(
+		report
+			.rows
+			.iter()
+			.map(|row| row.ordinal)
+			.collect::<Vec<_>>(),
+		[0, 1]
+	);
+	assert_eq!(report.rows[0].run, first.into());
+	assert_eq!(fixture.revalidations.get(), before + 2);
+	assert!(matches!(
+		session.cover_file_data(
+			window.clone(),
+			&FileDataRanges::Mapped(std::iter::once(4..5).collect()),
+			&cancellation
+		),
+		Err(Error::Corrupt(_))
+	));
+	assert_eq!(
+		session
+			.cover_file_data(window.clone(), &FileDataRanges::Limit, &cancellation)
+			.unwrap(),
+		RunCoverage::Limit
+	);
+	fixture
+		.change_at_check
+		.set(Some(fixture.revalidations.get() + 2));
+	assert!(matches!(
+		session.cover_file_data(window, &ranges, &cancellation),
 		Err(Error::SourceChanged)
 	));
 }

@@ -175,7 +175,7 @@ impl<S: ReadAt> ImageSession<S> {
 	}
 }
 
-fn check_cancelled(cancellation: &Cancellation) -> Result<(), Error> {
+pub(super) fn check_cancelled(cancellation: &Cancellation) -> Result<(), Error> {
 	if cancellation.is_cancelled() {
 		Err(Error::Cancelled)
 	} else {

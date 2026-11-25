@@ -66,6 +66,12 @@ impl App {
 			}
 			Ok(Observation::Details(details)) => browser.details = Some(details),
 			Ok(Observation::Png(prepared)) => browser.details = Some(prepared.present(ctx)),
+			Ok(Observation::FileRuns(file)) => {
+				browser.showing = false;
+				image.run_navigation.select(None);
+				image.run_navigation.file_runs = Some(file);
+				image.run_navigation.reveal_selected = true;
+			}
 			Ok(Observation::Search(report)) => {
 				if let Some(page) = &browser.page {
 					browser.search.apply(&page.location, report);

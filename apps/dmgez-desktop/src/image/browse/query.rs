@@ -1,12 +1,18 @@
-use std::num::{NonZeroU16, NonZeroU32};
+use std::{
+	num::{NonZeroU16, NonZeroU32},
+	ops::Range,
+};
 
 use dmgez_inspector::volume_queries::{MAX_LIST_OFFSET, StorageMetadata, inspect_storage};
+use dmgez_runtime::image::MAX_FILE_DATA_RANGES;
 use dmgez_udif::Cancellation;
-use dmgez_vfs::volume::{NodeHandle, NodeKind, RawName, ViewError, VolumeBackend, VolumeView};
+use dmgez_vfs::volume::{
+	NodeHandle, NodeKind, RawName, ViewEntry, ViewError, VolumeBackend, VolumeView,
+};
 
 use super::{
-	Details, Entry, Error, Filesystem, Location, MAX_DEPTH, Observation, PAGE_ENTRIES, Page,
-	Request, Storage, content,
+	Details, Entry, Error, FileRuns, Filesystem, ImageSnapshot, Location, MAX_DEPTH, Observation,
+	PAGE_ENTRIES, Page, Request, Storage, content,
 };
 
 const SCAN_BATCH_ENTRIES: u16 = 128;
@@ -18,12 +24,18 @@ enum FileQuery<'a> {
 	Png(&'a Cancellation),
 }
 
+pub(super) struct Context<'a> {
+	pub image: &'a ImageSnapshot,
+	pub cancellation: &'a Cancellation,
+}
+
 pub(super) fn query_volume<B: VolumeBackend>(
 	view: &mut VolumeView<B>,
 	filesystem: Filesystem,
 	request: Request,
 	search: impl FnOnce(&mut VolumeView<B>, Location, String) -> Result<Observation, Error>,
-	cancellation: &Cancellation,
+	context: Context<'_>,
+	window: Range<u64>,
 ) -> Result<Observation, Error>
 where
 	Error: From<ViewError<B::Error>>,
@@ -36,7 +48,17 @@ where
 		}
 		Request::Text { folder, name } => entry_details(view, folder, name, FileQuery::Text),
 		Request::Png { folder, name } => {
-			entry_details(view, folder, name, FileQuery::Png(cancellation))
+			entry_details(view, folder, name, FileQuery::Png(context.cancellation))
+		}
+		Request::FileRuns { folder, name } => {
+			let entry = exact_entry(view, &folder, &name)?;
+			let ranges = view.file_data_ranges(&entry.node, MAX_FILE_DATA_RANGES)?;
+			let coverage =
+				context
+					.image
+					.image
+					.cover_file_data(window, &ranges, context.cancellation)?;
+			Ok(Observation::FileRuns(FileRuns { name, coverage }))
 		}
 		Request::Search { location, query } => search(view, location, query),
 		#[cfg(feature = "actual-preview")]
@@ -129,11 +151,7 @@ where
 	Error: From<ViewError<B::Error>>,
 	Storage: From<StorageMetadata<B::Error>>,
 {
-	let parent = folder(view, &location)?;
-	let entry = view
-		.lookup(&parent, name.as_lookup())?
-		.filter(|entry| entry.name == name)
-		.ok_or(Error::EntryChanged)?;
+	let entry = exact_entry(view, &location, &name)?;
 	let metadata = view.stat(&entry.node)?;
 	let kind = metadata.kind;
 	let native_id = view.numeric_id(&entry.node)?;
@@ -165,4 +183,18 @@ where
 		}
 	}
 	Ok(Observation::Details(details))
+}
+
+fn exact_entry<B: VolumeBackend>(
+	view: &mut VolumeView<B>,
+	location: &Location,
+	name: &RawName,
+) -> Result<ViewEntry<B::Id>, Error>
+where
+	Error: From<ViewError<B::Error>>,
+{
+	let parent = folder(view, location)?;
+	view.lookup(&parent, name.as_lookup())?
+		.filter(|entry| entry.name == *name)
+		.ok_or(Error::EntryChanged)
 }

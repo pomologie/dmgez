@@ -109,6 +109,19 @@ fn selects_the_native_apfs_checkpoint_and_browses_exact_files_through_files_view
 	assert_eq!(docs.location.apfs, Some(selected));
 	assert_eq!(docs.location.ancestor(0).apfs, Some(selected));
 	let location = docs.location;
+	let Observation::FileRuns(file_runs) = observe(
+		&tab,
+		Request::FileRuns {
+			folder: location.clone(),
+			name: RawName::Utf8(ALIAS.into()),
+		},
+	) else {
+		panic!("expected the exact APFS link's coverage status");
+	};
+	assert_eq!(
+		file_runs.coverage,
+		dmgez_runtime::image::RunCoverage::Unavailable
+	);
 	for (query, expected) in [("alias", 1), ("ALIAS", 0)] {
 		let Observation::Search(report) = observe(
 			&tab,

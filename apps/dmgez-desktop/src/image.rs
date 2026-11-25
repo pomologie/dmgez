@@ -32,12 +32,18 @@ pub(crate) struct RunNavigation {
 	pub reveal_selected: bool,
 	pub query: RunQuery,
 	pub query_page: Option<RunQueryPage>,
+	#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
+	pub file_runs: Option<browse::FileRuns>,
 }
 
 impl RunNavigation {
 	pub(crate) fn select(&mut self, ordinal: Option<usize>) {
 		self.query = RunQuery::default();
 		self.query_page = None;
+		#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
+		{
+			self.file_runs = None;
+		}
 		self.select_displayed(ordinal);
 	}
 

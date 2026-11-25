@@ -6,14 +6,18 @@ use std::{
 use dmgez_vfs::{
 	Disk, LogicalDisk, VolumeId,
 	volume::{
-		DirectoryEntry, DirectoryPage, DirectoryReader, FinderInfo, ForkKind, ForkReader, HardLink,
-		LookupName, Metadata, NativeNameKey, NativeNameProfile, NodeKind, Quarantine,
-		QuarantineScope, RawName, VolumeBackend, VolumeView,
+		DirectoryEntry, DirectoryPage, DirectoryReader, FileDataRanges, FinderInfo, ForkKind,
+		ForkReader, HardLink, LookupName, Metadata, NativeNameKey, NativeNameProfile, NodeKind,
+		Quarantine, QuarantineScope, RawName, VolumeBackend, VolumeView,
 	},
 };
 use hfsplus_core::{ByteOffset, ReadAt, names::NameError};
 pub use hfsplus_format::volume::Signature as VolumeSignature;
-use hfsplus_format::{bsd, symlink::MAX_SYMLINK_TARGET_BYTES, volume::CatalogId};
+use hfsplus_format::{
+	bsd,
+	symlink::MAX_SYMLINK_TARGET_BYTES,
+	volume::{CatalogId, Geometry},
+};
 use hfsplus_reader::{
 	attributes::AttributeReadError,
 	catalog::{
@@ -24,6 +28,7 @@ use hfsplus_reader::{
 	overflow::{ForkKind as HfsFork, OverflowError, OverflowLimits},
 };
 
+mod data_ranges;
 mod finder_info;
 mod native_names;
 mod quarantine;
@@ -129,6 +134,7 @@ impl From<SymlinkError<SourceError>> for Error {
 /// Backend admitted on a single selected partition or whole-disk volume.
 pub struct HfsBackend<'volume, 'disk, S> {
 	catalog: Catalog<'volume, WindowSource<'disk, S>>,
+	geometry: Geometry,
 	limits: Limits,
 }
 
@@ -165,7 +171,7 @@ pub fn with_view_signature<S: LogicalDisk, T>(
 ) -> Result<T, Error> {
 	with_catalog(disk, selected, limits, |volume, catalog| {
 		read(
-			&mut view_for_catalog(selected, catalog, limits),
+			&mut view_for_catalog(selected, catalog, volume.header().geometry, limits),
 			volume.header().signature,
 		)
 	})
@@ -174,9 +180,17 @@ pub fn with_view_signature<S: LogicalDisk, T>(
 pub(crate) fn view_for_catalog<'volume, 'disk, S: LogicalDisk>(
 	selected: VolumeId,
 	catalog: Catalog<'volume, WindowSource<'disk, S>>,
+	geometry: Geometry,
 	limits: Limits,
 ) -> HfsView<'volume, 'disk, S> {
-	VolumeView::new(selected, HfsBackend { catalog, limits })
+	VolumeView::new(
+		selected,
+		HfsBackend {
+			catalog,
+			geometry,
+			limits,
+		},
+	)
 }
 
 impl<'volume, 'disk, S: LogicalDisk> HfsBackend<'volume, 'disk, S> {
@@ -289,6 +303,14 @@ impl<'volume, 'disk, S: LogicalDisk> VolumeBackend for HfsBackend<'volume, 'disk
 		limit: NonZeroU32,
 	) -> Result<Option<Vec<RawName>>, Error> {
 		self.extended_attribute_names(node, limit).map(Some)
+	}
+
+	fn file_data_ranges(
+		&mut self,
+		node: CatalogId,
+		limit: NonZeroU16,
+	) -> Result<FileDataRanges, Error> {
+		self.direct_data_ranges(node, limit)
 	}
 
 	fn with_xattr<T>(

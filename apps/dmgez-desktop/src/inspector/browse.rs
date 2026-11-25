@@ -331,11 +331,25 @@ pub(super) fn details_panel(ui: &mut Ui, details: &Details, idle: bool) -> Optio
 			ScrollArea::vertical()
 				.show(ui, |ui| {
 					show_details(ui, details);
-					content::show(ui, details, idle)
+					content::show(ui, details, idle).or_else(|| file_runs(ui, details, idle))
 				})
 				.inner
 		})
 		.inner
+}
+
+fn file_runs(ui: &mut Ui, details: &Details, idle: bool) -> Option<Action> {
+	if details.metadata.kind != NodeKind::RegularFile {
+		return None;
+	}
+	ui.add_enabled(idle, egui::Button::new("Show covering runs"))
+		.clicked()
+		.then(|| {
+			Action::Browse(Request::FileRuns {
+				folder: details.folder.clone(),
+				name: details.name.clone(),
+			})
+		})
 }
 
 fn show_details(ui: &mut Ui, details: &Details) {

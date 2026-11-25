@@ -32,6 +32,12 @@ impl<'source, S: LogicalDisk> Window<'source, S> {
 		self.range.start
 	}
 
+	/// The admitted window's byte range on the underlying logical disk.
+	#[must_use]
+	pub fn logical_range(&self) -> Range<u64> {
+		self.range.clone()
+	}
+
 	/// Read exactly within this window, using a relative byte offset.
 	///
 	/// # Errors

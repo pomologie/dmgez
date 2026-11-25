@@ -1,12 +1,12 @@
 use std::{path::Path, sync::Arc};
 
 use dmgez_inspector::{InspectionReport, Run, RunPage, VerificationReport};
-use dmgez_runtime::image::{
-	InspectionExportError, MAX_RUN_EXPORT_BYTES, ReportExport, RunQueryPage, export_run,
-};
+#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
+use dmgez_runtime::image::RunCoverage;
+use dmgez_runtime::image::{InspectionExportError, MAX_RUN_EXPORT_BYTES, ReportExport, export_run};
 use dmgez_udif::Cancellation;
 
-use super::{ImageSnapshot, ImageTab};
+use super::{ImageSnapshot, ImageTab, RunNavigation};
 
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum Kind {
@@ -32,11 +32,7 @@ impl ImageTab {
 			Kind::Inspection => Content::Inspection(Box::new(self.report.clone())),
 			Kind::Verification => Content::Verification(Arc::clone(self.verification.as_ref()?)),
 			Kind::Run(ordinal) => {
-				let selected = displayed_run(
-					self.report.run_page.as_ref()?,
-					self.run_navigation.query_page.as_ref(),
-					self.run_navigation.selected,
-				)?;
+				let selected = displayed_run(self.report.run_page.as_ref()?, &self.run_navigation)?;
 				if selected != ordinal {
 					return None;
 				}
@@ -74,13 +70,17 @@ impl Export {
 	}
 }
 
-pub(crate) fn displayed_run(
-	page: &RunPage,
-	query: Option<&RunQueryPage>,
-	ordinal: Option<usize>,
-) -> Option<usize> {
-	let ordinal = ordinal?;
-	if let Some(query) = query {
+pub(crate) fn displayed_run(page: &RunPage, navigation: &RunNavigation) -> Option<usize> {
+	let ordinal = navigation.selected?;
+	#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
+	if let Some(file) = &navigation.file_runs {
+		let RunCoverage::Mapped(coverage) = &file.coverage else {
+			return None;
+		};
+		let row = coverage.rows.iter().find(|row| row.ordinal == ordinal)?;
+		return is_exportable(&row.run).then_some(ordinal);
+	}
+	if let Some(query) = &navigation.query_page {
 		let row = query.rows.iter().find(|row| row.ordinal == ordinal)?;
 		return is_exportable(&row.run).then_some(ordinal);
 	}

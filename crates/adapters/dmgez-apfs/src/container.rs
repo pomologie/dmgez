@@ -1,4 +1,4 @@
-use std::error::Error as StdError;
+use std::{error::Error as StdError, ops::Range};
 
 use apfs_container::{
 	Container, Error as ContainerError, LookupOptions, OpenOptions, Volume, VolumeSelectionError,
@@ -56,6 +56,7 @@ pub enum OpenError<E: StdError + 'static = SourceError> {
 /// An APFS container bound to one checkpoint and its original disk window.
 pub struct ApfsContainer<'disk, S> {
 	container: Container<WindowSource<'disk, S>>,
+	logical_window: Range<u64>,
 }
 
 impl<'disk, S: LogicalDisk> ApfsContainer<'disk, S> {
@@ -65,9 +66,17 @@ impl<'disk, S: LogicalDisk> ApfsContainer<'disk, S> {
 	/// Fails on an absent requested XID, unsupported container profile, damaged
 	/// metadata, bounds or budget violations, or a failed source read.
 	pub fn open(window: Window<'disk, S>, xid: Option<TransactionId>) -> Result<Self, OpenError> {
+		let logical_window = window.logical_range();
 		Ok(Self {
 			container: open_container(WindowSource::new(window), xid)?,
+			logical_window,
 		})
+	}
+
+	/// Range of the admitted container on the underlying logical disk.
+	#[must_use]
+	pub fn logical_window(&self) -> Range<u64> {
+		self.logical_window.clone()
 	}
 
 	/// Transaction ID used for all volume lookups on this container.
