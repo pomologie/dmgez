@@ -35,18 +35,17 @@ dmgez-lint.workspace = true
 eframe.workspace = true
 rfd.workspace = true
 
+# Local preferences
+serde.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+
 # Diagnostics
 thiserror.workspace = true
 
 [dev-dependencies]
 # Workspace formats
 dmgez-udif = { workspace = true, features = ["write"] }
-
-# Serialization and configuration
-serde_json.workspace = true
-
-# Filesystem access and staging
-tempfile.workspace = true
 
 [lints]
 workspace = true

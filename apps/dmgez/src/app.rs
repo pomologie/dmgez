@@ -20,6 +20,7 @@ mod import_tests;
 mod project_save;
 #[cfg(feature = "project-build")]
 mod project_tasks;
+mod recent_files;
 mod worker;
 
 use image_tasks::ImageCompletion;
@@ -40,12 +41,14 @@ pub(crate) struct App {
 	copy_name: String,
 	closing: bool,
 	error: Option<String>,
+	recent: recent_files::RecentFiles,
 	#[cfg(feature = "project-build")]
 	build: project_tasks::BuildPanel,
 }
 
 enum Pending {
 	Open,
+	OpenRecent(recent_files::Entry),
 	Close,
 	#[cfg(feature = "project-build")]
 	OpenBuiltImage(PathBuf),
@@ -53,6 +56,11 @@ enum Pending {
 
 enum Completion {
 	Opened(Opened),
+	RecentsLoaded {
+		result: Result<recent_files::Loaded, recent_files::Error>,
+		initial_path: Option<PathBuf>,
+	},
+	RecentsUpdated(Result<recent_files::Preferences, recent_files::Error>),
 	Saved {
 		path: PathBuf,
 		revision: RevisionId,
@@ -98,6 +106,7 @@ impl App {
 			copy_name: String::new(),
 			closing: false,
 			error: None,
+			recent: recent_files::RecentFiles::default(),
 			#[cfg(feature = "project-build")]
 			build: project_tasks::BuildPanel::default(),
 		};
@@ -155,12 +164,20 @@ impl App {
 	fn finish(&mut self, ctx: &Context, completion: Completion) {
 		match completion {
 			Completion::Opened(opened) => {
+				self.remember_open(ctx, &opened);
 				self.opened = Some(opened);
 				#[cfg(feature = "project-build")]
 				{
 					self.build = project_tasks::BuildPanel::default();
 				}
 			}
+			Completion::RecentsLoaded {
+				result,
+				initial_path,
+			} => {
+				self.finish_recent_load(ctx, result, initial_path);
+			}
+			Completion::RecentsUpdated(result) => self.finish_recent_update(result),
 			Completion::Cancelled => {}
 			Completion::Failed(error) => self.error = Some(error.to_string()),
 			Completion::SaveFailed(error) => self.error = Some(error.to_string()),
@@ -255,6 +272,7 @@ impl App {
 					if ui.button("Open…").clicked() {
 						self.ask_open(ui.ctx());
 					}
+					self.recent_menu(ui);
 					if matches!(
 						&self.opened,
 						Some(Opened {
@@ -311,6 +329,9 @@ impl App {
 			if let Some(error) = &self.error {
 				ui.colored_label(ERROR, error);
 			}
+			if let Some(error) = &self.recent.error {
+				ui.colored_label(ERROR, error);
+			}
 			#[cfg(feature = "project-build")]
 			self.show_build(ui);
 		});
@@ -331,6 +352,7 @@ impl App {
 			if discard {
 				match self.confirm.take() {
 					Some(Pending::Open) => self.choose(ctx),
+					Some(Pending::OpenRecent(entry)) => self.open_recent(ctx, entry),
 					#[cfg(feature = "project-build")]
 					Some(Pending::OpenBuiltImage(path)) => {
 						self.start(ctx, move || project_tasks::open_built_outcome(path));

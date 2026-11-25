@@ -2,6 +2,8 @@
 
 Launch the desktop app with `cargo run -p dmgez-gui` or pass a local TOML project or DMG path after `--`. The Open dialog and file parsing run through one bounded document worker. Use the platform Open and history shortcuts or navigate the controls with Tab.
 
+**Recent files** lists up to 12 opened local projects or images across launches. **Clear recent files** removes those paths. Turn off **Remember recent files** to clear the list and stop recording.
+
 The design workspace lays out project declarations and their implied folders. It uses the shared preview geometry for zoom, clipping, icon selection, and snapping. Volume-label, visibility, and position edits use the typed project document and preserve comments. Save copy creates a new TOML file beside the source project, keeping its relative paths valid.
 
 On macOS and Linux, **Save** and Cmd/Ctrl+S save the exact edited TOML back to the open project. Save compares the file identity and original text before atomic replacement in a trusted local directory. Conflicts and unsupported access metadata leave your edits available in the editor. **Save copy** is available on Windows as well.

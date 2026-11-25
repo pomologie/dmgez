@@ -10,6 +10,7 @@ use dmgez_config::{
 };
 use dmgez_core::output::{PublishError, publish_new};
 use dmgez_runtime::project_save::FileRevision;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use crate::{image::ImageTab, project::ProjectTab};
@@ -24,6 +25,22 @@ pub(crate) struct Opened {
 pub(crate) enum Document {
 	Project(Box<ProjectTab>),
 	Image(Box<ImageTab>),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum Kind {
+	Project,
+	Image,
+}
+
+impl Document {
+	pub(crate) fn kind(&self) -> Kind {
+		match self {
+			Self::Project(_) => Kind::Project,
+			Self::Image(_) => Kind::Image,
+		}
+	}
 }
 
 #[derive(Debug, Error)]
@@ -51,19 +68,22 @@ pub(crate) fn open(path: PathBuf) -> Result<Opened, Error> {
 		.extension()
 		.and_then(|extension| extension.to_str())
 		.ok_or(Error::Extension)?;
-	let is_project = extension.eq_ignore_ascii_case(PROJECT_EXTENSION);
-	if !is_project && !extension.eq_ignore_ascii_case(IMAGE_EXTENSION) {
+	let kind = if extension.eq_ignore_ascii_case(PROJECT_EXTENSION) {
+		Kind::Project
+	} else if extension.eq_ignore_ascii_case(IMAGE_EXTENSION) {
+		Kind::Image
+	} else {
 		return Err(Error::Extension);
-	}
-	open_document(path, is_project)
+	};
+	open_as(path, kind)
 }
 
 #[cfg(feature = "project-build")]
 pub(crate) fn open_built_image(path: PathBuf) -> Result<Opened, Error> {
-	open_document(path, false)
+	open_as(path, Kind::Image)
 }
 
-fn open_document(path: PathBuf, is_project: bool) -> Result<Opened, Error> {
+pub(crate) fn open_as(path: PathBuf, kind: Kind) -> Result<Opened, Error> {
 	let canonical_path = path.canonicalize()?;
 	if !fs::metadata(&canonical_path)?.is_file() {
 		return Err(Error::NotFile);
@@ -73,14 +93,15 @@ fn open_document(path: PathBuf, is_project: bool) -> Result<Opened, Error> {
 	if !metadata.is_file() {
 		return Err(Error::NotFile);
 	}
-	let document = if is_project {
-		let document = read_project(input)?;
-		let file_revision = FileRevision::from_metadata(&metadata);
-		Document::Project(Box::new(
-			ProjectTab::new(document).with_file_revision(file_revision),
-		))
-	} else {
-		Document::Image(Box::new(ImageTab::open(input)?))
+	let document = match kind {
+		Kind::Project => {
+			let document = read_project(input)?;
+			let file_revision = FileRevision::from_metadata(&metadata);
+			Document::Project(Box::new(
+				ProjectTab::new(document).with_file_revision(file_revision),
+			))
+		}
+		Kind::Image => Document::Image(Box::new(ImageTab::open(input)?)),
 	};
 	Ok(Opened {
 		path: canonical_path,

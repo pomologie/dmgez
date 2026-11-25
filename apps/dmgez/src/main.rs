@@ -26,6 +26,11 @@ fn main() -> eframe::Result {
 	eframe::run_native(
 		APP_NAME,
 		options,
-		Box::new(move |context| Ok(Box::new(app::App::new(&context.egui_ctx, initial_path)))),
+		Box::new(move |context| {
+			Ok(Box::new(app::App::with_recent_files(
+				&context.egui_ctx,
+				initial_path,
+			)))
+		}),
 	)
 }

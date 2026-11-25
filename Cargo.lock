@@ -1222,6 +1222,7 @@ dependencies = [
  "dmgez-udif",
  "eframe",
  "rfd",
+ "serde",
  "serde_json",
  "tempfile",
  "thiserror 2.0.21",
