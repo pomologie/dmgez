@@ -1,3 +1,5 @@
+#[cfg(feature = "write")]
+use plist::Dictionary;
 use plist::Value;
 
 use crate::Error;
@@ -19,6 +21,16 @@ const WHOLE_DISK_ATTRIBUTES: &str = "0x0050";
 const WHOLE_DISK_ID: &str = "0";
 #[cfg(feature = "write")]
 const WHOLE_DISK_LABEL: &str = "whole disk (unknown partition : 0)";
+#[cfg(feature = "write")]
+const PARTITION_LIST_KEY: &str = "plst";
+#[cfg(feature = "write")]
+const PARTITION_LIST_NAME: &str = "";
+#[cfg(feature = "write")]
+const NATIVE_PARTITION_LIST_BYTES: usize = 1032;
+#[cfg(feature = "write")]
+const NATIVE_PARTITION_LIST_MARKERS: [usize; 2] = [517, 519];
+#[cfg(feature = "write")]
+const NATIVE_PARTITION_LIST_MARKER: u8 = 1;
 
 #[cfg(feature = "read")]
 const BINARY_PLIST_PREFIX: &[u8] = b"bplist";
@@ -116,18 +128,81 @@ pub(crate) fn tables(root: &Value) -> Result<&[Value], Error> {
 }
 
 #[cfg(feature = "write")]
-pub(crate) fn encode(table: Vec<u8>) -> Result<Vec<u8>, Error> {
-	use plist::Dictionary;
-
-	let table = Dictionary::from_iter([
-		(BLOCK_MAP_ATTRIBUTES_KEY, WHOLE_DISK_ATTRIBUTES.into()),
-		(BLOCK_MAP_CF_NAME_KEY, WHOLE_DISK_LABEL.into()),
-		(BLOCK_MAP_DATA_KEY, Value::Data(table)),
-		(BLOCK_MAP_ID_KEY, WHOLE_DISK_ID.into()),
-		(BLOCK_MAP_NAME_KEY, WHOLE_DISK_LABEL.into()),
+fn block_map_metadata(data: Option<Vec<u8>>) -> Dictionary {
+	let mut table = Dictionary::from_iter([
+		(BLOCK_MAP_ATTRIBUTES_KEY, Value::from(WHOLE_DISK_ATTRIBUTES)),
+		(BLOCK_MAP_CF_NAME_KEY, Value::from(WHOLE_DISK_LABEL)),
 	]);
-	let resources =
-		Dictionary::from_iter([(BLOCK_MAPS_KEY, Value::Array(vec![Value::Dictionary(table)]))]);
+	if let Some(data) = data {
+		table.insert(BLOCK_MAP_DATA_KEY.into(), Value::Data(data));
+	}
+	table.insert(BLOCK_MAP_ID_KEY.into(), WHOLE_DISK_ID.into());
+	table.insert(BLOCK_MAP_NAME_KEY.into(), WHOLE_DISK_LABEL.into());
+	table
+}
+
+#[cfg(feature = "write")]
+fn native_partition_list() -> Value {
+	let mut payload = vec![0; NATIVE_PARTITION_LIST_BYTES];
+	for index in NATIVE_PARTITION_LIST_MARKERS {
+		payload[index] = NATIVE_PARTITION_LIST_MARKER;
+	}
+	let record = Dictionary::from_iter([
+		(BLOCK_MAP_ATTRIBUTES_KEY, WHOLE_DISK_ATTRIBUTES.into()),
+		(BLOCK_MAP_DATA_KEY, Value::Data(payload)),
+		(BLOCK_MAP_ID_KEY, WHOLE_DISK_ID.into()),
+		(BLOCK_MAP_NAME_KEY, PARTITION_LIST_NAME.into()),
+	]);
+	Value::Array(vec![Value::Dictionary(record)])
+}
+
+#[cfg(all(feature = "read", feature = "write"))]
+pub(crate) fn rebuild_table(root: &Value) -> Result<(&[u8], bool), Error> {
+	let unsupported = || Error::Unsupported("resource metadata cannot be preserved by conversion");
+	let root_dict = root
+		.as_dictionary()
+		.filter(|dict| dict.len() == 1)
+		.ok_or_else(unsupported)?;
+	let resources = root_dict
+		.get(RESOURCE_FORK_KEY)
+		.and_then(Value::as_dictionary)
+		.ok_or_else(unsupported)?;
+	let has_partition_list = match resources.get(PARTITION_LIST_KEY) {
+		None if resources.len() == 1 => false,
+		Some(value) if resources.len() == 2 && *value == native_partition_list() => true,
+		_ => return Err(unsupported()),
+	};
+	let [table] = tables(root)? else {
+		return Err(Error::Unsupported(
+			"conversion requires one whole-disk block map",
+		));
+	};
+	let table = table.as_dictionary().ok_or_else(unsupported)?;
+	let expected = block_map_metadata(None);
+	if table.len() != expected.len() + 1
+		|| !expected
+			.iter()
+			.all(|(key, value)| table.get(key) == Some(value))
+	{
+		return Err(unsupported());
+	}
+	let data = table
+		.get(BLOCK_MAP_DATA_KEY)
+		.and_then(Value::as_data)
+		.ok_or_else(unsupported)?;
+	Ok((data, has_partition_list))
+}
+
+#[cfg(feature = "write")]
+pub(crate) fn encode(table: Vec<u8>, include_partition_list: bool) -> Result<Vec<u8>, Error> {
+	let table_metadata = block_map_metadata(Some(table));
+	let mut resources = Dictionary::from_iter([(
+		BLOCK_MAPS_KEY,
+		Value::Array(vec![Value::Dictionary(table_metadata)]),
+	)]);
+	if include_partition_list {
+		resources.insert(PARTITION_LIST_KEY.into(), native_partition_list());
+	}
 	let root = Value::Dictionary(Dictionary::from_iter([(
 		RESOURCE_FORK_KEY,
 		Value::Dictionary(resources),

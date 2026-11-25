@@ -1,7 +1,12 @@
 //! Streaming UDRO and UDZO construction from finite logical disk bytes.
 
 mod chunk;
+mod metadata;
 mod scheduler;
+
+pub(crate) use metadata::OutputMetadata;
+#[cfg(feature = "read")]
+pub use metadata::{RebuildMetadata, write_rebuilt_image};
 
 use std::{
 	io::{self, Read, Write},
@@ -248,10 +253,26 @@ pub struct WriteReport {
 /// resource limits, cancellation and failed I/O. A failed sink may contain an
 /// incomplete image prefix. Callers targeting a path should publish through staging.
 pub fn write_image(
+	source: impl Read,
+	logical_bytes: u64,
+	sink: impl Write,
+	options: &WriteOptions,
+) -> Result<WriteReport, Error> {
+	write_with_metadata(
+		source,
+		logical_bytes,
+		sink,
+		options,
+		OutputMetadata::default(),
+	)
+}
+
+fn write_with_metadata(
 	mut source: impl Read,
 	logical_bytes: u64,
 	mut sink: impl Write,
 	options: &WriteOptions,
+	metadata: OutputMetadata,
 ) -> Result<WriteReport, Error> {
 	options.cancellation.check()?;
 	let max_records = options.max_data_runs(logical_bytes)? + TERMINATOR_RECORD_COUNT;
@@ -303,6 +324,7 @@ pub fn write_image(
 		logical_crc.finalize(),
 		options,
 		admission.accounted_payload_bytes(),
+		metadata,
 	)
 }
 
@@ -370,6 +392,7 @@ impl<W: Write> DataFork<W> {
 		table_crc: u32,
 		options: &WriteOptions,
 		accounted_payload_bytes: usize,
+		metadata: OutputMetadata,
 	) -> Result<WriteReport, Error> {
 		self.records.push(Record {
 			kind: Kind::End,
@@ -398,12 +421,8 @@ impl<W: Write> DataFork<W> {
 		};
 		let physical_crc = self.hash.finalize();
 		let master_crc = checksum::master_crc([table_crc]);
-		let xml = resource::encode(blkx::encode(
-			self.sectors,
-			buffer_sectors,
-			table_crc,
-			&self.records,
-		)?)?;
+		let table = blkx::encode(self.sectors, buffer_sectors, table_crc, &self.records)?;
+		let xml = resource::encode(table, metadata.include_partition_list)?;
 		let physical_bytes = self
 			.stored_bytes
 			.checked_add(xml.len() as u64 + trailer::BYTES as u64)
@@ -415,6 +434,8 @@ impl<W: Write> DataFork<W> {
 			xml.len() as u64,
 			physical_crc,
 			master_crc,
+			metadata.variant,
+			metadata.segment_id,
 		);
 		options.cancellation.check()?;
 		self.sink.write_all(&xml)?;

@@ -1,5 +1,7 @@
 //! Bounded metadata inspection, random reads and checksum verification.
 
+#[cfg(feature = "write")]
+mod rebuild;
 mod source;
 
 use std::{io::Write, ops::Range};

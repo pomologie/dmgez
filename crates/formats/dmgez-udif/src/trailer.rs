@@ -12,7 +12,7 @@ const SINGLE_SEGMENT_NUMBER: u32 = 1;
 const SINGLE_SEGMENT_COUNT: u32 = 1;
 #[cfg(feature = "read")]
 const DEVICE_IMAGE: u32 = 1;
-const PARTITION_IMAGE: u32 = 2;
+pub(crate) const PARTITION_IMAGE: u32 = 2;
 
 const VERSION_OFFSET: usize = 4;
 const HEADER_LENGTH_OFFSET: usize = 8;
@@ -28,10 +28,8 @@ const RESOURCE_FORK_OFFSET: usize = 40;
 const RESOURCE_FORK_LENGTH_OFFSET: usize = 48;
 const SEGMENT_NUMBER_OFFSET: usize = 56;
 const SEGMENT_COUNT_OFFSET: usize = 60;
-#[cfg(feature = "read")]
 const SEGMENT_ID_OFFSET: usize = 64;
-#[cfg(feature = "read")]
-const SEGMENT_ID_BYTES: usize = 16;
+pub(crate) const SEGMENT_ID_BYTES: usize = 16;
 const DATA_CHECKSUM_OFFSET: usize = 80;
 const XML_OFFSET: usize = 216;
 const XML_LENGTH_OFFSET: usize = 224;
@@ -53,6 +51,12 @@ pub(crate) struct Trailer {
 	pub variant: u32,
 	pub physical_crc: Checksum,
 	pub master_crc: Checksum,
+}
+
+#[cfg(all(feature = "read", feature = "write"))]
+pub(crate) fn has_plain_checksums(bytes: &[u8; BYTES]) -> bool {
+	crate::checksum::is_plain_crc32(bytes, DATA_CHECKSUM_OFFSET)
+		&& crate::checksum::is_plain_crc32(bytes, MASTER_CHECKSUM_OFFSET)
 }
 
 #[cfg(feature = "read")]
@@ -138,6 +142,8 @@ pub(crate) fn encode(
 	xml_len: u64,
 	physical_crc: u32,
 	master_crc: u32,
+	variant: u32,
+	segment_id: [u8; SEGMENT_ID_BYTES],
 ) -> [u8; BYTES] {
 	use crate::{binary, checksum};
 
@@ -149,11 +155,12 @@ pub(crate) fn encode(
 	binary::put_u64(&mut bytes, DATA_FORK_LENGTH_OFFSET, data_len);
 	binary::put_u32(&mut bytes, SEGMENT_NUMBER_OFFSET, SINGLE_SEGMENT_NUMBER);
 	binary::put_u32(&mut bytes, SEGMENT_COUNT_OFFSET, SINGLE_SEGMENT_COUNT);
+	bytes[SEGMENT_ID_OFFSET..SEGMENT_ID_OFFSET + SEGMENT_ID_BYTES].copy_from_slice(&segment_id);
 	checksum::put_crc32(&mut bytes, DATA_CHECKSUM_OFFSET, physical_crc);
 	binary::put_u64(&mut bytes, XML_OFFSET, data_len);
 	binary::put_u64(&mut bytes, XML_LENGTH_OFFSET, xml_len);
 	checksum::put_crc32(&mut bytes, MASTER_CHECKSUM_OFFSET, master_crc);
-	binary::put_u32(&mut bytes, IMAGE_VARIANT_OFFSET, PARTITION_IMAGE);
+	binary::put_u32(&mut bytes, IMAGE_VARIANT_OFFSET, variant);
 	binary::put_u64(&mut bytes, SECTOR_COUNT_OFFSET, sectors);
 	bytes
 }

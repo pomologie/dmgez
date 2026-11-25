@@ -42,6 +42,17 @@ pub(crate) const NO_RUN_COMMENT: u32 = 0;
 #[cfg(feature = "write")]
 const WHOLE_DISK_DESCRIPTOR: u32 = 0xffff_fffe;
 
+#[cfg(all(feature = "read", feature = "write"))]
+pub(crate) fn has_rebuild_layout(bytes: &[u8], stored_length: u64) -> Result<bool, Error> {
+	let end = bytes
+		.last_chunk::<RUN_BYTES>()
+		.ok_or(Error::Corrupt("missing mish terminator"))?;
+	Ok(binary::u64_at(bytes, DATA_BASE_OFFSET)? == 0
+		&& binary::u32_at(bytes, DESCRIPTOR_OFFSET)? == WHOLE_DISK_DESCRIPTOR
+		&& binary::u64_at(end, RUN_DATA_OFFSET)? == stored_length
+		&& crate::checksum::is_plain_crc32(bytes, CHECKSUM_OFFSET))
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Kind {
 	Raw,

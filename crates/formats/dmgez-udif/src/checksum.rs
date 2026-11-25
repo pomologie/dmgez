@@ -14,7 +14,20 @@ const CRC32_BITS: u32 = u32::BITS;
 const BIT_COUNT_OFFSET: usize = size_of::<u32>();
 const PAYLOAD_OFFSET: usize = BIT_COUNT_OFFSET + size_of::<u32>();
 #[cfg(feature = "read")]
-const PAYLOAD_CAPACITY_BITS: u32 = 128 * u8::BITS;
+const PAYLOAD_CAPACITY_BYTES: usize = 128;
+#[cfg(feature = "read")]
+const PAYLOAD_CAPACITY_BITS: u32 = PAYLOAD_CAPACITY_BYTES as u32 * u8::BITS;
+
+#[cfg(all(feature = "read", feature = "write"))]
+pub(crate) fn is_plain_crc32(bytes: &[u8], offset: usize) -> bool {
+	matches!(Checksum::decode(bytes, offset), Ok(Checksum::Crc32(_)))
+		&& bytes
+			.get(
+				offset + PAYLOAD_OFFSET + size_of::<u32>()
+					..offset + PAYLOAD_OFFSET + PAYLOAD_CAPACITY_BYTES,
+			)
+			.is_some_and(|padding| padding.iter().all(|&byte| byte == 0))
+}
 
 #[cfg(feature = "read")]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
