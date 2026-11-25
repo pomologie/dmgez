@@ -11,6 +11,9 @@ use super::{
 	Record, Value, first_leaf, fork_start, fs, hfsplus, open_output, options,
 };
 
+#[path = "retina_background.rs"]
+mod retina;
+
 const PROJECT: &str = include_str!("../fixtures/finder-background.toml");
 const ROOT_SOURCE: &str = "background-root.png";
 const OVERRIDE_SOURCE: &str = "background-override.png";
@@ -36,8 +39,13 @@ fn write_sources(root: &Path) {
 
 fn publish_fixture(root: &Path) -> (Image<FileSource>, Header) {
 	write_sources(root);
+	publish_project(root, &Project::parse(PROJECT).unwrap());
+	open_output(&root.join(IMAGE))
+}
+
+fn publish_project(root: &Path, project: &Project) {
 	hfsplus::prepare(
-		&Project::parse(PROJECT).unwrap(),
+		project,
 		root,
 		options(OutputIntent::Path),
 		Default::default(),
@@ -47,7 +55,6 @@ fn publish_fixture(root: &Path) -> (Image<FileSource>, Header) {
 	.unwrap()
 	.publish(None)
 	.unwrap();
-	open_output(&root.join(IMAGE))
 }
 
 fn read_fork(image: &mut Image<FileSource>, header: &Header, fork: &Fork) -> Vec<u8> {
@@ -166,8 +173,17 @@ fn independent_oracle_matches_background_aliases_to_the_hfs_catalog() {
 	let (mut image, header) = publish_fixture(temp.path());
 	let catalog = first_leaf(&mut image, &header.forks.catalog, header.geometry);
 	let node = Node::decode(&catalog).unwrap();
-	let [root_asset, override_asset] = assert_assets(&mut image, &node, &header);
-	let root = catalog_records(&node, &header)
+	let assets = assert_assets(&mut image, &node, &header);
+	assert_fixture_aliases(&mut image, &node, &header, &assets);
+}
+
+fn assert_fixture_aliases(
+	image: &mut Image<FileSource>,
+	node: &Node<'_>,
+	header: &Header,
+	[root_asset, override_asset]: &[Asset; 2],
+) {
+	let root = catalog_records(node, header)
 		.find(|record| {
 			record.key.parent_or_thread == ROOT_PARENT_ID
 				&& matches!(record.value, Value::Folder { metadata, .. } if metadata.id == ROOT_ID)
@@ -175,14 +191,14 @@ fn independent_oracle_matches_background_aliases_to_the_hfs_catalog() {
 		.unwrap();
 	let volume_name = String::from_utf16(&root.key.name.units().collect::<Vec<_>>()).unwrap();
 	let expected = [
-		("root", Some(&root_asset)),
-		("inherited", Some(&root_asset)),
-		("override", Some(&override_asset)),
+		("root", Some(root_asset)),
+		("inherited", Some(root_asset)),
+		("override", Some(override_asset)),
 		("color", None),
 	];
-	for (parent, (kind, asset)) in store_folders(&node, &header).into_iter().zip(expected) {
-		let data = store_fork(&node, &header, parent);
-		let bytes = read_fork(&mut image, &header, &data);
+	for (parent, (kind, asset)) in store_folders(node, header).into_iter().zip(expected) {
+		let data = store_fork(node, header, parent);
+		let bytes = read_fork(image, header, &data);
 		let mut command = Command::new("python3");
 		command.args(["-B", "-c", ORACLE, kind]);
 		if let Some(asset) = asset {
