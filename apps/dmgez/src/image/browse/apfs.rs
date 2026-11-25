@@ -3,6 +3,7 @@ use dmgez_apfs::{
 	VolumeSelector,
 };
 use dmgez_runtime::volume::{ApfsView, with_apfs_volume, with_apfs_window};
+use dmgez_udif::Cancellation;
 use dmgez_vfs::{LogicalDisk, VolumeId, volume::RawName};
 
 use super::{Error, Filesystem, Location, Observation, Request, query, search};
@@ -63,6 +64,7 @@ pub(super) fn browse(
 	window: VolumeId,
 	selection: Selection,
 	request: Request,
+	cancellation: &Cancellation,
 ) -> Result<Observation, Error> {
 	let selector = Some(VolumeSelector::ObjectId(selection.object_id));
 	with_apfs_window(
@@ -74,7 +76,7 @@ pub(super) fn browse(
 				if selection != Selection::from(&info) {
 					return Err(Error::ApfsVolumeChanged);
 				}
-				query::query_volume(view, Filesystem::Apfs, request, search)
+				query::query_volume(view, Filesystem::Apfs, request, search, cancellation)
 			})?
 		},
 	)?

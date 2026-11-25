@@ -2,12 +2,9 @@
 
 use dmgez_vfs::volume::{ForkKind, NodeHandle, NodeKind, ViewError, VolumeBackend, VolumeView};
 
-const MAX_TEXT_BYTES: usize = 64 << 10;
+pub(crate) mod png;
 
-pub(super) enum Request {
-	MetadataOnly,
-	Text,
-}
+const MAX_TEXT_BYTES: usize = 64 << 10;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Preview {

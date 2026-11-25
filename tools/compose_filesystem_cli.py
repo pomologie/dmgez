@@ -277,7 +277,9 @@ def compose_desktop_manifest(manifest, *, reader=True, build=False, apfs=False):
     groups = []
     dependencies = ["dmgez-vfs = { workspace = true, optional = true }\n"]
     if reader:
-        read = render_feature(READ_FEATURE, [f"dep:{ADAPTER}", "dep:dmgez-vfs", "dmgez-runtime/hfsplus-volume"])
+        read = render_feature(READ_FEATURE, [
+            f"dep:{ADAPTER}", "dep:dmgez-vfs", "dmgez-preview/png-decode", "dmgez-runtime/hfsplus-volume",
+        ])
         preview = render_feature(ACTUAL_PREVIEW_FEATURE, [READ_FEATURE, "dmgez-runtime/actual-preview"])
         groups.append(f"# HFS+ volume access\n{read}\n{preview}\n")
         dependencies.append(
@@ -285,7 +287,9 @@ def compose_desktop_manifest(manifest, *, reader=True, build=False, apfs=False):
             'optional = true, default-features = false, features = ["browse"] }\n'
         )
     if apfs:
-        read = render_feature(APFS_FEATURE, [f"dep:{APFS_ADAPTER}", "dep:dmgez-vfs", "dmgez-runtime/apfs-volume"])
+        read = render_feature(APFS_FEATURE, [
+            f"dep:{APFS_ADAPTER}", "dep:dmgez-vfs", "dmgez-preview/png-decode", "dmgez-runtime/apfs-volume",
+        ])
         groups.append(f"# APFS volume access\n{read}\n")
         dependencies.append(
             f'{APFS_ADAPTER} = {{ path = "../../crates/{COMPOSED_CRATE_GROUPS[APFS_ADAPTER]}/{APFS_ADAPTER}", '

@@ -33,8 +33,6 @@ impl App {
 		direction: Option<Direction>,
 		result: Result<Observation, browse::Error>,
 	) {
-		#[cfg(not(feature = "actual-preview"))]
-		let _ = ctx;
 		let Some(Opened {
 			document: Document::Image(image),
 			..
@@ -67,6 +65,7 @@ impl App {
 				let _ = arrived;
 			}
 			Ok(Observation::Details(details)) => browser.details = Some(details),
+			Ok(Observation::Png(prepared)) => browser.details = Some(prepared.present(ctx)),
 			Ok(Observation::Search(report)) => {
 				if let Some(page) = &browser.page {
 					browser.search.apply(&page.location, report);

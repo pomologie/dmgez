@@ -152,6 +152,21 @@ fn selects_the_native_apfs_checkpoint_and_browses_exact_files_through_files_view
 			extent: content::Extent::Complete,
 		})
 	);
+	let Observation::Png(prepared) = observe(
+		&tab,
+		Request::Png {
+			folder: location.clone(),
+			name: RawName::Utf8(ALIAS.into()),
+		},
+	) else {
+		panic!("expected a PNG preview result at the selected checkpoint");
+	};
+	assert_eq!(prepared.details.folder.apfs, Some(selected));
+	assert_eq!(prepared.details.native_id, details.native_id);
+	assert!(matches!(
+		prepared.image,
+		Err(content::png::Issue::UnsupportedFormat)
+	));
 	selected.uuid[0] ^= 1;
 	let moved = Location {
 		apfs: Some(selected),

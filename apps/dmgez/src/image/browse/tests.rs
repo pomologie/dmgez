@@ -16,6 +16,7 @@ use crate::{
 	inspector::{self, Action},
 };
 
+mod png;
 mod search;
 mod storage;
 mod text;
@@ -62,11 +63,13 @@ fn page(tab: &ImageTab, location: Location, offset: u64) -> Page {
 }
 
 fn hfs_storage(details: &Details) -> &StorageMetadata<browse::Error> {
-	match details.storage.as_ref() {
-		Storage::Hfs(storage) => storage,
-		#[cfg(feature = "apfs-read")]
-		Storage::Apfs(_) => panic!("expected HFS storage metadata"),
-	}
+	#[cfg(feature = "apfs-read")]
+	let Storage::Hfs(storage) = details.storage.as_ref() else {
+		panic!("expected HFS storage metadata");
+	};
+	#[cfg(not(feature = "apfs-read"))]
+	let Storage::Hfs(storage) = details.storage.as_ref();
+	storage
 }
 
 fn partition(slot: u32) -> Location {

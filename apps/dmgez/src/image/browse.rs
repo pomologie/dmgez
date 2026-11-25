@@ -143,6 +143,10 @@ pub(crate) enum Request {
 		folder: Location,
 		name: RawName,
 	},
+	Png {
+		folder: Location,
+		name: RawName,
+	},
 	Search {
 		location: Location,
 		query: String,
@@ -170,6 +174,7 @@ pub(crate) enum Observation {
 	ApfsCatalog(apfs::Catalog),
 	Page(Page),
 	Details(Details),
+	Png(Box<content::png::Prepared>),
 	Search(search::Report),
 	#[cfg(feature = "actual-preview")]
 	Preview(preview::Prepared),
@@ -200,6 +205,7 @@ pub(crate) struct Details {
 	pub link_target: Option<Vec<u8>>,
 	pub storage: Box<Storage>,
 	pub text: Option<content::Preview>,
+	pub png: Option<content::png::Preview>,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -320,7 +326,7 @@ impl ImageSnapshot {
 			cancellation,
 		};
 		source.check_unchanged()?;
-		let result = browse_image(source, request);
+		let result = browse_image(source, request, cancellation);
 		self.source.check_unchanged()?;
 		if cancellation.is_cancelled() {
 			return Err(ImageError::Cancelled.into());
@@ -329,7 +335,11 @@ impl ImageSnapshot {
 	}
 }
 
-fn browse_image(source: impl ReadAt, request: Request) -> Result<Observation, Error> {
+fn browse_image(
+	source: impl ReadAt,
+	request: Request,
+	cancellation: &Cancellation,
+) -> Result<Observation, Error> {
 	with_logical_disk(source, Encoding::Udif(Limits::default()), |logical| {
 		let location = match &request {
 			Request::Page { location, .. }
@@ -338,6 +348,9 @@ fn browse_image(source: impl ReadAt, request: Request) -> Result<Observation, Er
 				folder: location, ..
 			}
 			| Request::Text {
+				folder: location, ..
+			}
+			| Request::Png {
 				folder: location, ..
 			} => location,
 			#[cfg(feature = "actual-preview")]
@@ -348,11 +361,11 @@ fn browse_image(source: impl ReadAt, request: Request) -> Result<Observation, Er
 		let volume = location.volume;
 		#[cfg(feature = "apfs-read")]
 		if let Some(selection) = location.apfs {
-			return apfs::browse(logical, volume, selection, request);
+			return apfs::browse(logical, volume, selection, request, cancellation);
 		}
 		#[cfg(feature = "hfsplus-read")]
 		{
-			browse_hfs(logical, volume, request)
+			browse_hfs(logical, volume, request, cancellation)
 		}
 		#[cfg(not(feature = "hfsplus-read"))]
 		{
@@ -366,6 +379,7 @@ fn browse_hfs(
 	logical: &mut dyn LogicalDisk,
 	volume: VolumeId,
 	request: Request,
+	cancellation: &Cancellation,
 ) -> Result<Observation, Error> {
 	let mut disk = Disk::discover(logical, DiskLimits::default())?;
 	let selected = disk.select_volume(Some(volume))?;
@@ -388,7 +402,7 @@ fn browse_hfs(
 			VolumeSignature::HfsPlus => Filesystem::HfsPlus,
 			VolumeSignature::HfsX => Filesystem::HfsX,
 		};
-		query::query_volume(view, filesystem, request, search::hfs)
+		query::query_volume(view, filesystem, request, search::hfs, cancellation)
 	})?
 }
 

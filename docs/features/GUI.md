@@ -30,6 +30,8 @@ Entry details report the logical data fork length, stored resource fork length, 
 
 **Preview text** reads up to 64 KiB from the exact selected regular file on the document worker. The details pane shows complete or partial UTF-8 text and distinguishes a missing data fork, binary bytes, and unsupported encoding. [Text preview tests](../../apps/dmgez/src/image/browse/tests/text.rs)
 
+**Preview PNG** uses the same image handle and worker to decode one still 8-bit PNG. Encoded input is capped at 4 MiB and display pixels are capped at 1,048,576, with neither dimension above 2,048. Admission uses the PNG signature and declines animation, incomplete streams, and trailing data. The displayed texture belongs to the selected entry. [PNG preview tests](../../apps/dmgez/src/image/browse/tests/png.rs)
+
 The optional `actual-preview` feature reads the observed Finder icon layout, catalog entries and qualified in-volume background artwork from the chosen HFS+ or HFSX folder. The CLI exports a PNG with an observation report. The desktop displays the same renderer’s output with visible fallback states. [Actual-image preview profile](../../crates/presentation/dmgez-preview/README.md#render-an-actual-disk-image)
 
 The desktop accepts pointer or keyboard activation on the rendered icon bounds and uses exact catalog names for folder navigation and item details. The hidden item control preserves the choice across folders. Search and folder history operate through the held image and retain exact catalog selections. [Preview activation tests](../../apps/dmgez/src/inspector/browse/preview/tests.rs)

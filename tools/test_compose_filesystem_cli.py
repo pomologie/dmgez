@@ -135,7 +135,9 @@ class DesktopCompositionTests(unittest.TestCase):
         manifest = tomllib.loads(compose.compose_desktop_manifest(original))
         self.assertEqual(manifest["features"], {
             **base.get("features", {}),
-            compose.READ_FEATURE: [f"dep:{compose.ADAPTER}", "dep:dmgez-vfs", "dmgez-runtime/hfsplus-volume"],
+            compose.READ_FEATURE: [
+                f"dep:{compose.ADAPTER}", "dep:dmgez-vfs", "dmgez-preview/png-decode", "dmgez-runtime/hfsplus-volume",
+            ],
             compose.ACTUAL_PREVIEW_FEATURE: [compose.READ_FEATURE, "dmgez-runtime/actual-preview"],
         })
         self.assertEqual(manifest["dependencies"][compose.ADAPTER]["features"], ["browse"])
@@ -146,7 +148,7 @@ class DesktopCompositionTests(unittest.TestCase):
         original = (compose.ROOT / compose.DESKTOP / compose.MANIFEST).read_text(encoding="utf-8")
         manifest = tomllib.loads(compose.compose_desktop_manifest(original, reader=False, apfs=True))
         self.assertEqual(manifest["features"][compose.APFS_FEATURE], [
-            f"dep:{compose.APFS_ADAPTER}", "dep:dmgez-vfs", "dmgez-runtime/apfs-volume",
+            f"dep:{compose.APFS_ADAPTER}", "dep:dmgez-vfs", "dmgez-preview/png-decode", "dmgez-runtime/apfs-volume",
         ])
         self.assertNotIn(compose.READ_FEATURE, manifest["features"])
         self.assertNotIn(compose.ACTUAL_PREVIEW_FEATURE, manifest["features"])
