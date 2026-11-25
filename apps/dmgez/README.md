@@ -8,6 +8,8 @@ The image workspace shows the inspector's observed UDIF metadata, partition disc
 
 The desktop tests cover bounded project input, native GPT fixture inspection, copy publication and no-clobber behavior, cancelled or failed opens, and grouped position edits with undo and redo.
 
+A live smoke test on macOS 14.7.2 (23H311, arm64) opened the [native GPT fixture](../../crates/foundation/dmgez-vfs/tests/fixtures/native-gpt.dmg) through the standard file picker. The window reported GPT and a logical partition start of 20,480 bytes. Verification status stayed “Not checked”.
+
 Run the desktop smoke suite from the workspace root.
 
 ```sh
