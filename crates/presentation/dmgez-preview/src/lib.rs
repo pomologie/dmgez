@@ -3,6 +3,8 @@
 //! [`ProjectFolder`] is the design-side adapter. The coordinate transforms
 //! can also be used on icon locations obtained from a read-only image view.
 
+#[cfg(feature = "actual")]
+pub mod actual;
 mod declared;
 mod geometry;
 mod project;

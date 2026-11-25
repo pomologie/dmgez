@@ -9,7 +9,7 @@ use super::{
 	canvas::{Canvas, Dimensions, Rgb},
 };
 
-const DEFAULT_BACKGROUND: Rgb = [245, 249, 248];
+pub(super) const DEFAULT_BACKGROUND: Rgb = [245, 249, 248];
 const MAX_ASSET_BYTES: usize = 16 << 20;
 const MAX_DECODE_BYTES: usize = 16 << 20;
 const FULL_OPACITY: u8 = u8::MAX;
@@ -23,21 +23,24 @@ pub(super) fn render(
 		None | Some(Background::None { .. }) => Canvas::new(dimensions, DEFAULT_BACKGROUND),
 		Some(Background::Color { value }) => {
 			let (red, green, blue) = parse_solid_background_color(value.as_str())?;
-			let color =
-				[red, green, blue].map(|channel| (channel * f64::from(u8::MAX)).round() as u8);
-			Canvas::new(dimensions, color)
+			color_canvas(dimensions, [red, green, blue])
 		}
 		Some(Background::Image { source, .. }) => {
 			let path = source.resolve(project_directory);
 			let mut canvas = Canvas::new(dimensions, DEFAULT_BACKGROUND)?;
-			paint_png(&mut canvas, &path)?;
+			paint_file(&mut canvas, &path)?;
 			Ok(canvas)
 		}
 		_ => Err(Error::BackgroundProfile),
 	}
 }
 
-fn paint_png(canvas: &mut Canvas, path: &Path) -> Result<(), Error> {
+pub(super) fn color_canvas(dimensions: Dimensions, channels: [f64; 3]) -> Result<Canvas, Error> {
+	let color = channels.map(|channel| (channel * f64::from(u8::MAX)).round() as u8);
+	Canvas::new(dimensions, color)
+}
+
+fn paint_file(canvas: &mut Canvas, path: &Path) -> Result<(), Error> {
 	if !path.metadata().map_err(Error::BackgroundOpen)?.is_file() {
 		return Err(Error::BackgroundOpen(io::Error::new(
 			io::ErrorKind::InvalidInput,
@@ -51,6 +54,13 @@ fn paint_png(canvas: &mut Canvas, path: &Path) -> Result<(), Error> {
 		.ok_or(Error::BackgroundBytes)?;
 	let mut input = zeroed(input_bytes)?;
 	source.read_exact_at(0, &mut input)?;
+	paint_png(canvas, &input)
+}
+
+pub(super) fn paint_png(canvas: &mut Canvas, input: &[u8]) -> Result<(), Error> {
+	if input.len() > MAX_ASSET_BYTES {
+		return Err(Error::BackgroundBytes);
+	}
 	let mut decoder = Decoder::new_with_limits(
 		Cursor::new(input),
 		Limits {

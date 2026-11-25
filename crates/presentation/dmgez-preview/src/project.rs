@@ -85,15 +85,19 @@ impl<'project> PlacedItem<'project> {
 	/// Returns the display name after applying the configured extension visibility.
 	#[must_use]
 	pub fn display_name(self) -> &'project str {
-		const EXTENSION_SEPARATOR: char = '.';
-		if self.hide_extension
-			&& let Some((stem, _)) = self.name.rsplit_once(EXTENSION_SEPARATOR)
-			&& !stem.is_empty()
-		{
-			return stem;
-		}
-		self.name
+		display_name(self.name, self.hide_extension)
 	}
+}
+
+pub(crate) fn display_name(name: &str, hide_extension: bool) -> &str {
+	const EXTENSION_SEPARATOR: char = '.';
+	if hide_extension
+		&& let Some((stem, _)) = name.rsplit_once(EXTENSION_SEPARATOR)
+		&& !stem.is_empty()
+	{
+		return stem;
+	}
+	name
 }
 
 /// Selection policy for items marked hidden in the image metadata.
@@ -362,7 +366,10 @@ fn point([x, y]: [Coordinate; 2]) -> Result<FolderPoint, GeometryError> {
 	FolderPoint::new(x.get(), y.get())
 }
 
-fn fallback_center(style: FolderStyle<'_>, index: usize) -> Result<FolderPoint, GeometryError> {
+pub(crate) fn fallback_center(
+	style: FolderStyle<'_>,
+	index: usize,
+) -> Result<FolderPoint, GeometryError> {
 	let step = style.grid_spacing.max(style.icon_size.width());
 	let columns = ((style.window_size.width() - style.icon_size.width()).max(0.0) / step).floor();
 	let columns = (columns as usize).saturating_add(1);

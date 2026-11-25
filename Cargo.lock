@@ -1315,6 +1315,7 @@ version = "0.1.0"
 dependencies = [
  "dmgez-config",
  "dmgez-core",
+ "dmgez-finder",
  "epaint",
  "png",
  "proptest",

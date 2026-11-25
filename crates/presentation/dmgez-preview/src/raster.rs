@@ -1,16 +1,23 @@
-//! Bounded CPU rendering of a project's declared icon-view folder.
+//! Bounded CPU rendering of icon layouts to PNG.
 
+#[cfg(feature = "actual")]
+mod actual;
 mod background;
 mod canvas;
 mod label;
 
 use std::{collections::TryReserveError, io::Write, path::Path};
 
-use dmgez_config::{Arrangement, BackgroundColorError, Project, VirtualPath};
+use dmgez_config::{Arrangement, BackgroundColorError, LabelPosition, Project, VirtualPath};
 use thiserror::Error;
 
-use crate::{CanvasPoint, DeclaredTree, DeclaredTreeError, GeometryError, ItemVisibility};
+use crate::{
+	CanvasPoint, DeclaredTree, DeclaredTreeError, FolderRect, GeometryError, ItemVisibility,
+	Viewport,
+};
 
+#[cfg(feature = "actual")]
+pub use actual::ActualPreview;
 use canvas::{Canvas, Dimensions};
 use label::Labels;
 
@@ -37,9 +44,9 @@ pub enum Error {
 	CustomIcon(VirtualPath),
 	#[error("the folder exceeds the design PNG limit of {MAX_FOLDER_ENTRIES} entries")]
 	EntryBudget,
-	#[error("design PNG dimensions exceed the raster limits")]
+	#[error("PNG dimensions exceed the raster limits")]
 	Dimensions,
-	#[error("design PNG exceeds the raster work budget")]
+	#[error("PNG exceeds the raster work budget")]
 	PaintBudget,
 	#[error("the requested Finder background is outside the design PNG profile")]
 	BackgroundProfile,
@@ -55,8 +62,11 @@ pub enum Error {
 	BackgroundDecode(#[from] png::DecodingError),
 	#[error("could not allocate bounded raster storage")]
 	Allocation(#[from] TryReserveError),
-	#[error("could not encode or write the design PNG")]
+	#[error("could not encode or write the PNG")]
 	Png(#[from] png::EncodingError),
+	#[cfg(feature = "actual")]
+	#[error(transparent)]
+	Actual(#[from] crate::actual::Error),
 }
 
 /// A prepared project design in one-pixel-per-point RGB.
@@ -112,14 +122,13 @@ impl DesignPreview {
 				return Err(Error::CustomIcon(item.destination.clone()));
 			}
 			let directory = tree.contains_folder(item.destination);
-			let start = viewport.to_canvas(item.icon_bounds.min())?;
-			let end = viewport.to_canvas(item.icon_bounds.max())?;
-			canvas.paint_icon(start, end, directory)?;
-			labels.paint(
+			paint_item(
 				&mut canvas,
+				&mut labels,
+				viewport,
+				item.icon_bounds,
 				item.display_name(),
-				start,
-				end,
+				directory,
 				style.label_position,
 			)?;
 		}
@@ -137,15 +146,34 @@ impl DesignPreview {
 	/// # Errors
 	/// Returns an encoding or write error if the sink cannot receive the PNG.
 	pub fn write_png(&self, output: impl Write) -> Result<(), Error> {
-		let (width, height) = self.size();
-		let mut encoder = png::Encoder::new(output, width, height);
-		encoder.set_color(PNG_COLOR_TYPE);
-		encoder.set_depth(PNG_SAMPLE_DEPTH);
-		encoder.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
-		encoder.add_text_chunk(PNG_DESCRIPTION_KEY.to_owned(), PNG_DESCRIPTION.to_owned())?;
-		let mut writer = encoder.write_header()?;
-		writer.write_image_data(self.canvas.bytes())?;
-		writer.finish()?;
-		Ok(())
+		write_png(&self.canvas, output, PNG_DESCRIPTION)
 	}
+}
+
+fn paint_item(
+	canvas: &mut Canvas,
+	labels: &mut Labels,
+	viewport: Viewport,
+	bounds: FolderRect,
+	name: &str,
+	directory: bool,
+	label_position: LabelPosition,
+) -> Result<(), Error> {
+	let start = viewport.to_canvas(bounds.min())?;
+	let end = viewport.to_canvas(bounds.max())?;
+	canvas.paint_icon(start, end, directory)?;
+	labels.paint(canvas, name, start, end, label_position)
+}
+
+fn write_png(canvas: &Canvas, output: impl Write, description: &str) -> Result<(), Error> {
+	let (width, height) = canvas.dimensions().size();
+	let mut encoder = png::Encoder::new(output, width, height);
+	encoder.set_color(PNG_COLOR_TYPE);
+	encoder.set_depth(PNG_SAMPLE_DEPTH);
+	encoder.set_source_srgb(png::SrgbRenderingIntent::Perceptual);
+	encoder.add_text_chunk(PNG_DESCRIPTION_KEY.to_owned(), description.to_owned())?;
+	let mut writer = encoder.write_header()?;
+	writer.write_image_data(canvas.bytes())?;
+	writer.finish()?;
+	Ok(())
 }

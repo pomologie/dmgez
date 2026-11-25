@@ -8,12 +8,16 @@ repository.workspace = true
 description = "Headless preview geometry and design rendering for dmgez"
 
 [features]
+actual = ["png-render", "dep:dmgez-finder"]
 png-render = ["dep:dmgez-core", "dep:epaint", "dep:png"]
 
 [dependencies]
 # Workspace foundation
 dmgez-config.workspace = true
 dmgez-core = { workspace = true, optional = true, features = ["source"] }
+
+# Finder metadata
+dmgez-finder = { workspace = true, optional = true }
 
 # CPU text layout
 epaint = { version = "=0.37.0", default-features = false, features = ["default_fonts"], optional = true }
