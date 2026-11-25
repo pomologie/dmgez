@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use dmgez_config::{Background, LabelPosition, VirtualPath};
+use dmgez_config::{Background, LabelPosition, VirtualPath, parse_solid_background_color};
 use dmgez_preview::{
 	CanvasPoint, Drag, FolderPoint, ItemVisibility, PositionSource, ProjectFolder, Viewport,
 };
@@ -26,8 +26,6 @@ const ITEM_CORNER: u8 = 8;
 const LABEL_MARGIN: f32 = 5.0;
 const MAX_LABEL_POINTS: f64 = 36.0;
 const FIT_PADDING: f32 = 26.0;
-const HEX_RADIX: u32 = 16;
-const HEX_SHORT_SCALE: u8 = 17;
 
 pub(crate) struct View<'a> {
 	pub selected: Option<&'a VirtualPath>,
@@ -115,9 +113,9 @@ pub(crate) fn show(
 			});
 		}
 		let background = match style.background {
-			Some(Background::Color { value }) => {
-				parse_color(value.as_str()).unwrap_or(CANVAS_BACKGROUND)
-			}
+			Some(Background::Color { value }) => parse_solid_background_color(value.as_str())
+				.map(canvas_color)
+				.unwrap_or(CANVAS_BACKGROUND),
 			_ => CANVAS_BACKGROUND,
 		};
 		let painter = ui.painter_at(rect);
@@ -245,20 +243,9 @@ fn project(viewport: Viewport, center: FolderPoint) -> Option<Pos2> {
 	(position.x.is_finite() && position.y.is_finite()).then_some(position)
 }
 
-fn parse_color(text: &str) -> Option<Color32> {
-	let data = text.strip_prefix('#')?.as_bytes();
-	let digit = |value| u8::try_from(char::from(value).to_digit(HEX_RADIX)?).ok();
-	let pair = |a, b| Some(digit(a)? * (HEX_RADIX as u8) + digit(b)?);
-	let [r, g, b] = match *data {
-		[r, g, b] => [
-			digit(r)? * HEX_SHORT_SCALE,
-			digit(g)? * HEX_SHORT_SCALE,
-			digit(b)? * HEX_SHORT_SCALE,
-		],
-		[r1, r2, g1, g2, b1, b2] => [pair(r1, r2)?, pair(g1, g2)?, pair(b1, b2)?],
-		_ => return None,
-	};
-	Some(Color32::from_rgb(r, g, b))
+fn canvas_color((red, green, blue): (f64, f64, f64)) -> Color32 {
+	let channel = |normalized: f64| (normalized * f64::from(u8::MAX)).round() as u8;
+	Color32::from_rgb(channel(red), channel(green), channel(blue))
 }
 
 #[cfg(test)]
@@ -268,6 +255,42 @@ mod tests {
 	use eframe::egui::{Context, Event, Modifiers, PointerButton, RawInput, Shape};
 
 	use super::*;
+
+	#[test]
+	fn paints_the_shared_solid_background_color() {
+		const SOURCE: &str = r#"
+schema_version = 1
+[image]
+name = 'Color'
+output = 'color.dmg'
+[finder]
+background = { kind = 'color', value = 'hsl(180deg, 100%, 50%)' }
+"#;
+		let project = Project::parse(SOURCE).unwrap();
+		let folder = "/".parse().unwrap();
+		let layout = ProjectFolder::from_project(&project, &folder, &[]).unwrap();
+		let mut frame = Context::default().run_ui(
+			RawInput {
+				screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(720.0, 550.0))),
+				..Default::default()
+			},
+			|ui| {
+				let view = View {
+					selected: None,
+					show_hidden: false,
+					snap: false,
+					scale: 1.0,
+					drag: None,
+					lint_warnings: None,
+				};
+				show(ui, &layout, view, |_| true);
+			},
+		);
+		frame.textures_delta.clear();
+		assert!(frame.shapes.iter().any(|shape| {
+			matches!(&shape.shape, Shape::Rect(rect) if rect.fill == Color32::from_rgb(0, 255, 255))
+		}));
+	}
 
 	#[test]
 	fn pointer_selects_the_icon_with_or_without_a_lint_marker() {

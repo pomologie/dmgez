@@ -68,8 +68,10 @@ pub enum Error {
 	/// A newer configuration selected a background outside this profile.
 	#[error("Finder background option is unavailable")]
 	Background,
-	/// The initial color profile accepts opaque hexadecimal RGB.
-	#[error("Finder background color must use #RGB or #RRGGBB")]
+	/// A solid background requires a recognized opaque color with in-range components.
+	#[error(
+		"Finder background color must be opaque, with a recognized syntax and components in range"
+	)]
 	BackgroundColor,
 	/// The arrangement key has no qualified icon-view spelling.
 	#[error("Finder icon arrangement by {0:?} is unavailable")]

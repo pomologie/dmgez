@@ -1,6 +1,6 @@
 # Finder presentation stores
 
-`write_store` produces a deterministic `.DS_Store` for a folder in a newly built image. It takes the folder's settings and the final names and positions of its direct children. The standard records capture window bounds and chrome, icon-view preferences, default view, and icon positions. Window origins follow dmgbuild's screen coordinates with y increasing upwards. Icon positions are unsigned whole points with y increasing downwards. The color profile accepts `#RGB` and `#RRGGBB`.
+`write_store` produces a deterministic `.DS_Store` for a folder in a newly built image. It takes the folder's settings and the final names and positions of its direct children. The standard records capture window bounds and chrome, icon-view preferences, default view, and icon positions. Window origins follow dmgbuild's screen coordinates with y increasing upwards. Icon positions are unsigned whole points with y increasing downwards. Solid backgrounds accept opaque CSS names, `#RGB`, `#RRGGBB` and dmgbuild's comma-separated `rgb`, `hsl`, `hwb`, `cmyk`, and `gray`/`grey` functions. Non-angle function components use fractions or percentages.
 
 The writer accepts printable ASCII item names. It supports icon view and list view as the default. Column view, cover flow, gallery view, template backgrounds, and editing existing stores require additional qualification. The caller resolves folder inheritance and reserves the generated store before planning catalog IDs.
 

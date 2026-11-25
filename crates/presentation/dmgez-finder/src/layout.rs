@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use dmgez_config::{
 	Arrangement, AutoFlag, Background, Column, Coordinate, FinderOptions, LabelPosition, View,
+	parse_solid_background_color,
 };
 use ds_parser::{
 	BrowserWindowSettings, FinderViewStyle, IconViewProperties, PropertyList, WindowBounds,
@@ -37,9 +38,6 @@ const ARRANGE_BY_DATE_LAST_OPENED: &str = "dateLastOpened";
 const ARRANGE_BY_SIZE: &str = "size";
 const ARRANGE_BY_KIND: &str = "kind";
 const ARRANGE_BY_LABEL: &str = "label";
-const HEX_COLOR_PREFIX: char = '#';
-const HEX_RADIX: u32 = 16;
-const NIBBLE_CHANNEL_SCALE: u8 = 17;
 
 pub(super) struct Layout<'a> {
 	pub window: BrowserWindowSettings,
@@ -245,7 +243,10 @@ fn resolve_background(
 ) -> Result<(i64, (f64, f64, f64)), Error> {
 	match background {
 		None | Some(Background::None {}) => Ok((DEFAULT_BACKGROUND_TYPE, DEFAULT_BACKGROUND_RGB)),
-		Some(Background::Color { value }) => Ok((SOLID_BACKGROUND_TYPE, rgb_hex(value.as_str())?)),
+		Some(Background::Color { value }) => Ok((
+			SOLID_BACKGROUND_TYPE,
+			parse_solid_background_color(value.as_str()).map_err(|_| Error::BackgroundColor)?,
+		)),
 		Some(Background::Image { .. }) => match image {
 			ImageBackground::Unavailable => Err(Error::ImageBackground),
 			ImageBackground::Preflight | ImageBackground::Alias(_) => {
@@ -255,32 +256,4 @@ fn resolve_background(
 		Some(Background::Template { .. }) => Err(Error::TemplateBackground),
 		Some(_) => Err(Error::Background),
 	}
-}
-
-fn rgb_hex(value: &str) -> Result<(f64, f64, f64), Error> {
-	let rgb = value
-		.strip_prefix(HEX_COLOR_PREFIX)
-		.ok_or(Error::BackgroundColor)?;
-	let channel = |byte: u8| {
-		char::from(byte)
-			.to_digit(HEX_RADIX)
-			.and_then(|digit| u8::try_from(digit).ok())
-			.ok_or(Error::BackgroundColor)
-	};
-	let pair = |high, low| Ok::<_, Error>(channel(high)? * (HEX_RADIX as u8) + channel(low)?);
-	let [red, green, blue] = match *rgb.as_bytes() {
-		[red, green, blue] => [
-			channel(red)? * NIBBLE_CHANNEL_SCALE,
-			channel(green)? * NIBBLE_CHANNEL_SCALE,
-			channel(blue)? * NIBBLE_CHANNEL_SCALE,
-		],
-		[r_high, r_low, g_high, g_low, b_high, b_low] => [
-			pair(r_high, r_low)?,
-			pair(g_high, g_low)?,
-			pair(b_high, b_low)?,
-		],
-		_ => return Err(Error::BackgroundColor),
-	};
-	let normalize = |byte| f64::from(byte) / f64::from(u8::MAX);
-	Ok((normalize(red), normalize(green), normalize(blue)))
 }
