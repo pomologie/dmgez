@@ -40,6 +40,8 @@ The optional APFS desktop profile shares the **Files** workspace for catalog pag
 
 The run table accepts a decimal or hexadecimal logical byte offset and selects the corresponding run on its page. The shared runtime uses the admitted UDIF index and revalidates the held source. [Run lookup tests](../../crates/runtime/dmgez-runtime/src/image/tests.rs)
 
+The run table can filter by codec or decoder availability and sort by logical offset, logical size, stored size, or stored offset. Queries run in the background over retained metadata. Filtered pages keep original logical ordinals for selection and export. [Run query tests](../../apps/dmgez/src/image/tests/run_query.rs)
+
 The inspector exports current inspection and completed verification reports as versioned JSON. A selected run with an available decoder can be exported as logical bytes within the 64 MiB limit. All exports stage to a new path and revalidate the held source before publication. [Export tests](../../apps/dmgez/src/app/image_exports/tests.rs)
 
 **Compare…** compares the open image with a separately selected DMG on the document worker. Compare stored image bytes, decoded disk bytes, or files when the corresponding HFS+ or APFS reader is composed. A logical byte difference can open its run in the inspector. Filesystem comparison shows changed paths side by side, with the compared fields, partition slots, and selected APFS volumes and checkpoints. Each result is bounded and revalidates the held input files. [Comparison tests](../../apps/dmgez/src/app/image_compare/tests.rs)

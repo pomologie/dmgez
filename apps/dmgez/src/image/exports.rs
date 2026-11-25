@@ -1,7 +1,9 @@
 use std::{path::Path, sync::Arc};
 
-use dmgez_inspector::{InspectionReport, RunPage, VerificationReport};
-use dmgez_runtime::image::{InspectionExportError, MAX_RUN_EXPORT_BYTES, ReportExport, export_run};
+use dmgez_inspector::{InspectionReport, Run, RunPage, VerificationReport};
+use dmgez_runtime::image::{
+	InspectionExportError, MAX_RUN_EXPORT_BYTES, ReportExport, RunQueryPage, export_run,
+};
 use dmgez_udif::Cancellation;
 
 use super::{ImageSnapshot, ImageTab};
@@ -30,8 +32,11 @@ impl ImageTab {
 			Kind::Inspection => Content::Inspection(Box::new(self.report.clone())),
 			Kind::Verification => Content::Verification(Arc::clone(self.verification.as_ref()?)),
 			Kind::Run(ordinal) => {
-				let selected =
-					selected_run(self.report.run_page.as_ref()?, self.run_navigation.selected)?;
+				let selected = displayed_run(
+					self.report.run_page.as_ref()?,
+					self.run_navigation.query_page.as_ref(),
+					self.run_navigation.selected,
+				)?;
 				if selected != ordinal {
 					return None;
 				}
@@ -69,9 +74,21 @@ impl Export {
 	}
 }
 
-pub(crate) fn selected_run(page: &RunPage, ordinal: Option<usize>) -> Option<usize> {
+pub(crate) fn displayed_run(
+	page: &RunPage,
+	query: Option<&RunQueryPage>,
+	ordinal: Option<usize>,
+) -> Option<usize> {
 	let ordinal = ordinal?;
+	if let Some(query) = query {
+		let row = query.rows.iter().find(|row| row.ordinal == ordinal)?;
+		return is_exportable(&row.run).then_some(ordinal);
+	}
 	let start = usize::try_from(page.offset).ok()?;
 	let run = page.runs.get(ordinal.checked_sub(start)?)?;
-	(run.decoder_available && run.logical.length_bytes <= MAX_RUN_EXPORT_BYTES).then_some(ordinal)
+	is_exportable(run).then_some(ordinal)
+}
+
+fn is_exportable(run: &Run) -> bool {
+	run.decoder_available && run.logical.length_bytes <= MAX_RUN_EXPORT_BYTES
 }

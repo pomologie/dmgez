@@ -1,4 +1,5 @@
 use dmgez_inspector::{RunPage, VerificationReport};
+use dmgez_runtime::image::RunQueryPage;
 use dmgez_udif::{Cancellation, Error};
 use eframe::egui::Context;
 
@@ -13,6 +14,7 @@ mod folder;
 
 pub(super) enum ImageCompletion {
 	Runs(Result<(RunPage, Option<usize>), Error>),
+	QueriedRuns(Result<RunQueryPage, Error>),
 	Checked(Box<VerificationReport>),
 	#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 	Browsed {
@@ -45,6 +47,16 @@ impl App {
 						.map(|location| (location.page, Some(location.ordinal))),
 				))
 			}),
+			Action::QueryRuns { query, offset } => {
+				let cancellation = Cancellation::default();
+				self.start_worker(ctx, Some(cancellation.clone()), move || {
+					Completion::Image(ImageCompletion::QueriedRuns(snapshot.query_runs(
+						query,
+						offset,
+						&cancellation,
+					)))
+				});
+			}
 			Action::Verify => {
 				let cancellation = Cancellation::default();
 				self.start_worker(ctx, Some(cancellation.clone()), move || {
@@ -96,13 +108,18 @@ impl App {
 					image.run_navigation.select(selected);
 				}
 				Err(error) => {
-					if matches!(error, Error::SourceChanged) {
-						image.verification = None;
-						image.run_navigation.select(None);
-						#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
-						image.browser.invalidate();
-					}
+					invalidate_changed_runs(image, &error);
 					self.error = Some(format!("Could not load the run page. {error}"));
+				}
+			},
+			ImageCompletion::QueriedRuns(result) => match result {
+				Ok(page) => {
+					image.run_navigation.query_page = Some(page);
+					image.run_navigation.select_displayed(None);
+				}
+				Err(error) => {
+					invalidate_changed_runs(image, &error);
+					self.error = Some(format!("Could not query the run table. {error}"));
 				}
 			},
 			ImageCompletion::Checked(report) => {
@@ -124,6 +141,15 @@ impl App {
 	}
 }
 
+fn invalidate_changed_runs(image: &mut crate::image::ImageTab, error: &Error) {
+	if matches!(error, Error::SourceChanged) {
+		image.verification = None;
+		image.run_navigation.select(None);
+		#[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
+		image.browser.invalidate();
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use std::{fs, time::Duration};
@@ -138,7 +164,7 @@ mod tests {
 		let result = app
 			.worker
 			.take()
-			.expect("offset action starts a worker")
+			.expect("image action starts a worker")
 			.receiver
 			.recv_timeout(WORKER_TIMEOUT)
 			.expect("image worker delivers its completion");
@@ -163,10 +189,24 @@ mod tests {
 		let container = &opened_image(&app).report.container;
 		let last = container.runs.total - 1;
 		let offset = container.logical_bytes - 1;
+		let original_page = opened_image(&app).report.run_page.clone();
+		let query = dmgez_runtime::image::RunQuery {
+			filter: dmgez_runtime::image::RunFilter::Zlib,
+			order: dmgez_runtime::image::RunOrder::LargestStored,
+		};
+		app.image_action(&ctx, Action::QueryRuns { query, offset: 0 });
+		apply_result(&mut app, &ctx);
+		let image = opened_image(&app);
+		let page = image.run_navigation.query_page.as_ref().unwrap();
+		assert_eq!(page.query, query);
+		assert!(!page.rows.is_empty());
+		assert_eq!(image.report.run_page, original_page);
+
 		app.image_action(&ctx, Action::LocateRun(offset));
 		apply_result(&mut app, &ctx);
 		assert_eq!(opened_image(&app).run_navigation.selected, Some(last));
 		assert!(opened_image(&app).run_navigation.reveal_selected);
+		assert!(opened_image(&app).run_navigation.query_page.is_none());
 
 		app.image_action(&ctx, Action::LocateRun(offset + 1));
 		apply_result(&mut app, &ctx);

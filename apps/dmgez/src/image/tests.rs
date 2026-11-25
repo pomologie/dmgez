@@ -13,6 +13,8 @@ use eframe::egui::{self, accesskit};
 use super::*;
 use crate::inspector::{self, Action};
 
+mod run_query;
+
 const NATIVE_UDZO: &[u8] = include_bytes!("../../../../tests/fixtures/images/tiny-UDZO.dmg");
 const NATIVE_SIGNED: &[u8] =
 	include_bytes!("../../../../tests/fixtures/images/tiny-UDZO-adhoc-sha256.dmg");
@@ -92,53 +94,58 @@ fn logical_offsets_select_the_run_that_contains_the_requested_byte() {
 fn assistive_actions_reach_the_run_pager_and_container_check() {
 	let mut tab = multi_page_image();
 	for label in ["Next page", "Verify container"] {
-		let ctx = egui::Context::default();
-		ctx.enable_accesskit();
-		let initial = egui::RawInput {
-			screen_rect: Some(egui::Rect::from_min_size(
-				egui::Pos2::ZERO,
-				crate::MINIMUM_SIZE.into(),
-			)),
-			..egui::RawInput::default()
-		};
-		let mut output = ctx.run_ui(initial, |ui| {
-			assert!(inspector::show(ui, &mut tab, true).is_none())
-		});
-		let accessibility = output.platform_output.accesskit_update.take();
-		output.drop_without_applying_deltas();
-		let target_node = accessibility
-			.unwrap()
-			.nodes
-			.into_iter()
-			.find(|(_, node)| {
-				node.label() == Some(label) && node.supports_action(accesskit::Action::Click)
-			})
-			.unwrap_or_else(|| panic!("missing accessible {label} action"))
-			.0;
-		let input = egui::RawInput {
-			events: vec![egui::Event::AccessKitActionRequest(
-				accesskit::ActionRequest {
-					action: accesskit::Action::Click,
-					target_tree: accesskit::TreeId::ROOT,
-					target_node,
-					data: None,
-				},
-			)],
-			..egui::RawInput::default()
-		};
-		let mut action = None;
-		ctx.run_ui(input, |ui| {
-			if let Some(emitted) = inspector::show(ui, &mut tab, true) {
-				action = Some(emitted);
-			}
-		})
-		.drop_without_applying_deltas();
+		let action = activate_inspector(&mut tab, label);
 		assert!(matches!(
 			(label, action),
 			("Next page", Some(Action::Page(RUN_PAGE_SIZE)))
 				| ("Verify container", Some(Action::Verify))
 		));
 	}
+}
+
+fn activate_inspector(tab: &mut ImageTab, label: &str) -> Option<Action> {
+	let ctx = egui::Context::default();
+	ctx.enable_accesskit();
+	let initial = egui::RawInput {
+		screen_rect: Some(egui::Rect::from_min_size(
+			egui::Pos2::ZERO,
+			crate::MINIMUM_SIZE.into(),
+		)),
+		..egui::RawInput::default()
+	};
+	let mut output = ctx.run_ui(initial, |ui| {
+		assert!(inspector::show(ui, tab, true).is_none())
+	});
+	let accessibility = output.platform_output.accesskit_update.take();
+	output.drop_without_applying_deltas();
+	let target_node = accessibility
+		.unwrap()
+		.nodes
+		.into_iter()
+		.find(|(_, node)| {
+			node.label() == Some(label) && node.supports_action(accesskit::Action::Click)
+		})
+		.unwrap_or_else(|| panic!("missing accessible {label} action"))
+		.0;
+	let input = egui::RawInput {
+		events: vec![egui::Event::AccessKitActionRequest(
+			accesskit::ActionRequest {
+				action: accesskit::Action::Click,
+				target_tree: accesskit::TreeId::ROOT,
+				target_node,
+				data: None,
+			},
+		)],
+		..egui::RawInput::default()
+	};
+	let mut action = None;
+	ctx.run_ui(input, |ui| {
+		if let Some(emitted) = inspector::show(ui, tab, true) {
+			action = Some(emitted);
+		}
+	})
+	.drop_without_applying_deltas();
+	action
 }
 
 #[test]

@@ -15,6 +15,7 @@ use dmgez_udif::{
 mod export;
 #[cfg(feature = "report-export")]
 mod inspection_export;
+mod run_query;
 #[cfg(test)]
 mod tests;
 #[cfg(feature = "raw-export")]
@@ -23,6 +24,7 @@ pub use export::{ExportError, export_raw};
 pub use inspection_export::{
 	ExportDataError, InspectionExportError, MAX_RUN_EXPORT_BYTES, ReportExport, export_run,
 };
+pub use run_query::{RunFilter, RunOrder, RunQuery, RunQueryPage, RunQueryRow};
 
 /// How much of the logical disk to inspect.
 #[derive(Debug, Clone, Copy)]

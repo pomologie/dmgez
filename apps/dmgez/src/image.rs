@@ -4,7 +4,9 @@ use dmgez_inspector::{
 	DiskLimits, InspectionReport, RunPage, RunWindow, VerificationMode, VerificationReport,
 	verify_with_cancellation,
 };
-use dmgez_runtime::image::{ImageSession, InspectionScope, MetadataBudget, RunLocation};
+use dmgez_runtime::image::{
+	ImageSession, InspectionScope, MetadataBudget, RunLocation, RunQuery, RunQueryPage,
+};
 use dmgez_udif::{
 	Cancellation, Error,
 	reader::{FileSource, Limits, ReadAt},
@@ -28,10 +30,18 @@ pub(crate) struct RunNavigation {
 	pub invalid_offset: bool,
 	pub selected: Option<usize>,
 	pub reveal_selected: bool,
+	pub query: RunQuery,
+	pub query_page: Option<RunQueryPage>,
 }
 
 impl RunNavigation {
 	pub(crate) fn select(&mut self, ordinal: Option<usize>) {
+		self.query = RunQuery::default();
+		self.query_page = None;
+		self.select_displayed(ordinal);
+	}
+
+	pub(crate) fn select_displayed(&mut self, ordinal: Option<usize>) {
 		self.selected = ordinal;
 		self.reveal_selected = ordinal.is_some();
 	}
@@ -80,6 +90,16 @@ impl ImageSnapshot {
 
 	pub(crate) fn locate_run(&self, offset: u64) -> Result<RunLocation, Error> {
 		self.image.locate_run(offset, RUN_PAGE_SIZE)
+	}
+
+	pub(crate) fn query_runs(
+		&self,
+		query: RunQuery,
+		offset: usize,
+		cancellation: &Cancellation,
+	) -> Result<RunQueryPage, Error> {
+		self.image
+			.query_runs(query, offset, RUN_PAGE_SIZE, cancellation)
 	}
 
 	pub(crate) fn verify(&self, cancellation: &Cancellation) -> VerificationReport {

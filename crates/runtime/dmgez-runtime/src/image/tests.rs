@@ -9,6 +9,7 @@ struct Fixture {
 	closed_to_reads: Cell<bool>,
 	revalidations: Cell<usize>,
 	changed: Cell<bool>,
+	change_at_check: Cell<Option<usize>>,
 }
 
 impl ReadAt for &Fixture {
@@ -18,7 +19,7 @@ impl ReadAt for &Fixture {
 
 	fn check_unchanged(&self) -> Result<(), Error> {
 		self.revalidations.set(self.revalidations.get() + 1);
-		if self.changed.get() {
+		if self.changed.get() || self.change_at_check.get() == Some(self.revalidations.get()) {
 			Err(Error::SourceChanged)
 		} else {
 			Ok(())
@@ -32,6 +33,48 @@ impl ReadAt for &Fixture {
 		);
 		UDZO.read_exact_at(offset, output)
 	}
+}
+
+#[test]
+fn querying_runs_only_reads_retained_metadata_and_revalidates_before_delivery() {
+	use dmgez_udif::Cancellation;
+
+	let fixture = Fixture::default();
+	let session =
+		ImageSession::open(&fixture, Limits::default(), MetadataBudget::ReaderLimits).unwrap();
+	fixture.closed_to_reads.set(true);
+	let expected = session.run_page(RunWindow::new(0, 1).unwrap()).unwrap();
+	let before = fixture.revalidations.get();
+	let cancellation = Cancellation::default();
+	let first = session
+		.query_runs(RunQuery::default(), 0, 1, &cancellation)
+		.unwrap();
+	assert_eq!(fixture.revalidations.get(), before + 2);
+	assert_eq!(first.offset, 0);
+	assert_eq!(first.next_offset, expected.next_offset);
+	assert_eq!(first.rows[0].ordinal, 0);
+	assert_eq!(first.rows[0].run, expected.runs[0]);
+	assert!(matches!(
+		session.query_runs(RunQuery::default(), 0, 0, &cancellation),
+		Err(Error::ResourceLimit(_))
+	));
+	let beyond = session
+		.query_runs(RunQuery::default(), usize::MAX, 1, &cancellation)
+		.unwrap();
+	assert!(beyond.rows.is_empty());
+	assert_eq!(beyond.next_offset, None);
+	fixture
+		.change_at_check
+		.set(Some(fixture.revalidations.get() + 2));
+	assert!(matches!(
+		session.query_runs(RunQuery::default(), 0, 1, &cancellation),
+		Err(Error::SourceChanged)
+	));
+	cancellation.cancel();
+	assert!(matches!(
+		session.query_runs(RunQuery::default(), 0, 1, &cancellation),
+		Err(Error::Cancelled)
+	));
 }
 
 #[test]

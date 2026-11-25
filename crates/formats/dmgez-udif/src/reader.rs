@@ -3,6 +3,7 @@
 #[cfg(feature = "write")]
 mod rebuild;
 mod release;
+mod run_metadata;
 mod source;
 
 use std::{io::Write, ops::Range};
@@ -296,28 +297,6 @@ impl<S: ReadAt> Image<S> {
 	/// Returns a source error if the admitted identity cannot be confirmed.
 	pub fn check_source_unchanged(&self) -> Result<(), Error> {
 		self.source.check_unchanged()
-	}
-
-	/// Inspect the normalized map in logical order without reading any data fork payload.
-	pub fn runs(&self) -> impl ExactSizeIterator<Item = RunDescriptor> + '_ {
-		self.logical_order.iter().map(|&index| {
-			let run = &self.runs[index];
-			let encoding = match run.kind {
-				Kind::Raw => RunEncoding::Raw,
-				Kind::Zero => RunEncoding::Zero,
-				Kind::Ignore => RunEncoding::Ignore,
-				Kind::Zlib => RunEncoding::Zlib,
-				Kind::Lzfse => RunEncoding::Lzfse,
-				Kind::Lzma2 => RunEncoding::Lzma2,
-				Kind::Unsupported(kind) => RunEncoding::Unsupported(kind),
-				Kind::Comment | Kind::End => unreachable!("index contains only logical runs"),
-			};
-			RunDescriptor {
-				logical: run.logical.clone(),
-				physical: run.physical.clone(),
-				encoding,
-			}
-		})
 	}
 
 	/// Finds the zero-based logical run ordinal covering a disk-relative byte.

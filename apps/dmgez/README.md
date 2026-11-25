@@ -29,9 +29,11 @@ The image workspace shows the inspector's observed UDIF metadata and partition d
 
 Enter a decimal or `0x` hexadecimal offset in **Logical byte offset** and choose **Go to run** or press Enter. The inspector opens the page containing that byte and highlights its run using the retained index from the opened image.
 
+Choose a codec or decoder status under **Filter runs**, then choose **Sort runs** and select **Apply run query**. Results cover the whole admitted run index and keep their original run numbers across pages. Select a row to export that run. **Clear run query** restores logical order, and **Go to run** opens the logical page containing the requested byte.
+
 Choose **Verify container** to scan stored runs and declared container checksums in the background. The sidebar reports structure, payload, filesystem, and security coverage independently. Filesystem and security stay “Not checked” for a container scan. **Cancel** stops at the next verification boundary and keeps the last completed result. If the open file changes, reopen the image before relying on its observed metadata.
 
-Export the current inspection or completed verification as JSON from the sidebar. After jumping to a run, **Export selected run…** saves its decoded logical bytes when the decoder is available and the run is at most 64 MiB. Exports require a fresh destination and recheck the open image before publication.
+Export the current inspection or completed verification as JSON from the sidebar. **Export selected run…** saves the selected run's decoded logical bytes when the decoder is available and the run is at most 64 MiB. Exports require a fresh destination and recheck the open image before publication.
 
 Use **Compare…** to compare the open image with another DMG. Choose logical disk bytes, stored image bytes, or a filesystem supported by the composed desktop build. A logical difference can take you to its run. Filesystem results show the changed paths and their fields. Use **Disk and metadata selection** to choose partition slots or APFS object IDs and checkpoint XIDs when an image has more than one candidate.
 
