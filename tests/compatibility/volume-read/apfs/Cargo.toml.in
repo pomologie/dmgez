@@ -17,5 +17,8 @@ thiserror = "=2.0.21"
 [dev-dependencies]
 dmgez-operations = { version = "=0.1.0", path = @dmgez-operations@, default-features = false, features = ["extract"] }
 
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]
+tempfile = "=3.27.0"
+
 [lints.rust]
 unsafe_code = "forbid"

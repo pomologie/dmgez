@@ -107,6 +107,7 @@ dependencies = [
  "dmgez-operations",
  "dmgez-udif",
  "dmgez-vfs",
+ "tempfile",
  "thiserror",
 ]
 

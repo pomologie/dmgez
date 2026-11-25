@@ -13,6 +13,10 @@ use hfsplus_format::{
 };
 use hfsplus_reader::{ForkReadSupport, catalog::CatalogError};
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[path = "native/extract_host.rs"]
+mod extract_host;
+
 const HARD_LINKS: &[u8] = include_bytes!("fixtures/native-chained-hardlinks.bin");
 const CLEAN_JOURNAL: &[u8] = include_bytes!("fixtures/native-journal.bin");
 const DATA: &[u8] = b"pomologie linked file\n";

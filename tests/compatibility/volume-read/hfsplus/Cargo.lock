@@ -89,6 +89,7 @@ dependencies = [
  "hfsplus-core",
  "hfsplus-format",
  "hfsplus-reader",
+ "tempfile",
  "thiserror",
 ]
 

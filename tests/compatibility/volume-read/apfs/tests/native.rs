@@ -14,6 +14,10 @@ use dmgez_vfs::volume::{
 	ForkKind, LookupName, NodeHandle, NodeKind, RawName, ViewError, VolumeBackend, VolumeView,
 };
 
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[path = "native/extract_host.rs"]
+mod extract_host;
+
 #[path = "native/fixture.rs"]
 mod fixture;
 use fixture::{FixtureError, NATIVE_BLOCK_BYTES, NativeBlocks, VOLUME, disk, open_container};
