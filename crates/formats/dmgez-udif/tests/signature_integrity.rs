@@ -4,7 +4,8 @@ use std::io::{Cursor, Read};
 
 use dmgez_udif::{
 	Error, MAX_EMBEDDED_SIGNATURE_BYTES, SignatureIntegrityError, TRAILER_BYTES,
-	read_embedded_signature, verify_signature_integrity,
+	embedded_code_directory, read_embedded_signature, signed_signature_range,
+	verify_signature_integrity,
 };
 
 // Wire offsets from the native fixture recorded in tiny-UDZO-adhoc-sha256.json.
@@ -18,6 +19,14 @@ const REQUIREMENTS_COUNT_FIELD: usize = 8;
 #[test]
 fn matches_all_three_digests_in_the_native_ad_hoc_signature() {
 	verify_signature_integrity(&mut Cursor::new(NATIVE_SIGNED)).unwrap();
+	let trailer = NATIVE_SIGNED.last_chunk::<TRAILER_BYTES>().unwrap();
+	let range = signed_signature_range(trailer, NATIVE_SIGNED.len() as u64).unwrap();
+	let signature = &NATIVE_SIGNED[range.start as usize..range.end as usize];
+	let directory = embedded_code_directory(signature).unwrap();
+	assert_eq!(directory.identifier, b"org.dmgez.udif-fixture");
+	assert!(directory.ad_hoc);
+	assert!(!directory.has_cms_signature);
+	assert!(!directory.has_ticket);
 }
 
 #[test]

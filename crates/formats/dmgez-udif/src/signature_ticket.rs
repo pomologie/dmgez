@@ -6,9 +6,9 @@ use crate::Error;
 // diskimagerep.cpp reads the ticket from the embedded signature.
 const EMBEDDED_SIGNATURE_MAGIC: u32 = 0xfade_0cc0;
 pub(super) const TICKET_SLOT: u32 = 0x0001_0002;
-const BLOB_WRAPPER_MAGIC: u32 = 0xfade_0b01;
+pub(super) const BLOB_WRAPPER_MAGIC: u32 = 0xfade_0b01;
 const WORD_BYTES: usize = size_of::<u32>();
-const BLOB_HEADER_BYTES: usize = 2 * WORD_BYTES;
+pub(super) const BLOB_HEADER_BYTES: usize = 2 * WORD_BYTES;
 const SUPERBLOB_HEADER_BYTES: usize = 3 * WORD_BYTES;
 const INDEX_ENTRY_BYTES: usize = 2 * WORD_BYTES;
 const MAX_COMPONENTS: usize = 64;

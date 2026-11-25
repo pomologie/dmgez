@@ -2,7 +2,9 @@
 
 use crate::{
 	Error,
-	signature_ticket::{TICKET_SLOT, components, size as offset, word},
+	signature_ticket::{
+		BLOB_HEADER_BYTES, BLOB_WRAPPER_MAGIC, TICKET_SLOT, components, size as offset, word,
+	},
 };
 
 // Wire fields and virtual slot numbers follow Apple Security's codedirectory.h.
@@ -14,6 +16,7 @@ const REQUIREMENTS_SET_MAGIC: u32 = 0xfade_0c01;
 const SCATTER_VERSION: u32 = 0x0002_0100;
 const MAGIC_FIELD: usize = 0;
 const VERSION_FIELD: usize = 8;
+const FLAGS_FIELD: usize = 12;
 const HASH_OFFSET_FIELD: usize = 16;
 const IDENTIFIER_OFFSET_FIELD: usize = 20;
 const SPECIAL_COUNT_FIELD: usize = 24;
@@ -33,6 +36,7 @@ const SPECIAL_COUNT: u32 = 6;
 const CODE_COUNT: u32 = 1;
 const GENERIC_PLATFORM: u8 = 0;
 const UNPAGED: u8 = 0;
+const AD_HOC_FLAG: u32 = 0x0000_0002;
 
 /// Exact digest inputs and stored SHA-256 hashes from an embedded CodeDirectory.
 ///
@@ -45,6 +49,14 @@ const UNPAGED: u8 = 0;
 pub struct EmbeddedCodeDirectory<'signature> {
 	/// Entire CodeDirectory blob, including its header.
 	pub directory: &'signature [u8],
+	/// Code-signing identifier exactly as stored, without the terminator.
+	pub identifier: &'signature [u8],
+	/// The CodeDirectory has Apple's ad hoc flag set.
+	pub ad_hoc: bool,
+	/// The CMS slot contains data other than an empty blob wrapper.
+	pub has_cms_signature: bool,
+	/// A stapled ticket slot is present and its payload is outside this profile.
+	pub has_ticket: bool,
 	/// Number of file bytes preceding the signature that are covered by the body hash.
 	pub signing_limit: u64,
 	/// Stored digest of the file bytes preceding the signature.
@@ -71,11 +83,17 @@ pub fn embedded_code_directory(signature: &[u8]) -> Result<EmbeddedCodeDirectory
 	let components = components(signature)?;
 	let mut directory = None;
 	let mut requirements = None;
+	let mut has_cms_signature = false;
+	let mut has_ticket = false;
 	for component in components {
 		match component.slot {
 			DIRECTORY_SLOT => directory = Some(component.data),
 			REQUIREMENTS_SLOT => requirements = Some(component.data),
-			CMS_SLOT | TICKET_SLOT => {}
+			CMS_SLOT => {
+				has_cms_signature = component.data.len() != BLOB_HEADER_BYTES
+					|| word(component.data, MAGIC_FIELD)? != BLOB_WRAPPER_MAGIC;
+			}
+			TICKET_SLOT => has_ticket = true,
 			_ => return Err(Error::Unsupported("unknown UDIF signature component slot")),
 		}
 	}
@@ -89,6 +107,10 @@ pub fn embedded_code_directory(signature: &[u8]) -> Result<EmbeddedCodeDirectory
 	}
 	Ok(EmbeddedCodeDirectory {
 		directory,
+		identifier: hashes.identifier,
+		ad_hoc: word(directory, FLAGS_FIELD)? & AD_HOC_FLAG != 0,
+		has_cms_signature,
+		has_ticket,
 		signing_limit: u64::from(word(directory, CODE_LIMIT_FIELD)?),
 		body_hash: hashes.body,
 		trailer_hash: hashes.trailer,
@@ -98,6 +120,7 @@ pub fn embedded_code_directory(signature: &[u8]) -> Result<EmbeddedCodeDirectory
 }
 
 struct DirectoryHashes<'directory> {
+	identifier: &'directory [u8],
 	body: &'directory [u8; SHA256_BYTES],
 	trailer: &'directory [u8; SHA256_BYTES],
 	requirements: &'directory [u8; SHA256_BYTES],
@@ -144,9 +167,11 @@ fn directory_hashes(directory: &[u8]) -> Result<DirectoryHashes<'_>, Error> {
 		.ok_or(Error::Corrupt(
 			"invalid UDIF CodeDirectory identifier range",
 		))?;
-	if identifier.first().copied().is_none_or(|byte| byte == 0) || !identifier.contains(&0) {
-		return Err(Error::Corrupt("invalid UDIF CodeDirectory identifier"));
-	}
+	let identifier_end = identifier
+		.iter()
+		.position(|&byte| byte == 0)
+		.filter(|&end| end != 0)
+		.ok_or(Error::Corrupt("invalid UDIF CodeDirectory identifier"))?;
 
 	// The six special hashes precede the code hash in descending slot order.
 	let hashes = directory[special_offset..code_end]
@@ -173,6 +198,7 @@ fn directory_hashes(directory: &[u8]) -> Result<DirectoryHashes<'_>, Error> {
 		));
 	}
 	Ok(DirectoryHashes {
+		identifier: &identifier[..identifier_end],
 		body,
 		trailer,
 		requirements,
