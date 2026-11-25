@@ -1,16 +1,12 @@
-use std::{error::Error as StdError, num::NonZeroU64};
+use std::{cell::RefCell, error::Error as StdError, num::NonZeroU64};
 
-use apfs_format::{
-	Error as FormatError,
-	superblock::{BLOCK_SIZE_PREFIX_BYTES, BlockAddress, Superblock},
-};
+use apfs_container::{Error as ContainerError, probe_extent};
+use apfs_core::{ByteOffset, ReadAt};
+use apfs_format::Error as FormatError;
 use dmgez_vfs::{Error as DiskError, LogicalDisk, Window};
 use thiserror::Error;
 
 use crate::{CheckFailureKind, verification::format_failure};
-
-const BOOTSTRAP_BLOCK: BlockAddress = BlockAddress(0);
-const BOOTSTRAP_OFFSET: u64 = 0;
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -21,6 +17,8 @@ pub enum ProbeError<E: StdError + 'static = DiskError> {
 	Format(#[from] FormatError),
 	#[error("could not allocate an APFS block-zero superblock buffer")]
 	Allocation,
+	#[error("the APFS container probe failed")]
+	Container(#[source] ContainerError<E>),
 }
 
 impl<E: StdError + 'static> ProbeError<E> {
@@ -29,7 +27,10 @@ impl<E: StdError + 'static> ProbeError<E> {
 		match self {
 			Self::Disk(_) => CheckFailureKind::Read,
 			Self::Format(error) => format_failure(error),
-			Self::Allocation => CheckFailureKind::ResourceLimit,
+			Self::Allocation | Self::Container(ContainerError::Limit(_)) => {
+				CheckFailureKind::ResourceLimit
+			}
+			Self::Container(_) => CheckFailureKind::Corrupt,
 		}
 	}
 }
@@ -61,29 +62,37 @@ pub fn probe_partitionless<S: LogicalDisk>(
 /// to allocate the bounded scratch buffer.
 pub fn probe<E: StdError + 'static>(
 	length: u64,
-	mut read: impl FnMut(u64, &mut [u8]) -> Result<(), E>,
+	read: impl FnMut(u64, &mut [u8]) -> Result<(), E>,
 ) -> Result<Option<NonZeroU64>, ProbeError<E>> {
-	let mut prefix = [0; BLOCK_SIZE_PREFIX_BYTES];
-	if length < prefix.len() as u64 {
-		return Ok(None);
-	}
-	read(BOOTSTRAP_OFFSET, &mut prefix).map_err(ProbeError::Disk)?;
-	let block_bytes = match Superblock::block_size_hint(&prefix) {
-		Ok(bytes) => bytes,
-		Err(FormatError::InvalidMagic) => return Ok(None),
-		Err(error) => return Err(error.into()),
+	let source = ProbeSource {
+		length,
+		read: RefCell::new(read),
 	};
-	if u64::from(block_bytes) > length {
-		return Err(FormatError::InvalidGeometry.into());
+	probe_extent(&source).map_err(|error| match error {
+		ContainerError::Bootstrap(error) => ProbeError::Format(error),
+		ContainerError::Read { source, .. } => ProbeError::Disk(source),
+		ContainerError::Allocation => ProbeError::Allocation,
+		error => ProbeError::Container(error),
+	})
+}
+
+struct ProbeSource<F> {
+	length: u64,
+	read: RefCell<F>,
+}
+
+impl<F, E> ReadAt for ProbeSource<F>
+where
+	F: FnMut(u64, &mut [u8]) -> Result<(), E>,
+{
+	type Error = E;
+
+	fn len(&self) -> u64 {
+		self.length
 	}
-	let mut block = Vec::new();
-	block
-		.try_reserve_exact(block_bytes as usize)
-		.map_err(|_| ProbeError::Allocation)?;
-	block.resize(block_bytes as usize, 0);
-	read(BOOTSTRAP_OFFSET, &mut block).map_err(ProbeError::Disk)?;
-	let geometry = Superblock::decode(&block, length)?.geometry;
-	let range = geometry.byte_range(BOOTSTRAP_BLOCK, geometry.block_count())?;
-	let bytes = NonZeroU64::new(range.end).ok_or(FormatError::InvalidGeometry)?;
-	Ok(Some(bytes))
+
+	fn read_exact_at(&self, offset: ByteOffset, output: &mut [u8]) -> Result<(), Self::Error> {
+		// The callback has no access to this source and the native probe reads sequentially.
+		(self.read.borrow_mut())(offset.0, output)
+	}
 }
