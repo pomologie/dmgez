@@ -66,6 +66,8 @@ On macOS, `signing-native` enables `sign inspect` and `sign verify` for app bund
 
 `sign dmg` uses an explicit Developer ID Application certificate in Keychain to sign a private copy of an unsigned image, then verifies and publishes it to a new path. [Stage and sign a disk image](docs/features/RELEASE.md#stage-and-sign-a-disk-image)
 
+`sign app` signs a private bundle copy from the inside out and verifies the finished app before publishing to a new path. Use `--entitlements CODE_PATH=PLIST` to supply the distribution entitlements for a particular code item. [Stage and sign an application](docs/features/RELEASE.md#stage-and-sign-an-application)
+
 `import-appdmg` translates documented appdmg JSON settings into a new version-one TOML manifest. Relative asset paths keep their original settings directory. A relative `--image-output` is interpreted from the new manifest's directory. The command reports unmapped behavior and refuses to replace an existing manifest.
 
 ## Build from a TOML project

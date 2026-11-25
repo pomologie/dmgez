@@ -28,6 +28,7 @@ dmgez/
       dmgez-config/              # typed versioned TOML and validation
       dmgez-vfs/                 # composition of read-only image + filesystem views
     formats/
+      dmgez-macho/               # bounded inspection of executable slices
       dmgez-udif/                # independently owned DMG-specific format
       dmgez-legacy/              # stretch; NDIF/DC42 etc., not a generic codec crate
       dmgez-sparse/              # stretch; sparse/sparsebundle/ASIF separate modules
@@ -68,8 +69,9 @@ Read arrows as `consumer -> dependency`.
 | `dmgez-core` | none; no host UI, networking, formats or services |
 | `dmgez-config` | core |
 | `dmgez-udif` | core (or its own minimal portable format types); no filesystem |
+| `dmgez-macho` | none |
 | `dmgez-finder` | core, config; external Finder libraries; no concrete builder |
-| `dmgez-builder` | core, config, udif writer, finder writer |
+| `dmgez-builder` | core, config, udif writer, finder writer; Mach-O inspection for optional volume icons |
 | `dmgez-hfsplus` | dmgez-builder, core, config, udif writer, independent versioned HFS+ libraries |
 | `dmgez-hfsplus-read` | independent versioned HFS+ reader and format libraries, vfs for browsing |
 | `dmgez-apfs-read` | independent versioned APFS container, reader and format libraries, vfs for browsing and verification |
@@ -82,7 +84,7 @@ Read arrows as `consumer -> dependency`.
 | `dmgez-cache` | core and codec-profile contracts; builder can consume it; never import builder |
 | `dmgez-install` | core, operations extraction, platform adapters; no GUI |
 | `dmgez-mount` | core, vfs, optional install-monitoring policy; no GUI |
-| `dmgez-signing` | optional signing integrations and UDIF trailer admission and signature append validation; no builder import |
+| `dmgez-signing` | optional signing integrations, Mach-O inspection, UDIF trailer admission and signature append validation; no builder import |
 | `dmgez-encryption` | core, generic crypto primitives; exposed as a bounded storage adapter |
 | apps | compose selected services, not one another |
 

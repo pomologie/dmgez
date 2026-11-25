@@ -37,6 +37,22 @@ The output parent must be a stable, trusted local directory. dmgez copies the un
 
 The signing transaction was exercised on disposable UDRO and UDZO fixtures on arm64 macOS 14.7.2 with an ad hoc signer confined to the tests. The fixtures verify source and quarantine preservation, native CRC and signature checks, no new output after tampering or signature policy rejection, and preservation of an existing destination. A protected Developer ID run with Apple's timestamp service remains open for D-REL-01-T01. [Native staging fixtures](../../crates/security/dmgez-signing/src/native/disk/tests.rs)
 
+### Stage and sign an application
+
+On macOS with `signing-native`, use `sign app` with the public SHA-1 fingerprint of a Developer ID Application identity in Keychain. Supply distribution entitlements by exact bundle-relative signing target. Use `.` for the root bundle. Each declared target must be present in the plan. [Apple distribution signing workflow](https://developer.apple.com/documentation/xcode/creating-distribution-signed-code-for-the-mac/)
+
+```sh
+dmgez sign app Product.app --output Signed.app \
+  --identity "$DEVELOPER_ID_FINGERPRINT" \
+  --entitlements 'Contents/Helpers/Helper.app=helper.entitlements' --json
+```
+
+Keep the source bundle stable and use a trusted local output directory outside the source. dmgez copies through native `ditto` and checks resource bytes, modes, extended attributes, contained symlinks, and internal hard links before signing. macOS can update quarantine records during the copy. It signs each supported code item in the private copy before its enclosing bundle, including versions of versioned frameworks. Native verification checks the selected Developer ID certificate, secure timestamp, hardened runtime for eligible Mach-O executables, and the configured entitlements on each admitted architecture. An item with no rule has an empty entitlement policy. A final deep verification covers the app's nested signatures. The source is revalidated and the verified copy is published to a new path without clobbering an existing destination.
+
+The CLI reports the signing order and the runtime and entitlement policy for each item. This operation replaces signatures in the staged copy. Policy assessment is reported as `not_performed`.
+
+The private app transaction was exercised on arm64 macOS 14.7.2 with a previously signed synthetic app and nested helper. The fixtures verified inside-out re-signing, unchanged source files, hardened runtime, exact nested entitlements, and refusal to publish a failed verification. A protected Developer ID run remains open for D-REL-01-T01 and D-REL-01-T02. [Native app staging fixtures](../../crates/security/dmgez-signing/src/native/app/tests.rs)
+
 ## Semantic diff and lint policies
 
 Diff supports `contents` (BLAKE3 + optional exact stream compare), metadata, links, resource forks/xattrs, Finder semantic settings, filesystem allocation/raw records, UDIF physical maps/codec/byte differences, signature metadata; physical and logical differences separate. Compare normalized paths with each filesystem's rules; case/normalization ambiguities diagnostic. Compare volume IDs/profile explicitly. No implicit timestamp suppression; optional policy ignores listed fields and reports exclusions. Detect unchanged/added/removed/changed/renamed candidate (rename inference clearly labeled). Budgeted traversal, hash cache scoped to immutable identity, parallel only as allowed. Return machine diff including unknown/not compared. CI exit 0 equal under policy, 1 differences, 2 error/unsupported. Lint profiles `installer`, `macos-release`, `layout`, `strict-metadata` use typed rule IDs severity and evidence, suppressions explicit with reason. Rules: missing expected Applications link, incorrect target, overlapping icons/labels, background missing, size/scale mismatch, unsafe path, duplicate canonical names, suspicious external symlink (normal Applications link allowed), unexpected visible private assets, missing executable mode/Info.plist executable, missing signature/hardened runtime/ticket where requested. Lint never auto-fixes signed content; suggested changes separate. Release checks run native tools only when explicitly requested.
