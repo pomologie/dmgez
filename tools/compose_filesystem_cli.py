@@ -23,6 +23,7 @@ READ_TEST = "volume_cli"
 APFS_VERIFY_TEST = "apfs_verify_cli"
 APFS_EXTRACT_TEST = "apfs_extract_cli"
 EXTRACT_TEST = "extract_cli"
+INSTALL_TEST = "install_cli"
 DECMPFS_TEST = "hfs_decmpfs_cli"
 SEMANTIC_DIFF_TEST = "semantic_diff_cli"
 TOOLCHAIN = "rust-toolchain.toml"
@@ -44,10 +45,11 @@ READ_FEATURE = "hfsplus-read"
 VERIFY_FEATURE = "hfsplus-verify"
 EXTRACT_FEATURE = "hfsplus-extract"
 DECMPFS_FEATURE = "hfsplus-decmpfs"
+INSTALL_FEATURE = "hfsplus-install"
 DIFF_FEATURE = "diff"
 DIFF_HASH_FEATURE = "diff-hash"
 FINDER_DIFF_FEATURE = "finder-diff"
-READ_PROFILES = (READ_FEATURE, EXTRACT_FEATURE, DECMPFS_FEATURE)
+READ_PROFILES = (READ_FEATURE, EXTRACT_FEATURE, DECMPFS_FEATURE, INSTALL_FEATURE)
 APFS_READER = "apfs-reader"
 APFS_PACKAGES = {
     "apfs-core": "crates/foundation/apfs-core",
@@ -58,6 +60,8 @@ APFS_PACKAGES = {
 APFS_ADAPTER = "dmgez-apfs-read"
 APFS_FEATURE = "apfs-read"
 APFS_EXTRACT_FEATURE = "apfs-extract"
+APFS_INSTALL_FEATURE = "apfs-install"
+APFS_PROFILES = (APFS_FEATURE, APFS_EXTRACT_FEATURE, APFS_INSTALL_FEATURE)
 APFS_FIXTURES_ENV = "DMGEZ_APFS_FIXTURES"
 PROJECT_RELEASE_FEATURE = "project-release"
 SOURCE_DIRS = ("apps", "crates", "tests")
@@ -123,11 +127,17 @@ def compose_cli_manifest(manifest, reader, build, apfs):
         additions[VERIFY_FEATURE] = ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/verify"]
         additions[EXTRACT_FEATURE] = [READ_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract"]
         additions[DECMPFS_FEATURE] = [READ_FEATURE, f"{READ_ADAPTER}/decmpfs-zlib"]
+        additions[INSTALL_FEATURE] = [
+            READ_FEATURE, "dep:dmgez-config", "dep:dmgez-operations", "dmgez-operations/install",
+        ]
         dependencies_to_add.append(READ_ADAPTER)
     if apfs:
         additions[APFS_FEATURE] = ["inspect", f"dep:{APFS_ADAPTER}"]
         additions[APFS_EXTRACT_FEATURE] = [
             APFS_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract",
+        ]
+        additions[APFS_INSTALL_FEATURE] = [
+            APFS_FEATURE, "dep:dmgez-config", "dep:dmgez-operations", "dmgez-operations/install",
         ]
         dependencies_to_add.append(APFS_ADAPTER)
     if features.keys() & additions.keys():
@@ -251,6 +261,8 @@ def run_cli(cargo, directory, options, packages):
                 command.extend(("--test", DECMPFS_TEST))
             if has_cli_feature(options, EXTRACT_FEATURE):
                 command.extend(("--test", EXTRACT_TEST))
+        if any(has_cli_feature(options, name) for name in (INSTALL_FEATURE, APFS_INSTALL_FEATURE)):
+            command.extend(("--test", INSTALL_TEST))
         if HFSPLUS_BUILDER in packages:
             command.extend(("--test", CLI_TEST))
             if has_cli_feature(options, PROJECT_RELEASE_FEATURE):
@@ -298,12 +310,12 @@ def main():
     use_apfs = options.apfs is not None or options.apfs_packages is not None
     if not (use_hfsplus or use_apfs):
         parser.error("supply an HFS+ or APFS package source")
-    for feature in (APFS_FEATURE, APFS_EXTRACT_FEATURE):
+    for feature in APFS_PROFILES:
         if has_cli_feature(options, feature) and not use_apfs:
             parser.error(f"{feature} requires --apfs or --apfs-packages")
-    if use_apfs and not any(
-        has_cli_feature(options, feature) for feature in (APFS_FEATURE, APFS_EXTRACT_FEATURE)
-    ):
+    if has_cli_feature(options, INSTALL_FEATURE) and not use_hfsplus:
+        parser.error(f"{INSTALL_FEATURE} requires --hfsplus or --hfsplus-packages")
+    if use_apfs and not any(has_cli_feature(options, feature) for feature in APFS_PROFILES):
         options.features.append(APFS_FEATURE)
     if options.target_dir is None:
         options.target_dir = ROOT / "target" / ("apfs-cli" if use_apfs else "hfsplus-cli")

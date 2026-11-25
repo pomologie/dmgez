@@ -64,7 +64,7 @@ fn with_hfs_source<T>(
 }
 
 #[cfg(all(
-	feature = "hfsplus-extract",
+	any(feature = "hfsplus-extract", feature = "hfsplus-install"),
 	any(target_os = "linux", target_os = "macos")
 ))]
 pub(super) fn with_hfs_view_verified<T>(
@@ -140,7 +140,7 @@ pub(super) fn with_apfs_view_for_comparison<T>(
 }
 
 #[cfg(all(
-	feature = "apfs-extract",
+	any(feature = "apfs-extract", feature = "apfs-install"),
 	any(target_os = "linux", target_os = "macos")
 ))]
 pub(super) fn with_apfs_view_verified<T>(
@@ -172,7 +172,7 @@ pub(super) fn with_apfs_view_verified<T>(
 #[cfg(any(
 	all(feature = "diff", feature = "apfs-read"),
 	all(
-		feature = "apfs-extract",
+		any(feature = "apfs-extract", feature = "apfs-install"),
 		any(target_os = "linux", target_os = "macos")
 	)
 ))]
@@ -247,7 +247,12 @@ fn with_apfs_container_source<T>(
 }
 
 #[cfg(all(
-	any(feature = "hfsplus-extract", feature = "apfs-extract"),
+	any(
+		feature = "hfsplus-extract",
+		feature = "apfs-extract",
+		feature = "hfsplus-install",
+		feature = "apfs-install"
+	),
 	any(target_os = "linux", target_os = "macos")
 ))]
 fn with_verified_source<T>(

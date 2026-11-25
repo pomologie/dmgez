@@ -10,6 +10,7 @@ mod extract;
 mod import_appdmg;
 #[cfg(feature = "inspect")]
 mod inspect;
+mod install;
 #[cfg(feature = "lint")]
 mod lint;
 mod native_assessment;
@@ -191,6 +192,9 @@ enum Command {
 	Volumes(volume_commands::VolumesArguments),
 	/// Extract a selected fork or directory tree to an absent host path.
 	Extract(extract::Arguments),
+	/// Copy one selected application bundle to an existing directory without mounting the image.
+	#[command(name = install::COMMAND)]
+	Install(install::Arguments),
 	/// Export the decoded disk or one partition to a regular file.
 	#[command(name = UNWRAP_RAW_COMMAND)]
 	UnwrapRaw {
@@ -342,6 +346,8 @@ fn run(command: Command) -> CliResult<ExitCode> {
 				),
 				(extract::HFSPLUS_FEATURE, extract::HFSPLUS_COMPILED),
 				(extract::APFS_FEATURE, extract::APFS_COMPILED),
+				(install::HFSPLUS_FEATURE, install::HFSPLUS_COMPILED),
+				(install::APFS_FEATURE, install::APFS_COMPILED),
 				(ANALYZE_COMMAND, cfg!(feature = "inspect")),
 				(CONVERT_COMMAND, cfg!(feature = "convert")),
 				(OPTIMIZE_COMMAND, cfg!(feature = "convert")),
@@ -470,6 +476,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		Command::Cat(arguments) => volume_commands::run(volume_commands::Query::Cat(&arguments)),
 		Command::Volumes(arguments) => volume_commands::volumes(&arguments),
 		Command::Extract(arguments) => extract::run(&arguments),
+		Command::Install(arguments) => install::run(&arguments),
 		#[cfg(feature = "inspect")]
 		Command::UnwrapRaw {
 			image,

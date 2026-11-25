@@ -146,6 +146,17 @@ target/apfs-cli/debug/dmgez extract image.dmg /Docs --filesystem apfs --data-onl
 
 [APFS extraction scope](docs/features/INSPECTION.md#extract-apfs)
 
+## Install an app without mounting
+
+Compose `hfsplus-install` or `apfs-install` on macOS or Linux. Select one `.app` and an existing destination directory. Run with `--dry-run` to check the plan and destination.
+
+```sh
+python3 tools/compose_filesystem_cli.py --hfsplus ../hfsplus --no-default-features --features hfsplus-install
+target/hfsplus-cli/debug/dmgez install installer.dmg --app /Example.app --destination ./output --json
+```
+
+[Supported app metadata and publication behavior](docs/features/MOUNT_INSTALL.md#virtual-install-and-external-copy)
+
 ## Desktop app
 
 The [native desktop app](apps/dmgez/README.md) opens TOML projects for layout editing and disk images for container and partition inspection. Launch it with `cargo run --locked -p dmgez-gui`.

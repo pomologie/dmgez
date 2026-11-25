@@ -108,4 +108,4 @@ thiserror = "2.0.21"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(feature, values("project-build", "project-release", "finder-write", "hfsplus-read", "hfsplus-verify", "hfsplus-extract", "hfsplus-decmpfs", "apfs-read", "apfs-extract"))'] }
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(kani)', 'cfg(feature, values("project-build", "project-release", "finder-write", "hfsplus-read", "hfsplus-verify", "hfsplus-extract", "hfsplus-decmpfs", "hfsplus-install", "apfs-read", "apfs-extract", "apfs-install"))'] }

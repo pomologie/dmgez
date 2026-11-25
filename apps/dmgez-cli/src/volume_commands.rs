@@ -13,13 +13,13 @@ mod apfs;
 #[cfg(any(
 	all(feature = "diff", feature = "apfs-read"),
 	all(
-		feature = "apfs-extract",
+		any(feature = "apfs-extract", feature = "apfs-install"),
 		any(target_os = "linux", target_os = "macos")
 	)
 ))]
 pub(super) use apfs::VolumeIdentity;
 #[cfg(all(
-	feature = "apfs-extract",
+	any(feature = "apfs-extract", feature = "apfs-install"),
 	any(target_os = "linux", target_os = "macos")
 ))]
 pub(super) use apfs::with_selector_guidance;

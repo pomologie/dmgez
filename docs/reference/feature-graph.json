@@ -99,6 +99,14 @@
     "install": [
       "extract"
     ],
+    "hfsplus-install": [
+      "install",
+      "hfsplus-read"
+    ],
+    "apfs-install": [
+      "install",
+      "apfs-read"
+    ],
     "signing-rust": [],
     "signing-native": [],
     "notarization-rust": [
