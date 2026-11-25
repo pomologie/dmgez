@@ -2,9 +2,6 @@
 
 use std::{collections::TryReserveError, io::Write, mem::size_of, path::Path};
 
-#[cfg(feature = "finder-write")]
-use std::borrow::Cow;
-
 use dmgez_builder::{
 	execution::{BuildPlan, BuildReport, ExecuteError, OutputVerifier},
 	metadata::{self as host_metadata, Attribute, policy},
@@ -17,8 +14,6 @@ use dmgez_builder::{
 };
 use dmgez_config::{Capacity, Project, VirtualPath};
 use dmgez_udif::writer::{Cancellation, WriteOptions};
-#[cfg(feature = "finder-write")]
-use hfsplus_builder::volume::{EntryKind, ForkSource};
 use hfsplus_builder::{
 	SealedPlan,
 	volume::{self, CapacityError, CapacityPolicy, ManifestEntry, VolumeError, VolumeOptions},
@@ -26,12 +21,12 @@ use hfsplus_builder::{
 use hfsplus_core::ByteLen;
 use thiserror::Error;
 
+#[cfg(feature = "finder-write")]
+mod finder;
 mod hard_links;
 mod metadata;
 mod source;
 
-#[cfg(feature = "finder-write")]
-use metadata::DEFAULT_FILE_MODE;
 use metadata::{Capture, DEFAULT_FOLDER_MODE, MISSING_HFS_DATE, epoch_seconds, generated_metadata};
 use source::Payload;
 
@@ -51,6 +46,15 @@ pub enum Error {
 	Profile(#[from] PreflightError),
 	#[error(transparent)]
 	Execute(#[from] ExecuteError),
+	#[cfg(feature = "finder-write")]
+	#[error(transparent)]
+	Finder(#[from] dmgez_builder::presentation::Error),
+	#[cfg(feature = "finder-write")]
+	#[error("a reserved Finder background identity is missing at {path:?}")]
+	BackgroundIdentity { path: String },
+	#[cfg(feature = "finder-write")]
+	#[error("the stored HFS+ volume name cannot be represented in a Finder alias")]
+	BackgroundVolumeName(#[source] std::string::FromUtf16Error),
 	#[error("build was cancelled while sealing the HFS+ image")]
 	Cancelled,
 	#[error("build metadata exceeds the available byte budget")]
@@ -130,6 +134,7 @@ pub fn capabilities() -> BuildCapabilities {
 	capabilities.atomic_replace = Availability::Available;
 	if cfg!(feature = "finder-write") {
 		capabilities.finder_layout = Availability::Available;
+		capabilities.finder_image_background = Availability::Available;
 	}
 	if cfg!(feature = "volume-icon") {
 		capabilities.finder_volume_icon = Availability::Available;
@@ -282,22 +287,10 @@ fn seal<'build>(
 	let mut members = Vec::new();
 	members.try_reserve_exact(shared_count)?;
 
-	#[cfg(feature = "finder-write")]
-	let generated = prepared.finder_assets();
-	#[cfg(feature = "finder-write")]
-	for asset in generated {
-		charge(&mut remaining, asset.bytes.capacity())?;
-		charge(&mut remaining, asset.path.as_str().len())?;
-		charge(
-			&mut remaining,
-			size_of::<dmgez_builder::presentation::GeneratedAsset>(),
-		)?;
-	}
-
 	let count = manifest.entries().len() - shared_count;
 	#[cfg(feature = "finder-write")]
 	let count = count
-		.checked_add(generated.len())
+		.checked_add(finder::account_assets(prepared, &mut remaining)?)
 		.ok_or(Error::MetadataBudget)?;
 	charge_many::<ManifestEntry<'_, Payload<'_>>>(&mut remaining, count)?;
 	let mut entries = Vec::new();
@@ -337,14 +330,7 @@ fn seal<'build>(
 		cancellation,
 	)?;
 	#[cfg(feature = "finder-write")]
-	for asset in generated {
-		check_cancelled(cancellation)?;
-		entries.push(ManifestEntry {
-			path: relative(&asset.path)?,
-			metadata: generated_metadata(DEFAULT_FILE_MODE, generated_seconds),
-			kind: EntryKind::GeneratedFile { resource: None },
-		});
-	}
+	finder::reserve_assets(prepared, &mut entries, generated_seconds, cancellation)?;
 
 	let mut options =
 		VolumeOptions::for_capacity(project.image.name.as_str(), ALLOCATION_BLOCK_BYTES)?;
@@ -369,13 +355,13 @@ fn seal<'build>(
 		_ => return Err(Error::UnsupportedProfile),
 	};
 	#[cfg(feature = "finder-write")]
-	for asset in generated {
-		check_cancelled(cancellation)?;
-		draft.bind_generated_data(
-			relative(&asset.path)?,
-			ForkSource::whole(Payload::Bytes(Cow::Borrowed(&asset.bytes))),
-		)?;
-	}
+	finder::bind_assets(
+		prepared,
+		&mut draft,
+		project.image.name.as_str(),
+		generated_seconds,
+		cancellation,
+	)?;
 	for (path, attrs) in pending_attrs {
 		for attr in attrs {
 			check_cancelled(cancellation)?;

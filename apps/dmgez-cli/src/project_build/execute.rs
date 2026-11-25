@@ -96,7 +96,7 @@ fn write_dry_run(
 	let profile = prepared.profile();
 	let manifest = prepared.manifest();
 	#[cfg(feature = "finder-write")]
-	let finder_assets = prepared.finder_assets().len();
+	let finder_assets = prepared.finder_asset_count();
 	#[cfg(not(feature = "finder-write"))]
 	let finder_assets = 0;
 	writeln!(output, "mode=dry-run")?;
