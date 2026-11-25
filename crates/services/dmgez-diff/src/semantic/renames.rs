@@ -7,6 +7,7 @@ use crate::Side;
 use super::{
 	Error, RenameCandidate,
 	catalog::Catalog,
+	path_matching::Pairs,
 	payloads::{ForkDigest, Payloads, missing_data},
 };
 
@@ -20,15 +21,32 @@ type File<'a, Id> = (&'a [String], &'a NodeHandle<Id>);
 // A repeated fingerprint loses its unique path even if a third file matches it.
 type FingerprintIndex<'a> = BTreeMap<FileFingerprint, Option<&'a [String]>>;
 
-pub(super) fn infer<L: VolumeBackend, R: VolumeBackend>(
-	left: (&mut VolumeView<L>, &Catalog<L::Id>),
-	right: (&mut VolumeView<R>, &Catalog<R::Id>),
+pub(super) fn infer<'catalog, L: VolumeBackend, R: VolumeBackend>(
+	left: (&mut VolumeView<L>, &'catalog Catalog<L::Id>),
+	right: (&mut VolumeView<R>, &'catalog Catalog<R::Id>),
+	pairs: &Pairs<'catalog>,
 	payloads: &mut Payloads<impl FnMut() -> bool>,
 ) -> Result<Vec<RenameCandidate>, Error<L::Error, R::Error>> {
 	let (left_view, left_catalog) = left;
 	let (right_view, right_catalog) = right;
-	let left_files = unmatched(left_catalog, right_catalog, payloads)?;
-	let right_files = unmatched(right_catalog, left_catalog, payloads)?;
+	let left_files = unmatched(
+		left_catalog,
+		|path| {
+			pairs
+				.right(path)
+				.is_some_and(|paired| right_catalog.contains_key(paired))
+		},
+		payloads,
+	)?;
+	let right_files = unmatched(
+		right_catalog,
+		|path| {
+			pairs
+				.left(path)
+				.is_some_and(|paired| left_catalog.contains_key(paired))
+		},
+		payloads,
+	)?;
 	if left_files.is_empty() || right_files.is_empty() {
 		return Ok(Vec::new());
 	}
@@ -52,9 +70,9 @@ pub(super) fn infer<L: VolumeBackend, R: VolumeBackend>(
 	Ok(candidates)
 }
 
-fn unmatched<'a, Id, OtherId, L: StdError + 'static, R: StdError + 'static>(
+fn unmatched<'a, Id, L: StdError + 'static, R: StdError + 'static>(
 	source: &'a Catalog<Id>,
-	other: &Catalog<OtherId>,
+	is_matched: impl Fn(&'a [String]) -> bool,
 	payloads: &mut Payloads<impl FnMut() -> bool>,
 ) -> Result<Vec<File<'a, Id>>, Error<L, R>> {
 	let mut files = Vec::new();
@@ -66,7 +84,7 @@ fn unmatched<'a, Id, OtherId, L: StdError + 'static, R: StdError + 'static>(
 				.hard_link
 				.as_ref()
 				.is_none_or(|link| link.count == NonZeroU32::MIN)
-			&& !other.contains_key(path)
+			&& !is_matched(path)
 		{
 			files.push((path.as_slice(), &entry.node));
 		}

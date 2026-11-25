@@ -6,7 +6,7 @@ use dmgez_vfs::volume::{Fork, ForkKind, NodeHandle, VolumeBackend, VolumeView};
 
 use crate::Side;
 
-use super::Error;
+use super::{Error, object::PairedPaths};
 
 #[cfg(feature = "content-hash")]
 use super::Contents;
@@ -81,7 +81,7 @@ impl<F: FnMut() -> bool> Payloads<F> {
 		left: (&mut VolumeView<L>, &NodeHandle<L::Id>),
 		right: (&mut VolumeView<R>, &NodeHandle<R::Id>),
 		kind: ForkKind,
-		path: &[String],
+		paths: PairedPaths<'_>,
 		#[cfg(feature = "content-hash")] storage_groups: (Option<&StorageId>, Option<&StorageId>),
 	) -> Result<bool, Error<L::Error, R::Error>> {
 		self.poll()?;
@@ -96,36 +96,36 @@ impl<F: FnMut() -> bool> Payloads<F> {
 							left_fork,
 							right_fork,
 							kind,
-							path,
+							paths,
 							storage_groups,
 						);
 					}
-					self.compare_forks(left_fork, right_fork, path)
+					self.compare_forks(left_fork, right_fork, paths)
 				})
 			})
 			.map_err(|source| Error::LeftObject {
-				path: path.to_vec(),
+				path: paths.left.to_vec(),
 				source,
 			})?;
 		let required = kind == ForkKind::Data;
 		if let Some(right_result) = left_result {
 			let right_result = right_result.map_err(|source| Error::RightObject {
-				path: path.to_vec(),
+				path: paths.right.to_vec(),
 				source,
 			})?;
 			return match right_result {
 				Some(compared) => compared,
-				None if required => Err(missing_data(Side::Right, path)),
+				None if required => Err(missing_data(Side::Right, paths.right)),
 				None => Ok(false),
 			};
 		}
 		if required {
-			return Err(missing_data(Side::Left, path));
+			return Err(missing_data(Side::Left, paths.left));
 		}
 		let right_result = right
 			.with_fork(right_node, kind, |_| ())
 			.map_err(|source| Error::RightObject {
-				path: path.to_vec(),
+				path: paths.right.to_vec(),
 				source,
 			})?;
 		Ok(right_result.is_none())
@@ -135,7 +135,7 @@ impl<F: FnMut() -> bool> Payloads<F> {
 		&mut self,
 		left: &mut Fork<'_, L>,
 		right: &mut Fork<'_, R>,
-		path: &[String],
+		paths: PairedPaths<'_>,
 	) -> Result<bool, Error<L, R>> {
 		let length = left.len();
 		if length != right.len() {
@@ -153,13 +153,13 @@ impl<F: FnMut() -> bool> Payloads<F> {
 			let right_bytes = &mut self.right_scratch[..width as usize];
 			left.read_exact_at(offset, left_bytes)
 				.map_err(|source| Error::LeftObject {
-					path: path.to_vec(),
+					path: paths.left.to_vec(),
 					source,
 				})?;
 			right
 				.read_exact_at(offset, right_bytes)
 				.map_err(|source| Error::RightObject {
-					path: path.to_vec(),
+					path: paths.right.to_vec(),
 					source,
 				})?;
 			self.compared_bytes += width;
@@ -175,21 +175,21 @@ impl<F: FnMut() -> bool> Payloads<F> {
 		&mut self,
 		left: (&mut VolumeView<L>, &NodeHandle<L::Id>),
 		right: (&mut VolumeView<R>, &NodeHandle<R::Id>),
-		path: &[String],
+		paths: PairedPaths<'_>,
 	) -> Result<bool, Error<L::Error, R::Error>> {
 		self.poll()?;
 		let left = left
 			.0
 			.read_link(left.1)
 			.map_err(|source| Error::LeftObject {
-				path: path.to_vec(),
+				path: paths.left.to_vec(),
 				source,
 			})?;
 		let right = right
 			.0
 			.read_link(right.1)
 			.map_err(|source| Error::RightObject {
-				path: path.to_vec(),
+				path: paths.right.to_vec(),
 				source,
 			})?;
 		// VFS supplies bounded whole link targets. Account both reads even when

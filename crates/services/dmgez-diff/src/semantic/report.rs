@@ -1,6 +1,7 @@
 use std::num::NonZeroU32;
 
-use serde::Serialize;
+use dmgez_vfs::volume::NativeNameProfile;
+use serde::{Serialize, Serializer};
 
 use crate::{DEFAULT_COMPARE_BYTES, bytes::decimal};
 
@@ -17,7 +18,8 @@ pub struct Limits {
 	pub max_entries: usize,
 	/// Maximum number of components below each volume root.
 	pub max_depth: usize,
-	/// Maximum aggregate stored absolute-path bytes in each catalog.
+	/// Maximum aggregate stored absolute-path bytes in each catalog and,
+	/// independently, encoded native path-key bytes at each side.
 	pub max_path_bytes: usize,
 	/// Maximum logical payload bytes read per side, including confirmation passes.
 	#[serde(serialize_with = "decimal")]
@@ -55,11 +57,14 @@ impl Outcome {
 }
 
 /// How stored names are paired between two trees.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
 #[non_exhaustive]
 #[serde(rename_all = "snake_case")]
 pub enum PathMatching {
+	#[default]
 	ExactStoredText,
+	/// Match names using the same admitted native equality profile on both sides.
+	Native,
 }
 
 /// How logical regular-file forks are compared.
@@ -224,6 +229,12 @@ pub struct XattrPolicy {
 #[non_exhaustive]
 pub struct Policy {
 	pub paths: PathMatching,
+	/// The shared native equality profile, when requested and admitted.
+	#[serde(
+		skip_serializing_if = "Option::is_none",
+		serialize_with = "serialize_native_name_profile"
+	)]
+	pub native_name_profile: Option<NativeNameProfile>,
 	pub contents: ContentComparison,
 	pub compared: &'static [Field],
 	pub excluded: &'static [Uncompared],
@@ -241,7 +252,10 @@ pub struct Policy {
 }
 
 impl Policy {
-	pub(super) fn for_options(options: Options) -> Self {
+	pub(super) fn for_options(
+		options: Options,
+		native_name_profile: Option<NativeNameProfile>,
+	) -> Self {
 		let policy = if options.xattrs {
 			Self::with_xattrs()
 		} else {
@@ -260,7 +274,11 @@ impl Policy {
 		};
 		#[cfg(feature = "content-hash")]
 		let policy = policy.with_content_options(options.contents, options.infer_renames);
-		policy
+		Self {
+			paths: options.paths,
+			native_name_profile,
+			..policy
+		}
 	}
 
 	fn with_xattrs() -> Self {
@@ -277,6 +295,7 @@ impl Default for Policy {
 	fn default() -> Self {
 		Self {
 			paths: PathMatching::ExactStoredText,
+			native_name_profile: None,
 			contents: ContentComparison::ExactBytes,
 			compared: &COMPARED_FIELDS,
 			excluded: &UNCOMPARED_FIELDS,
@@ -288,6 +307,13 @@ impl Default for Policy {
 			rename_inference: None,
 		}
 	}
+}
+
+fn serialize_native_name_profile<S: Serializer>(
+	profile: &Option<NativeNameProfile>,
+	serializer: S,
+) -> Result<S::Ok, S::Error> {
+	profile.map(NativeNameProfile::as_str).serialize(serializer)
 }
 
 #[cfg(feature = "content-hash")]
@@ -332,12 +358,15 @@ pub struct XattrChange {
 	pub kind: ChangeKind,
 }
 
-/// A difference at one exact stored path.
+/// A difference at a stored path.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 #[non_exhaustive]
 pub struct Change {
-	/// Literal stored components from the volume root. The root is empty.
+	/// Literal components of the left stored path, or the right path for an addition.
 	pub path: Vec<String>,
+	/// Right stored path of a matched change whose literal spelling differs.
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub right_path: Option<Vec<String>>,
 	pub kind: ChangeKind,
 	/// Changed fields of a path common to both volumes.
 	pub fields: Vec<Field>,
@@ -354,6 +383,7 @@ impl Change {
 	pub(super) fn new(path: &[String], kind: ChangeKind, fields: Vec<Field>) -> Self {
 		Self {
 			path: path.to_vec(),
+			right_path: None,
 			kind,
 			fields,
 			xattrs: Vec::new(),
@@ -361,6 +391,14 @@ impl Change {
 			finder_layout: Vec::new(),
 		}
 	}
+}
+
+/// Distinct stored spellings of a pair equal under the selected policy.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[non_exhaustive]
+pub struct EquivalentPathSpelling {
+	pub left: Vec<String>,
+	pub right: Vec<String>,
 }
 
 /// Complete result for the declared, bounded semantic comparison.
@@ -384,6 +422,9 @@ pub struct Report {
 	pub compared_bytes: u64,
 	/// Differences in lexicographic component order.
 	pub changes: Vec<Change>,
+	/// Equal pairs with different stored spellings, sorted by their left paths.
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub equivalent_path_spellings: Vec<EquivalentPathSpelling>,
 	/// Inferred pairs in lexicographic order of their former path.
 	#[cfg(feature = "content-hash")]
 	#[serde(skip_serializing_if = "Vec::is_empty")]

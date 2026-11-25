@@ -1,12 +1,8 @@
 //! Bounded comparison of visible paths and supported objects in two volume views.
 
-#[cfg(feature = "content-hash")]
-use std::num::NonZeroU32;
 use std::{error::Error as StdError, hash::Hash};
 
-use dmgez_vfs::volume::{ForkKind, NodeKind, ViewError, VolumeBackend, VolumeView};
-#[cfg(feature = "content-hash")]
-use dmgez_vfs::volume::{Metadata, StorageId};
+use dmgez_vfs::volume::{NodeKind, ViewError, VolumeBackend, VolumeView};
 use thiserror::Error;
 
 use crate::{SCHEMA_VERSION, Side};
@@ -16,6 +12,8 @@ mod finder_info;
 #[cfg(feature = "finder-layout")]
 mod finder_layout;
 mod links;
+mod object;
+mod path_matching;
 mod payloads;
 #[cfg(feature = "content-hash")]
 mod renames;
@@ -29,9 +27,11 @@ pub use catalog::CatalogError;
 pub use finder_info::FinderInfoError;
 #[cfg(feature = "finder-layout")]
 pub use finder_layout::FinderLayoutError;
+pub use path_matching::PathMatchError;
 pub use report::{
-	Change, ChangeKind, ContentComparison, Field, FinderInfoComparison, FinderInfoPolicy, Limits,
-	Outcome, PathMatching, Policy, Report, Uncompared, XattrChange, XattrPolicy,
+	Change, ChangeKind, ContentComparison, EquivalentPathSpelling, Field, FinderInfoComparison,
+	FinderInfoPolicy, Limits, Outcome, PathMatching, Policy, Report, Uncompared, XattrChange,
+	XattrPolicy,
 };
 #[cfg(feature = "content-hash")]
 pub use report::{Contents, RenameCandidate, RenameInference};
@@ -41,6 +41,8 @@ pub use xattrs::XattrError;
 
 use catalog::{Entry, collect};
 use links::Topology;
+use object::{PairedPaths, compare_entry};
+use path_matching::{Pairs, native_profile};
 use payloads::Payloads;
 use xattrs::Xattrs;
 
@@ -52,6 +54,8 @@ pub enum Error<L: StdError + 'static, R: StdError + 'static> {
 	LeftCatalog(#[source] CatalogError<L>),
 	#[error("could not collect the right filesystem catalog")]
 	RightCatalog(#[source] CatalogError<R>),
+	#[error("could not match filesystem paths under the selected policy")]
+	PathMatching(#[from] PathMatchError<L, R>),
 	#[error("could not read the left filesystem object at {path:?}")]
 	LeftObject {
 		path: Vec<String>,
@@ -120,6 +124,8 @@ pub enum Error<L: StdError + 'static, R: StdError + 'static> {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 #[non_exhaustive]
 pub struct Options {
+	/// Pair common paths by exact stored spelling or a qualified native profile.
+	pub paths: PathMatching,
 	/// Compare the supported stored extended attributes.
 	pub xattrs: bool,
 	/// Compare effective per-object FinderInfo on common paths of the same kind.
@@ -244,6 +250,9 @@ where
 /// Hashes may be reused for effective hard-link storage within each admitted
 /// view. The caller validates source identities as with [`compare`].
 ///
+/// Native path matching requires a shared admitted key profile and rejects
+/// ambiguous matches. Stored spellings remain available in the report.
+///
 /// # Errors
 /// Stops on the same failures as [`compare`] and on unsupported, unreadable or
 /// over-budget records in any enabled scope.
@@ -260,26 +269,42 @@ where
 	L::Id: Eq + Hash,
 	R::Id: Eq + Hash,
 {
-	let policy = Policy::for_options(options);
+	let native_profile = native_profile(left, right, options.paths, &mut cancelled)?;
 	let left_catalog = collect(left, limits, &mut cancelled).map_err(Error::LeftCatalog)?;
 	let right_catalog = collect(right, limits, &mut cancelled).map_err(Error::RightCatalog)?;
-	let topology = Topology::compare(&left_catalog, &right_catalog, &mut cancelled)?;
+	let pairs = Pairs::new(
+		(left, &left_catalog),
+		(right, &right_catalog),
+		limits,
+		native_profile,
+		&mut cancelled,
+	)?;
+	let policy = Policy::for_options(options, native_profile);
+	let topology = Topology::compare(&left_catalog, &right_catalog, &pairs, &mut cancelled)?;
 	let mut payloads = Payloads::new(limits.max_bytes, cancelled);
 	#[cfg(feature = "content-hash")]
 	payloads.set_contents(options.contents);
 	let mut xattrs = policy.xattrs.map(|_| Xattrs::default());
 	let mut changes = Vec::new();
+	let mut equivalent_path_spellings = Vec::new();
 
-	for (path, left_entry) in &left_catalog {
+	for (left_path, left_entry) in &left_catalog {
 		payloads.poll()?;
-		let Some(right_entry) = right_catalog.get(path) else {
-			changes.push(Change::new(path, ChangeKind::Removed, Vec::new()));
+		let Some((right_path, right_entry)) = pairs
+			.right(left_path)
+			.and_then(|path| right_catalog.get_key_value(path))
+		else {
+			changes.push(Change::new(left_path, ChangeKind::Removed, Vec::new()));
 			continue;
+		};
+		let paths = PairedPaths {
+			left: left_path,
+			right: right_path,
 		};
 		let mut entry = compare_entry(
 			(&mut *left, left_entry),
 			(&mut *right, right_entry),
-			path,
+			paths,
 			&topology,
 			&mut payloads,
 			#[cfg(feature = "finder-layout")]
@@ -289,7 +314,7 @@ where
 			xattrs.compare(
 				(left, &left_entry.node),
 				(right, &right_entry.node),
-				path,
+				paths,
 				&mut payloads,
 			)?
 		} else {
@@ -303,25 +328,36 @@ where
 			&& !finder_info::equivalent(
 				(left, &left_entry.node),
 				(right, &right_entry.node),
-				path,
+				paths,
 				&mut payloads,
 			)? {
 			entry.fields.push(Field::FinderInfo);
 		}
 		if !entry.fields.is_empty() {
-			let mut change = Change::new(path, ChangeKind::Changed, entry.fields);
+			let mut change = Change::new(left_path, ChangeKind::Changed, entry.fields);
+			if left_path != right_path {
+				change.right_path = Some(right_path.clone());
+			}
 			change.xattrs = xattr_changes;
 			#[cfg(feature = "finder-layout")]
 			{
 				change.finder_layout = entry.finder_layout;
 			}
 			changes.push(change);
+		} else if left_path != right_path {
+			equivalent_path_spellings.push(EquivalentPathSpelling {
+				left: left_path.clone(),
+				right: right_path.clone(),
+			});
 		}
 	}
-	for path in right_catalog.keys() {
+	for right_path in right_catalog.keys() {
 		payloads.poll()?;
-		if !left_catalog.contains_key(path) {
-			changes.push(Change::new(path, ChangeKind::Added, Vec::new()));
+		if pairs
+			.left(right_path)
+			.is_none_or(|path| !left_catalog.contains_key(path))
+		{
+			changes.push(Change::new(right_path, ChangeKind::Added, Vec::new()));
 		}
 	}
 	changes.sort_unstable_by(|left, right| left.path.cmp(&right.path));
@@ -330,6 +366,7 @@ where
 		renames::infer(
 			(left, &left_catalog),
 			(right, &right_catalog),
+			&pairs,
 			&mut payloads,
 		)?
 	} else {
@@ -350,103 +387,10 @@ where
 		right_entries: right_catalog.len(),
 		compared_bytes: payloads.compared_bytes(),
 		changes,
+		equivalent_path_spellings,
 		#[cfg(feature = "content-hash")]
 		rename_candidates,
 	})
-}
-
-#[derive(Default)]
-struct EntryChanges {
-	fields: Vec<Field>,
-	#[cfg(feature = "finder-layout")]
-	finder_layout: Vec<FinderRecordChange>,
-}
-
-fn compare_entry<L: VolumeBackend, R: VolumeBackend>(
-	left: (&mut VolumeView<L>, &Entry<L::Id>),
-	right: (&mut VolumeView<R>, &Entry<R::Id>),
-	path: &[String],
-	topology: &Topology<'_>,
-	payloads: &mut Payloads<impl FnMut() -> bool>,
-	#[cfg(feature = "finder-layout")] finder_layout: Option<FinderLayoutPolicy>,
-) -> Result<EntryChanges, Error<L::Error, R::Error>> {
-	let (left_view, left) = left;
-	let (right_view, right) = right;
-	let l = &left.metadata;
-	let r = &right.metadata;
-	let mut changes = EntryChanges::default();
-	for (same, field) in [
-		(l.kind == r.kind, Field::Kind),
-		(l.mode == r.mode, Field::Mode),
-		(l.uid == r.uid, Field::Uid),
-		(l.gid == r.gid, Field::Gid),
-		(topology.equivalent(l, r), Field::HardLinkTopology),
-	] {
-		if !same {
-			changes.fields.push(field);
-		}
-	}
-	match (l.kind, r.kind) {
-		(NodeKind::RegularFile, NodeKind::RegularFile) => {
-			#[cfg(feature = "content-hash")]
-			let storage_groups = (shared_storage(l), shared_storage(r));
-			let compare_data = true;
-			#[cfg(feature = "finder-layout")]
-			let compare_data = if finder_layout
-				.is_some_and(|policy| path.last().is_some_and(|name| name == policy.store_name))
-			{
-				changes.finder_layout = finder_layout::compare_stores(
-					(left_view, &left.node),
-					(right_view, &right.node),
-					path,
-					payloads,
-				)?;
-				if !changes.finder_layout.is_empty() {
-					changes.fields.push(Field::FinderLayout);
-				}
-				false
-			} else {
-				compare_data
-			};
-			if compare_data
-				&& !payloads.fork(
-					(left_view, &left.node),
-					(right_view, &right.node),
-					ForkKind::Data,
-					path,
-					#[cfg(feature = "content-hash")]
-					storage_groups,
-				)? {
-				changes.fields.push(Field::DataFork);
-			}
-			if !payloads.fork(
-				(left_view, &left.node),
-				(right_view, &right.node),
-				ForkKind::Resource,
-				path,
-				#[cfg(feature = "content-hash")]
-				storage_groups,
-			)? {
-				changes.fields.push(Field::ResourceFork);
-			}
-		}
-		(NodeKind::Symlink, NodeKind::Symlink)
-			if !payloads.link((left_view, &left.node), (right_view, &right.node), path)? =>
-		{
-			changes.fields.push(Field::SymlinkTarget);
-		}
-		_ => {}
-	}
-	Ok(changes)
-}
-
-#[cfg(feature = "content-hash")]
-fn shared_storage(metadata: &Metadata<StorageId>) -> Option<&StorageId> {
-	metadata
-		.hard_link
-		.as_ref()
-		.filter(|link| link.count > NonZeroU32::MIN)
-		.map(|link| &link.storage)
 }
 
 fn require_kind<L: StdError + 'static, R: StdError + 'static>(

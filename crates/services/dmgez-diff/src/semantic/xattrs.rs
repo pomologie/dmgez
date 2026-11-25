@@ -4,7 +4,7 @@ use std::{
 	num::NonZeroU32,
 };
 
-use super::{ChangeKind, Error, XattrChange, XattrPolicy, payloads::Payloads};
+use super::{ChangeKind, Error, XattrChange, XattrPolicy, object::PairedPaths, payloads::Payloads};
 use dmgez_vfs::volume::{LookupName, NodeHandle, RawName, ViewError, VolumeBackend, VolumeView};
 
 const RESOURCE_FORK: &str = "com.apple.ResourceFork";
@@ -64,7 +64,7 @@ impl Xattrs {
 		&mut self,
 		left: (&mut VolumeView<L>, &NodeHandle<L::Id>),
 		right: (&mut VolumeView<R>, &NodeHandle<R::Id>),
-		path: &[String],
+		paths: PairedPaths<'_>,
 		payloads: &mut Payloads<impl FnMut() -> bool>,
 	) -> Result<Vec<XattrChange>, Error<L::Error, R::Error>> {
 		let (left_view, left_node) = left;
@@ -74,7 +74,7 @@ impl Xattrs {
 			self.left
 				.list(left_view, left_node)
 				.map_err(|source| Error::LeftXattrs {
-					path: path.to_vec(),
+					path: paths.left.to_vec(),
 					source,
 				})?;
 		payloads.poll()?;
@@ -82,7 +82,7 @@ impl Xattrs {
 			self.right
 				.list(right_view, right_node)
 				.map_err(|source| Error::RightXattrs {
-					path: path.to_vec(),
+					path: paths.right.to_vec(),
 					source,
 				})?;
 
@@ -93,7 +93,7 @@ impl Xattrs {
 				if values_equal(
 					(left_view, left_node, left_raw.as_lookup()),
 					(right_view, right_node, right_raw.as_lookup()),
-					path,
+					paths,
 					&name,
 					payloads,
 				)? {
@@ -174,7 +174,7 @@ impl Budget {
 fn values_equal<L: VolumeBackend, R: VolumeBackend>(
 	left: (&mut VolumeView<L>, &NodeHandle<L::Id>, LookupName<'_>),
 	right: (&mut VolumeView<R>, &NodeHandle<R::Id>, LookupName<'_>),
-	path: &[String],
+	paths: PairedPaths<'_>,
 	name: &str,
 	payloads: &mut Payloads<impl FnMut() -> bool>,
 ) -> Result<bool, Error<L::Error, R::Error>> {
@@ -185,32 +185,32 @@ fn values_equal<L: VolumeBackend, R: VolumeBackend>(
 			right_view
 				.with_xattr(right_node, right_name, |right_value| {
 					payloads
-						.compare_forks(left_value, right_value, path)
+						.compare_forks(left_value, right_value, paths)
 						.map_err(|error| with_attribute_name(error, name))
 				})
 				.map_err(|source| Error::RightXattrs {
-					path: path.to_vec(),
+					path: paths.right.to_vec(),
 					source: XattrError::Read {
 						name: name.to_owned(),
 						source,
 					},
 				})?
 				.ok_or_else(|| Error::RightXattrs {
-					path: path.to_vec(),
+					path: paths.right.to_vec(),
 					source: XattrError::Missing {
 						name: name.to_owned(),
 					},
 				})?
 		})
 		.map_err(|source| Error::LeftXattrs {
-			path: path.to_vec(),
+			path: paths.left.to_vec(),
 			source: XattrError::Read {
 				name: name.to_owned(),
 				source,
 			},
 		})?
 		.ok_or_else(|| Error::LeftXattrs {
-			path: path.to_vec(),
+			path: paths.left.to_vec(),
 			source: XattrError::Missing {
 				name: name.to_owned(),
 			},

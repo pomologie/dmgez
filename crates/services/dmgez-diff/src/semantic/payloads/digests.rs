@@ -6,7 +6,7 @@ use dmgez_vfs::volume::{
 
 use crate::Side;
 
-use super::{CHUNK_BYTES, Contents, Error, Payloads};
+use super::{CHUNK_BYTES, Contents, Error, PairedPaths, Payloads};
 
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub(in crate::semantic) struct ForkDigest {
@@ -75,7 +75,7 @@ impl<F: FnMut() -> bool> Payloads<F> {
 		left: &mut Fork<'_, L>,
 		right: &mut Fork<'_, R>,
 		kind: ForkKind,
-		path: &[String],
+		paths: PairedPaths<'_>,
 		(left_storage, right_storage): (Option<&StorageId>, Option<&StorageId>),
 	) -> Result<bool, Error<L, R>> {
 		let length = left.len();
@@ -89,14 +89,14 @@ impl<F: FnMut() -> bool> Payloads<F> {
 		}
 		let left_hash = self.resolve_digest(left, left_cached, left_storage, kind, |source| {
 			Error::LeftObject {
-				path: path.to_vec(),
+				path: paths.left.to_vec(),
 				source,
 			}
 		})?;
 		let right_hash =
 			self.resolve_digest(right, right_cached, right_storage, kind, |source| {
 				Error::RightObject {
-					path: path.to_vec(),
+					path: paths.right.to_vec(),
 					source,
 				}
 			})?;
@@ -104,7 +104,7 @@ impl<F: FnMut() -> bool> Payloads<F> {
 			return Ok(false);
 		}
 		if self.contents == Contents::Blake3Exact {
-			return self.compare_forks(left, right, path);
+			return self.compare_forks(left, right, paths);
 		}
 		Ok(true)
 	}

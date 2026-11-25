@@ -4,7 +4,7 @@ use dmgez_vfs::volume::{
 	FINDER_INFO_BYTES, FinderInfo, NodeHandle, ViewError, VolumeBackend, VolumeView,
 };
 
-use super::{Error, payloads::Payloads};
+use super::{Error, object::PairedPaths, payloads::Payloads};
 
 /// Stopped per-object FinderInfo comparison on one side of a common path.
 #[derive(Debug, thiserror::Error)]
@@ -19,17 +19,17 @@ pub enum FinderInfoError<E: StdError + 'static> {
 pub(super) fn equivalent<L: VolumeBackend, R: VolumeBackend>(
 	left: (&mut VolumeView<L>, &NodeHandle<L::Id>),
 	right: (&mut VolumeView<R>, &NodeHandle<R::Id>),
-	path: &[String],
+	paths: PairedPaths<'_>,
 	payloads: &mut Payloads<impl FnMut() -> bool>,
 ) -> Result<bool, Error<L::Error, R::Error>> {
 	payloads.poll()?;
 	let left = read(left.0, left.1).map_err(|source| Error::LeftFinderInfo {
-		path: path.to_vec(),
+		path: paths.left.to_vec(),
 		source,
 	})?;
 	payloads.poll()?;
 	let right = read(right.0, right.1).map_err(|source| Error::RightFinderInfo {
-		path: path.to_vec(),
+		path: paths.right.to_vec(),
 		source,
 	})?;
 	if left.is_some() || right.is_some() {

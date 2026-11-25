@@ -9,6 +9,7 @@ use crate::Side;
 
 use super::{
 	ChangeKind, Error, FinderRecordChange,
+	object::PairedPaths,
 	payloads::{Payloads, missing_data},
 };
 
@@ -27,15 +28,15 @@ pub enum FinderLayoutError<E: StdError + 'static> {
 pub(super) fn compare_stores<L: VolumeBackend, R: VolumeBackend>(
 	left: (&mut VolumeView<L>, &NodeHandle<L::Id>),
 	right: (&mut VolumeView<R>, &NodeHandle<R::Id>),
-	path: &[String],
+	paths: PairedPaths<'_>,
 	payloads: &mut Payloads<impl FnMut() -> bool>,
 ) -> Result<Vec<FinderRecordChange>, Error<L::Error, R::Error>> {
 	let left_error = |source| Error::LeftFinderLayout {
-		path: path.to_vec(),
+		path: paths.left.to_vec(),
 		source,
 	};
 	let right_error = |source| Error::RightFinderLayout {
-		path: path.to_vec(),
+		path: paths.right.to_vec(),
 		source,
 	};
 	payloads.poll()?;
@@ -57,10 +58,10 @@ pub(super) fn compare_stores<L: VolumeBackend, R: VolumeBackend>(
 					Ok(record_changes(left_store, right_store))
 				})
 				.map_err(|source| right_error(FinderLayoutError::Read(source)))?
-				.ok_or_else(|| missing_data(Side::Right, path))?
+				.ok_or_else(|| missing_data(Side::Right, paths.right))?
 		})
 		.map_err(|source| left_error(FinderLayoutError::Read(source)))?
-		.ok_or_else(|| missing_data(Side::Left, path))?
+		.ok_or_else(|| missing_data(Side::Left, paths.left))?
 }
 
 fn store_length<E: StdError + 'static>(
