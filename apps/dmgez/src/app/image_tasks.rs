@@ -9,7 +9,7 @@ use crate::inspector::Action;
 use super::{App, Completion, Document, Opened};
 
 pub(super) enum ImageCompletion {
-	Runs(Result<RunPage, Error>),
+	Runs(Result<(RunPage, Option<usize>), Error>),
 	Checked(Box<VerificationReport>),
 	#[cfg(feature = "hfsplus-read")]
 	Browsed(Result<Observation, browse::Error>),
@@ -27,7 +27,16 @@ impl App {
 		let snapshot = image.snapshot.clone();
 		match action {
 			Action::Page(offset) => self.start(ctx, move || {
-				Completion::Image(ImageCompletion::Runs(snapshot.run_page(offset)))
+				Completion::Image(ImageCompletion::Runs(
+					snapshot.run_page(offset).map(|page| (page, None)),
+				))
+			}),
+			Action::LocateRun(offset) => self.start(ctx, move || {
+				Completion::Image(ImageCompletion::Runs(
+					snapshot
+						.locate_run(offset)
+						.map(|location| (location.page, Some(location.ordinal))),
+				))
 			}),
 			Action::Verify => {
 				let cancellation = Cancellation::default();
@@ -73,10 +82,14 @@ impl App {
 		};
 		match completion {
 			ImageCompletion::Runs(result) => match result {
-				Ok(page) => image.report.run_page = Some(page),
+				Ok((page, selected)) => {
+					image.report.run_page = Some(page);
+					image.run_navigation.select(selected);
+				}
 				Err(error) => {
 					if matches!(error, Error::SourceChanged) {
 						image.verification = None;
+						image.run_navigation.select(None);
 						#[cfg(feature = "hfsplus-read")]
 						image.browser.invalidate();
 					}
@@ -84,8 +97,9 @@ impl App {
 				}
 			},
 			ImageCompletion::Checked(report) => {
-				#[cfg(feature = "hfsplus-read")]
 				if matches!(report.cause(), Some(Error::SourceChanged)) {
+					image.run_navigation.select(None);
+					#[cfg(feature = "hfsplus-read")]
 					image.browser.invalidate();
 				}
 				image.verification = Some(report);
@@ -115,11 +129,79 @@ impl App {
 				Err(error) => {
 					if matches!(error, browse::Error::Image(Error::SourceChanged)) {
 						image.verification = None;
+						image.run_navigation.select(None);
 						image.browser.invalidate();
 					}
 					self.error = Some(format!("Could not browse the volume. {error}"));
 				}
 			},
 		}
+	}
+}
+
+#[cfg(test)]
+mod tests {
+	use std::{fs, time::Duration};
+
+	use super::*;
+	use crate::app::open_outcome;
+
+	const UDZO: &[u8] = include_bytes!("../../../../tests/fixtures/images/tiny-UDZO.dmg");
+	const WORKER_TIMEOUT: Duration = Duration::from_secs(5);
+
+	fn apply_result(app: &mut App, ctx: &Context) {
+		let result = app
+			.worker
+			.take()
+			.expect("offset action starts a worker")
+			.receiver
+			.recv_timeout(WORKER_TIMEOUT)
+			.expect("image worker delivers its completion");
+		app.finish(ctx, result);
+	}
+
+	fn opened_image(app: &App) -> &crate::image::ImageTab {
+		let Document::Image(image) = &app.opened.as_ref().unwrap().document else {
+			panic!("expected image tab")
+		};
+		image
+	}
+
+	#[test]
+	fn offset_lookup_loads_and_highlights_a_run_then_normal_paging_clears_it() {
+		let ctx = Context::default();
+		let scratch = tempfile::tempdir().unwrap();
+		let path = scratch.path().join("retained.dmg");
+		fs::write(&path, UDZO).unwrap();
+		let mut app = App::new(&ctx, None);
+		app.finish(&ctx, open_outcome(path.clone()));
+		let container = &opened_image(&app).report.container;
+		let last = container.runs.total - 1;
+		let offset = container.logical_bytes - 1;
+		app.image_action(&ctx, Action::LocateRun(offset));
+		apply_result(&mut app, &ctx);
+		assert_eq!(opened_image(&app).run_navigation.selected, Some(last));
+		assert!(opened_image(&app).run_navigation.reveal_selected);
+
+		app.image_action(&ctx, Action::LocateRun(offset + 1));
+		apply_result(&mut app, &ctx);
+		assert!(app.error.as_deref().unwrap().contains("exceeds disk size"));
+		assert_eq!(opened_image(&app).run_navigation.selected, Some(last));
+
+		app.image_action(&ctx, Action::Page(0));
+		apply_result(&mut app, &ctx);
+		assert_eq!(opened_image(&app).run_navigation.selected, None);
+		assert!(!opened_image(&app).run_navigation.reveal_selected);
+		assert!(app.error.is_none());
+
+		app.image_action(&ctx, Action::LocateRun(offset));
+		apply_result(&mut app, &ctx);
+		fs::write(path, []).unwrap();
+		app.image_action(&ctx, Action::Verify);
+		apply_result(&mut app, &ctx);
+		let image = opened_image(&app);
+		let verification = image.verification.as_ref().unwrap();
+		assert!(matches!(verification.cause(), Some(Error::SourceChanged)));
+		assert_eq!(image.run_navigation.selected, None);
 	}
 }

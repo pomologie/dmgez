@@ -13,6 +13,8 @@ use dmgez_udif::{
 
 #[cfg(feature = "raw-export")]
 mod export;
+#[cfg(test)]
+mod tests;
 #[cfg(feature = "raw-export")]
 pub use export::{ExportError, export_raw};
 
@@ -38,6 +40,16 @@ pub enum MetadataBudget {
 #[derive(Debug)]
 pub struct ImageSession<S> {
 	image: Image<S>,
+}
+
+/// A requested run and its page in the logical disk.
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct RunLocation {
+	/// Bounded page containing the selected run.
+	pub page: RunPage,
+	/// Zero-based ordinal of the selected run in logical order.
+	pub ordinal: usize,
 }
 
 /// Opens a regular file for held, read-only image access.
@@ -88,6 +100,27 @@ impl<S: ReadAt> ImageSession<S> {
 		let page = inspect_runs(&self.image, window);
 		self.image.check_source_unchanged()?;
 		Ok(page)
+	}
+
+	/// Reports the run covering a disk-relative byte and the page containing it.
+	///
+	/// Lookup and paging use the retained index without decoding payloads.
+	///
+	/// # Errors
+	/// Returns an error for an invalid page size, an out-of-range byte, or an
+	/// index whose backing source cannot be revalidated.
+	pub fn locate_run(&self, offset: u64, page_size: usize) -> Result<RunLocation, Error> {
+		let ordinal = self.image.run_ordinal_at(offset).ok_or(Error::OutOfRange {
+			offset,
+			len: 1,
+			disk_len: self.image.descriptor().logical_bytes,
+		})?;
+		let window = RunWindow::containing(ordinal, page_size)
+			.ok_or(Error::ResourceLimit("run page size"))?;
+		Ok(RunLocation {
+			page: self.run_page(window)?,
+			ordinal,
+		})
 	}
 
 	/// Reports container and run allocation without decoding payloads.

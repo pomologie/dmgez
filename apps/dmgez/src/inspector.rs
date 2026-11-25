@@ -2,17 +2,20 @@ use dmgez_inspector::{
 	CheckStatus, ChecksumDeclaration, ContainerFormat, DiskReport, PartitionDetails,
 	PartitionReport, RecognizedFilesystem, RunPage,
 };
-use eframe::egui::{self, Grid, Panel, RichText, ScrollArea, Ui};
+use eframe::egui::{self, Align, Grid, Key, Panel, RichText, ScrollArea, TextEdit, Ui};
 
-use crate::image::{ImageTab, RUN_PAGE_SIZE};
+use crate::image::{ImageTab, RUN_PAGE_SIZE, RunNavigation};
 
 #[cfg(feature = "hfsplus-read")]
 mod browse;
 
 const SUMMARY_WIDTH: f32 = 264.0;
+const MAX_OFFSET_TEXT: usize = u64::MAX.ilog10() as usize + 1;
+const HEX_RADIX: u32 = 16;
 
 pub(crate) enum Action {
 	Page(usize),
+	LocateRun(u64),
 	Verify,
 	#[cfg(feature = "hfsplus-read")]
 	ShowContainer,
@@ -24,7 +27,7 @@ pub(crate) enum Action {
 	Browse(crate::image::browse::Request),
 }
 
-pub(crate) fn show(ui: &mut Ui, image: &ImageTab, idle: bool) -> Option<Action> {
+pub(crate) fn show(ui: &mut Ui, image: &mut ImageTab, idle: bool) -> Option<Action> {
 	let report = &image.report;
 	let verify = Panel::left("image_summary")
 		.default_size(SUMMARY_WIDTH)
@@ -103,10 +106,15 @@ pub(crate) fn show(ui: &mut Ui, image: &ImageTab, idle: bool) -> Option<Action> 
 						"Declared master checksum",
 						checksum(report.container.master_checksum),
 					);
-					report
-						.run_page
-						.as_ref()
-						.and_then(|page| show_runs(ui, page, report.container.runs.total, idle))
+					report.run_page.as_ref().and_then(|page| {
+						show_runs(
+							ui,
+							page,
+							report.container.runs.total,
+							&mut image.run_navigation,
+							idle,
+						)
+					})
 				})
 				.inner
 		})
@@ -114,13 +122,24 @@ pub(crate) fn show(ui: &mut Ui, image: &ImageTab, idle: bool) -> Option<Action> 
 	verify.or(page)
 }
 
-fn show_runs(ui: &mut Ui, page: &RunPage, total: usize, idle: bool) -> Option<Action> {
+fn show_runs(
+	ui: &mut Ui,
+	page: &RunPage,
+	total: usize,
+	navigation: &mut RunNavigation,
+	idle: bool,
+) -> Option<Action> {
 	ui.separator();
 	ui.heading("Runs");
 	if page.runs.is_empty() {
 		ui.label("No runs in this page");
 		return None;
 	}
+	let locate = show_run_lookup(ui, navigation, idle);
+	if let Some(selected) = navigation.selected {
+		ui.label(format!("Selected run {}", selected + 1));
+	}
+	let reveal_selected = std::mem::take(&mut navigation.reveal_selected);
 	let first = page.offset + 1;
 	let last = page.offset + page.runs.len() as u64;
 	let offset = usize::try_from(page.offset).ok()?;
@@ -171,8 +190,16 @@ fn show_runs(ui: &mut Ui, page: &RunPage, total: usize, idle: bool) -> Option<Ac
 			ui.strong(heading);
 		}
 		ui.end_row();
-		for (index, run) in (first..).zip(&page.runs) {
-			ui.label(index.to_string());
+		for (ordinal, run) in (offset..).zip(&page.runs) {
+			let label = (ordinal + 1).to_string();
+			if navigation.selected == Some(ordinal) {
+				let response = ui.strong(label);
+				if reveal_selected {
+					response.scroll_to_me(Some(Align::Center));
+				}
+			} else {
+				ui.label(label);
+			}
 			ui.label(format!("{:?}", run.encoding));
 			ui.label(run.logical.offset_bytes.to_string());
 			ui.label(run.logical.length_bytes.to_string());
@@ -185,7 +212,59 @@ fn show_runs(ui: &mut Ui, page: &RunPage, total: usize, idle: bool) -> Option<Ac
 			ui.end_row();
 		}
 	});
+	locate.or(action)
+}
+
+fn show_run_lookup(ui: &mut Ui, navigation: &mut RunNavigation, idle: bool) -> Option<Action> {
+	let requested = ui
+		.horizontal_wrapped(|ui| {
+			let label = ui.label("Logical byte offset");
+			let input = ui
+				.add_enabled(
+					idle,
+					TextEdit::singleline(&mut navigation.offset)
+						.hint_text("Decimal or 0x…")
+						.desired_width(180.0)
+						.char_limit(MAX_OFFSET_TEXT + 1),
+				)
+				.labelled_by(label.id);
+			if input.changed() {
+				navigation.invalid_offset = false;
+			}
+			let clicked = ui
+				.add_enabled(idle, egui::Button::new("Go to run"))
+				.clicked();
+			clicked
+				|| (idle && input.lost_focus() && ui.input(|input| input.key_pressed(Key::Enter)))
+		})
+		.inner;
+	let action = if requested {
+		let offset = parse_logical_offset(&navigation.offset);
+		navigation.invalid_offset = offset.is_none();
+		offset.map(Action::LocateRun)
+	} else {
+		None
+	};
+	if navigation.invalid_offset {
+		ui.label("Enter a decimal byte offset or a hexadecimal offset starting with 0x.");
+	}
 	action
+}
+
+fn parse_logical_offset(input: &str) -> Option<u64> {
+	// Keep a character beyond the representable input so truncated paste is rejected.
+	if input.len() > MAX_OFFSET_TEXT {
+		return None;
+	}
+	let value = input.trim();
+	if let Some(hex) = value
+		.strip_prefix('0')
+		.and_then(|rest| rest.strip_prefix(['x', 'X']))
+	{
+		u64::from_str_radix(hex, HEX_RADIX).ok()
+	} else {
+		value.parse().ok()
+	}
 }
 
 fn show_disk(ui: &mut Ui, disk: Option<&DiskReport>) {

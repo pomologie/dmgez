@@ -233,6 +233,16 @@ impl RunWindow {
 		}
 		Some(Self { offset, limit })
 	}
+
+	/// A page aligned to its limit and containing the given zero-based run ordinal.
+	#[must_use]
+	pub const fn containing(ordinal: usize, limit: usize) -> Option<Self> {
+		let Some(mut window) = Self::new(ordinal, limit) else {
+			return None;
+		};
+		window.offset -= ordinal % limit;
+		Some(window)
+	}
 }
 
 /// Bounded detail page for the requested logical run window.

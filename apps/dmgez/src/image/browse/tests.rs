@@ -195,10 +195,10 @@ fn rejects_a_changed_source_and_cancelled_lookups() {
 #[test]
 fn accessible_file_controls_request_volume_pages_and_folder_navigation() {
 	let mut tab = wrap(&fixture(CATALOG));
-	assert!(matches!(activate(&tab, "Files"), Action::ShowFiles));
+	assert!(matches!(activate(&mut tab, "Files"), Action::ShowFiles));
 	tab.browser.showing = true;
 	for control in ["Open whole-disk volume", "Next files", "Nested", "Up"] {
-		let Action::Browse(request) = activate(&tab, control) else {
+		let Action::Browse(request) = activate(&mut tab, control) else {
 			panic!("expected browse request from {control}");
 		};
 		let Observation::Page(observed) = tab
@@ -240,7 +240,7 @@ fn folder_preview_uses_the_admitted_location_and_a_bounded_texture() {
 	let selected = page(&tab, location.clone(), 0);
 	tab.browser.show_page(selected);
 
-	let Action::Browse(request @ Request::Preview { .. }) = activate(&tab, "Preview folder") else {
+	let Action::Browse(request @ Request::Preview { .. }) = activate(&mut tab, "Preview folder") else {
 		panic!("expected a preview request from the current folder");
 	};
 	let Observation::Preview(prepared) = tab
@@ -285,7 +285,7 @@ fn catalog_details_controls_share_a_column_on_separate_rows() {
 			screen_rect: Some(viewport),
 			..Default::default()
 		},
-		|ui| assert!(inspector::show(ui, &tab, true).is_none()),
+		|ui| assert!(inspector::show(ui, &mut tab, true).is_none()),
 	);
 	let controls: Vec<_> = output
 		.platform_output
@@ -306,7 +306,7 @@ fn catalog_details_controls_share_a_column_on_separate_rows() {
 	assert!((first.y0 - second.y0).abs() >= 1.0, "{first:?}, {second:?}");
 }
 
-fn activate(tab: &ImageTab, title: &str) -> Action {
+fn activate(tab: &mut ImageTab, title: &str) -> Action {
 	let context = egui::Context::default();
 	context.enable_accesskit();
 	let viewport = egui::Rect::from_min_size(

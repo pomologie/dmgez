@@ -320,6 +320,16 @@ impl<S: ReadAt> Image<S> {
 		})
 	}
 
+	/// Finds the zero-based logical run ordinal covering a disk-relative byte.
+	///
+	/// The search uses the admitted index without accessing payload bytes.
+	/// Returns `None` at or beyond the end of the logical disk.
+	#[must_use]
+	pub fn run_ordinal_at(&self, offset: u64) -> Option<usize> {
+		let ordinal = index::run_ordinal_at(&self.runs, &self.logical_order, offset);
+		(ordinal < self.logical_order.len()).then_some(ordinal)
+	}
+
 	/// Read exactly a logical byte range, including reads across run boundaries.
 	///
 	/// # Errors

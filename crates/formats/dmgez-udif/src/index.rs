@@ -220,6 +220,10 @@ pub(crate) fn order_runs(runs: &[Run], disk_len: u64) -> Result<Vec<usize>, Erro
 	Ok(ordered)
 }
 
+pub(crate) fn run_ordinal_at(runs: &[Run], logical_order: &[usize], offset: u64) -> usize {
+	logical_order.partition_point(|&index| runs[index].logical.end <= offset)
+}
+
 // A cursor over a request admitted against a contiguous logical partition.
 pub(crate) struct ReadCursor {
 	remaining: Range<u64>,
@@ -228,11 +232,9 @@ pub(crate) struct ReadCursor {
 
 impl ReadCursor {
 	pub(crate) fn new(runs: &[Run], logical_order: &[usize], request: Range<u64>) -> Self {
-		let ordinal =
-			logical_order.partition_point(|&index| runs[index].logical.end <= request.start);
 		Self {
+			ordinal: run_ordinal_at(runs, logical_order, request.start),
 			remaining: request,
-			ordinal,
 		}
 	}
 

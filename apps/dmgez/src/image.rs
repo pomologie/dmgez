@@ -4,7 +4,7 @@ use dmgez_inspector::{
 	DiskLimits, InspectionReport, RunPage, RunWindow, VerificationMode, VerificationReport,
 	verify_with_cancellation,
 };
-use dmgez_runtime::image::{ImageSession, InspectionScope, MetadataBudget};
+use dmgez_runtime::image::{ImageSession, InspectionScope, MetadataBudget, RunLocation};
 use dmgez_udif::{
 	Cancellation, Error,
 	reader::{FileSource, Limits, ReadAt},
@@ -16,8 +16,24 @@ pub(crate) struct ImageTab {
 	pub snapshot: Arc<ImageSnapshot>,
 	pub report: InspectionReport,
 	pub verification: Option<Box<VerificationReport>>,
+	pub run_navigation: RunNavigation,
 	#[cfg(feature = "hfsplus-read")]
 	pub browser: browse::Browser,
+}
+
+#[derive(Default)]
+pub(crate) struct RunNavigation {
+	pub offset: String,
+	pub invalid_offset: bool,
+	pub selected: Option<usize>,
+	pub reveal_selected: bool,
+}
+
+impl RunNavigation {
+	pub(crate) fn select(&mut self, ordinal: Option<usize>) {
+		self.selected = ordinal;
+		self.reveal_selected = ordinal.is_some();
+	}
 }
 
 #[cfg(feature = "hfsplus-read")]
@@ -39,6 +55,7 @@ impl ImageTab {
 			snapshot: Arc::new(ImageSnapshot { source, image }),
 			report,
 			verification: None,
+			run_navigation: RunNavigation::default(),
 			#[cfg(feature = "hfsplus-read")]
 			browser: browse::Browser::default(),
 		})
@@ -55,6 +72,10 @@ impl ImageSnapshot {
 		let window = RunWindow::new(offset, RUN_PAGE_SIZE)
 			.ok_or(Error::ResourceLimit("desktop run page size"))?;
 		self.image.run_page(window)
+	}
+
+	pub(crate) fn locate_run(&self, offset: u64) -> Result<RunLocation, Error> {
+		self.image.locate_run(offset, RUN_PAGE_SIZE)
 	}
 
 	pub(crate) fn verify(&self, cancellation: &Cancellation) -> VerificationReport {
