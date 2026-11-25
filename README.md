@@ -78,17 +78,34 @@ Compose `installer-test` to check the finished image with `dmgez test installer.
 
 ## Build from a TOML project
 
-While the versioned HFS+ dependencies are unpublished, compose the standalone CLI locally on macOS or Linux using a sibling checkout or unpacked 0.1.0 packages. The compose tool uses a temporary Cargo workspace and the local Cargo cache. The resulting binary contains the builder and runs directly.
+The ordinary Cargo workspace builds the raw-image CLI. To enable `dmgez build`, compose the standalone CLI with the unpublished HFS+ packages on macOS, Linux, or Windows. Use Python 3.11 or newer and the Rust toolchain pinned in this checkout. Supply a sibling `hfsplus` checkout containing commit `185ba1d605d58c6cdeeca70b94c864e07ede3e5d`.
 
-The HFS+ composition tool also accepts Windows hosts for [local NTFS project builds](tests/compatibility/project-build/README.md#windows-ntfs-composition). The Windows path passed cross-target checks and needs native runtime qualification.
+Run from the dmgez checkout. Set the manifest and output paths for your project. The build resolves `[image].output` and asset paths relative to `dmg.toml`. Upload the verified output file from that path in your CI job.
 
 ```sh
-python3 tools/compose_hfsplus_cli.py --hfsplus ../hfsplus
-target/hfsplus-cli/debug/dmgez build project.toml --dry-run
-target/hfsplus-cli/debug/dmgez build project.toml
+git -C ../hfsplus checkout --detach 185ba1d605d58c6cdeeca70b94c864e07ede3e5d
+python3 tools/compose_hfsplus_cli.py --hfsplus ../hfsplus --fetch --release --features inspect
+target/hfsplus-cli/release/dmgez build path/to/dmg.toml --dry-run
+target/hfsplus-cli/release/dmgez build path/to/dmg.toml
+target/hfsplus-cli/release/dmgez verify path/to/installer.dmg --container
 ```
 
-Use `--hfsplus-packages PATH` for unpacked packages, or `--no-default-features --features build` for a serial build with Finder support. The compose tool's `--test` mode runs the build command's integration tests. Use `dmgez capabilities` to check whether the binary includes project building. The [compatibility runner](tests/compatibility/project-build/README.md) exercises the same build service and command implementation with the native fixtures.
+On Windows, place `dmg.toml` and its assets in a project directory on local NTFS, such as `$env:LOCALAPPDATA\Temp\dmgez-project`. Keep the output on the same local filesystem. The Windows adapter reports metadata it cannot observe. Strict builds refuse required metadata loss. [Windows source profile](docs/reference/WINDOWS_SOURCES.md)
+
+```powershell
+git -C ..\hfsplus checkout --detach 185ba1d605d58c6cdeeca70b94c864e07ede3e5d
+py -3 tools\compose_hfsplus_cli.py --hfsplus ..\hfsplus --fetch --release --features inspect
+$projectDirectory = Join-Path $env:LOCALAPPDATA 'Temp\dmgez-project'
+$manifest = Join-Path $projectDirectory 'dmg.toml'
+$image = Join-Path $projectDirectory 'installer.dmg'
+.\target\hfsplus-cli\release\dmgez.exe build $manifest --dry-run
+.\target\hfsplus-cli\release\dmgez.exe build $manifest
+.\target\hfsplus-cli\release\dmgez.exe verify $image --container
+```
+
+`--fetch` primes Cargo's cache using the workspace lockfile. The composer then builds with the supplied HFS+ packages in a temporary workspace with frozen dependencies. Use `--hfsplus-packages PATH` for unpacked 0.1.0 packages, `--no-default-features --features build` for serial builds with Finder support, or `--test` to run the build integration tests. [Project build fixtures](tests/compatibility/project-build/README.md)
+
+The workflow runs on manual dispatch from the default branch. It needs the pinned HFS+ commit available to GitHub Actions. For a private HFS+ checkout, configure `HFSPLUS_READ_TOKEN` with read-only access to that repository. The default GitHub token suffices for a public checkout. The workflow verifies and compares its own fixture artifacts. The NTFS path passed a Windows-target compilation check. Native Windows runtime qualification remains pending. [Cross-platform DMG project build workflow](.github/workflows/project-build.yml)
 
 Compose `project-edit` to preview a typed TOML edit batch and rebuild to a verified unsigned image at a fresh path. [Edit and rebuild a project](docs/features/ADVANCED.md#edit-and-rebuild-a-project)
 
