@@ -60,6 +60,65 @@ fn creates_a_verified_conversion_only_when_the_feature_is_compiled() {
 	assert_eq!(fs::read_dir(work.path()).unwrap().count(), 2);
 }
 
+#[cfg(feature = "convert")]
+#[test]
+fn signed_conversion_requires_permission_and_publishes_exact_unsigned_bytes() {
+	use dmgez_udif::reader::{Image, Limits};
+
+	const SIGNED: &[u8] =
+		include_bytes!("../../../tests/fixtures/images/tiny-UDZO-adhoc-sha256.dmg");
+	const RAW: &[u8] = include_bytes!("../../../tests/fixtures/expected/tiny.raw");
+	const PERMISSION: &str = "--allow-signature-loss";
+	let work = tempfile::tempdir().unwrap();
+	let source = work.path().join("signed.dmg");
+	let destination = work.path().join("converted.dmg");
+	fs::write(&source, SIGNED).unwrap();
+	let invoke = |options: &[&str]| {
+		Command::new(env!("CARGO_BIN_EXE_dmgez"))
+			.arg("convert")
+			.arg(&source)
+			.args(["--format", CONVERSION_FORMAT, "--serial", "-o"])
+			.arg(&destination)
+			.args(options)
+			.output()
+			.unwrap()
+	};
+	let denied = invoke(&[]);
+	assert!(!denied.status.success(), "{denied:?}");
+	assert!(denied.stdout.is_empty());
+	assert!(String::from_utf8_lossy(&denied.stderr).contains("requires explicit permission"));
+	assert!(!destination.exists());
+	let optimized = Command::new(env!("CARGO_BIN_EXE_dmgez"))
+		.arg("optimize")
+		.arg(&source)
+		.args(["--serial", "-o"])
+		.arg(&destination)
+		.output()
+		.unwrap();
+	assert!(!optimized.status.success(), "{optimized:?}");
+	assert!(!destination.exists());
+	let converted = invoke(&[PERMISSION]);
+	assert!(converted.status.success(), "{converted:?}");
+	let report = String::from_utf8(converted.stdout).unwrap();
+	for line in [
+		"trust = SignatureAndAnyTicketRemoved",
+		"output_check = VerifiedAndCompared",
+	] {
+		assert!(report.lines().any(|value| value == line), "{report}");
+	}
+	let stored = fs::read(&destination).unwrap();
+	let mut image = Image::open(stored.as_slice(), Limits::default()).unwrap();
+	assert!(image.embedded_signature_range().is_none());
+	image.verify().unwrap();
+	let mut logical = Vec::new();
+	image.write_raw_to(&mut logical).unwrap();
+	assert_eq!(logical, RAW);
+	assert!(!invoke(&[PERMISSION]).status.success());
+	assert_eq!(fs::read(destination).unwrap(), stored);
+	assert_eq!(fs::read(source).unwrap(), SIGNED);
+	assert_eq!(fs::read_dir(work.path()).unwrap().count(), 2);
+}
+
 #[test]
 fn optimize_reports_sample_costs_and_refuses_an_exhausted_budget() {
 	const FULL_SAMPLE: &str = "2048";

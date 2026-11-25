@@ -6,6 +6,16 @@ Raw export streams logical disk bytes from qualified UDIF, no file-system interp
 
 `dmgez-operations` provides project-backed rebuild planning with its `edit` feature. It checks the exact source TOML revision, applies one atomic edit batch, and passes the validated project to the ordinary builder for unsigned, no-clobber publication to a fresh path. The original manifest and image remain available. This library path was exercised with a renamed file and exact payload readback from a new HFS+ image on macOS. [Rebuild planner](../../crates/services/dmgez-operations/src/edit.rs) · [Planner tests](../../crates/services/dmgez-operations/tests/project_rebuild.rs)
 
+### Convert a signed image
+
+With `convert` enabled, use `--allow-signature-loss` to rebuild a qualified signed UDRO or UDZO image as a new unsigned image.
+
+```sh
+dmgez convert installer.dmg --format udro --allow-signature-loss -o installer-unsigned.dmg
+```
+
+The report shows `trust = SignatureAndAnyTicketRemoved`. Conversion checks the source container and compares the staged logical disk byte for byte before publication. The signed source remains intact. Use `sign verify` separately to check its signature and sign the new image if needed. `convert` without the flag and `optimize` require unsigned input. [Conversion tests](../../apps/dmgez-cli/tests/convert_cli.rs)
+
 ### Edit and rebuild a project
 
 Compose the CLI with the HFS+ builder and `project-edit`. Pass the original project, a versioned edit batch and a fresh output path.

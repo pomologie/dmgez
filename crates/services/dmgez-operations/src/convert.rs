@@ -1,4 +1,4 @@
-//! Same-geometry conversion of the admitted unsigned UDRO and UDZO profiles.
+//! Same-geometry conversion of admitted UDRO and UDZO profiles.
 
 use std::{
 	cell::RefCell,
@@ -28,6 +28,17 @@ pub struct Options {
 	pub output: WriteOptions,
 }
 
+/// Permission to discard an embedded signature during file conversion.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SignaturePolicy {
+	/// Require an unsigned container.
+	#[default]
+	RequireUnsigned,
+	/// Allow removal of the original signature and any associated ticket.
+	Discard,
+}
+
 /// Output validation performed before a successful return.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -44,6 +55,8 @@ pub enum OutputCheck {
 pub enum TrustState {
 	/// Both images use the unsigned container profile.
 	UnsignedPreserved,
+	/// The source signature and any ticket were excluded from the unsigned output.
+	SignatureAndAnyTicketRemoved,
 }
 
 /// Successful conversion and the checks that applied at that output boundary.
@@ -66,6 +79,10 @@ pub enum Error {
 	Target,
 	#[error("source image could not be admitted or verified")]
 	Input(#[source] UdifError),
+	#[error(
+		"conversion requires explicit permission to discard the embedded signature and any ticket"
+	)]
+	SignatureLossNotAllowed,
 	#[error("container encoding did not complete")]
 	Encode(#[source] UdifError),
 	#[error("staged container could not be reopened or verified")]
@@ -112,6 +129,7 @@ pub fn stream(source: impl ReadAt, sink: impl Write, options: &Options) -> Resul
 		output,
 		options,
 		OutputCheck::Writer,
+		plan.trust,
 	))
 }
 
@@ -124,6 +142,34 @@ pub fn stream(source: impl ReadAt, sink: impl Write, options: &Options) -> Resul
 pub fn file(source: &Path, destination: &Path, options: &Options) -> Result<Report, FileError> {
 	let source = open_source(source, destination)?;
 	let (plan, input_checks) = prepare(source, options)?;
+	publish_plan(plan, input_checks, destination, options)
+}
+
+/// Convert a regular file to a new unsigned image with explicit signature policy.
+///
+/// The signed profile uses structural admission and container checksums. Signature
+/// integrity, ticket validity and platform trust are separate from conversion.
+/// The destination directory must remain stable throughout the operation.
+///
+/// # Errors
+/// Refuses signed input without permission, malformed or unsupported envelopes,
+/// failed checksums, and existing destinations. Publication requires exact logical
+/// byte equality between the admitted source and the reopened unsigned stage.
+pub fn file_with_signature_policy(
+	source: &Path,
+	destination: &Path,
+	options: &Options,
+	policy: SignaturePolicy,
+) -> Result<Report, FileError> {
+	let source = open_source(source, destination)?;
+	let (plan, input_checks) = prepare_source(source, options, |source, limits| {
+		let image = Image::open_release(source, limits).map_err(Error::Input)?;
+		if policy == SignaturePolicy::RequireUnsigned && image.embedded_signature_range().is_some()
+		{
+			return Err(Error::SignatureLossNotAllowed);
+		}
+		Ok(image)
+	})?;
 	publish_plan(plan, input_checks, destination, options)
 }
 
@@ -149,6 +195,7 @@ pub(crate) fn publish_plan<S: ReadAt>(
 	options: &Options,
 ) -> Result<Report, FileError> {
 	let metadata = plan.metadata;
+	let trust = plan.trust;
 	let plan = RefCell::new(plan);
 	let output = publish_new(
 		destination,
@@ -161,6 +208,7 @@ pub(crate) fn publish_plan<S: ReadAt>(
 		output,
 		options,
 		OutputCheck::VerifiedAndCompared,
+		trust,
 	))
 }
 
@@ -170,6 +218,7 @@ fn report(
 	output: WriteReport,
 	options: &Options,
 	output_check: OutputCheck,
+	trust: TrustState,
 ) -> Report {
 	Report {
 		source_profile: metadata.source_profile(),
@@ -177,18 +226,29 @@ fn report(
 		input_checks,
 		output,
 		output_check,
-		trust: TrustState::UnsignedPreserved,
+		trust,
 	}
 }
 
 pub(crate) struct Plan<S> {
 	image: Image<CheckedSource<S>>,
 	metadata: RebuildMetadata,
+	trust: TrustState,
 }
 
 pub(crate) fn prepare<S: ReadAt>(
 	source: S,
 	options: &Options,
+) -> Result<(Plan<S>, Verification), Error> {
+	prepare_source(source, options, |source, limits| {
+		Image::open(source, limits).map_err(Error::Input)
+	})
+}
+
+fn prepare_source<S: ReadAt>(
+	source: S,
+	options: &Options,
+	admit: impl FnOnce(CheckedSource<S>, Limits) -> Result<Image<CheckedSource<S>>, Error>,
 ) -> Result<(Plan<S>, Verification), Error> {
 	if !matches!(options.output.profile, Profile::Udro | Profile::Udzo) {
 		return Err(Error::Target);
@@ -202,15 +262,27 @@ pub(crate) fn prepare<S: ReadAt>(
 		source,
 		cancellation: options.output.cancellation.clone(),
 	};
-	let mut image = Image::open(source, options.input).map_err(Error::Input)?;
-	let metadata = image.rebuild_metadata().map_err(Error::Input)?;
+	let mut image = admit(source, options.input)?;
+	let trust = if image.embedded_signature_range().is_some() {
+		TrustState::SignatureAndAnyTicketRemoved
+	} else {
+		TrustState::UnsignedPreserved
+	};
+	let metadata = image.rebuild_release_metadata().map_err(Error::Input)?;
 	options
 		.output
 		.max_data_runs(image.descriptor().logical_bytes)
 		.map_err(Error::Encode)?;
 	let checks = image.verify().map_err(Error::Input)?;
 	check_source(&mut image)?;
-	Ok((Plan { image, metadata }, checks))
+	Ok((
+		Plan {
+			image,
+			metadata,
+			trust,
+		},
+		checks,
+	))
 }
 
 impl<S: ReadAt> Plan<S> {

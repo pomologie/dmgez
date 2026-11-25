@@ -8,7 +8,9 @@ use std::{
 	io::{self, Write},
 };
 
-use dmgez_operations::convert::{self, Error, FileError, Options, OutputCheck, TrustState};
+use dmgez_operations::convert::{
+	self, Error, FileError, Options, OutputCheck, SignaturePolicy, TrustState,
+};
 use dmgez_udif::{
 	Error as UdifError,
 	reader::{CheckStatus, Image, Limits, ReadAt},
@@ -18,6 +20,8 @@ use plist::Value;
 
 const UDRO: &[u8] = include_bytes!("../../../../tests/fixtures/images/tiny-UDRO.dmg");
 const UDZO: &[u8] = include_bytes!("../../../../tests/fixtures/images/tiny-UDZO.dmg");
+const SIGNED_UDZO: &[u8] =
+	include_bytes!("../../../../tests/fixtures/images/tiny-UDZO-adhoc-sha256.dmg");
 const RAW: &[u8] = include_bytes!("../../../../tests/fixtures/expected/tiny.raw");
 const COMMENT: &[u8] = include_bytes!("../../../../tests/fixtures/images/comment-run.dmg");
 const HYBRID: &[u8] = include_bytes!("../../../../tests/fixtures/images/hybrid-UDZO.dmg");
@@ -182,6 +186,51 @@ fn stages_exact_file_output_and_refuses_existing_paths_or_aliases() {
 }
 
 #[test]
+fn explicit_signature_policy_preserves_the_source_and_refuses_corrupt_inputs() {
+	const SIGNATURE_OFFSET: usize = 3084;
+	let tmp = tempfile::tempdir().unwrap();
+	let source = tmp.path().join("source.dmg");
+	let output = tmp.path().join("output.dmg");
+	let convert = |policy| {
+		convert::file_with_signature_policy(&source, &output, &options(Profile::Udzo), policy)
+	};
+	fs::write(&source, SIGNED_UDZO).unwrap();
+	assert!(matches!(
+		convert(SignaturePolicy::RequireUnsigned),
+		Err(FileError::Prepare(Error::SignatureLossNotAllowed)),
+	));
+	assert!(matches!(
+		convert::file(&source, &output, &options(Profile::Udzo)),
+		Err(FileError::Prepare(Error::Input(UdifError::Unsupported(_)))),
+	));
+	assert!(!output.exists());
+	let report = convert(SignaturePolicy::Discard).unwrap();
+	assert_eq!(report.trust, TrustState::SignatureAndAnyTicketRemoved);
+	assert_eq!(report.output_check, OutputCheck::VerifiedAndCompared);
+	assert_eq!(fs::read(&source).unwrap(), SIGNED_UDZO);
+	fs::remove_file(&output).unwrap();
+	let mut corrupt_signature = SIGNED_UDZO.to_vec();
+	corrupt_signature[SIGNATURE_OFFSET] ^= 1;
+	let mut corrupt_payload = SIGNED_UDZO.to_vec();
+	corrupt_payload[0] ^= 1;
+	let rejects = |bytes: &[u8], expected: fn(&UdifError) -> bool| {
+		fs::write(&source, bytes).unwrap();
+		assert!(matches!(
+			convert(SignaturePolicy::Discard),
+			Err(FileError::Prepare(Error::Input(error))) if expected(&error),
+		));
+		assert!(!output.exists());
+		assert_eq!(fs::read(&source).unwrap(), bytes);
+	};
+	rejects(&corrupt_signature, |error| {
+		matches!(error, UdifError::Corrupt(_))
+	});
+	rejects(&corrupt_payload, |error| {
+		matches!(error, UdifError::ChecksumMismatch { .. })
+	});
+}
+
+#[test]
 fn a_source_changed_during_emission_never_returns_success() {
 	struct Source<'state>(&'state Cell<bool>);
 	impl ReadAt for Source<'_> {
@@ -216,20 +265,24 @@ fn a_source_changed_during_emission_never_returns_success() {
 #[cfg(target_os = "macos")]
 #[test]
 #[ignore = "requires Apple hdiutil"]
-fn apple_verifies_and_exports_both_directions() {
+fn apple_verifies_and_exports_both_profiles_and_a_signed_conversion() {
 	use std::process::Command;
 
 	const HDIUTIL: &str = "/usr/bin/hdiutil";
 	let tmp = tempfile::tempdir().unwrap();
-	for (index, (input, target)) in [(UDRO, Profile::Udzo), (UDZO, Profile::Udro)]
-		.into_iter()
-		.enumerate()
+	for (index, (input, target, policy)) in [
+		(UDRO, Profile::Udzo, SignaturePolicy::RequireUnsigned),
+		(UDZO, Profile::Udro, SignaturePolicy::RequireUnsigned),
+		(SIGNED_UDZO, Profile::Udro, SignaturePolicy::Discard),
+	]
+	.into_iter()
+	.enumerate()
 	{
 		let source = tmp.path().join(format!("source-{index}.dmg"));
 		let output = tmp.path().join(format!("output-{index}.dmg"));
 		let raw = tmp.path().join(format!("export-{index}.cdr"));
 		fs::write(&source, input).unwrap();
-		convert::file(&source, &output, &options(target)).unwrap();
+		convert::file_with_signature_policy(&source, &output, &options(target), policy).unwrap();
 		assert!(
 			Command::new(HDIUTIL)
 				.arg("verify")

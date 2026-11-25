@@ -116,7 +116,7 @@ enum Command {
 		#[command(flatten)]
 		encoding: EncodingFlags,
 	},
-	/// Convert a qualified unsigned image between UDRO and UDZO.
+	/// Convert a qualified image to unsigned UDRO or UDZO.
 	#[command(name = CONVERT_COMMAND)]
 	Convert {
 		image: PathBuf,
@@ -124,6 +124,9 @@ enum Command {
 		output: PathBuf,
 		#[arg(long, value_enum)]
 		format: ConversionFormat,
+		/// Allow discarding the source signature and any embedded notarization ticket.
+		#[arg(long)]
+		allow_signature_loss: bool,
 		#[command(flatten)]
 		encoding: EncodingFlags,
 	},
@@ -339,8 +342,9 @@ fn run(command: Command) -> CliResult<ExitCode> {
 			image,
 			output,
 			format,
+			allow_signature_loss,
 			encoding,
-		} => convert::run(&image, &output, format, &encoding),
+		} => convert::run(&image, &output, format, &encoding, allow_signature_loss),
 		#[cfg(not(feature = "convert"))]
 		Command::Convert { .. } | Command::Optimize { .. } => {
 			Err(format!("feature not compiled: {CONVERT_COMMAND}").into())

@@ -3,7 +3,7 @@ use std::{
 	path::Path,
 };
 
-use dmgez_operations::convert::{Options, Report, file};
+use dmgez_operations::convert::{Options, Report, SignaturePolicy, file_with_signature_policy};
 use dmgez_udif::writer::{Profile, WriteOptions};
 
 use crate::{CliResult, ConversionFormat, EncodingFlags};
@@ -20,6 +20,7 @@ pub(crate) fn run(
 	destination: &Path,
 	format: ConversionFormat,
 	encoding: &EncodingFlags,
+	allow_signature_loss: bool,
 ) -> CliResult {
 	let profile = match format {
 		ConversionFormat::Udro => Profile::Udro,
@@ -33,7 +34,12 @@ pub(crate) fn run(
 		},
 		..Options::default()
 	};
-	let report = file(source, destination, &options)?;
+	let policy = if allow_signature_loss {
+		SignaturePolicy::Discard
+	} else {
+		SignaturePolicy::RequireUnsigned
+	};
+	let report = file_with_signature_policy(source, destination, &options, policy)?;
 	write_report(io::stdout().lock(), &report)?;
 	Ok(())
 }
