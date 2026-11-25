@@ -1,9 +1,12 @@
-use std::path::Path;
+use std::{
+	io::{self, Write},
+	path::Path,
+};
 
-use dmgez_operations::convert::{Options, file};
+use dmgez_operations::convert::{Options, Report, file};
 use dmgez_udif::writer::{Profile, WriteOptions};
 
-use crate::{CliResult, ConversionFormat, EncodingFlags, report_field};
+use crate::{CliResult, ConversionFormat, EncodingFlags};
 
 const INPUT_PROFILE_KEY: &str = "input_profile";
 const OUTPUT_PROFILE_KEY: &str = "output_profile";
@@ -31,17 +34,23 @@ pub(crate) fn run(
 		..Options::default()
 	};
 	let report = file(source, destination, &options)?;
-	report_field(
-		INPUT_PROFILE_KEY,
-		format_args!("{:?}", report.source_profile),
-	);
-	report_field(
-		OUTPUT_PROFILE_KEY,
-		format_args!("{:?}", report.output_profile),
-	);
-	report_field(LOGICAL_SIZE_KEY, report.output.logical_bytes);
-	report_field(PHYSICAL_SIZE_KEY, report.output.physical_bytes);
-	report_field(OUTPUT_CHECK_KEY, format_args!("{:?}", report.output_check));
-	report_field(TRUST_KEY, format_args!("{:?}", report.trust));
+	write_report(io::stdout().lock(), &report)?;
 	Ok(())
+}
+
+pub(crate) fn write_report(mut output: impl Write, report: &Report) -> io::Result<()> {
+	writeln!(output, "{INPUT_PROFILE_KEY} = {:?}", report.source_profile)?;
+	writeln!(output, "{OUTPUT_PROFILE_KEY} = {:?}", report.output_profile)?;
+	writeln!(
+		output,
+		"{LOGICAL_SIZE_KEY} = {}",
+		report.output.logical_bytes
+	)?;
+	writeln!(
+		output,
+		"{PHYSICAL_SIZE_KEY} = {}",
+		report.output.physical_bytes
+	)?;
+	writeln!(output, "{OUTPUT_CHECK_KEY} = {:?}", report.output_check)?;
+	writeln!(output, "{TRUST_KEY} = {:?}", report.trust)
 }

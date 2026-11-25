@@ -1,6 +1,7 @@
 use std::{fs, process::Command};
 
 const NATIVE_UDZO: &[u8] = include_bytes!("../../../tests/fixtures/images/tiny-UDZO.dmg");
+const NATIVE_UDRO: &[u8] = include_bytes!("../../../tests/fixtures/images/tiny-UDRO.dmg");
 const CONVERSION_FORMAT: &str = "udro";
 const EXISTING: &[u8] = b"keep this entry";
 
@@ -57,4 +58,65 @@ fn creates_a_verified_conversion_only_when_the_feature_is_compiled() {
 	assert_eq!(fs::read(destination).unwrap(), EXISTING);
 	assert_eq!(fs::read(source).unwrap(), NATIVE_UDZO);
 	assert_eq!(fs::read_dir(work.path()).unwrap().count(), 2);
+}
+
+#[test]
+fn optimize_reports_sample_costs_and_refuses_an_exhausted_budget() {
+	const FULL_SAMPLE: &str = "2048";
+	const EMPTY_BUDGET: &str = "0";
+	let work = tempfile::tempdir().unwrap();
+	let source = work.path().join("source.dmg");
+	let destination = work.path().join("optimized.dmg");
+	fs::write(&source, NATIVE_UDRO).unwrap();
+	let run = |budget: &str| {
+		Command::new(env!("CARGO_BIN_EXE_dmgez"))
+			.arg("optimize")
+			.arg(&source)
+			.args([
+				"--serial",
+				"--max-sample-chunks",
+				"1",
+				"--max-sample-bytes",
+				budget,
+				"-o",
+			])
+			.arg(&destination)
+			.output()
+			.unwrap()
+	};
+	let failed = run(EMPTY_BUDGET);
+	assert!(!failed.status.success());
+	assert!(!destination.exists());
+	let output = run(FULL_SAMPLE);
+	assert_eq!(output.status.success(), cfg!(feature = "convert"));
+	assert_eq!(destination.exists(), cfg!(feature = "convert"));
+	if cfg!(feature = "convert") {
+		assert!(String::from_utf8_lossy(&failed.stderr).contains("sample byte budget"));
+		let stdout = String::from_utf8(output.stdout).unwrap();
+		assert!(stdout.lines().any(|line| line == "sampled_chunks = 1"));
+		assert!(
+			stdout
+				.lines()
+				.any(|line| line == "sample = offset 0 bytes 2048")
+		);
+		assert!(
+			stdout
+				.lines()
+				.any(|line| line.starts_with("candidate = Udro wrapped_bytes "))
+		);
+		assert!(
+			stdout
+				.lines()
+				.any(|line| line.starts_with("candidate = Udzo wrapped_bytes "))
+		);
+		assert!(stdout.lines().any(|line| line == "output_profile = Udzo"));
+		assert!(
+			stdout
+				.lines()
+				.any(|line| line == "output_check = VerifiedAndCompared")
+		);
+	} else {
+		assert!(String::from_utf8_lossy(&output.stderr).contains("feature not compiled: convert"));
+	}
+	assert_eq!(fs::read(source).unwrap(), NATIVE_UDRO);
 }

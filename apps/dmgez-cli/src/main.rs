@@ -8,6 +8,8 @@ mod convert;
 mod diff;
 #[cfg(feature = "inspect")]
 mod inspect;
+#[cfg(feature = "convert")]
+mod optimize;
 #[cfg(feature = "build")]
 mod wrap;
 
@@ -17,6 +19,7 @@ const ANALYZE_COMMAND: &str = "analyze";
 const CONVERT_COMMAND: &str = "convert";
 const DIFF_COMMAND: &str = "diff";
 const DIFF_ERROR_EXIT_CODE: u8 = 2;
+const OPTIMIZE_COMMAND: &str = "optimize";
 const UNWRAP_RAW_COMMAND: &str = "unwrap-raw";
 const THREADS_ARG_ID: &str = "threads";
 const THREADS_VALUE_NAME: &str = "THREADS";
@@ -59,6 +62,17 @@ enum Command {
 		output: PathBuf,
 		#[arg(long, value_enum)]
 		format: ConversionFormat,
+		#[command(flatten)]
+		encoding: EncodingFlags,
+	},
+	/// Sample eligible unsigned profiles and publish a verified conversion.
+	#[command(name = OPTIMIZE_COMMAND)]
+	Optimize {
+		image: PathBuf,
+		#[arg(short, long)]
+		output: PathBuf,
+		#[command(flatten)]
+		sampling: SamplingFlags,
 		#[command(flatten)]
 		encoding: EncodingFlags,
 	},
@@ -164,6 +178,16 @@ struct EncodingFlags {
 	threads: Option<usize>,
 }
 
+#[derive(Args)]
+struct SamplingFlags {
+	/// Maximum whole output chunks to sample.
+	#[arg(long)]
+	max_sample_chunks: Option<u16>,
+	/// Maximum logical sample bytes supplied to each candidate.
+	#[arg(long)]
+	max_sample_bytes: Option<u64>,
+}
+
 #[cfg(any(feature = "build", feature = "convert"))]
 impl EncodingFlags {
 	fn execution(&self) -> Result<dmgez_udif::writer::Execution, dmgez_udif::Error> {
@@ -235,6 +259,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 				(INSPECT_COMMAND, cfg!(feature = "inspect")),
 				(ANALYZE_COMMAND, cfg!(feature = "inspect")),
 				(CONVERT_COMMAND, cfg!(feature = "convert")),
+				(OPTIMIZE_COMMAND, cfg!(feature = "convert")),
 				(DIFF_COMMAND, cfg!(feature = "diff")),
 				(VERIFY_CONTAINER_CAPABILITY, cfg!(feature = "inspect")),
 				(UNWRAP_RAW_COMMAND, cfg!(feature = "inspect")),
@@ -260,7 +285,16 @@ fn run(command: Command) -> CliResult<ExitCode> {
 			encoding,
 		} => convert::run(&image, &output, format, &encoding),
 		#[cfg(not(feature = "convert"))]
-		Command::Convert { .. } => Err(format!("feature not compiled: {CONVERT_COMMAND}").into()),
+		Command::Convert { .. } | Command::Optimize { .. } => {
+			Err(format!("feature not compiled: {CONVERT_COMMAND}").into())
+		}
+		#[cfg(feature = "convert")]
+		Command::Optimize {
+			image,
+			output,
+			sampling,
+			encoding,
+		} => optimize::run(&image, &output, sampling, &encoding),
 		#[cfg(feature = "diff")]
 		Command::Diff {
 			left,
