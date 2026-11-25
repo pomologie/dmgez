@@ -2,6 +2,7 @@
 
 #[cfg(feature = "write")]
 mod rebuild;
+mod release;
 mod source;
 
 use std::{io::Write, ops::Range};
@@ -192,16 +193,17 @@ impl<S: ReadAt> Image<S> {
 	/// # Errors
 	/// Rejects malformed, out-of-budget or unsupported container metadata and I/O failures.
 	pub fn open(source: S, limits: Limits) -> Result<Self, Error> {
-		let len = source.len();
-		if len > limits.max_physical_bytes {
-			return Err(Error::ResourceLimit("physical image size"));
-		}
-		let body_len = len
-			.checked_sub(trailer::BYTES as u64)
-			.ok_or(Error::InvalidFormat("image is shorter than a koly trailer"))?;
-		let mut tail = [0; trailer::BYTES];
-		source.read_exact_at(body_len, &mut tail)?;
-		let trailer = trailer::Trailer::decode(&tail, body_len)?;
+		let (tail, body_len) = release::read_trailer(&source, limits)?;
+		Self::open_from_trailer(source, limits, &tail, body_len)
+	}
+
+	fn open_from_trailer(
+		source: S,
+		limits: Limits,
+		tail: &[u8; trailer::BYTES],
+		body_len: u64,
+	) -> Result<Self, Error> {
+		let trailer = trailer::Trailer::decode(tail, body_len)?;
 		if trailer.logical_bytes > limits.max_logical_bytes {
 			return Err(Error::ResourceLimit("logical disk size"));
 		}
@@ -259,7 +261,7 @@ impl<S: ReadAt> Image<S> {
 		}
 		let logical_order = index::order_runs(&runs, trailer.logical_bytes)?;
 		let descriptor = Descriptor {
-			physical_bytes: len,
+			physical_bytes: source.len(),
 			logical_bytes: trailer.logical_bytes,
 			data_fork: trailer.data,
 			resource_xml: trailer.xml,

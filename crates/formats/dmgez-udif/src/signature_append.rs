@@ -26,6 +26,11 @@ pub fn validate_unsigned_signature_fields(trailer: &[u8; TRAILER_BYTES]) -> Resu
 	Ok(())
 }
 
+#[cfg(feature = "read")]
+pub(crate) fn clear_signature_fields(trailer: &mut [u8; TRAILER_BYTES]) {
+	trailer[SIGNATURE_FIELDS].fill(0);
+}
+
 /// Returns the signed-body length admissible to the portable UDIF writer.
 ///
 /// The apple-codesign 0.29 DMG writer appends its signature immediately after
