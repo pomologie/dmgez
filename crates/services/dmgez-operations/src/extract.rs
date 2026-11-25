@@ -65,6 +65,11 @@ impl Default for NameLimits {
 pub struct EntryId(usize);
 
 impl EntryId {
+	#[cfg(feature = "install")]
+	pub(crate) const fn from_index(index: usize) -> Self {
+		Self(index)
+	}
+
 	#[must_use]
 	pub const fn index(self) -> usize {
 		self.0

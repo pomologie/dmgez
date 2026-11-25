@@ -1,6 +1,10 @@
 #![cfg(feature = "install")]
 
-use std::{cell::Cell, io, num::NonZeroU16};
+use std::{
+	cell::Cell,
+	io,
+	num::{NonZeroU16, NonZeroU32},
+};
 
 use dmgez_operations::{
 	extract::{NameLimits, NameProfile},
@@ -9,10 +13,14 @@ use dmgez_operations::{
 use dmgez_vfs::{
 	VolumeId,
 	volume::{
-		DirectoryEntry, DirectoryPage, DirectoryReader, ForkKind, ForkReader, LookupName, Metadata,
-		NodeKind, RawName, ViewError, VolumeBackend, VolumeView,
+		DirectoryEntry, DirectoryPage, DirectoryReader, FinderInfo, ForkKind, ForkReader,
+		LookupName, Metadata, NodeKind, Quarantine, QuarantineScope, RawName, ViewError,
+		VolumeBackend, VolumeView,
 	},
 };
+
+#[path = "virtual_install/planning.rs"]
+mod planning;
 
 const APP_NAME: &str = "Installer.app";
 const SELECTED_APP: &str = "/installer.app";
@@ -23,6 +31,9 @@ const MACOS_NAME: &str = "MacOS";
 const EXECUTABLE_NAME: &str = "Installer";
 const EXECUTABLE_MODE: u16 = 0o755;
 const DATA_MODE: u16 = 0o644;
+const DIRECTORY_MODE: u16 = 0o755;
+const LINK_MODE: u16 = 0o777;
+const FIXTURE_ATTRIBUTE: &str = "user.dmgez-test";
 const PROGRAM_BYTES: &[u8] = b"#!/bin/false\n";
 const INFO: &[u8] = br#"<plist version="1.0"><dict>
 	<key>CFBundleExecutable</key><string>Installer</string>
@@ -94,6 +105,10 @@ struct Fixture<'test> {
 	info: Option<&'test [u8]>,
 	program: Option<&'test [u8]>,
 	mode: u16,
+	link: Option<&'test [u8]>,
+	attribute: Option<&'test [u8]>,
+	resource: Option<&'test [u8]>,
+	quarantined: Option<Node>,
 	read_count: &'test Cell<usize>,
 }
 
@@ -103,6 +118,10 @@ impl<'test> Fixture<'test> {
 			info: Some(INFO),
 			program: Some(PROGRAM_BYTES),
 			mode: EXECUTABLE_MODE,
+			link: None,
+			attribute: None,
+			resource: None,
+			quarantined: None,
 			read_count,
 		}
 	}
@@ -200,10 +219,11 @@ impl VolumeBackend for Fixture<'_> {
 	fn stat(&mut self, node: Node) -> io::Result<Option<Metadata<u64>>> {
 		Ok(Some(Metadata {
 			kind: node.kind(),
-			mode: if node == Node::Executable {
-				self.mode
-			} else {
-				DATA_MODE
+			mode: match node.kind() {
+				NodeKind::Directory => DIRECTORY_MODE,
+				NodeKind::Symlink => LINK_MODE,
+				_ if node == Node::Executable => self.mode,
+				_ => DATA_MODE,
 			},
 			uid: 0,
 			gid: 0,
@@ -224,6 +244,7 @@ impl VolumeBackend for Fixture<'_> {
 		let bytes = match (node, kind) {
 			(Node::Info, ForkKind::Data) => self.info,
 			(Node::Executable, ForkKind::Data) => self.program,
+			(Node::Executable, ForkKind::Resource) => self.resource,
 			_ => None,
 		};
 		Ok(bytes.map(|bytes| {
@@ -234,9 +255,53 @@ impl VolumeBackend for Fixture<'_> {
 		}))
 	}
 
-	fn read_link(&mut self, _: Node) -> io::Result<Option<Vec<u8>>> {
+	fn quarantine(&mut self, node: Node, _: QuarantineScope) -> io::Result<Quarantine> {
+		Ok(if self.quarantined == Some(node) {
+			Quarantine::Marked
+		} else {
+			Quarantine::Clear
+		})
+	}
+
+	fn finder_info(&mut self, _: Node) -> io::Result<FinderInfo> {
+		Ok(FinderInfo::Absent)
+	}
+
+	fn list_xattrs(&mut self, node: Node, _: NonZeroU32) -> io::Result<Option<Vec<RawName>>> {
+		let names = if node == Node::Executable && self.attribute.is_some() {
+			vec![RawName::Utf16(FIXTURE_ATTRIBUTE.encode_utf16().collect())]
+		} else {
+			Vec::new()
+		};
+		Ok(Some(names))
+	}
+
+	fn with_xattr<T>(
+		&mut self,
+		node: Node,
+		name: LookupName<'_>,
+		read: impl FnOnce(&mut dyn ForkReader<Error = io::Error>) -> T,
+	) -> io::Result<Option<T>> {
+		let matches = matches!(name, LookupName::StoredUtf16(units) if units.iter().copied().eq(FIXTURE_ATTRIBUTE.encode_utf16()));
+		Ok(self
+			.attribute
+			.filter(|_| matches && node == Node::Executable)
+			.map(|bytes| {
+				read(&mut Data {
+					bytes,
+					read_count: self.read_count,
+				})
+			}))
+	}
+
+	fn read_link(&mut self, node: Node) -> io::Result<Option<Vec<u8>>> {
+		if node == Node::BundleLink
+			&& let Some(target) = self.link
+		{
+			return Ok(Some(target.to_vec()));
+		}
 		Err(io::Error::other(
-			"preflight must retain links without reading their targets",
+			"layout preflight must retain links without reading targets",
 		))
 	}
 }
@@ -303,32 +368,6 @@ fn rejects_link_selection_and_executable_name_ambiguity_or_escape() {
 			Err(Error::Info)
 		));
 	}
-}
-
-#[test]
-fn admits_a_bounded_binary_info_plist() {
-	let mut info = plist::Dictionary::new();
-	info.insert("CFBundleExecutable".into(), EXECUTABLE_NAME.into());
-	let mut bytes = Vec::new();
-	plist::Value::Dictionary(info)
-		.to_writer_binary(&mut bytes)
-		.unwrap();
-	let reads = Cell::new(0);
-	let mut view = Fixture {
-		info: Some(&bytes),
-		..Fixture::new(&reads)
-	}
-	.view();
-	let plan = prepare_application(
-		&mut view,
-		&SELECTED_APP.parse().unwrap(),
-		QUALIFIED_PROFILE,
-		NameLimits::default(),
-		|| false,
-	)
-	.unwrap();
-	assert_eq!(plan.executable().native_id(), Node::Executable);
-	assert_eq!(reads.get(), 1);
 }
 
 #[test]
@@ -438,38 +477,5 @@ fn applies_bounds_and_cancellation_before_reading_bundle_bytes() {
 }
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
-#[test]
-fn refuses_dangling_output_links_and_replaced_destination_directories() {
-	use dmgez_operations::extract::host::{HostError, StableDestination};
-	use std::{fs, os::unix::fs::symlink};
-
-	let reads = Cell::new(0);
-	let mut view = Fixture::new(&reads).view();
-	let plan = prepare_application(
-		&mut view,
-		&SELECTED_APP.parse().unwrap(),
-		QUALIFIED_PROFILE,
-		NameLimits::default(),
-		|| false,
-	)
-	.unwrap();
-	let parent = tempfile::tempdir().unwrap();
-	let path = parent.path().canonicalize().unwrap().join("destination");
-	fs::create_dir(&path).unwrap();
-	let destination = StableDestination::open(&path).unwrap();
-	plan.require_fresh_destination(&destination).unwrap();
-	assert_eq!(fs::read_dir(&path).unwrap().count(), 0);
-	let output = path.join(APP_NAME);
-	symlink("missing", &output).unwrap();
-	assert!(matches!(
-		plan.require_fresh_destination(&destination),
-		Err(HostError::Conflict)
-	));
-	assert!(output.symlink_metadata().unwrap().is_symlink());
-	fs::rename(&path, path.with_extension("previous")).unwrap();
-	fs::create_dir(&path).unwrap();
-	assert!(matches!(
-		plan.require_fresh_destination(&destination),
-		Err(HostError::Detached)
-	));
-}
+#[path = "virtual_install/destination.rs"]
+mod destination;

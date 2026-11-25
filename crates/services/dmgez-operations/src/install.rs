@@ -1,6 +1,12 @@
 //! Plans a fresh mountless application installation from one selected volume.
 
 mod bundle;
+mod copy_plan;
+
+pub use copy_plan::{
+	CopyAttribute, CopyContent, CopyEntry, CopyLimits, CopyPlan, CopyPlanError, CopySummary,
+	prepare_copy,
+};
 
 use std::{collections::TryReserveError, error::Error as StdError, hash::Hash};
 
