@@ -64,6 +64,8 @@ With `installer-lint`, `lint project.toml --profile installer --json` inspects t
 
 On macOS, `signing-native` enables `sign inspect` and `sign verify` for app bundles and UDIF images. The report distinguishes readable signatures, successful signature verification, unsigned artifacts, and signature failures. [Release checks](docs/features/RELEASE.md#inspect-and-verify-existing-signatures)
 
+`sign dmg` uses an explicit Developer ID Application certificate in Keychain to sign a private copy of an unsigned image, then verifies and publishes it to a new path. [Stage and sign a disk image](docs/features/RELEASE.md#stage-and-sign-a-disk-image)
+
 `import-appdmg` translates documented appdmg JSON settings into a new version-one TOML manifest. Relative asset paths keep their original settings directory. A relative `--image-output` is interpreted from the new manifest's directory. The command reports unmapped behavior and refuses to replace an existing manifest.
 
 ## Build from a TOML project

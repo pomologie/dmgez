@@ -24,6 +24,19 @@ Before and after each tool call, dmgez compares the top-level path's identity an
 
 The read-only portion of D-REL-01-T01 was exercised on arm64 macOS 14.7.2 using a synthetic nested app and a UDZO image. The fixtures cover unsigned and ad hoc signed artifacts, tampering with a sealed nested resource and a signed image byte, and source bytes, modes, and xattrs before and after inspection. [Native signature fixtures](../../apps/dmgez-cli/tests/sign_cli.rs)
 
+### Stage and sign a disk image
+
+On macOS with `signing-native`, use the public SHA-1 fingerprint of an available Developer ID Application signing identity in Keychain. The identity's private key stays in Keychain. The signing operation contacts Apple's timestamp service. [Finding the signing identity and signing a disk image](https://developer.apple.com/documentation/xcode/packaging-mac-software-for-distribution)
+
+```sh
+dmgez sign dmg installer.dmg --output installer-signed.dmg \
+  --identity "$DEVELOPER_ID_FINGERPRINT" --identifier com.example.installer --json
+```
+
+The output parent must be a stable, trusted local directory. dmgez copies the unsigned UDIF bytes and any quarantine attribute into a private stage beside the output. It verifies the image CRC with `hdiutil` before signing and again afterward. The signed copy must keep the entire original body and every trailer field except the signature offset and length, satisfy a native requirement for the selected certificate and identifier, and carry a secure timestamp. Publication uses a no-clobber rename after those checks. The report includes the unsigned and signed SHA-256 digests. Filesystem consistency, notarization, and Gatekeeper remain separate checks. [Developer ID certificate requirements](https://developer.apple.com/documentation/technotes/tn3127-inside-code-signing-requirements)
+
+The signing transaction was exercised on disposable UDRO and UDZO fixtures on arm64 macOS 14.7.2 with an ad hoc signer confined to the tests. The fixtures verify source and quarantine preservation, native CRC and signature checks, no new output after tampering or signature policy rejection, and preservation of an existing destination. A protected Developer ID run with Apple's timestamp service remains open for D-REL-01-T01. [Native staging fixtures](../../crates/security/dmgez-signing/src/native/disk/tests.rs)
+
 ## Semantic diff and lint policies
 
 Diff supports `contents` (BLAKE3 + optional exact stream compare), metadata, links, resource forks/xattrs, Finder semantic settings, filesystem allocation/raw records, UDIF physical maps/codec/byte differences, signature metadata; physical and logical differences separate. Compare normalized paths with each filesystem's rules; case/normalization ambiguities diagnostic. Compare volume IDs/profile explicitly. No implicit timestamp suppression; optional policy ignores listed fields and reports exclusions. Detect unchanged/added/removed/changed/renamed candidate (rename inference clearly labeled). Budgeted traversal, hash cache scoped to immutable identity, parallel only as allowed. Return machine diff including unknown/not compared. CI exit 0 equal under policy, 1 differences, 2 error/unsupported. Lint profiles `installer`, `macos-release`, `layout`, `strict-metadata` use typed rule IDs severity and evidence, suppressions explicit with reason. Rules: missing expected Applications link, incorrect target, overlapping icons/labels, background missing, size/scale mismatch, unsafe path, duplicate canonical names, suspicious external symlink (normal Applications link allowed), unexpected visible private assets, missing executable mode/Info.plist executable, missing signature/hardened runtime/ticket where requested. Lint never auto-fixes signed content; suggested changes separate. Release checks run native tools only when explicitly requested.
