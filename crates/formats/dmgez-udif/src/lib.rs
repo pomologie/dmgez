@@ -21,6 +21,7 @@ mod lzfse;
 mod lzma;
 #[cfg(any(feature = "read", feature = "write"))]
 mod resource;
+mod signature_append;
 #[cfg(any(feature = "read", feature = "write"))]
 mod trailer;
 mod trailer_header;
@@ -34,6 +35,7 @@ pub mod writer;
 
 pub use error::Error;
 pub use geometry::SECTOR_BYTES;
+pub use signature_append::{validate_signature_append, validate_unsigned_signature_fields};
 pub use trailer_header::{TRAILER_BYTES, check_trailer_header};
 
 #[cfg(kani)]
