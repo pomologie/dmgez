@@ -16,6 +16,8 @@ use super::{
 	native_apfs_mutations::{advertise_incomplete_checkpoint, edit_object, replace_field},
 	report, semantic_command, semantic_diff,
 };
+#[cfg(feature = "diff-hash")]
+use super::{BLAKE3_CONTENTS, BLAKE3_EXACT_CONTENTS, CONTENTS_OPTION};
 
 const APFS: &str = "apfs";
 const BOTH_RAW: &[&str] = &["--left-raw", "--right-raw"];
@@ -110,11 +112,39 @@ fn raw_and_udzo_apfs_compare_equal_despite_different_physical_bytes() {
 	assert!(fs::metadata(&left).unwrap().len() > fs::metadata(&right).unwrap().len());
 
 	let output = semantic_diff(&left, &right, APFS, &["--left-raw"]);
-	let report = report(&output, EQUAL);
-	assert_eq!(report["outcome"], "equal", "{report:#}");
-	assert_eq!(report["left"]["input"], "raw");
-	assert_eq!(report["right"]["input"], "udif");
-	assert_eq!(report["changes"], json!([]));
+	let baseline = report(&output, EQUAL);
+	assert_eq!(baseline["outcome"], "equal", "{baseline:#}");
+	assert_eq!(baseline["left"]["input"], "raw");
+	assert_eq!(baseline["right"]["input"], "udif");
+	assert_eq!(baseline["changes"], json!([]));
+	#[cfg(feature = "diff-hash")]
+	{
+		// The native capture contains one pair of forks under three aliases.
+		const ALIASES: usize = 3;
+		const DATA_BYTES: usize = DATA_PATTERN.len() * 250;
+		const RESOURCE_BYTES: usize = RESOURCE_PATTERN.len() * 200;
+		const ONE_PAIR: usize = DATA_BYTES + RESOURCE_BYTES;
+
+		assert_eq!(baseline["compared_bytes"], (ONE_PAIR * ALIASES).to_string());
+		for (mode, contents, passes) in [
+			(BLAKE3_CONTENTS, "blake3", 1),
+			(BLAKE3_EXACT_CONTENTS, "blake3_exact", 1 + ALIASES),
+		] {
+			let budget = (ONE_PAIR * passes).to_string();
+			let hashed = report(
+				&semantic_diff(
+					&left,
+					&right,
+					APFS,
+					&["--left-raw", CONTENTS_OPTION, mode, "--max-bytes", &budget],
+				),
+				EQUAL,
+			);
+			assert_eq!(hashed["policy"]["contents"], contents);
+			assert_eq!(hashed["compared_bytes"], budget);
+			assert_eq!(hashed["changes"], baseline["changes"]);
+		}
+	}
 }
 
 #[test]
@@ -146,6 +176,12 @@ fn distinguishes_one_changed_fork_on_each_shared_alias() {
 					&& change["fields"] == json!([field])),
 				"missing {path}: {baseline:#}",
 			);
+		}
+		#[cfg(feature = "diff-hash")]
+		for mode in [BLAKE3_CONTENTS, BLAKE3_EXACT_CONTENTS] {
+			let options = [BOTH_RAW, &[CONTENTS_OPTION, mode]].concat();
+			let hashed = report(&semantic_diff(&left, &right, APFS, &options), DIFFERENT);
+			assert_eq!(hashed["changes"], baseline["changes"], "{hashed:#}");
 		}
 		if field == RESOURCE_FIELD {
 			let with_attributes = report(

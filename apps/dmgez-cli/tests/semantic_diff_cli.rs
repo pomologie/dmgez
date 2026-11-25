@@ -11,6 +11,14 @@ const EQUAL: i32 = 0;
 const DIFFERENT: i32 = 1;
 const XATTR_OPTION: &str = "--xattrs";
 const FINDER_INFO_OPTION: &str = "--finder-info";
+const CONTENTS_OPTION: &str = "--contents";
+const EXACT_CONTENTS: &str = "exact";
+#[cfg(feature = "diff")]
+const BLAKE3_CONTENTS: &str = "blake3";
+#[cfg(feature = "diff")]
+const BLAKE3_EXACT_CONTENTS: &str = "blake3-exact";
+#[cfg(feature = "diff")]
+const INFER_RENAMES_OPTION: &str = "--infer-renames";
 #[cfg(all(feature = "diff", any(feature = "hfsplus-read", feature = "apfs-read")))]
 const FINDER_INFO_FIELD: &str = "finder_info";
 #[cfg(all(feature = "diff", any(feature = "hfsplus-read", feature = "apfs-read")))]
@@ -32,6 +40,13 @@ mod finder_layout;
 #[cfg(all(feature = "diff", feature = "apfs-read"))]
 #[path = "support/native_apfs.rs"]
 mod fixture;
+#[cfg(all(
+	feature = "diff-hash",
+	feature = "hfsplus-read",
+	feature = "project-build"
+))]
+#[path = "semantic_diff_cli/hash_contents.rs"]
+mod hash_contents;
 #[cfg(all(feature = "diff", feature = "hfsplus-read"))]
 #[path = "semantic_diff_cli/hfsplus.rs"]
 mod hfsplus;
@@ -103,16 +118,40 @@ fn byte_diff_rejects_semantic_options_before_opening_inputs() {
 	let directory = tempfile::tempdir().unwrap();
 	let absent = directory.path().join("unused.dmg");
 	for mode in ["logical", "physical"] {
-		for option in [XATTR_OPTION, FINDER_LAYOUT_OPTION, FINDER_INFO_OPTION] {
+		for options in [
+			&[XATTR_OPTION][..],
+			&[FINDER_LAYOUT_OPTION][..],
+			&[FINDER_INFO_OPTION][..],
+			&[CONTENTS_OPTION, EXACT_CONTENTS][..],
+			&[CONTENTS_OPTION, BLAKE3_CONTENTS][..],
+			&[CONTENTS_OPTION, BLAKE3_EXACT_CONTENTS][..],
+			&[INFER_RENAMES_OPTION][..],
+		] {
 			let output = Command::new(BINARY)
 				.arg("diff")
 				.arg(&absent)
 				.arg(&absent)
-				.args(["--mode", mode, option, "--json"])
+				.args(["--mode", mode, "--json"])
+				.args(options)
 				.output()
 				.unwrap();
-			assert_error(&output, &format!("{option} requires --mode semantic"));
+			assert_error(&output, &format!("{} requires --mode semantic", options[0]));
 		}
+	}
+}
+
+#[cfg(all(feature = "diff", not(feature = "diff-hash")))]
+#[test]
+fn unavailable_hash_and_rename_scopes_refuse_before_opening_inputs() {
+	let directory = tempfile::tempdir().unwrap();
+	let absent = directory.path().join("unused.dmg");
+	for options in [
+		&[CONTENTS_OPTION, BLAKE3_CONTENTS][..],
+		&[CONTENTS_OPTION, BLAKE3_EXACT_CONTENTS][..],
+		&[INFER_RENAMES_OPTION][..],
+	] {
+		let output = semantic_diff(&absent, &absent, "hfsplus", options);
+		assert_error(&output, "feature not compiled: diff-hash");
 	}
 }
 
@@ -154,7 +193,12 @@ fn unavailable_semantic_backend_refuses_before_opening_inputs() {
 		} else {
 			String::from("feature not compiled: diff")
 		};
-		for options in [&[][..], &[XATTR_OPTION][..], &[FINDER_INFO_OPTION][..]] {
+		for options in [
+			&[][..],
+			&[XATTR_OPTION][..],
+			&[FINDER_INFO_OPTION][..],
+			&[CONTENTS_OPTION, EXACT_CONTENTS][..],
+		] {
 			let output = semantic_diff(&left, &right, filesystem, options);
 			assert_error(&output, &expected);
 		}
