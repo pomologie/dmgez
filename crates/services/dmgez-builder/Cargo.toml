@@ -9,7 +9,7 @@ description = "Plan and execute dmgez image builds"
 
 [features]
 default = ["finder-write", "parallel", "zlib"]
-finder-write = ["dep:dmgez-finder", "dep:png"]
+finder-write = ["dep:dmgez-finder", "dep:flate2", "dep:png", "dep:tiff"]
 lzfse = ["dmgez-udif/lzfse"]
 lzma = ["dmgez-udif/lzma"]
 parallel = ["dmgez-udif/parallel"]
@@ -21,8 +21,10 @@ dmgez-config.workspace = true
 dmgez-core = { workspace = true, features = ["source", "staging"] }
 dmgez-finder = { workspace = true, optional = true }
 dmgez-udif = { workspace = true, features = ["write"] }
+flate2 = { workspace = true, optional = true }
 png = { version = "=0.18.1", optional = true }
 thiserror.workspace = true
+tiff = { workspace = true, optional = true }
 
 [target.'cfg(unix)'.dependencies]
 globset.workspace = true
