@@ -1,4 +1,4 @@
-use std::{borrow::Cow, error::Error, io, io::Write, path::Path};
+use std::{borrow::Cow, error::Error, io::Write, path::Path};
 
 use dmgez_runtime::{
 	project_build::{BuildEvent, BuildMode, BuildProject},
