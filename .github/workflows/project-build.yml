@@ -1,0 +1,123 @@
+name: Cross-platform DMG project build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  HFSPLUS_REVISION: 185ba1d605d58c6cdeeca70b94c864e07ede3e5d
+
+jobs:
+  build:
+    name: Build and verify a DMG (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15, windows-2025]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Check out the pinned Pomologie HFS+ source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: pomologie/hfsplus
+          ref: ${{ env.HFSPLUS_REVISION }}
+          path: hfsplus
+          token: ${{ secrets.HFSPLUS_READ_TOKEN || github.token }}
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: '3.13.17'
+      - run: rustup show active-toolchain
+      - name: Install 7-Zip on Linux
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends 7zip
+      - name: Install 7-Zip on macOS
+        if: runner.os == 'macOS'
+        run: brew install sevenzip
+      - name: Prepare NTFS working storage on Windows
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $work = Join-Path $env:LOCALAPPDATA "Temp\dmgez-project-${env:GITHUB_RUN_ID}-${env:GITHUB_RUN_ATTEMPT}"
+          $drive = [IO.DriveInfo]::new([IO.Path]::GetPathRoot($work))
+          if ($drive.DriveFormat -ne 'NTFS') {
+            throw "The Windows DMG project build requires NTFS scratch storage. Found $($drive.DriveFormat) at $($drive.Name)."
+          }
+          New-Item -ItemType Directory -Path $work -Force | Out-Null
+          "PROJECT_CI_DIR=$work" >> $env:GITHUB_ENV
+          "TEMP=$work" >> $env:GITHUB_ENV
+          "TMP=$work" >> $env:GITHUB_ENV
+      - name: Build and verify dmg.toml
+        id: project
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          import shutil
+          import subprocess
+          import sys
+
+          hfsplus = Path("hfsplus").resolve(strict=True)
+          revision = subprocess.check_output(["git", "-C", hfsplus, "rev-parse", "HEAD"], text=True).strip()
+          if revision != os.environ["HFSPLUS_REVISION"]:
+              sys.exit(f"Expected the pinned HFS+ revision, found {revision}")
+          print(f"HFS+ revision {revision}", flush=True)
+
+          seven_zip = shutil.which("7zz") or shutil.which("7z")
+          if sys.platform == "win32" and not seven_zip:
+              bundled = Path(os.environ["ProgramFiles"]) / "7-Zip" / "7z.exe"
+              if bundled.is_file():
+                  seven_zip = str(bundled)
+          if not seven_zip:
+              sys.exit("7-Zip is required to verify the HFS+ payload")
+
+          work = Path(os.environ.get("PROJECT_CI_DIR") or os.environ["RUNNER_TEMP"]) / "dmgez-project"
+          compose = [
+              sys.executable, "-B", "tools/compose_hfsplus_cli.py", "--hfsplus", hfsplus,
+              "--target-dir", work / "target", "--release", "--features", "inspect",
+          ]
+          executable = subprocess.check_output([*compose, "--fetch"], text=True).strip()
+          image = work / "image"
+          subprocess.run([
+              sys.executable, "-B", "tests/compatibility/project-build/check_ci_project.py",
+              executable, image, "--seven-zip", seven_zip,
+          ], check=True)
+          if sys.platform == "win32":
+              subprocess.run([*compose, "--test"], check=True)
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              print(f"dmg={image / 'installer.dmg'}", file=output)
+      - name: Upload the verified DMG
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: project-image-${{ matrix.os }}
+          path: ${{ steps.project.outputs.dmg }}
+          if-no-files-found: error
+          compression-level: 0
+
+  compare-images:
+    name: Compare verified images from all three hosts
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: project-image-*
+          path: images
+      - name: Verify byte-for-byte equality
+        shell: bash
+        run: |
+          files=(
+            images/project-image-ubuntu-24.04/installer.dmg
+            images/project-image-macos-15/installer.dmg
+            images/project-image-windows-2025/installer.dmg
+          )
+          sha256sum "${files[@]}"
+          cmp "${files[0]}" "${files[1]}"
+          cmp "${files[0]}" "${files[2]}"
