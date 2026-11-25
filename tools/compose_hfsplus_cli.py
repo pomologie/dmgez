@@ -18,6 +18,7 @@ CLI_PACKAGE = "dmgez-cli"
 CLI_BINARY = "dmgez"
 CLI_TEST = "project_build_cli"
 VERIFY_TEST = "hfs_verify_cli"
+READ_TEST = "volume_cli"
 TOOLCHAIN = "rust-toolchain.toml"
 MANIFEST = "Cargo.toml"
 LOCK = "Cargo.lock"
@@ -192,6 +193,8 @@ def run_cli(cargo, directory, options, hfsplus):
             environment.setdefault(HFSPLUS_FIXTURES_ENV, str(fixtures))
             if has_cli_feature(options, VERIFY_FEATURE):
                 command.extend(("--test", VERIFY_TEST))
+            if has_cli_feature(options, READ_FEATURE):
+                command.extend(("--test", READ_TEST))
         if HFSPLUS_BUILDER in hfsplus:
             command.extend(("--test", CLI_TEST))
         subprocess.run(command, cwd=directory, env=environment, check=True)
