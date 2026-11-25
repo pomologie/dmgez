@@ -33,6 +33,20 @@ pub enum NameProfile {
 pub struct HostName(String);
 
 impl HostName {
+	/// Admits a caller-selected output basename under the qualified name profile.
+	///
+	/// # Errors
+	/// Rejects unrepresentable, reserved, oversized, or non-confined names.
+	pub fn new(name: &str, profile: NameProfile, max_bytes: usize) -> Result<Self, NameError> {
+		validate_component(name.as_bytes(), profile, max_bytes)?;
+		Ok(Self(name.into()))
+	}
+
+	#[cfg(any(target_os = "linux", target_os = "macos"))]
+	pub(super) fn check(&self, profile: NameProfile, max_bytes: usize) -> Result<(), NameError> {
+		validate_component(self.0.as_bytes(), profile, max_bytes)
+	}
+
 	#[must_use]
 	pub fn as_str(&self) -> &str {
 		&self.0

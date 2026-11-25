@@ -1,9 +1,14 @@
-//! Name and topology preflight and host publication primitives for extraction.
+//! Bounded extraction plans and publication for explicitly selected file content.
 
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub mod host;
 
 mod names;
+mod plan;
+mod report;
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+mod execute;
 
 use std::{
 	collections::{HashMap, HashSet, TryReserveError},
@@ -15,6 +20,11 @@ use dmgez_vfs::volume::{NodeHandle, NodeKind, ViewError, VolumeBackend, VolumeVi
 use thiserror::Error;
 
 pub use names::{HostName, NameError, NameProfile};
+pub use plan::{ExtractionLimits, ExtractionPlan, PlanError, PlannedFork, Selection, prepare};
+pub use report::{Omission, PlanReport, Progress, SelectionReport};
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+pub use execute::{ExecutionError, ExecutionFailure, execute};
 
 const DEFAULT_PAGE_ENTRIES: NonZeroU16 = NonZeroU16::new(64).unwrap();
 const DEFAULT_MAX_ENTRIES: usize = 16_384;

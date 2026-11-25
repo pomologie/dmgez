@@ -1100,6 +1100,7 @@ dependencies = [
  "dmgez-vfs",
  "plist",
  "rustix 1.1.6",
+ "serde",
  "tempfile",
  "thiserror 2.0.21",
 ]

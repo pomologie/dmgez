@@ -109,6 +109,7 @@ version = "0.1.0"
 dependencies = [
  "dmgez-vfs",
  "rustix",
+ "serde",
  "tempfile",
  "thiserror",
 ]
