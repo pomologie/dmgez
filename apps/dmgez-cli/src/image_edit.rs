@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::Args;
+use clap::{Args, ValueEnum};
 
 use crate::CliResult;
 
@@ -20,12 +20,22 @@ pub(super) struct Arguments {
 	/// Require the original image to match this full-file SHA-256.
 	#[arg(long, value_name = SHA256_VALUE)]
 	expect_image_sha256: Option<String>,
+	/// Refuse or report metadata loss when adding content from the host.
+	#[arg(long, value_enum, default_value_t)]
+	metadata_policy: HostMetadataPolicy,
 	/// Plan the rebuild without creating a stage or publishing an image.
 	#[arg(long)]
 	dry_run: bool,
 	/// Write a versioned JSON report.
 	#[arg(long)]
 	json: bool,
+}
+
+#[derive(Clone, Copy, Default, ValueEnum)]
+enum HostMetadataPolicy {
+	#[default]
+	Strict,
+	Report,
 }
 
 #[cfg(feature = "image-edit")]

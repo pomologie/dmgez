@@ -9,13 +9,17 @@ const CHANGES: &str = "changes.toml";
 const EDITED: &str = "edited.dmg";
 
 fn edit(root: &Path, target: &str, options: &[&str]) -> Output {
+	edit_from(root, CHANGES, target, options)
+}
+
+fn edit_from(root: &Path, batch: &str, target: &str, options: &[&str]) -> Output {
 	Command::new(BINARY)
 		.current_dir(root)
 		.args([
 			"edit-image",
 			ORIGINAL,
 			"--changes",
-			CHANGES,
+			batch,
 			"--output",
 			target,
 		])
@@ -48,3 +52,7 @@ mod rebuild;
 #[cfg(all(feature = "image-edit", feature = "finder-write"))]
 #[path = "image_edit_cli/finder.rs"]
 mod finder;
+
+#[cfg(feature = "image-edit")]
+#[path = "image_edit_cli/host_copy.rs"]
+mod host_copy;

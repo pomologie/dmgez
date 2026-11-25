@@ -76,7 +76,7 @@ operation = "set_image_name"
 name = "Edited"
 "#;
 
-fn build(root: &Path, uses_opaque_layout: bool) {
+pub(super) fn build(root: &Path, uses_opaque_layout: bool) {
 	fs::write(root.join(DATA), PAYLOAD).unwrap();
 	#[cfg(unix)]
 	{
@@ -332,7 +332,7 @@ fn opaque_finder_layout_refuses_the_rebuild_before_publication() {
 	assert!(!root.join(EDITED).exists());
 }
 
-fn json(output: Output) -> Value {
+pub(super) fn json(output: Output) -> Value {
 	assert!(output.status.success(), "{output:?}");
 	serde_json::from_slice(&output.stdout).unwrap()
 }

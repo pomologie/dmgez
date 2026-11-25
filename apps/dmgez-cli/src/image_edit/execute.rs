@@ -3,11 +3,15 @@ use std::{
 	cell::RefCell,
 	fs,
 	io::{self, Read, Write},
-	path::Path,
+	path::{Path, absolute},
 };
 
-use dmgez_config::project_edit::{MAX_EDIT_BATCH_BYTES, ProjectEdit, parse_edit_batch};
+use dmgez_config::{
+	MetadataPolicy,
+	project_edit::{MAX_EDIT_BATCH_BYTES, parse_edit_batch},
+};
 use dmgez_core::output::{StagedReader, publish_new};
+use dmgez_hfsplus::rebuild::{PreparedEdit, seal_prepared};
 use dmgez_hfsplus_read::AlternateStatus;
 use dmgez_hfsplus_read::browse::{Limits, with_catalog};
 use dmgez_operations::edit::image_source::{
@@ -25,7 +29,7 @@ use crate::{
 	staged_image::{invalid, open_verified_stage},
 };
 
-use super::Arguments;
+use super::{Arguments, HostMetadataPolicy};
 
 const SCHEMA_VERSION: u16 = 1;
 const SHA256_FORMAT: &str = "expected image SHA-256 must contain 64 hexadecimal digits";
@@ -38,6 +42,7 @@ const METADATA_MISMATCH: &str = "the staged image differs from its admitted cont
 const LOGICAL_MISMATCH: &str = "the staged image does not contain the sealed logical bytes";
 const STAGED_LAYOUT: &str = "the rebuilt HFS+ volume does not cover the whole staged logical disk";
 const STAGED_STRUCTURE: &str = "the rebuilt HFS+ filesystem has incomplete structural coverage";
+const MAX_LOSS_DETAILS: usize = 20;
 
 pub(super) fn run(arguments: &Arguments) -> CliResult {
 	let expected = arguments
@@ -45,7 +50,8 @@ pub(super) fn run(arguments: &Arguments) -> CliResult {
 		.as_deref()
 		.map(parse_sha256)
 		.transpose()?;
-	check_destination(&arguments.output)?;
+	let output = absolute(&arguments.output)?;
+	check_destination(&output)?;
 	let changes = Snapshot::open(&arguments.changes, MAX_EDIT_BATCH_BYTES)?;
 	let changes_dir = changes.path.parent().ok_or(CHANGES_DIRECTORY)?;
 	let edits = parse_edit_batch(&changes.text)?;
@@ -56,38 +62,51 @@ pub(super) fn run(arguments: &Arguments) -> CliResult {
 		SourceEnvelope::SignedDigestsVerified => "signed_digests_verified",
 		_ => return Err("the image uses an unsupported source envelope".into()),
 	};
+	let policy = match arguments.metadata_policy {
+		HostMetadataPolicy::Strict => MetadataPolicy::Strict,
+		HostMetadataPolicy::Report => MetadataPolicy::Report,
+	};
+	let prepared = PreparedEdit::new(edits, changes_dir, &output, policy)?;
 	let rebuilt = if arguments.dry_run {
-		let plan = rebuild(&mut source, &edits, changes_dir, None)?;
-		changes.validate()?;
-		source.revalidate()?;
+		let plan = rebuild(&mut source, &prepared, None)?;
+		validate_inputs(&source, &changes, &prepared)?;
 		plan
 	} else {
 		let source = RefCell::new(source);
 		publish_new(
-			&arguments.output,
+			&output,
 			|sink| {
 				let mut source = source.try_borrow_mut().map_err(io::Error::other)?;
-				rebuild(&mut source, &edits, changes_dir, Some(sink))
+				rebuild(&mut source, &prepared, Some(sink))
 			},
 			|stage, rebuilt| {
 				verify(stage, rebuilt)?;
-				changes.validate()?;
-				source
-					.try_borrow()
-					.map_err(io::Error::other)?
-					.revalidate()
-					.map_err(io::Error::other)
+				let source = source.try_borrow().map_err(io::Error::other)?;
+				validate_inputs(&source, &changes, &prepared)
 			},
 		)?
 	};
 	let encoded = rebuilt.encoded.as_ref();
+	let losses = prepared.metadata_losses();
 	let report = Report {
 		schema_version: SCHEMA_VERSION,
 		image_sha256: encode_sha256(revision.sha256()),
 		source_envelope,
 		output: arguments.output.to_string_lossy(),
-		edits: edits.len(),
+		edits: prepared.edits_count(),
 		entries: rebuilt.entries,
+		metadata_losses: losses.iter().map(|entry| entry.details.len()).sum(),
+		metadata_loss_details: losses
+			.iter()
+			.flat_map(|entry| entry.details.iter().map(move |loss| (entry, loss)))
+			.take(MAX_LOSS_DETAILS)
+			.map(|(entry, loss)| MetadataLossDetail {
+				path: entry.path.as_str(),
+				other_aliases: entry.aliases.len(),
+				field: format!("{:?}", loss.field),
+				reason: format!("{:?}", loss.reason),
+			})
+			.collect(),
 		logical_bytes: rebuilt.logical_bytes,
 		physical_bytes: encoded.map(|value| value.written.physical_bytes),
 		logical_sha256: encoded.map(|value| encode_sha256(&value.logical_sha256)),
@@ -96,6 +115,16 @@ pub(super) fn run(arguments: &Arguments) -> CliResult {
 		trust: "unsigned",
 	};
 	report.write(arguments.json)
+}
+
+fn validate_inputs(
+	source: &ImageSource,
+	changes: &Snapshot,
+	prepared: &PreparedEdit,
+) -> io::Result<()> {
+	source.revalidate().map_err(io::Error::other)?;
+	changes.validate()?;
+	prepared.validate_sources().map_err(io::Error::other)
 }
 
 fn check_destination(path: &Path) -> io::Result<()> {
@@ -145,8 +174,7 @@ struct Encoded {
 
 fn rebuild(
 	source: &mut ImageSource,
-	edits: &[ProjectEdit],
-	changes_dir: &Path,
+	prepared: &PreparedEdit,
 	sink: Option<&mut dyn Write>,
 ) -> io::Result<Rebuilt> {
 	let source_metadata = source.container_metadata();
@@ -156,8 +184,7 @@ fn rebuild(
 		VolumeId::WholeDisk,
 		Limits::default(),
 		|volume, catalog| {
-			let plan = dmgez_hfsplus::rebuild::seal(volume, &catalog, edits, changes_dir)
-				.map_err(invalid)?;
+			let plan = seal_prepared(volume, &catalog, prepared).map_err(invalid)?;
 			let logical_bytes = plan.logical_bytes();
 			let options = WriteOptions {
 				profile: source_metadata.source_profile(),
@@ -265,6 +292,14 @@ impl Write for HashSink {
 }
 
 #[derive(Serialize)]
+struct MetadataLossDetail<'path> {
+	path: &'path str,
+	other_aliases: usize,
+	field: String,
+	reason: String,
+}
+
+#[derive(Serialize)]
 struct Report<'path> {
 	schema_version: u16,
 	image_sha256: String,
@@ -272,6 +307,8 @@ struct Report<'path> {
 	output: Cow<'path, str>,
 	edits: usize,
 	entries: usize,
+	metadata_losses: usize,
+	metadata_loss_details: Vec<MetadataLossDetail<'path>>,
 	logical_bytes: u64,
 	physical_bytes: Option<u64>,
 	logical_sha256: Option<String>,
@@ -288,6 +325,21 @@ impl Report<'_> {
 			writeln!(output, "output = {}", EscapedText(&self.output))?;
 			writeln!(output, "edits = {}", self.edits)?;
 			writeln!(output, "entries = {}", self.entries)?;
+			writeln!(output, "metadata_losses = {}", self.metadata_losses)?;
+			for loss in &self.metadata_loss_details {
+				writeln!(
+					output,
+					"Metadata loss at {} ({} other aliases), {} ({})",
+					EscapedText(loss.path),
+					loss.other_aliases,
+					loss.field,
+					loss.reason,
+				)?;
+			}
+			let hidden = self.metadata_losses - self.metadata_loss_details.len();
+			if hidden != 0 {
+				writeln!(output, "{hidden} additional metadata losses")?;
+			}
 			writeln!(output, "logical_bytes = {}", self.logical_bytes)?;
 			if let Some(bytes) = self.physical_bytes {
 				writeln!(output, "physical_bytes = {bytes}")?;
