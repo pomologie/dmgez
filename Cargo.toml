@@ -43,7 +43,6 @@ exclude = [
 	# Composed filesystem adapters
 	"crates/adapters/dmgez-apfs-read",
 	"crates/adapters/dmgez-hfsplus",
-	"crates/adapters/dmgez-hfsplus-read",
 
 	# Fuzz harness
 	"fuzz",

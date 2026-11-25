@@ -1,6 +1,6 @@
 use std::num::NonZeroU32;
 
-use dmgez_hfsplus_read::browse::{self, HfsView, VolumeSignature};
+use dmgez_hfsplus::browse::{self, HfsView, VolumeSignature};
 use dmgez_vfs::{Disk, Limits, LogicalDisk};
 
 use crate::{disk::select_volume, volume::Error};

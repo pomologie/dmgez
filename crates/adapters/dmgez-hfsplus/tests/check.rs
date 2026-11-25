@@ -2,7 +2,7 @@
 
 use std::{error::Error as _, io};
 
-use dmgez_hfsplus_read::{CheckError, CheckFailureKind, check};
+use dmgez_hfsplus::{CheckError, CheckFailureKind, check};
 use hfsplus_format::volume::{HEADER_BYTES, PRIMARY_HEADER_OFFSET};
 use hfsplus_reader::check::{CheckError as StructureError, CheckLimit};
 

@@ -1,6 +1,6 @@
 use std::{fs, path::Path, process::Output};
 
-use dmgez_hfsplus_read::browse::{Limits, with_view};
+use dmgez_hfsplus::browse::{Limits, with_view};
 use dmgez_udif::reader::{Image, Limits as UdifLimits};
 use dmgez_vfs::{
 	Disk, VolumeId,

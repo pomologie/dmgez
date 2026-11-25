@@ -9,7 +9,7 @@ use dmgez_diff::{
 	semantic::{self, Limits, Options},
 };
 #[cfg(feature = "hfsplus-volume")]
-use dmgez_hfsplus_read::browse::{Error as HfsError, VolumeSignature};
+use dmgez_hfsplus::browse::{Error as HfsError, VolumeSignature};
 use dmgez_inspector::SelectedWindowId;
 use dmgez_vfs::{
 	LogicalDisk, VolumeId,

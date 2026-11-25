@@ -16,8 +16,8 @@ use dmgez_hfsplus::{
 	HostCopyMetadataLoss,
 	rebuild::{PrepareError, PreparedEdit, seal_prepared},
 };
-use dmgez_hfsplus_read::AlternateStatus;
-use dmgez_hfsplus_read::browse::{Limits, with_catalog};
+use dmgez_hfsplus::AlternateStatus;
+use dmgez_hfsplus::browse::{Limits, with_catalog};
 use dmgez_operations::edit::image_source::{
 	ImageSource, ImageSourceError, ImageSourceOptions, SourceEnvelope as ObservedEnvelope,
 };

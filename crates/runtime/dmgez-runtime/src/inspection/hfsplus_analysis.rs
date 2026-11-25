@@ -3,7 +3,7 @@ use std::{
 	path::Path,
 };
 
-use dmgez_hfsplus_read::analysis::{self, MAX_LARGEST_FILES};
+use dmgez_hfsplus::analysis::{self, MAX_LARGEST_FILES};
 use dmgez_inspector::{AnalysisReport, SelectedWindowId};
 use dmgez_udif::reader::{Image, Limits as ImageLimits};
 use dmgez_vfs::{Disk, Limits as DiskLimits};

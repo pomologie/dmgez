@@ -1,6 +1,6 @@
 use std::io::{self, Write};
 
-use dmgez_hfsplus_read::analysis::{self, MAX_LARGEST_FILES};
+use dmgez_hfsplus::analysis::{self, MAX_LARGEST_FILES};
 use dmgez_inspector::{AnalysisReport, SelectedWindowId};
 use dmgez_runtime::inspection::{HfsAnalysisError, analyze_hfsplus};
 use serde::Serialize;

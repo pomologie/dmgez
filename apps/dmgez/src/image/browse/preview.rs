@@ -1,4 +1,4 @@
-use dmgez_hfsplus_read::browse;
+use dmgez_hfsplus::browse;
 use dmgez_preview::{
 	ItemVisibility,
 	actual::{Coverage, EntryKind},

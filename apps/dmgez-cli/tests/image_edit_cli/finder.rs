@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, fs, path::Path, process::Command};
 
 use dmgez_finder::inspection::{ReadLimits, Record, RecordValue, inspect};
-use dmgez_hfsplus_read::browse::{Limits, with_view};
+use dmgez_hfsplus::browse::{Limits, with_view};
 use dmgez_udif::reader::Image;
 use dmgez_vfs::{
 	Disk, VolumeId,

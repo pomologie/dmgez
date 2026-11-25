@@ -2,7 +2,7 @@
 
 use std::{env, fs, io::Read, ops::Range, path::PathBuf};
 
-use dmgez_hfsplus_read::{
+use dmgez_hfsplus::{
 	analysis::{Error, Format, Limit, Limits, analyze},
 	browse,
 };

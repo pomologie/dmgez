@@ -10,7 +10,7 @@ use dmgez_finder::{
 	},
 	write_store_with_background_identity,
 };
-use dmgez_hfsplus_read::browse::{Limits, with_catalog};
+use dmgez_hfsplus::browse::{Limits, with_catalog};
 use dmgez_udif::reader::Image;
 use dmgez_vfs::{Disk, VolumeId, volume::ForkKind};
 

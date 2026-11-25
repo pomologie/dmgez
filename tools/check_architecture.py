@@ -34,7 +34,7 @@ PROFILES = {
 }
 OUTSIDE_DEFAULT = {
     "apple-dmg", "apfs", "apfs-container", "apfs-core", "apfs-format", "apfs-reader",
-    "bzip2", "dmgez-apfs-read", "dmgez-cache", "dmgez-hfsplus-read", "dmgez-mount", "eframe", "egui", "fstool", "fuser",
+    "bzip2", "dmgez-apfs-read", "dmgez-cache", "dmgez-hfsplus", "dmgez-mount", "eframe", "egui", "fstool", "fuser",
     "hfsplus-reader", "lzfse_rust", "lzma-rust2", "notify",
     "reqwest", "rmcp", "tokio", "udif", "winfsp",
 }

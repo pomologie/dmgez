@@ -1,4 +1,4 @@
-use dmgez_hfsplus_read::browse::VolumeSignature;
+use dmgez_hfsplus::browse::VolumeSignature;
 use dmgez_vfs::{VolumeId, volume::RawName};
 
 use super::*;

@@ -79,7 +79,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "dmgez-hfsplus-read"
+name = "dmgez-hfsplus"
 version = "0.1.0"
 dependencies = [
  "dmgez-vfs",
@@ -93,7 +93,7 @@ dependencies = [
 name = "dmgez-hfsplus-read-probe"
 version = "0.0.0"
 dependencies = [
- "dmgez-hfsplus-read",
+ "dmgez-hfsplus",
  "dmgez-operations",
  "dmgez-udif",
  "dmgez-vfs",

@@ -4,7 +4,7 @@ use std::{fmt::Write as _, fs, path::Path, process::Output, thread};
 
 use dmgez_builder::preflight::{Availability, OutputIntent, PreflightOptions, ReleaseIntent};
 use dmgez_config::Project;
-use dmgez_hfsplus_read::browse::{Limits, with_catalog, with_view};
+use dmgez_hfsplus::browse::{Limits, with_catalog, with_view};
 use dmgez_udif::{TRAILER_BYTES, reader::Image, validate_unsigned_signature_fields};
 use dmgez_vfs::{
 	Disk, VolumeId,

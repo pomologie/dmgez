@@ -1,6 +1,6 @@
 //! Held-image routing and stale result admission for folder search.
 
-use dmgez_hfsplus_read::browse::{self, NameFragment};
+use dmgez_hfsplus::browse::{self, NameFragment};
 use dmgez_inspector::volume_queries::{SearchError, SearchExtent, search_children};
 use dmgez_vfs::volume::{RawName, VolumeBackend, VolumeView};
 

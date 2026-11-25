@@ -5,18 +5,35 @@ edition = "2024"
 rust-version = "1.98"
 license = "Apache-2.0"
 repository = "https://github.com/pomologie/dmgez"
-description = "Compose the versioned HFS+ builder with dmgez image planning"
+description = "Adapt independent HFS+ and HFSX engines to dmgez workflows"
 
 [features]
 default = ["finder-write", "parallel"]
 
+# Volume reading
+browse = ["dep:hfsplus-reader", "dep:dmgez-vfs"]
+verify = ["dep:hfsplus-reader"]
+analysis = ["browse", "dep:serde"]
+preview = ["browse", "dep:dmgez-finder", "dep:dmgez-preview"]
+decmpfs-zlib = ["hfsplus-reader/decmpfs-zlib"]
+
+# Volume building
+build = [
+	"dep:dmgez-builder",
+	"dep:dmgez-config",
+	"dep:dmgez-core",
+	"dep:dmgez-udif",
+	"dep:hfsplus-builder",
+]
+
 # Finder layout and icons
-finder-write = ["dep:dmgez-finder", "dep:dmgez-macho", "dmgez-builder/finder-write"]
+finder-write = ["build", "dep:dmgez-finder", "dep:dmgez-macho", "dmgez-builder/finder-write"]
 volume-icon = ["finder-write", "dmgez-builder/volume-icon"]
 badge-icons = ["volume-icon", "dmgez-builder/badge-icons"]
 
 # Image editing
 image-edit = [
+	"build",
 	"dmgez-config/project-edit",
 	"dep:dmgez-finder",
 	"dep:dmgez-macho",
@@ -24,37 +41,51 @@ image-edit = [
 ]
 
 # Compression and parallel execution
-lzfse = ["dmgez-builder/lzfse"]
-lzma = ["dmgez-builder/lzma"]
-compression-cache = ["dmgez-builder/compression-cache"]
-parallel = ["dmgez-builder/parallel"]
+lzfse = ["build", "dmgez-builder/lzfse"]
+lzma = ["build", "dmgez-builder/lzma"]
+compression-cache = ["build", "dmgez-builder/compression-cache"]
+parallel = ["build", "dmgez-builder/parallel"]
 
 # Partitioned disk output
-partition-write = ["dmgez-builder/partition-write"]
+partition-write = ["build", "dmgez-builder/partition-write"]
 
-[target.'cfg(any(target_os = "linux", target_os = "macos", windows))'.dependencies]
-# Workspace formats
-dmgez-macho = { version = "=0.1.0", path = "../../formats/dmgez-macho", optional = true }
-dmgez-udif = { version = "=0.1.0", path = "../../formats/dmgez-udif", default-features = false, features = ["write"] }
-
+[dependencies]
 # Workspace foundation
-dmgez-config = { version = "=0.1.0", path = "../../foundation/dmgez-config" }
-dmgez-core = { version = "=0.1.0", path = "../../foundation/dmgez-core", default-features = false, features = ["source"] }
+dmgez-vfs = { version = "=0.1.0", path = "../../foundation/dmgez-vfs", default-features = false, optional = true }
 
 # Workspace presentation
-dmgez-finder = { version = "=0.1.0", path = "../../presentation/dmgez-finder", optional = true }
-
-# Workspace build
-dmgez-builder = { version = "=0.1.0", path = "../../build/dmgez-builder", default-features = false, features = ["zlib"] }
+dmgez-finder = { version = "=0.1.0", path = "../../presentation/dmgez-finder", default-features = false, optional = true }
+dmgez-preview = { version = "=0.1.0", path = "../../presentation/dmgez-preview", default-features = false, features = ["actual", "png-render"], optional = true }
 
 # HFS+ libraries
-hfsplus-builder = "=0.1.0"
 hfsplus-core = { package = "hfsplus-pomologie-core", version = "=0.1.0" }
 hfsplus-format = "=0.1.0"
 hfsplus-reader = { version = "=0.1.0", optional = true }
 
+# Serialization and configuration
+serde = { version = "1.0.229", features = ["derive"], optional = true }
+
 # Diagnostics
 thiserror = "=2.0.21"
+
+[target.'cfg(any(target_os = "linux", target_os = "macos", windows))'.dependencies]
+# Workspace formats
+dmgez-macho = { version = "=0.1.0", path = "../../formats/dmgez-macho", optional = true }
+dmgez-udif = { version = "=0.1.0", path = "../../formats/dmgez-udif", default-features = false, features = ["write"], optional = true }
+
+# Workspace foundation
+dmgez-config = { version = "=0.1.0", path = "../../foundation/dmgez-config", optional = true }
+dmgez-core = { version = "=0.1.0", path = "../../foundation/dmgez-core", default-features = false, features = ["source"], optional = true }
+
+# Workspace build
+dmgez-builder = { version = "=0.1.0", path = "../../build/dmgez-builder", default-features = false, features = ["zlib"], optional = true }
+
+# HFS+ libraries
+hfsplus-builder = { version = "=0.1.0", optional = true }
+
+[dev-dependencies]
+# Workspace formats
+dmgez-udif = { version = "=0.1.0", path = "../../formats/dmgez-udif", default-features = false, features = ["read"] }
 
 [lints.rust]
 unsafe_code = "forbid"

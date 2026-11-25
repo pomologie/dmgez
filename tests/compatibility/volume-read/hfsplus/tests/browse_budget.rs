@@ -1,6 +1,6 @@
 use std::{cell::RefCell, num::NonZeroU16, ops::Range};
 
-use dmgez_hfsplus_read::browse::{Error, Limits, SourceError, with_catalog, with_view};
+use dmgez_hfsplus::browse::{Error, Limits, SourceError, with_catalog, with_view};
 use dmgez_vfs::{
 	Disk, LogicalDisk, VolumeId,
 	volume::{ForkKind, LookupName, NodeKind},

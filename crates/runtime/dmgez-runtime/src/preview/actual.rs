@@ -4,7 +4,7 @@ use std::{io, num::NonZeroU32, path::Path};
 
 use dmgez_config::VirtualPath;
 use dmgez_core::output::{PublishError, publish_new};
-use dmgez_hfsplus_read::{
+use dmgez_hfsplus::{
 	browse::Limits as HfsLimits,
 	preview::{CaptureError, capture_disk},
 };

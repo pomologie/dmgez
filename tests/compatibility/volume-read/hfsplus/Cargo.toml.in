@@ -10,7 +10,7 @@ hfsx-fixture = []
 
 [dependencies]
 # Workspace adapters
-dmgez-hfsplus-read = { path = @dmgez-hfsplus-read@, default-features = false, features = ["browse"] }
+dmgez-hfsplus = { path = @dmgez-hfsplus@, default-features = false, features = ["browse"] }
 
 [dev-dependencies]
 # Workspace formats

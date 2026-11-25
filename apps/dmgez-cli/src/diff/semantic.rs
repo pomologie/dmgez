@@ -202,9 +202,9 @@ enum HfsSignature {
 }
 
 #[cfg(feature = "hfsplus-read")]
-impl From<dmgez_hfsplus_read::browse::VolumeSignature> for HfsSignature {
-	fn from(value: dmgez_hfsplus_read::browse::VolumeSignature) -> Self {
-		use dmgez_hfsplus_read::browse::VolumeSignature;
+impl From<dmgez_hfsplus::browse::VolumeSignature> for HfsSignature {
+	fn from(value: dmgez_hfsplus::browse::VolumeSignature) -> Self {
+		use dmgez_hfsplus::browse::VolumeSignature;
 
 		match value {
 			VolumeSignature::HfsPlus => Self::HfsPlus,

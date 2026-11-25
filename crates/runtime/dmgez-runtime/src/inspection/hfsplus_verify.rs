@@ -1,6 +1,6 @@
 use std::{error::Error, num::NonZeroU32};
 
-use dmgez_hfsplus_read::CheckFailureKind;
+use dmgez_hfsplus::CheckFailureKind;
 use dmgez_inspector::{
 	FilesystemCheckError, FilesystemEvidence, FilesystemOptions, FilesystemProbe, FilesystemSource,
 };
@@ -18,7 +18,7 @@ pub(super) fn verify(
 	let limits = Limits::default();
 	let mut cause = None;
 	let check = |window: &mut dyn FilesystemSource| {
-		dmgez_hfsplus_read::check_reachable_data(
+		dmgez_hfsplus::check_reachable_data(
 			window.len(),
 			max_payload_bytes,
 			|offset, output| window.read_exact_at(offset, output),

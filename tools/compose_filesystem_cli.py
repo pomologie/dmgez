@@ -44,7 +44,6 @@ HFSPLUS_PACKAGES = {
     "hfsplus-pomologie-core": "crates/foundation/hfsplus-pomologie-core",
 }
 ADAPTER = "dmgez-hfsplus"
-READ_ADAPTER = "dmgez-hfsplus-read"
 READ_FEATURE = "hfsplus-read"
 ACTUAL_PREVIEW_FEATURE = "actual-preview"
 PREVIEW_TEST = "preview_cli"
@@ -72,7 +71,6 @@ APFS_ADAPTER = "dmgez-apfs-read"
 COMPOSED_CRATE_GROUPS = {
     "dmgez-builder": "build",
     ADAPTER: "adapters",
-    READ_ADAPTER: "adapters",
     APFS_ADAPTER: "adapters",
 }
 APFS_FEATURE = "apfs-read"
@@ -90,7 +88,7 @@ RUNTIME = Path("crates/runtime/dmgez-runtime")
 PROJECT_BUILD_FEATURE = "project-build"
 PROJECT_FEATURES = {
     PROJECT_BUILD_FEATURE: [
-        "dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config", "dep:dmgez-udif",
+        "dep:dmgez-builder", f"{ADAPTER}/build", "dep:dmgez-config", "dep:dmgez-udif",
         "dep:serde", "dep:serde_json", "dmgez-runtime/project-build",
     ],
     PROJECT_RELEASE_FEATURE: [
@@ -170,17 +168,17 @@ def compose_cli_manifest(manifest, reader, build, apfs):
         dependencies_to_add.extend(("dmgez-builder", ADAPTER))
     if reader:
         hfsplus_features = {
-            READ_FEATURE: ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse", "dmgez-runtime/hfsplus-volume"],
+            READ_FEATURE: ["inspect", f"dep:{ADAPTER}", f"{ADAPTER}/browse", "dmgez-runtime/hfsplus-volume"],
             ACTUAL_PREVIEW_FEATURE: ["preview", READ_FEATURE, "dmgez-runtime/actual-preview"],
             HFS_ANALYSIS_FEATURE: [READ_FEATURE, "dmgez-runtime/hfsplus-analysis"],
             VERIFY_FEATURE: [
-                "inspect", f"dep:{READ_ADAPTER}", "dmgez-runtime/hfsplus-verification",
+                "inspect", f"dep:{ADAPTER}", "dmgez-runtime/hfsplus-verification",
             ],
             EXTRACT_FEATURE: [
                 READ_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract",
                 "dmgez-runtime/extraction", "dmgez-runtime/verified-volume",
             ],
-            DECMPFS_FEATURE: [READ_FEATURE, f"{READ_ADAPTER}/decmpfs-zlib"],
+            DECMPFS_FEATURE: [READ_FEATURE, f"{ADAPTER}/decmpfs-zlib"],
             INSTALL_FEATURE: [
                 READ_FEATURE, "dep:dmgez-config", "dep:dmgez-operations", "dmgez-operations/install",
                 "dmgez-runtime/installation", "dmgez-runtime/verified-volume",
@@ -196,13 +194,14 @@ def compose_cli_manifest(manifest, reader, build, apfs):
                 *project_features[PROJECT_RELEASE_FEATURE], INSTALL_FEATURE,
             ]
             project_features[IMAGE_EDIT_FEATURE] = [
-                "project-build", f"{ADAPTER}/image-edit", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse",
-                f"{READ_ADAPTER}/verify",
+                "project-build", f"{ADAPTER}/image-edit", f"{ADAPTER}/browse",
+                f"{ADAPTER}/verify",
                 "dep:dmgez-core", "dep:dmgez-operations", "dmgez-operations/image-edit", "dep:dmgez-udif",
                 "dmgez-udif/read", "dmgez-udif/write", "dep:dmgez-vfs", "dep:serde", "dep:serde_json", "dep:sha2",
                 "dmgez-runtime/image-edit",
             ]
-        dependencies_to_add.append(READ_ADAPTER)
+        if not build:
+            dependencies_to_add.append(ADAPTER)
     if apfs:
         apfs_features = {
             APFS_FEATURE: ["inspect", f"dep:{APFS_ADAPTER}", "dmgez-runtime/apfs-volume"],
@@ -267,14 +266,14 @@ def compose_cli_manifest(manifest, reader, build, apfs):
 def compose_desktop_manifest(manifest, *, build=False):
     parsed = tomllib.loads(manifest)
     if ({READ_FEATURE, ACTUAL_PREVIEW_FEATURE, PROJECT_BUILD_FEATURE}.intersection(parsed.get("features", {}))
-            or READ_ADAPTER in parsed["dependencies"] or "dmgez-vfs" in parsed["dependencies"]):
+            or ADAPTER in parsed["dependencies"] or "dmgez-vfs" in parsed["dependencies"]):
         raise ValueError("desktop manifest already has filesystem composition settings")
     feature_section = "\n[features]\n"
     dependency_section = "\n[dependencies]\n"
     development_section = "\n[dev-dependencies]\n"
     if dependency_section not in manifest or development_section not in manifest:
         raise ValueError("could not find the desktop dependencies sections")
-    read = render_feature(READ_FEATURE, [f"dep:{READ_ADAPTER}", "dep:dmgez-vfs"])
+    read = render_feature(READ_FEATURE, [f"dep:{ADAPTER}", "dep:dmgez-vfs"])
     preview = render_feature(ACTUAL_PREVIEW_FEATURE, [READ_FEATURE, "dmgez-runtime/actual-preview"])
     group = f"# HFS+ volume access\n{read}\n{preview}\n"
     if build:
@@ -289,7 +288,7 @@ def compose_desktop_manifest(manifest, *, build=False):
     return manifest.replace(
         development_section,
         "\n# Composed filesystem dependencies\n"
-        f'{READ_ADAPTER} = {{ path = "../../crates/{COMPOSED_CRATE_GROUPS[READ_ADAPTER]}/{READ_ADAPTER}", '
+        f'{ADAPTER} = {{ path = "../../crates/{COMPOSED_CRATE_GROUPS[ADAPTER]}/{ADAPTER}", '
         'optional = true, default-features = false, features = ["browse"] }\n'
         "dmgez-vfs = { workspace = true, optional = true }\n"
         + development_section,
@@ -305,7 +304,7 @@ def compose_runtime_manifest(manifest, *, reader, build, apfs):
         adapters.append(ADAPTER)
         features.update({
             PROJECT_BUILD_FEATURE: [
-                "project-input", "dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-udif", "dmgez-udif/write",
+                "project-input", "dep:dmgez-builder", f"{ADAPTER}/build", "dep:dmgez-udif", "dmgez-udif/write",
             ],
             PROJECT_EDIT_FEATURE: [
                 "project-build", "stage-verification", "dep:dmgez-operations", "dmgez-operations/edit", "dep:sha2",
@@ -318,18 +317,19 @@ def compose_runtime_manifest(manifest, *, reader, build, apfs):
             "hfsplus-parallel": [f"{ADAPTER}/parallel"],
         })
     if reader:
-        adapters.append(READ_ADAPTER)
+        if not build:
+            adapters.append(ADAPTER)
         features.update({
-            "hfsplus-volume": ["image", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse"],
-            HFS_ANALYSIS_FEATURE: ["image", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/analysis"],
-            "hfsplus-verification": ["image", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/verify"],
+            "hfsplus-volume": ["image", f"dep:{ADAPTER}", f"{ADAPTER}/browse"],
+            HFS_ANALYSIS_FEATURE: ["image", f"dep:{ADAPTER}", f"{ADAPTER}/analysis"],
+            "hfsplus-verification": ["image", f"dep:{ADAPTER}", f"{ADAPTER}/verify"],
             INSTALL_FEATURE: ["hfsplus-volume", "installation", "verified-volume"],
-            ACTUAL_PREVIEW_FEATURE: ["preview", "hfsplus-volume", f"{READ_ADAPTER}/preview"],
+            ACTUAL_PREVIEW_FEATURE: ["preview", "hfsplus-volume", f"{ADAPTER}/preview"],
         })
         if build:
             features[IMAGE_EDIT_FEATURE] = [
                 "project-input", "stage-verification", f"dep:{ADAPTER}", f"{ADAPTER}/image-edit",
-                f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse", f"{READ_ADAPTER}/verify",
+                f"{ADAPTER}/browse", f"{ADAPTER}/verify",
                 "dep:dmgez-operations", "dmgez-operations/image-edit", "dep:dmgez-vfs", "dep:sha2",
             ]
     if apfs:

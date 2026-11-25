@@ -105,7 +105,7 @@ fn analyzes_a_native_apm_hfs_volume_without_changing_container_analysis() {
 #[cfg(feature = "hfsplus-analysis")]
 #[test]
 fn rejects_largest_count_above_the_catalog_limit_before_opening_input() {
-	use dmgez_hfsplus_read::analysis::MAX_LARGEST_FILES;
+	use dmgez_hfsplus::analysis::MAX_LARGEST_FILES;
 
 	let directory = tempfile::tempdir().unwrap();
 	let too_many = (MAX_LARGEST_FILES + 1).to_string();

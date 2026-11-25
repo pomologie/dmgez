@@ -12,7 +12,7 @@ use std::io;
 #[cfg(feature = "apfs-read")]
 use dmgez_apfs_read::{TransactionId, VolumeInfo, VolumeSelector};
 #[cfg(feature = "hfsplus-read")]
-use dmgez_hfsplus_read::browse::HfsView;
+use dmgez_hfsplus::browse::HfsView;
 use dmgez_runtime::{
 	disk::{self, Encoding},
 	volume,

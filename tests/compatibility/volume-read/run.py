@@ -13,7 +13,7 @@ from tempfile import TemporaryDirectory
 RUNNER = Path(__file__).resolve().parent
 ENGINE_VERSION = "0.1.0"
 HFSPLUS_CORE_PACKAGE = "hfsplus-pomologie-core"
-HFSPLUS_ADAPTER_PACKAGE = "dmgez-hfsplus-read"
+HFSPLUS_ADAPTER_PACKAGE = "dmgez-hfsplus"
 HFSPLUS_ENGINE = "hfsplus"
 APFS_ENGINE = "apfs"
 APFS_ADAPTER_PACKAGE = "dmgez-apfs-read"

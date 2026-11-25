@@ -1,6 +1,6 @@
 //! Find controls and bounded results for the current image folder.
 
-use dmgez_hfsplus_read::browse::NameFragment;
+use dmgez_hfsplus::browse::NameFragment;
 use dmgez_inspector::volume_queries::SearchExtent;
 use eframe::egui::{Button, Key, TextEdit, Ui};
 

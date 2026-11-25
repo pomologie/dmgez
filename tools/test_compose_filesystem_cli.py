@@ -135,11 +135,11 @@ class DesktopCompositionTests(unittest.TestCase):
         manifest = tomllib.loads(compose.compose_desktop_manifest(original))
         self.assertEqual(manifest["features"], {
             **base.get("features", {}),
-            compose.READ_FEATURE: [f"dep:{compose.READ_ADAPTER}", "dep:dmgez-vfs"],
+            compose.READ_FEATURE: [f"dep:{compose.ADAPTER}", "dep:dmgez-vfs"],
             compose.ACTUAL_PREVIEW_FEATURE: [compose.READ_FEATURE, "dmgez-runtime/actual-preview"],
         })
-        self.assertEqual(manifest["dependencies"][compose.READ_ADAPTER]["features"], ["browse"])
-        self.assertTrue(manifest["dependencies"][compose.READ_ADAPTER]["optional"])
+        self.assertEqual(manifest["dependencies"][compose.ADAPTER]["features"], ["browse"])
+        self.assertTrue(manifest["dependencies"][compose.ADAPTER]["optional"])
         self.assertEqual(manifest["dev-dependencies"], base["dev-dependencies"])
 
     def test_desktop_project_build_uses_the_composed_runtime(self):
@@ -149,7 +149,7 @@ class DesktopCompositionTests(unittest.TestCase):
         self.assertEqual(manifest["features"][compose.PROJECT_BUILD_FEATURE], [
             "dmgez-runtime/project-build", "dmgez-runtime/finder-write", "dmgez-runtime/hfsplus-parallel",
         ])
-        self.assertNotIn(compose.ADAPTER, manifest["dependencies"])
+        self.assertEqual(manifest["dependencies"][compose.ADAPTER]["features"], ["browse"])
         features = tomllib.loads(compose.compose_runtime_manifest(runtime, reader=True, build=True, apfs=False))[
             "features"
         ]
@@ -311,7 +311,7 @@ class WindowsCompositionTests(unittest.TestCase):
             cli = compose.load_toml(workspace / compose.CLI / compose.MANIFEST)
             self.assertIn("project-build", cli["features"]["build"])
             runtime = compose.load_toml(workspace / compose.RUNTIME / compose.MANIFEST)
-            self.assertIn("dep:dmgez-hfsplus", runtime["features"]["project-build"])
+            self.assertIn("dmgez-hfsplus/build", runtime["features"]["project-build"])
             self.assertEqual(
                 runtime["dependencies"][compose.ADAPTER]["path"], "../../adapters/dmgez-hfsplus",
             )

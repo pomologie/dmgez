@@ -1,4 +1,4 @@
-use dmgez_hfsplus_read::browse::{Error as HfsError, VolumeSignature};
+use dmgez_hfsplus::browse::{Error as HfsError, VolumeSignature};
 use dmgez_inspector::{DiskReport, DiskScheme, RecognizedFilesystem};
 use dmgez_vfs::{
 	PartitionId, Scheme, VolumeId,

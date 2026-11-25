@@ -27,7 +27,7 @@ dmgez-config = { path = @dmgez-config@ }
 
 # Workspace build
 dmgez-builder = { path = @dmgez-builder@, default-features = false }
-dmgez-hfsplus = { path = @dmgez-hfsplus@, default-features = false }
+dmgez-hfsplus = { path = @dmgez-hfsplus@, default-features = false, features = ["build"] }
 
 # Command-line interface
 clap = { version = "=4.6.8", features = ["derive"] }

@@ -51,7 +51,7 @@ pub enum Error {
 	Selection(#[from] SelectionError),
 	#[cfg(feature = "hfsplus-volume")]
 	#[error(transparent)]
-	Hfsplus(#[from] dmgez_hfsplus_read::browse::Error),
+	Hfsplus(#[from] dmgez_hfsplus::browse::Error),
 	#[cfg(feature = "apfs-volume")]
 	#[error(transparent)]
 	Apfs(#[from] dmgez_apfs_read::OpenError),

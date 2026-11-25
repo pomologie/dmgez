@@ -5,7 +5,7 @@ use std::{
 	num::{NonZeroU16, NonZeroU32},
 };
 
-use dmgez_hfsplus_read::browse::{self, VolumeSignature};
+use dmgez_hfsplus::browse::{self, VolumeSignature};
 use dmgez_inspector::{
 	DiskLimits,
 	volume_queries::{MAX_LIST_OFFSET, StorageMetadata, inspect_storage},
