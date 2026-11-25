@@ -68,6 +68,9 @@ struct SemanticOptions {
 	/// Include supported extended attributes in the semantic comparison.
 	#[arg(long)]
 	xattrs: bool,
+	/// Compare effective per-object FinderInfo in semantic mode.
+	#[arg(long)]
+	finder_info: bool,
 	/// Compare supported Finder settings from matched .DS_Store files.
 	#[arg(long)]
 	finder_layout: bool,
@@ -126,6 +129,9 @@ pub(super) fn run(arguments: &Arguments) -> CliResult<ExitCode> {
 	match arguments.mode {
 		Mode::Semantic => run_semantic(arguments),
 		_ if arguments.options.xattrs => Err(invalid("--xattrs requires --mode semantic").into()),
+		_ if arguments.options.finder_info => {
+			Err(invalid("--finder-info requires --mode semantic").into())
+		}
 		_ if arguments.options.finder_layout => {
 			Err(invalid("--finder-layout requires --mode semantic").into())
 		}

@@ -5,10 +5,10 @@ use std::{
 };
 
 #[cfg(feature = "finder-diff")]
-use dmgez_diff::semantic::{Field, compare_with_finder_layout};
+use dmgez_diff::semantic::Field;
 use dmgez_diff::{
 	Side,
-	semantic::{Limits, Outcome, Report, compare, compare_with_xattrs},
+	semantic::{Limits, Options, Outcome, Report, compare_with_options},
 };
 use dmgez_inspector::SelectedWindowId;
 use dmgez_vfs::{
@@ -150,14 +150,14 @@ where
 		Input::new(right.partition(), arguments.options.right_raw, right_volume),
 		Side::Right,
 	)?;
-	let comparison = match &arguments.options {
-		#[cfg(feature = "finder-diff")]
-		options if options.finder_layout => {
-			compare_with_finder_layout(left, right, limits, options.xattrs, || false)?
-		}
-		options if options.xattrs => compare_with_xattrs(left, right, limits, || false)?,
-		_ => compare(left, right, limits, || false)?,
-	};
+	let mut options = Options::default();
+	options.xattrs = arguments.options.xattrs;
+	options.finder_info = arguments.options.finder_info;
+	#[cfg(feature = "finder-diff")]
+	{
+		options.finder_layout = arguments.options.finder_layout;
+	}
+	let comparison = compare_with_options(left, right, limits, options, || false)?;
 	Ok(DiffReport {
 		address_space: FILESYSTEM_SPACE,
 		filesystem: filesystem.as_str(),
