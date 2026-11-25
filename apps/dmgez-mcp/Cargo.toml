@@ -12,7 +12,7 @@ description = "Local MCP tools for dmgez projects"
 dmgez-udif = { workspace = true, features = ["read"] }
 
 # Workspace foundation
-dmgez-config.workspace = true
+dmgez-config = { workspace = true, features = ["project-edit"] }
 dmgez-core = { workspace = true, features = ["source"] }
 
 # Workspace inspection

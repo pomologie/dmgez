@@ -2,6 +2,8 @@
 
 #[path = "stdio/images.rs"]
 mod images;
+#[path = "stdio/update.rs"]
+mod update;
 #[cfg(windows)]
 #[path = "stdio/windows.rs"]
 mod windows;
@@ -38,6 +40,7 @@ const REQUEST_PROTOCOL: &str = "2025-11-25";
 const CAPABILITIES: &str = "capabilities";
 const PROJECT_VALIDATE: &str = "project_validate";
 const PROJECT_READ: &str = "project_read";
+const PROJECT_UPDATE: &str = "project_update";
 const PROJECT_LIST: &str = "project_list";
 const TOOLS_CALL: &str = "tools/call";
 const TOOLS_LIST: &str = "tools/list";
@@ -61,7 +64,13 @@ fn serves_only_typed_read_only_tools_and_uses_the_shared_project_parser() {
 		.collect::<BTreeSet<_>>();
 	assert_eq!(
 		names,
-		BTreeSet::from([CAPABILITIES, PROJECT_LIST, PROJECT_READ, PROJECT_VALIDATE])
+		BTreeSet::from([
+			CAPABILITIES,
+			PROJECT_LIST,
+			PROJECT_READ,
+			PROJECT_UPDATE,
+			PROJECT_VALIDATE,
+		])
 	);
 	assert!(
 		tools
@@ -181,8 +190,6 @@ fn rejects_unconfined_files_and_arguments_before_reading() {
 		}),
 	);
 	assert!(malformed.get("error").is_some() || malformed["result"]["isError"] == true);
-	let mutation = client.call(TOOLS_CALL, json!({"name":"project_update", "arguments":{}}));
-	assert!(mutation.get("error").is_some() || mutation["result"]["isError"] == true);
 	assert_eq!(fs::read_to_string(outside).unwrap(), VALID_PROJECT);
 	client.finish();
 }

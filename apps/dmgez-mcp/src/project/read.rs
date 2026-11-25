@@ -9,7 +9,7 @@ use crate::local::LocalRoot;
 
 use super::Issue;
 
-const SHA256_HEX_BYTES: usize = 64;
+pub(super) const SHA256_HEX_BYTES: usize = 64;
 
 #[derive(Debug, Serialize, JsonSchema)]
 #[serde(tag = "status", rename_all = "snake_case")]
@@ -44,7 +44,7 @@ impl LocalRoot {
 	}
 }
 
-fn revision_sha256(bytes: &[u8]) -> String {
+pub(super) fn revision_sha256(bytes: &[u8]) -> String {
 	let mut result = String::with_capacity(SHA256_HEX_BYTES);
 	for byte in Sha256::digest(bytes) {
 		write!(result, "{byte:02x}").expect("writing to a string cannot fail");

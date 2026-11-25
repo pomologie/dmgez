@@ -14,7 +14,8 @@ use tokio::{runtime::Builder, sync::Semaphore};
 use crate::image::{self, MAX_METADATA_BYTES};
 use crate::local::{LocalRoot, MAX_FILE_NAME_BYTES};
 use crate::project::{
-	Listing, MAX_DIRECTORY_ENTRIES, MAX_PAGE_SIZE, MAX_PROJECT_BYTES, Reading, Validation,
+	Listing, MAX_DIRECTORY_ENTRIES, MAX_PAGE_SIZE, MAX_PROJECT_BYTES, MAX_PROJECT_EDITS, Reading,
+	Update, UpdateRequest, Validation,
 };
 use crate::transport::{MAX_IN_FLIGHT, MAX_REQUEST_BYTES, stdio};
 
@@ -55,6 +56,7 @@ struct CapabilitiesReport {
 	max_in_flight: usize,
 	max_directory_entries: usize,
 	max_project_page_size: usize,
+	max_project_edits: usize,
 	image_inspection: bool,
 	max_image_metadata_bytes: usize,
 }
@@ -105,6 +107,7 @@ impl Server {
 			max_in_flight: MAX_IN_FLIGHT,
 			max_directory_entries: MAX_DIRECTORY_ENTRIES,
 			max_project_page_size: MAX_PAGE_SIZE,
+			max_project_edits: MAX_PROJECT_EDITS,
 			image_inspection: self.image_root.is_some(),
 			max_image_metadata_bytes: MAX_METADATA_BYTES,
 		})
@@ -130,6 +133,18 @@ impl Server {
 	) -> Result<Json<ToolReport<Reading>>, ErrorData> {
 		self.local_operation(&self.project_root, Reading::Busy, move |root| {
 			root.read(&request.file_name)
+		})
+		.await
+	}
+
+	#[tool(annotations(read_only_hint = true, open_world_hint = false))]
+	/// Validate a revision-bound project changeset and return an in-memory dry-run report.
+	async fn project_update(
+		&self,
+		Parameters(request): Parameters<UpdateRequest>,
+	) -> Result<Json<ToolReport<Update>>, ErrorData> {
+		self.local_operation(&self.project_root, Update::Busy, move |root| {
+			root.plan_update(request)
 		})
 		.await
 	}

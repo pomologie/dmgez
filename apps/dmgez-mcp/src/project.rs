@@ -9,9 +9,11 @@ use crate::local::{FileAdmission, LocalRoot, direct_name};
 
 mod list;
 mod read;
+mod update;
 
 pub(super) use list::{Listing, MAX_DIRECTORY_ENTRIES, MAX_PAGE_SIZE};
 pub(super) use read::Reading;
+pub(super) use update::{MAX_PROJECT_EDITS, Update, UpdateRequest};
 
 pub(super) const MAX_PROJECT_BYTES: usize = 1 << 20;
 const FILE_EXTENSION: &str = "toml";
@@ -49,12 +51,13 @@ impl LocalRoot {
 	}
 
 	fn parse_manifest(&self, file_name: &str) -> Result<(Project, String), Issue> {
-		let input = self.read_manifest(file_name)?;
+		let input =
+			String::from_utf8(self.read_manifest(file_name)?).map_err(|_| Issue::InvalidUtf8)?;
 		let project = Project::parse(&input).map_err(config_issue)?;
 		Ok((project, input))
 	}
 
-	fn read_manifest(&self, file_name: &str) -> Result<String, Issue> {
+	fn read_manifest(&self, file_name: &str) -> Result<Vec<u8>, Issue> {
 		let path = project_name(file_name).ok_or(Issue::InvalidFileName)?;
 		let (file, binding) = self.open_file(path).map_err(file_issue)?;
 		let captured = CapturedFile::new(file).map_err(source_issue)?;
@@ -67,7 +70,7 @@ impl LocalRoot {
 			.read_exact_at(0, &mut bytes)
 			.map_err(source_issue)?;
 		binding.verify().map_err(file_issue)?;
-		String::from_utf8(bytes).map_err(|_| Issue::InvalidUtf8)
+		Ok(bytes)
 	}
 }
 
