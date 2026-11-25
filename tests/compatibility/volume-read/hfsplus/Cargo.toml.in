@@ -1,0 +1,20 @@
+[package]
+name = "dmgez-hfsplus-read-probe"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.98"
+publish = false
+
+[dependencies]
+dmgez-vfs = { path = @dmgez-vfs@, default-features = false }
+hfsplus-core = { version = "=0.1.0", path = @hfsplus-core@ }
+hfsplus-format = { version = "=0.1.0", path = @hfsplus-format@ }
+hfsplus-reader = { version = "=0.1.0", path = @hfsplus-reader@ }
+thiserror = "=2.0.21"
+
+[dev-dependencies]
+dmgez-udif = { path = @dmgez-udif@, default-features = false, features = ["read", "write", "zlib"] }
+hfsplus-builder = { version = "=0.1.0", path = @hfsplus-builder@ }
+
+[lints.rust]
+unsafe_code = "forbid"
