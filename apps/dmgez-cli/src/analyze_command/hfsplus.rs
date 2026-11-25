@@ -51,7 +51,7 @@ pub(super) fn run(arguments: &Arguments) -> CliResult {
 		limits.largest_files = largest;
 	}
 	let source = inspect::open_source(&arguments.image)?;
-	let mut image = Image::open(BorrowedSource(&source), ImageLimits::default())?;
+	let mut image = Image::open_release(BorrowedSource(&source), ImageLimits::default())?;
 	let container = dmgez_inspector::analyze(&image);
 	let mut disk = Disk::discover(&mut image, DiskLimits::default())?;
 	let selected = select(&disk, arguments.partition)?;

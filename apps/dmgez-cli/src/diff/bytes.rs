@@ -33,8 +33,8 @@ pub(super) fn run(arguments: &Arguments, logical: bool) -> CliResult<ExitCode> {
 	let max_bytes = arguments.max_bytes.unwrap_or(DEFAULT_COMPARE_BYTES);
 	let (address_space, comparison) = if logical {
 		let limits = Limits::default();
-		let mut left = with_side(Image::open(left, limits), Side::Left)?;
-		let mut right = with_side(Image::open(right, limits), Side::Right)?;
+		let mut left = with_side(Image::open_release(left, limits), Side::Left)?;
+		let mut right = with_side(Image::open_release(right, limits), Side::Right)?;
 		(
 			LOGICAL_SPACE,
 			compare(&mut left, &mut right, max_bytes, || false)?,

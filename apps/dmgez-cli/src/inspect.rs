@@ -28,6 +28,7 @@ const PHYSICAL_BYTES_KEY: &str = "physical_bytes";
 const LOGICAL_BYTES_KEY: &str = "logical_bytes";
 const VARIANT_KEY: &str = "variant";
 const BLOCK_MAP_COUNT_KEY: &str = "block_maps";
+const EMBEDDED_SIGNATURE_KEY: &str = "embedded_signature";
 const DATA_FORK_CHECKSUM_KEY: &str = "data_fork_checksum";
 const MASTER_CHECKSUM_KEY: &str = "master_checksum";
 const UNSUPPORTED_RUNS_KEY: &str = "unsupported_runs";
@@ -46,6 +47,7 @@ const MASTER_STATUS_KEY: &str = "master";
 const STRUCTURE_STATUS_KEY: &str = "structure";
 const PAYLOAD_STATUS_KEY: &str = "payload";
 const FILESYSTEM_STATUS_KEY: &str = "filesystem";
+const SECURITY_STATUS_KEY: &str = "security";
 const FILESYSTEM_SCOPE_KEY: &str = "filesystem_scope";
 const FILESYSTEM_VOLUME_UUID_KEY: &str = "filesystem_volume_uuid";
 const FILESYSTEM_VOLUME_OBJECT_ID_KEY: &str = "filesystem_volume_object_id";
@@ -94,7 +96,7 @@ pub(super) fn show<S: ReadAt>(
 		),
 		None => None,
 	};
-	let mut image = Image::open(open()?, Limits::default())?;
+	let mut image = Image::open_release(open()?, Limits::default())?;
 	let report = if arguments.partitions {
 		dmgez_inspector::inspect_disk(&mut image, window, DiskLimits::default())
 	} else {
@@ -110,6 +112,15 @@ pub(super) fn show<S: ReadAt>(
 	report_field(LOGICAL_BYTES_KEY, container.logical_bytes);
 	report_field(VARIANT_KEY, container.variant);
 	report_field(BLOCK_MAP_COUNT_KEY, container.block_map_count);
+	if let Some(signature) = container.embedded_signature {
+		report_field(
+			EMBEDDED_SIGNATURE_KEY,
+			format_args!(
+				"stored byte {} length {}",
+				signature.offset_bytes, signature.length_bytes,
+			),
+		);
+	}
 	report_field(
 		DATA_FORK_CHECKSUM_KEY,
 		checksum(container.data_fork_checksum),
@@ -188,8 +199,9 @@ fn show_disk(disk: &DiskReport) {
 }
 
 pub(crate) fn analyze(path: &Path, json: bool) -> CliResult {
-	let image = Image::open(open_source(path)?, Limits::default())?;
+	let image = Image::open_release(open_source(path)?, Limits::default())?;
 	let report = dmgez_inspector::analyze(&image);
+	image.check_source_unchanged()?;
 	if json {
 		return print_json(&report);
 	}
@@ -285,6 +297,7 @@ pub(super) fn verify(arguments: &verify_command::Arguments, mode: VerificationMo
 		report_field(STRUCTURE_STATUS_KEY, report.coverage.structure.as_str());
 		report_field(PAYLOAD_STATUS_KEY, report.coverage.payload.as_str());
 		report_field(FILESYSTEM_STATUS_KEY, report.coverage.filesystem.as_str());
+		report_field(SECURITY_STATUS_KEY, report.coverage.security.as_str());
 		show_filesystem_coverage(&report);
 		report_field(VERIFICATION_KEY, outcome(report.outcome));
 	}
@@ -351,7 +364,7 @@ fn show_filesystem_coverage(report: &VerificationReport) {
 }
 
 pub(crate) fn unwrap(path: &Path, destination: &Path, partition: Option<NonZeroU32>) -> CliResult {
-	let mut image = Image::open(open_source(path)?, Limits::default())?;
+	let mut image = Image::open_release(open_source(path)?, Limits::default())?;
 	if let Some(slot) = partition {
 		let mut disk = Disk::discover(&mut image, DiskLimits::default())?;
 		let Layout::Partitioned { scheme, .. } = *disk.layout() else {

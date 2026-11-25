@@ -43,6 +43,8 @@ mod remote {
 	use super::{SECRET, SIGNED_URL, inspect};
 
 	const IMAGE: &[u8] = include_bytes!("../../../tests/fixtures/images/tiny-UDZO.dmg");
+	const SIGNED_IMAGE: &[u8] =
+		include_bytes!("../../../tests/fixtures/images/tiny-UDZO-adhoc-sha256.dmg");
 	const ENTITY_TAG: &str = "\"fixture-v1\"";
 	const DEADLINE: Duration = Duration::from_secs(8);
 	const METADATA_REQUESTS: usize = 4;
@@ -56,7 +58,7 @@ mod remote {
 				"http://{}/image.dmg?signature={SECRET}",
 				listener.local_addr().unwrap()
 			);
-			let fixture = thread::spawn(move || serve_metadata(&listener, changed));
+			let fixture = thread::spawn(move || serve_metadata(&listener, IMAGE, false, changed));
 			let result = inspect(&["--url", &url, "--json", "--run-limit", "1"]);
 			let error = String::from_utf8_lossy(&result.stderr);
 			assert!(!error.contains(SECRET));
@@ -79,6 +81,26 @@ mod remote {
 	}
 
 	#[test]
+	fn signed_image_adds_only_the_signature_frame_to_the_metadata_reads() {
+		let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+		listener.set_nonblocking(true).unwrap();
+		let url = format!(
+			"http://{}/image.dmg?signature={SECRET}",
+			listener.local_addr().unwrap()
+		);
+		let fixture = thread::spawn(move || serve_metadata(&listener, SIGNED_IMAGE, true, false));
+		let result = inspect(&["--url", &url, "--json"]);
+		assert!(result.status.success(), "{result:?}");
+		let report: serde_json::Value = serde_json::from_slice(&result.stdout).unwrap();
+		assert_eq!(
+			report["container"]["embedded_signature"]["length_bytes"],
+			"351"
+		);
+		assert_eq!(report["coverage"]["security"], "not_checked");
+		assert!(fixture.join().unwrap() < SIGNED_IMAGE.len());
+	}
+
+	#[test]
 	fn validates_the_requested_window_before_contacting_the_source() {
 		let result = inspect(&["--url", SIGNED_URL, "--run-limit", "0"]);
 		let error = String::from_utf8_lossy(&result.stderr);
@@ -87,25 +109,39 @@ mod remote {
 		assert!(!error.contains(SECRET));
 	}
 
-	fn serve_metadata(listener: &TcpListener, changed: bool) -> usize {
+	fn serve_metadata(listener: &TcpListener, image: &[u8], signed: bool, changed: bool) -> usize {
+		// Byte intervals are captured in the tiny-UDZO and ad hoc fixture manifests.
+		const PAYLOAD_BYTES: usize = 300;
+		const SIGNATURE_START: usize = 3084;
+		const TRAILER_BYTES: usize = 512;
+		let trailer_start = image.len() - TRAILER_BYTES;
+		let mut ranges = vec![(0, 0), (trailer_start, image.len() - 1)];
+		if signed {
+			ranges.push((SIGNATURE_START, trailer_start - 1));
+		}
+		let xml_end = if signed {
+			SIGNATURE_START
+		} else {
+			trailer_start
+		};
+		ranges.extend([(PAYLOAD_BYTES, xml_end - 1), (0, 0)]);
+		assert_eq!(ranges.len(), METADATA_REQUESTS + usize::from(signed));
 		let mut transferred = 0;
 		let deadline = Instant::now() + DEADLINE;
-		for index in 0..METADATA_REQUESTS {
+		for (index, expected) in ranges.iter().enumerate() {
 			let mut stream = accept_until(listener, deadline);
 			stream.set_nonblocking(false).unwrap();
 			stream.set_read_timeout(Some(DEADLINE)).unwrap();
 			let (first, last) = read_range(&stream, index != 0);
-			if index == 0 || index + 1 == METADATA_REQUESTS {
-				assert_eq!((first, last), (0, 0));
-			}
-			if changed && index + 1 == METADATA_REQUESTS {
+			assert_eq!((first, last), *expected);
+			if changed && index + 1 == ranges.len() {
 				stream.write_all(b"HTTP/1.1 412 Precondition Failed\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap();
 				break;
 			}
-			let body = &IMAGE[first..=last];
+			let body = &image[first..=last];
 			write!(stream,
 				"HTTP/1.1 206 Partial Content\r\nContent-Range: bytes {first}-{last}/{}\r\nETag: {ENTITY_TAG}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-				IMAGE.len(), body.len(),
+				image.len(), body.len(),
 			).unwrap();
 			stream.write_all(body).unwrap();
 			transferred += body.len();

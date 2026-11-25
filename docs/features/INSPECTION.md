@@ -30,6 +30,12 @@ Browse supports the sibling reader's unencrypted, single-store container profile
 
 The D-READ-03 CLI and adapter suites use captured Sonoma APFS blocks for partitionless and MBR-wrapped reads, exact checkpoints, hard links, and independent fork data. The native two-volume check compares both raw and UDZO discovery with Apple volume metadata and requires explicit selection for ambiguous browsing. [CLI tests](../../apps/dmgez-cli/tests/volume_cli/apfs.rs) [Compatibility recipe](../../tests/compatibility/volume-read/README.md#apfs)
 
+### Read a signed UDIF image
+
+`inspect`, `verify`, `unwrap-raw` and the volume commands admit the bounded UDIF signature layout used by the default ad hoc signer. Inspect and verification JSON reports include the physical `embedded_signature` range in `container`, or `null` for unsigned images. Quick verification checks the signature frame and block-map structure. Container verification also checks the declared CRCs and leaves `coverage.security` at `not_checked`. Use `sign verify` to check the signature's integrity. Raw export streams the decoded disk bytes.
+
+The reader requires the qualified single SHA-256 CodeDirectory layout and refuses unsupported or malformed signature frames before reading the disk payload. The native signed fixture tests compare the exported disk with the expected raw bytes and check that a modified signature digest fails `sign verify` independently of the container CRCs. [Signed CLI tests](../../apps/dmgez-cli/tests/signed_read_cli.rs) · [Native fixture provenance](../../tests/fixtures/manifests/tiny-UDZO-adhoc-sha256.json)
+
 ## Verify is separate
 
 `verify --quick` validates headers, ranges, map coverage, supported checksums declared as not checked if not computed; `verify --container` streams required CRC domains; `verify --full` also checks supported filesystem invariants, file data access, attribute records, and optional requested source manifest. Distinguish structural, payload, filesystem and security statuses. No signature trust claim from checksums, no Gatekeeper inference. Missing codec => unsupported with nonzero exit if requested verification needs it. Corrupted volume cannot be silently repaired. Verification reads bounded chunks, never extracts or launches. Report errors capped with count of suppressed errors and traversal budgets. Native `fsck_hfs -n` and `fsck_apfs -n` in disposable test devices only after tool syntax checked on runner. Source remains read-only. `inspect` can return partial report and diagnostic; no implicit `passed` status.

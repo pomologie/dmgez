@@ -371,7 +371,7 @@ fn verify_container<S: ReadAt>(
 	}
 	let image = source
 		.check_unchanged()
-		.and_then(|()| Image::open(source, limits));
+		.and_then(|()| Image::open_release(source, limits));
 	let mut image = match image.and_then(|mut image| {
 		if cancellation.is_some_and(Cancellation::is_cancelled) {
 			return Err(Error::Cancelled);

@@ -2,7 +2,7 @@ use std::{fmt, ops::Range};
 
 use dmgez_udif::{
 	SECTOR_BYTES,
-	reader::{Checksum, Descriptor, Image, ReadAt, RunDescriptor, RunEncoding as UdifEncoding},
+	reader::{Checksum, Image, ReadAt, RunDescriptor, RunEncoding as UdifEncoding},
 };
 use serde::{Serialize, Serializer};
 
@@ -96,6 +96,8 @@ pub struct ContainerSummary {
 	pub logical_bytes: u64,
 	pub data_fork: ByteRange,
 	pub resource_xml: ByteRange,
+	/// Physical range of the admitted signature frame, without any trust verdict.
+	pub embedded_signature: Option<ByteRange>,
 	pub data_fork_checksum: ChecksumDeclaration,
 	pub master_checksum: ChecksumDeclaration,
 	/// Count of UDIF block maps. Partition discovery is a separate operation.
@@ -110,10 +112,6 @@ impl ContainerSummary {
 			counts.record(run.encoding);
 			counts
 		});
-		Self::from_descriptor(descriptor, runs)
-	}
-
-	fn from_descriptor(descriptor: &Descriptor, runs: RunSummary) -> Self {
 		Self {
 			format: ContainerFormat::UdifV4,
 			segment_count: SINGLE_SEGMENT_COUNT,
@@ -124,6 +122,10 @@ impl ContainerSummary {
 			logical_bytes: descriptor.logical_bytes,
 			data_fork: ByteRange::admitted(&descriptor.data_fork),
 			resource_xml: ByteRange::admitted(&descriptor.resource_xml),
+			embedded_signature: image
+				.embedded_signature_range()
+				.as_ref()
+				.map(ByteRange::admitted),
 			data_fork_checksum: descriptor.physical_crc.into(),
 			master_checksum: descriptor.master_crc.into(),
 			block_map_count: descriptor.tables.len(),

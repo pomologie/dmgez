@@ -341,7 +341,7 @@ fn with_logical_disk<T>(
 		raw_disk = Raw(borrowed);
 		&mut raw_disk
 	} else {
-		udif_disk = Image::open(borrowed, ImageLimits::default())?;
+		udif_disk = Image::open_release(borrowed, ImageLimits::default())?;
 		&mut udif_disk
 	};
 	read(logical)
