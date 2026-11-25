@@ -59,9 +59,11 @@ APFS_ADAPTER = "dmgez-apfs-read"
 APFS_FEATURE = "apfs-read"
 APFS_EXTRACT_FEATURE = "apfs-extract"
 APFS_FIXTURES_ENV = "DMGEZ_APFS_FIXTURES"
+PROJECT_RELEASE_FEATURE = "project-release"
 SOURCE_DIRS = ("apps", "crates", "tests")
 FEATURE_ADDITIONS = {
     "project-build": ["dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config"],
+    PROJECT_RELEASE_FEATURE: ["project-build", "inspect", "dep:dmgez-signing", "dep:sha2", "dep:tempfile"],
     "finder-write": ["dmgez-builder?/finder-write", f"{ADAPTER}?/finder-write"],
     "volume-icon": ["finder-write", f"{ADAPTER}?/volume-icon"],
     "badge-icons": ["volume-icon", f"{ADAPTER}?/badge-icons"],
@@ -144,6 +146,9 @@ def compose_cli_manifest(manifest, reader, build, apfs):
         "optional = true, default-features = false }\n"
         for name in dependencies_to_add
     )
+    if build:
+        added_dependencies += "sha2 = { workspace = true, optional = true }\n"
+        added_dependencies += "tempfile = { workspace = true, optional = true }\n"
     return (
         before_features + feature_section + lines + dependency_section
         + added_dependencies + dependencies
@@ -248,6 +253,8 @@ def run_cli(cargo, directory, options, packages):
                 command.extend(("--test", EXTRACT_TEST))
         if HFSPLUS_BUILDER in packages:
             command.extend(("--test", CLI_TEST))
+            if has_cli_feature(options, PROJECT_RELEASE_FEATURE):
+                command.extend(("--bin", CLI_BINARY))
             if sys.platform == "win32":
                 command.extend(("--test", WINDOWS_CLI_TEST))
         subprocess.run(command, cwd=directory, env=environment, check=True)

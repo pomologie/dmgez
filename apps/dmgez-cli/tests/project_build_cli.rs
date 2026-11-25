@@ -1,5 +1,9 @@
 use std::process::Command;
 
+#[cfg(feature = "project-release")]
+#[path = "project_build/release.rs"]
+mod release;
+
 const BINARY: &str = env!("CARGO_BIN_EXE_dmgez");
 const MANIFEST_NAME: &str = "installer.toml";
 

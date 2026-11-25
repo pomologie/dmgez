@@ -23,6 +23,7 @@ mod project_input;
 	feature = "hfsplus-read",
 	feature = "apfs-read",
 	feature = "signing-native",
+	feature = "project-release",
 	all(feature = "installer-lint", any(unix, windows)),
 ))]
 mod report_output;
@@ -37,6 +38,7 @@ mod wrap;
 
 const WRAP_RAW_COMMAND: &str = "wrap-raw";
 const BUILD_PROJECT_COMMAND: &str = "build";
+const BUILD_RELEASE_CAPABILITY: &str = "project-release";
 const INSPECT_COMMAND: &str = "inspect";
 const ANALYZE_COMMAND: &str = "analyze";
 const CONVERT_COMMAND: &str = "convert";
@@ -300,6 +302,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		Command::Capabilities => {
 			for (name, compiled) in [
 				(BUILD_PROJECT_COMMAND, cfg!(feature = "project-build")),
+				(BUILD_RELEASE_CAPABILITY, cfg!(feature = "project-release")),
 				(WRAP_RAW_COMMAND, cfg!(feature = "build")),
 				(
 					PARALLEL_FEATURE,

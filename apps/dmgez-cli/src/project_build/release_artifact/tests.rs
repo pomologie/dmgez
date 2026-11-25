@@ -1,0 +1,84 @@
+use dmgez_core::output::stage_new;
+use dmgez_udif::{
+	SECTOR_BYTES,
+	writer::{Profile, WriteOptions, write_image},
+};
+
+use super::*;
+
+const SOURCE_NAME: &str = "source.dmg";
+const OUTPUT_NAME: &str = "release.dmg";
+const STAGED_SUFFIX: &str = ".dmg";
+const UNSIGNED: &[u8] = include_bytes!("../../../../../tests/fixtures/images/tiny-UDZO.dmg");
+const SIGNED: &[u8] =
+	include_bytes!("../../../../../tests/fixtures/images/tiny-UDZO-adhoc-sha256.dmg");
+const SIGNED_SHA256: &str = "5b2bd2040ed7234affd8db97f05717a7541f821470d1451d26699f4ec1f8395e";
+
+#[test]
+fn publishes_the_exact_signed_image_once() {
+	let directory = tempfile::tempdir().unwrap();
+	let source = directory.path().join(SOURCE_NAME);
+	let output = directory.path().join(OUTPUT_NAME);
+	fs::write(&source, SIGNED).unwrap();
+	let expected = ImageIdentity::new(SIGNED_SHA256, SIGNED.len() as u64).unwrap();
+	assert_eq!(observe(&source).unwrap(), expected);
+	assert_eq!(verify(&source).unwrap(), expected);
+	publish(&source, &expected, &output).unwrap();
+	assert_eq!(fs::read(&output).unwrap(), SIGNED);
+	assert!(publish(&source, &expected, &output).is_err());
+	assert_eq!(fs::read(&output).unwrap(), SIGNED);
+	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 2);
+}
+
+#[test]
+fn stale_identity_and_corrupt_payload_leave_no_output_or_staging_entry() {
+	let directory = tempfile::tempdir().unwrap();
+	let source = directory.path().join(SOURCE_NAME);
+	let output = directory.path().join(OUTPUT_NAME);
+	fs::write(&source, UNSIGNED).unwrap();
+	let expected = verify(&source).unwrap();
+	let mut corrupt = UNSIGNED.to_vec();
+	corrupt[0] ^= 1;
+	fs::write(&source, corrupt).unwrap();
+	assert!(publish(&source, &expected, &output).is_err());
+	assert!(publish(&source, &observe(&source).unwrap(), &output).is_err());
+	assert!(!output.exists());
+	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn stage_recheck_requires_the_writer_checksum_values() {
+	let directory = tempfile::tempdir().unwrap();
+	let output = directory.path().join(OUTPUT_NAME);
+	let options = WriteOptions {
+		profile: Profile::Udro,
+		..WriteOptions::default()
+	};
+	let payload = [0x53; SECTOR_BYTES as usize];
+	let mut stage = stage_new(
+		&output,
+		STAGED_SUFFIX,
+		|writer| write_image(payload.as_slice(), SECTOR_BYTES, writer, &options).map_err(invalid),
+		verify_stage,
+	)
+	.unwrap();
+	let mut report = stage.report().clone();
+	report.master_crc ^= 1;
+	assert!(verify_stage(stage.reader().unwrap(), &report).is_err());
+	assert!(!output.exists());
+}
+
+#[cfg(unix)]
+#[test]
+fn rejects_a_repointable_symbolic_link_as_the_release_source() {
+	let directory = tempfile::tempdir().unwrap();
+	let source = directory.path().join(SOURCE_NAME);
+	let link = directory.path().join("linked.dmg");
+	let output = directory.path().join(OUTPUT_NAME);
+	fs::write(&source, UNSIGNED).unwrap();
+	std::os::unix::fs::symlink(&source, &link).unwrap();
+	assert!(observe(&link).is_err());
+	assert!(verify(&link).is_err());
+	assert!(publish(&link, &observe(&source).unwrap(), &output).is_err());
+	assert!(!output.exists());
+}

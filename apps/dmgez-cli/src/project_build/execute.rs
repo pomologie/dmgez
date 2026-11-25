@@ -17,6 +17,8 @@ use dmgez_hfsplus::{self as hfsplus, HfsImage, MetadataLoss};
 use crate::{CliResult, project_input};
 
 use super::Arguments;
+#[cfg(feature = "project-release")]
+use super::release::ReleaseRequest;
 
 const DEFINITION_SEPARATOR: char = '=';
 const OVERWRITE_ASSIGNMENT: &str = "build.overwrite=true";
@@ -33,11 +35,15 @@ pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> CliResult
 	if !working_directory.is_absolute() {
 		return Err(RELATIVE_WORKING_DIRECTORY.into());
 	}
+	#[cfg(not(feature = "project-release"))]
+	if arguments.release {
+		return Err("release builds require the project-release feature".into());
+	}
 	let path = working_directory.join(&arguments.project).canonicalize()?;
 	let directory = path.parent().ok_or(MISSING_PROJECT_DIRECTORY)?;
 	let input = project_input::read(&path)?;
 	let mut defines = BTreeMap::new();
-	for definition in arguments.define {
+	for definition in &arguments.define {
 		let (name, value) = definition
 			.split_once(DEFINITION_SEPARATOR)
 			.ok_or(INVALID_DEFINITION)?;
@@ -59,14 +65,31 @@ pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> CliResult
 		overrides.push(overwrite);
 	}
 	let project = Project::parse_with_overrides(&input, &defines, &overrides, working_directory)?;
+	#[cfg(feature = "project-release")]
+	let release = ReleaseRequest::admit(&project, &arguments, working_directory)?;
 	let progress = Progress::default();
+	let capabilities = hfsplus::capabilities();
+	#[cfg(feature = "project-release")]
+	let capabilities = {
+		let mut capabilities = capabilities;
+		if release.is_some() {
+			capabilities.release = dmgez_builder::preflight::Availability::Available;
+			capabilities.verify = dmgez_builder::preflight::Availability::Available;
+		}
+		capabilities
+	};
+	let intent = if arguments.release {
+		ReleaseIntent::Release
+	} else {
+		ReleaseIntent::Unsigned
+	};
 	let prepared = hfsplus::prepare_with_progress(
 		&project,
 		directory,
 		PreflightOptions {
-			capabilities: hfsplus::capabilities(),
+			capabilities,
 			output: OutputIntent::Path,
-			release: ReleaseIntent::Unsigned,
+			release: intent,
 			host_threads: thread::available_parallelism()?,
 		},
 		Default::default(),
@@ -77,6 +100,16 @@ pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> CliResult
 	if arguments.dry_run {
 		write_dry_run(io::stdout().lock(), prepared.prepared(), &sealed, losses)?;
 		return Ok(());
+	}
+	#[cfg(feature = "project-release")]
+	if let Some(release) = release {
+		let output = prepared
+			.prepared()
+			.output_path()
+			.ok_or("missing release destination")?;
+		return release.run(sealed, output, arguments.json, |event| {
+			progress.update(event)
+		});
 	}
 	let report = sealed.publish_with_progress(None, |event| progress.update(event))?;
 	if report.report.release == ReleasePlan::ConfiguredStagesDeferred {
