@@ -1,8 +1,12 @@
-//! Exact comparison of visible paths and supported objects in two volume views.
+//! Bounded comparison of visible paths and supported objects in two volume views.
 
+#[cfg(feature = "content-hash")]
+use std::num::NonZeroU32;
 use std::{error::Error as StdError, hash::Hash};
 
 use dmgez_vfs::volume::{ForkKind, NodeKind, ViewError, VolumeBackend, VolumeView};
+#[cfg(feature = "content-hash")]
+use dmgez_vfs::volume::{Metadata, StorageId};
 use thiserror::Error;
 
 use crate::{SCHEMA_VERSION, Side};
@@ -13,6 +17,8 @@ mod finder_info;
 mod finder_layout;
 mod links;
 mod payloads;
+#[cfg(feature = "content-hash")]
+mod renames;
 mod report;
 mod xattrs;
 
@@ -27,6 +33,8 @@ pub use report::{
 	Change, ChangeKind, ContentComparison, Field, FinderInfoComparison, FinderInfoPolicy, Limits,
 	Outcome, PathMatching, Policy, Report, Uncompared, XattrChange, XattrPolicy,
 };
+#[cfg(feature = "content-hash")]
+pub use report::{Contents, RenameCandidate, RenameInference};
 #[cfg(feature = "finder-layout")]
 pub use report::{FinderLayoutPolicy, FinderLayoutUncompared, FinderRecordChange};
 pub use xattrs::XattrError;
@@ -119,6 +127,12 @@ pub struct Options {
 	/// Decode matched regular Finder store data forks.
 	#[cfg(feature = "finder-layout")]
 	pub finder_layout: bool,
+	/// Compare admitted regular-file forks under this policy on common paths.
+	#[cfg(feature = "content-hash")]
+	pub contents: Contents,
+	/// Infer candidate pairs among otherwise removed and added regular files.
+	#[cfg(feature = "content-hash")]
+	pub infer_renames: bool,
 }
 
 /// Compares the visible root and descendants of two admitted filesystem views.
@@ -224,6 +238,11 @@ where
 /// including the volume root. A pair with at least one present record charges
 /// one record length to the shared logical payload budget. A symbolic link is
 /// compared as an object and is never followed.
+/// With content hashing enabled, the fork comparison mode applies to common
+/// regular files. Rename inference uses fork fingerprints on unmatched paths.
+/// Both operations consume the same payload budget as the other scopes.
+/// Hashes may be reused for effective hard-link storage within each admitted
+/// view. The caller validates source identities as with [`compare`].
 ///
 /// # Errors
 /// Stops on the same failures as [`compare`] and on unsupported, unreadable or
@@ -246,6 +265,8 @@ where
 	let right_catalog = collect(right, limits, &mut cancelled).map_err(Error::RightCatalog)?;
 	let topology = Topology::compare(&left_catalog, &right_catalog, &mut cancelled)?;
 	let mut payloads = Payloads::new(limits.max_bytes, cancelled);
+	#[cfg(feature = "content-hash")]
+	payloads.set_contents(options.contents);
 	let mut xattrs = policy.xattrs.map(|_| Xattrs::default());
 	let mut changes = Vec::new();
 
@@ -304,6 +325,16 @@ where
 		}
 	}
 	changes.sort_unstable_by(|left, right| left.path.cmp(&right.path));
+	#[cfg(feature = "content-hash")]
+	let rename_candidates = if options.infer_renames {
+		renames::infer(
+			(left, &left_catalog),
+			(right, &right_catalog),
+			&mut payloads,
+		)?
+	} else {
+		Vec::new()
+	};
 	payloads.poll()?;
 
 	Ok(Report {
@@ -319,6 +350,8 @@ where
 		right_entries: right_catalog.len(),
 		compared_bytes: payloads.compared_bytes(),
 		changes,
+		#[cfg(feature = "content-hash")]
+		rename_candidates,
 	})
 }
 
@@ -355,6 +388,8 @@ fn compare_entry<L: VolumeBackend, R: VolumeBackend>(
 	}
 	match (l.kind, r.kind) {
 		(NodeKind::RegularFile, NodeKind::RegularFile) => {
+			#[cfg(feature = "content-hash")]
+			let storage_groups = (shared_storage(l), shared_storage(r));
 			let compare_data = true;
 			#[cfg(feature = "finder-layout")]
 			let compare_data = if finder_layout
@@ -379,6 +414,8 @@ fn compare_entry<L: VolumeBackend, R: VolumeBackend>(
 					(right_view, &right.node),
 					ForkKind::Data,
 					path,
+					#[cfg(feature = "content-hash")]
+					storage_groups,
 				)? {
 				changes.fields.push(Field::DataFork);
 			}
@@ -387,6 +424,8 @@ fn compare_entry<L: VolumeBackend, R: VolumeBackend>(
 				(right_view, &right.node),
 				ForkKind::Resource,
 				path,
+				#[cfg(feature = "content-hash")]
+				storage_groups,
 			)? {
 				changes.fields.push(Field::ResourceFork);
 			}
@@ -399,6 +438,15 @@ fn compare_entry<L: VolumeBackend, R: VolumeBackend>(
 		_ => {}
 	}
 	Ok(changes)
+}
+
+#[cfg(feature = "content-hash")]
+fn shared_storage(metadata: &Metadata<StorageId>) -> Option<&StorageId> {
+	metadata
+		.hard_link
+		.as_ref()
+		.filter(|link| link.count > NonZeroU32::MIN)
+		.map(|link| &link.storage)
 }
 
 fn require_kind<L: StdError + 'static, R: StdError + 'static>(

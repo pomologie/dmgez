@@ -9,8 +9,10 @@ repository.workspace = true
 
 [features]
 finder-layout = ["dep:dmgez-finder"]
+content-hash = ["dep:blake3"]
 
 [dependencies]
+blake3 = { workspace = true, optional = true }
 dmgez-finder = { workspace = true, optional = true }
 dmgez-vfs.workspace = true
 serde.workspace = true

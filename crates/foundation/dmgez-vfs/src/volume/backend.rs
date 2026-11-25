@@ -55,6 +55,7 @@ pub trait VolumeBackend {
 	) -> Result<Option<DirectoryEntry<Self::Id>>, Self::Error>;
 
 	/// Gets effective metadata. Hard-link storage keys are local to this view.
+	/// Handles sharing a key have the same effective fork presence and bytes.
 	fn stat(&mut self, node: Self::Id) -> Result<Option<Metadata<u64>>, Self::Error>;
 
 	/// Reads effective FinderInfo from bounded metadata without opening data forks.

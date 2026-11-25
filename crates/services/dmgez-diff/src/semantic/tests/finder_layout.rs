@@ -69,6 +69,7 @@ fn independently_composes_both_finder_scopes_and_stored_attributes() {
 				xattrs,
 				finder_layout: true,
 				finder_info: true,
+				..Options::default()
 			},
 			|| false,
 		)

@@ -1,10 +1,22 @@
 use std::error::Error as StdError;
 
+#[cfg(feature = "content-hash")]
+use dmgez_vfs::volume::StorageId;
 use dmgez_vfs::volume::{Fork, ForkKind, NodeHandle, VolumeBackend, VolumeView};
 
 use crate::Side;
 
 use super::Error;
+
+#[cfg(feature = "content-hash")]
+use super::Contents;
+#[cfg(feature = "content-hash")]
+pub(super) use digests::ForkDigest;
+#[cfg(feature = "content-hash")]
+use digests::{DigestCache, FingerprintBytes};
+
+#[cfg(feature = "content-hash")]
+mod digests;
 
 const CHUNK_BYTES: usize = 64 * 1024;
 
@@ -14,6 +26,12 @@ pub(super) struct Payloads<F> {
 	cancelled: F,
 	left_scratch: Vec<u8>,
 	right_scratch: Vec<u8>,
+	#[cfg(feature = "content-hash")]
+	contents: Contents,
+	#[cfg(feature = "content-hash")]
+	digests: DigestCache,
+	#[cfg(feature = "content-hash")]
+	fingerprint_bytes: FingerprintBytes,
 }
 
 impl<F: FnMut() -> bool> Payloads<F> {
@@ -25,6 +43,12 @@ impl<F: FnMut() -> bool> Payloads<F> {
 			cancelled,
 			left_scratch: vec![0; scratch_bytes],
 			right_scratch: vec![0; scratch_bytes],
+			#[cfg(feature = "content-hash")]
+			contents: Contents::Exact,
+			#[cfg(feature = "content-hash")]
+			digests: DigestCache::default(),
+			#[cfg(feature = "content-hash")]
+			fingerprint_bytes: FingerprintBytes::default(),
 		}
 	}
 
@@ -58,6 +82,7 @@ impl<F: FnMut() -> bool> Payloads<F> {
 		right: (&mut VolumeView<R>, &NodeHandle<R::Id>),
 		kind: ForkKind,
 		path: &[String],
+		#[cfg(feature = "content-hash")] storage_groups: (Option<&StorageId>, Option<&StorageId>),
 	) -> Result<bool, Error<L::Error, R::Error>> {
 		self.poll()?;
 		let (left, left_node) = left;
@@ -65,6 +90,16 @@ impl<F: FnMut() -> bool> Payloads<F> {
 		let left_result = left
 			.with_fork(left_node, kind, |left_fork| {
 				right.with_fork(right_node, kind, |right_fork| {
+					#[cfg(feature = "content-hash")]
+					if self.contents != Contents::Exact {
+						return self.compare_digests(
+							left_fork,
+							right_fork,
+							kind,
+							path,
+							storage_groups,
+						);
+					}
 					self.compare_forks(left_fork, right_fork, path)
 				})
 			})

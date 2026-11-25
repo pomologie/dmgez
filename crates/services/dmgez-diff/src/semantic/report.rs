@@ -19,7 +19,7 @@ pub struct Limits {
 	pub max_depth: usize,
 	/// Maximum aggregate stored absolute-path bytes in each catalog.
 	pub max_path_bytes: usize,
-	/// Maximum logical comparison payload bytes per side.
+	/// Maximum logical payload bytes read per side, including confirmation passes.
 	#[serde(serialize_with = "decimal")]
 	pub max_bytes: u64,
 }
@@ -62,7 +62,7 @@ pub enum PathMatching {
 	ExactStoredText,
 }
 
-/// How comparable logical payloads are compared.
+/// How logical regular-file forks are compared.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[non_exhaustive]
 #[serde(rename_all = "snake_case")]
@@ -71,6 +71,18 @@ pub enum ContentComparison {
 	/// Exact byte comparison with decoded records for matched regular Finder stores.
 	#[cfg(feature = "finder-layout")]
 	ExactBytesWithFinderLayout,
+	/// Compare the lengths and BLAKE3 digests of matched forks.
+	#[cfg(feature = "content-hash")]
+	Blake3,
+	/// Confirm matching fork digests by exact comparison.
+	#[cfg(feature = "content-hash")]
+	Blake3Exact,
+	/// Compare fork digests with decoded records for matched regular Finder stores.
+	#[cfg(all(feature = "finder-layout", feature = "content-hash"))]
+	Blake3WithFinderLayout,
+	/// Confirm matching fork digests and decode matched regular Finder stores.
+	#[cfg(all(feature = "finder-layout", feature = "content-hash"))]
+	Blake3ExactWithFinderLayout,
 }
 
 /// A supported field that changed within one common path.
@@ -148,6 +160,8 @@ const COMPARED_FIELDS: [Field; 8] = [
 const COMPARED_FIELDS_WITH_XATTRS: [Field; COMPARED_FIELDS.len() + 1] =
 	with_field(&COMPARED_FIELDS, Field::ExtendedAttributes);
 
+// Keep the rename exclusion last in both base lists so enabled inference can
+// reuse the preceding fields, including after other policy transformations.
 const UNCOMPARED_FIELDS: [Uncompared; 11] = [
 	Uncompared::Timestamps,
 	Uncompared::ExtendedAttributesExceptResourceFork,
@@ -220,6 +234,10 @@ pub struct Policy {
 	#[cfg(feature = "finder-layout")]
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub finder_layout: Option<FinderLayoutPolicy>,
+	/// Selected rename inference method, if enabled.
+	#[cfg(feature = "content-hash")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub rename_inference: Option<RenameInference>,
 }
 
 impl Policy {
@@ -235,11 +253,14 @@ impl Policy {
 		} else {
 			policy
 		};
-		if options.finder_info {
+		let policy = if options.finder_info {
 			policy.with_finder_info()
 		} else {
 			policy
-		}
+		};
+		#[cfg(feature = "content-hash")]
+		let policy = policy.with_content_options(options.contents, options.infer_renames);
+		policy
 	}
 
 	fn with_xattrs() -> Self {
@@ -263,9 +284,16 @@ impl Default for Policy {
 			finder_info: None,
 			#[cfg(feature = "finder-layout")]
 			finder_layout: None,
+			#[cfg(feature = "content-hash")]
+			rename_inference: None,
 		}
 	}
 }
+
+#[cfg(feature = "content-hash")]
+pub use content::{Contents, RenameCandidate, RenameInference};
+#[cfg(feature = "content-hash")]
+mod content;
 
 pub use finder_info::{FinderInfoComparison, FinderInfoPolicy};
 mod finder_info;
@@ -347,10 +375,17 @@ pub struct Report {
 	pub left_entries: usize,
 	/// Number of paths scanned, including the root.
 	pub right_entries: usize,
-	/// Paired fork and attribute chunks counted once. Whole link targets,
-	/// Finder stores, and FinderInfo are charged the larger of the two input lengths.
+	/// Paired reads count once per pass. A cached digest avoids that side's
+	/// hash read. Exact confirmation always reads both forks. Whole link
+	/// targets, Finder stores, and FinderInfo charge the larger of the two
+	/// lengths. Rename fingerprints charge the larger of the two sides'
+	/// total fingerprinted fork bytes.
 	#[serde(serialize_with = "decimal")]
 	pub compared_bytes: u64,
 	/// Differences in lexicographic component order.
 	pub changes: Vec<Change>,
+	/// Inferred pairs in lexicographic order of their former path.
+	#[cfg(feature = "content-hash")]
+	#[serde(skip_serializing_if = "Vec::is_empty")]
+	pub rename_candidates: Vec<RenameCandidate>,
 }

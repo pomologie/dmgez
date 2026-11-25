@@ -10,12 +10,12 @@ const EMPTY_RECORD: FinderInfo = FinderInfo::Present([0; FINDER_INFO_BYTES]);
 const MARKED_RECORD: FinderInfo = FinderInfo::Present([0x5a; FINDER_INFO_BYTES]);
 const TARGET: &[u8] = b"elsewhere";
 
-const FINDER_INFO: Options = Options {
-	xattrs: false,
-	finder_info: true,
-	#[cfg(feature = "finder-layout")]
-	finder_layout: false,
-};
+fn finder_info_options() -> Options {
+	Options {
+		finder_info: true,
+		..Options::default()
+	}
+}
 
 #[test]
 fn reports_root_and_link_finder_info_without_returning_record_bytes() {
@@ -39,7 +39,7 @@ fn reports_root_and_link_finder_info_without_returning_record_bytes() {
 		&mut left,
 		&mut right,
 		Limits::default(),
-		FINDER_INFO,
+		finder_info_options(),
 		|| false,
 	)
 	.unwrap();
@@ -73,11 +73,12 @@ fn reports_root_and_link_finder_info_without_returning_record_bytes() {
 fn charges_equal_present_pairs_once_and_absent_pairs_zero_bytes() {
 	let mut left = view_with_metadata([], true, MARKED_RECORD);
 	let mut right = view_with_metadata([], true, MARKED_RECORD);
+	let options = finder_info_options();
 	let exact = Limits {
 		max_bytes: FINDER_INFO_BYTES as u64,
 		..Limits::default()
 	};
-	let report = compare_with_options(&mut left, &mut right, exact, FINDER_INFO, || false).unwrap();
+	let report = compare_with_options(&mut left, &mut right, exact, options, || false).unwrap();
 	assert_eq!(report.outcome, Outcome::Equal);
 	assert_eq!(report.compared_bytes, exact.max_bytes);
 	let short = Limits {
@@ -85,7 +86,7 @@ fn charges_equal_present_pairs_once_and_absent_pairs_zero_bytes() {
 		..exact
 	};
 	assert!(matches!(
-		compare_with_options(&mut left, &mut right, short, FINDER_INFO, || false),
+		compare_with_options(&mut left, &mut right, short, options, || false),
 		Err(Error::ByteLimit { limit }) if limit == short.max_bytes
 	));
 	let zero = Limits {
@@ -93,7 +94,7 @@ fn charges_equal_present_pairs_once_and_absent_pairs_zero_bytes() {
 		..exact
 	};
 	let absent =
-		compare_with_options(&mut view([]), &mut view([]), zero, FINDER_INFO, || false).unwrap();
+		compare_with_options(&mut view([]), &mut view([]), zero, options, || false).unwrap();
 	assert_eq!(absent.compared_bytes, 0);
 }
 
@@ -104,7 +105,7 @@ fn refuses_unavailable_records_but_does_not_query_differing_kinds() {
 	let mut right = view([(ITEM, unsupported)]);
 	assert!(matches!(
 		compare_with_options(
-			&mut view([(ITEM, TestNode::file(ITEM_ID))]), &mut right, Limits::default(), FINDER_INFO, || false,
+			&mut view([(ITEM, TestNode::file(ITEM_ID))]), &mut right, Limits::default(), finder_info_options(), || false,
 		),
 		Err(Error::RightFinderInfo { path, source: FinderInfoError::Unavailable }) if path == [ITEM],
 	));
@@ -112,7 +113,7 @@ fn refuses_unavailable_records_but_does_not_query_differing_kinds() {
 		&mut view([(ITEM, TestNode::link(ITEM_ID, TARGET))]),
 		&mut right,
 		Limits::default(),
-		FINDER_INFO,
+		finder_info_options(),
 		|| false,
 	)
 	.unwrap();
