@@ -1,17 +1,23 @@
 [workspace]
 resolver = "3"
 members = [
+	# Applications
 	"apps/dmgez",
 	"apps/dmgez-cli",
 	"apps/dmgez-mcp",
+	# Formats
 	"crates/formats/dmgez-macho",
 	"crates/formats/dmgez-udif",
+	# Foundation
 	"crates/foundation/dmgez-config",
 	"crates/foundation/dmgez-core",
 	"crates/foundation/dmgez-vfs",
+	# Presentation
 	"crates/presentation/dmgez-finder",
 	"crates/presentation/dmgez-preview",
+	# Security
 	"crates/security/dmgez-signing",
+	# Services
 	"crates/services/dmgez-builder",
 	"crates/services/dmgez-diff",
 	"crates/services/dmgez-inspector",
@@ -33,45 +39,72 @@ license = "Apache-2.0"
 repository = "https://github.com/pomologie/dmgez"
 
 [workspace.dependencies]
-blake3 = { version = "=1.8.7", default-features = false, features = ["pure"] }
-clap = { version = "4.6.8", features = ["derive"] }
-crc32fast = "1.5.5"
-dmgez-builder = { path = "crates/services/dmgez-builder", default-features = false }
+# Workspace formats
+dmgez-macho = { path = "crates/formats/dmgez-macho" }
+dmgez-udif = { path = "crates/formats/dmgez-udif", default-features = false }
+
+# Workspace foundation
 dmgez-config = { path = "crates/foundation/dmgez-config" }
 dmgez-core = { path = "crates/foundation/dmgez-core", default-features = false }
-dmgez-diff = { path = "crates/services/dmgez-diff" }
+dmgez-vfs = { path = "crates/foundation/dmgez-vfs", default-features = false }
+
+# Workspace presentation
 dmgez-finder = { path = "crates/presentation/dmgez-finder" }
+dmgez-preview = { path = "crates/presentation/dmgez-preview" }
+
+# Workspace security
+dmgez-signing = { path = "crates/security/dmgez-signing", default-features = false }
+
+# Workspace services
+dmgez-builder = { path = "crates/services/dmgez-builder", default-features = false }
+dmgez-diff = { path = "crates/services/dmgez-diff" }
 dmgez-inspector = { path = "crates/services/dmgez-inspector", default-features = false }
 dmgez-lint = { path = "crates/services/dmgez-lint" }
-dmgez-macho = { path = "crates/formats/dmgez-macho" }
 dmgez-operations = { path = "crates/services/dmgez-operations", default-features = false }
-dmgez-preview = { path = "crates/presentation/dmgez-preview" }
-dmgez-signing = { path = "crates/security/dmgez-signing", default-features = false }
-dmgez-udif = { path = "crates/formats/dmgez-udif", default-features = false }
-dmgez-vfs = { path = "crates/foundation/dmgez-vfs", default-features = false }
-ds_parser = "=0.4.0"
-eframe = { version = "=0.37.0", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
+
+# Compression
 flate2 = { version = "1.1.11", default-features = false, features = ["zlib-rs"] }
-globset = { version = "0.4.21", default-features = false }
-gpt = { version = "=4.1.0", default-features = false }
-icns = { version = "=0.5.0", default-features = false, features = ["pngio"] }
 lzfse_rust = { version = "=0.2.1", default-features = false }
 lzma-rust2 = { version = "=0.25.0", default-features = false, features = ["std", "xz", "encoder"] }
+
+# Hashes and checksums
+blake3 = { version = "=1.8.7", default-features = false, features = ["pure"] }
+crc32fast = "1.5.5"
+sha2 = { version = "0.11.1", default-features = false }
+
+# Partition tables
+gpt = { version = "=4.1.0", default-features = false }
 part-tables = { version = "=0.1.0", default-features = false, features = ["apm", "mbr"] }
+
+# Finder metadata and images
+ds_parser = "=0.4.0"
+icns = { version = "=0.5.0", default-features = false, features = ["pngio"] }
+tiff = { version = "=0.11.3", default-features = false, features = ["deflate", "lzw"] }
+
+# Serialization and configuration
 plist = { version = "=1.10.4", default-features = false }
-proptest = { version = "1.12.0", default-features = false, features = ["std"] }
 quick-xml = { version = "0.42.0", default-features = false }
-rayon = "1.12.0"
-rfd = { version = "=0.17.2", default-features = false, features = ["xdg-portal", "wayland"] }
-rustix = { version = "1.1.6", features = ["fs"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
-sha2 = { version = "0.11.1", default-features = false }
-tempfile = "3.27.0"
-thiserror = "2.0.21"
-tiff = { version = "=0.11.3", default-features = false, features = ["deflate", "lzw"] }
 toml = { version = "1.2.1", default-features = false, features = ["parse", "serde", "std"] }
 toml_edit = { version = "0.25.19", default-features = false, features = ["display", "parse"] }
+
+# Filesystem access and staging
+globset = { version = "0.4.21", default-features = false }
+rustix = { version = "1.1.6", features = ["fs"] }
+tempfile = "3.27.0"
+
+# Parallel execution
+rayon = "1.12.0"
+
+# Application interfaces
+clap = { version = "4.6.8", features = ["derive"] }
+eframe = { version = "=0.37.0", default-features = false, features = ["accesskit", "default_fonts", "glow", "wayland", "x11"] }
+rfd = { version = "=0.17.2", default-features = false, features = ["xdg-portal", "wayland"] }
+
+# Diagnostics and testing
+proptest = { version = "1.12.0", default-features = false, features = ["std"] }
+thiserror = "2.0.21"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
