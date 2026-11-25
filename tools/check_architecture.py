@@ -18,7 +18,8 @@ PROFILES = {
     "appdmg_import": (["--no-default-features", "--features", "appdmg-import"], {"dmgez-config", "dmgez-core", "serde_json"}),
 }
 OUTSIDE_DEFAULT = {
-    "apple-dmg", "apfs", "bzip2", "eframe", "egui", "fstool", "fuser", "lzfse_rust", "lzma-rust2", "notify",
+    "apple-dmg", "apfs", "bzip2", "dmgez-hfsplus-verify", "eframe", "egui", "fstool", "fuser",
+    "hfsplus-reader", "lzfse_rust", "lzma-rust2", "notify",
     "reqwest", "rmcp", "tokio", "udif", "winfsp",
 }
 PROFILE_DEPS = {"dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-inspector", "dmgez-lint", "dmgez-operations", "dmgez-preview", "dmgez-udif", "dmgez-vfs", "flate2", "rayon", "serde_json"}

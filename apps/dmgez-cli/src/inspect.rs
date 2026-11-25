@@ -18,6 +18,9 @@ use serde::Serialize;
 
 use crate::{CliResult, VerificationFlags, report_field};
 
+#[cfg(feature = "hfsplus-verify")]
+mod hfsplus;
+
 const FORMAT_KEY: &str = "format";
 const PHYSICAL_BYTES_KEY: &str = "physical_bytes";
 const LOGICAL_BYTES_KEY: &str = "logical_bytes";
@@ -218,7 +221,8 @@ pub(crate) fn verify(path: &Path, json: bool, scope: VerificationFlags) -> CliRe
 		VerificationFlags { full: true, .. } => VerificationMode::Full,
 		_ => VerificationMode::Container,
 	};
-	let report = dmgez_inspector::verify(open_source(path)?, Limits::default(), mode);
+	let source = open_source(path)?;
+	let report = verification_report(source, mode);
 	if json {
 		print_json(&report)?;
 	} else {
@@ -235,12 +239,22 @@ pub(crate) fn verify(path: &Path, json: bool, scope: VerificationFlags) -> CliRe
 		report_field(STRUCTURE_STATUS_KEY, report.coverage.structure.as_str());
 		report_field(PAYLOAD_STATUS_KEY, report.coverage.payload.as_str());
 		report_field(FILESYSTEM_STATUS_KEY, report.coverage.filesystem.as_str());
+		#[cfg(feature = "hfsplus-verify")]
+		hfsplus::show_coverage(&report);
 		report_field(VERIFICATION_KEY, outcome(report.outcome));
 	}
 	if report.passed() {
 		return Ok(());
 	}
 	Err(Box::new(VerificationFailure(report)))
+}
+
+fn verification_report(source: FileSource, mode: VerificationMode) -> VerificationReport {
+	#[cfg(feature = "hfsplus-verify")]
+	if mode == VerificationMode::Full {
+		return hfsplus::verify(source);
+	}
+	dmgez_inspector::verify(source, Limits::default(), mode)
 }
 
 pub(crate) fn unwrap(path: &Path, destination: &Path, partition: Option<NonZeroU32>) -> CliResult {

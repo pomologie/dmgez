@@ -41,6 +41,7 @@ const PARALLEL_FEATURE: &str = "parallel";
 const LZFSE_FEATURE: &str = "lzfse";
 const LZMA_FEATURE: &str = "lzma";
 const VERIFY_CONTAINER_CAPABILITY: &str = "verify-container";
+const VERIFY_HFSPLUS_CAPABILITY: &str = "verify-hfsplus";
 const RUN_LIMIT_ARG: &str = "run_limit";
 const PARTITION_SLOT_VALUE: &str = "SLOT";
 const COMPILED: &str = "compiled";
@@ -155,7 +156,7 @@ enum Command {
 		#[arg(long)]
 		json: bool,
 	},
-	/// Check UDIF integrity at the requested scope.
+	/// Check container integrity and, when requested, filesystem integrity.
 	Verify {
 		image: PathBuf,
 		#[arg(long)]
@@ -307,6 +308,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 					)),
 				),
 				(INSPECT_COMMAND, cfg!(feature = "inspect")),
+				(VERIFY_HFSPLUS_CAPABILITY, cfg!(feature = "hfsplus-verify")),
 				(ANALYZE_COMMAND, cfg!(feature = "inspect")),
 				(CONVERT_COMMAND, cfg!(feature = "convert")),
 				(OPTIMIZE_COMMAND, cfg!(feature = "convert")),
