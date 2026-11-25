@@ -24,8 +24,11 @@ const CONTENTS: &[u8] = b"literal input payload";
 const PREVIOUS: &[u8] = b"preexisting output";
 const LIST_CONFIG: &str = "finder-list.toml";
 const LIST_OUTPUT: &str = "list-layout.dmg";
-const LIST_LOGICAL_BYTES: u64 = 1 << 20;
 const LIST_MANIFEST: &str = include_str!("fixtures/finder-list.toml");
+const COLUMN_CONFIG: &str = "finder-column.toml";
+const COLUMN_OUTPUT: &str = "column-layout.dmg";
+const COLUMN_MANIFEST: &str = include_str!("fixtures/finder-column.toml");
+const FINDER_FIXTURE_LOGICAL_BYTES: u64 = 1 << 20;
 const MANIFEST: &str = r#"
 schema_version = 1
 
@@ -124,22 +127,37 @@ fn dry_run_reports_exact_capacity_and_resolves_each_path_from_its_origin() {
 
 #[test]
 fn reports_list_view_and_builds_the_root_and_nested_finder_assets() {
+	check_default_view(LIST_CONFIG, LIST_OUTPUT, LIST_MANIFEST, "ListView", 2);
+}
+
+#[test]
+fn reports_column_view_and_builds_the_root_and_nested_finder_assets() {
+	check_default_view(
+		COLUMN_CONFIG,
+		COLUMN_OUTPUT,
+		COLUMN_MANIFEST,
+		"ColumnView",
+		3,
+	);
+}
+
+fn check_default_view(config: &str, image: &str, manifest: &str, view: &str, assets: usize) {
 	let caller = tempfile::tempdir().unwrap();
 	let root = caller.path().canonicalize().unwrap();
 	let isolated = tempfile::tempdir().unwrap();
-	fs::write(root.join(LIST_CONFIG), LIST_MANIFEST).unwrap();
+	fs::write(root.join(config), manifest).unwrap();
 	let command = |extra: &[&str]| {
 		Command::new(BINARY)
 			.current_dir(isolated.path())
 			.arg("--working-directory")
 			.arg(&root)
-			.arg(LIST_CONFIG)
+			.arg(config)
 			.args(extra)
 			.output()
 			.unwrap()
 	};
 	let preview = command(&["--dry-run"]);
-	let destination = root.join(LIST_OUTPUT);
+	let destination = root.join(image);
 	assert!(!destination.exists());
 	assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
 
@@ -158,13 +176,16 @@ fn reports_list_view_and_builds_the_root_and_nested_finder_assets() {
 	}
 
 	let (summary, _) = successful(preview);
-	assert!(summary.contains("finder=ListView\n"));
-	assert!(summary.contains("finder_assets=2\n"));
-	assert!(summary.contains(&format!("logical_bytes={LIST_LOGICAL_BYTES}\n")));
+	assert!(summary.contains(&format!("finder={view}\n")));
+	assert!(summary.contains(&format!("finder_assets={assets}\n")));
+	assert!(summary.contains(&format!("logical_bytes={FINDER_FIXTURE_LOGICAL_BYTES}\n")));
 	successful(command(&[]));
 	let source = FileSource::new(fs::File::open(destination).unwrap()).unwrap();
 	let mut image = Image::open(source, Limits::default()).unwrap();
-	assert_eq!(image.descriptor().logical_bytes, LIST_LOGICAL_BYTES);
+	assert_eq!(
+		image.descriptor().logical_bytes,
+		FINDER_FIXTURE_LOGICAL_BYTES
+	);
 	image.verify().unwrap();
 }
 

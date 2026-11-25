@@ -1,0 +1,45 @@
+schema_version = 1
+
+[image]
+name = "Finder Column Project"
+output = "column-layout.dmg"
+format = "udro"
+size = "1MiB"
+
+[build]
+reproducible = true
+source_date_epoch = 946684800
+
+[[contents]]
+type = "directory"
+destination = "/Documentation"
+position = [55, 70]
+
+[[contents]]
+type = "directory"
+destination = "/Documentation/Reference"
+
+[[contents]]
+type = "directory"
+destination = "/Changelog"
+
+[finder]
+default_view = "column-view"
+include_icon_view_settings = "auto"
+include_list_view_settings = false
+
+[[finder.folders]]
+path = "/Documentation"
+include_icon_view_settings = true
+include_list_view_settings = true
+
+[finder.folders.icon_view]
+icon_size = 96
+
+[finder.folders.list_view]
+text_size = 14
+
+[[finder.folders]]
+path = "/Changelog"
+default_view = "list-view"
+include_list_view_settings = "auto"

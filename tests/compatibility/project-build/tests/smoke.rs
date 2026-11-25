@@ -23,6 +23,9 @@ use rustix::fs::{XattrFlags, fsetxattr};
 #[cfg(feature = "finder-write")]
 #[path = "smoke/background.rs"]
 mod background;
+#[cfg(feature = "finder-write")]
+#[path = "smoke/column_view.rs"]
+mod column_view;
 #[cfg(feature = "volume-icon")]
 #[path = "smoke/volume_icon.rs"]
 mod volume_icon;

@@ -47,7 +47,7 @@ fn publish_fixture(root: &Path) -> (Image<FileSource>, Header) {
 	open_output(&root.join(IMAGE))
 }
 
-fn publish_project(root: &Path, project: &Project) {
+pub(super) fn publish_project(root: &Path, project: &Project) {
 	hfsplus::prepare(
 		project,
 		root,
@@ -61,7 +61,7 @@ fn publish_project(root: &Path, project: &Project) {
 	.unwrap();
 }
 
-fn read_fork(image: &mut Image<FileSource>, header: &Header, fork: &Fork) -> Vec<u8> {
+pub(super) fn read_fork(image: &mut Image<FileSource>, header: &Header, fork: &Fork) -> Vec<u8> {
 	let mut bytes = vec![0; usize::try_from(fork.logical_bytes).unwrap()];
 	image
 		.read_exact_at(fork_start(fork, header.geometry), &mut bytes)
@@ -75,7 +75,7 @@ fn catalog_records<'a>(node: &'a Node<'a>, header: &Header) -> impl Iterator<Ite
 		.map(move |bytes| Record::decode(bytes, geometry).unwrap())
 }
 
-fn folder(node: &Node<'_>, header: &Header, parent: CatalogId, name: &str) -> Metadata {
+pub(super) fn folder(node: &Node<'_>, header: &Header, parent: CatalogId, name: &str) -> Metadata {
 	catalog_records(node, header)
 		.find_map(|record| match record.value {
 			Value::Folder { metadata, .. }
@@ -135,7 +135,7 @@ fn assert_assets(image: &mut Image<FileSource>, node: &Node<'_>, header: &Header
 	assets
 }
 
-fn store_fork(node: &Node<'_>, header: &Header, parent: CatalogId) -> Fork {
+pub(super) fn store_fork(node: &Node<'_>, header: &Header, parent: CatalogId) -> Fork {
 	catalog_records(node, header)
 		.find_map(|record| match record.value {
 			Value::File { data, .. }

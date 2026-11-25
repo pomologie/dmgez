@@ -16,6 +16,10 @@ Root `.DS_Store` and optional folder stores built directly. Typical layout uses 
 
 ## Tests and support
 
+Root and nested Finder layouts accept `default_view = "column-view"`. The generated `.DS_Store` selects column view with the `icvl/type/clmv` record. A nested folder inherits the selected view and can override it. Icon positions remain available when switching views, and explicit `include_icon_view_settings` and `include_list_view_settings` still control their secondary settings.
+
+The D-FINDER-02 compatibility check verified and mounted an HFS+ image read-only on macOS 14.7.2. The independent `ds_store` reader matched the selected view, nested override, icon position, and secondary records. Actual Finder window selection remains unverified because macOS denied this runner's Apple Event request. The desktop preview still requires icon view. [Mounted column view check](../../tests/compatibility/project-build/check_finder_column.py) [dmgbuild column view mapping](https://github.com/dmgbuild/dmgbuild/blob/v2.0.0/src/dmgbuild/core.py#L450-L464)
+
 HFS+ project builds support static PNG backgrounds, paired Retina PNGs, and a prebuilt two-representation TIFF in the root and configured folders. The builder captures and revalidates every input file, reserves a hidden `/.background` directory and its files, and reuses the same asset for inherited settings. A local folder may select another source or pair or override the inherited background with a solid color. After the HFS+ draft assigns catalog IDs, the builder writes the aliases from the stored Unicode volume label, creation timestamps, and file and parent IDs. Each alias contains the standard `/Volumes/<volume name>` mount hint.
 
 ```toml

@@ -20,7 +20,7 @@ window,show_toolbar,finder.show_toolbar,0.3.0,planned,D-FINDER-02,Actual support
 window,show_pathbar,finder.show_pathbar,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
 window,show_sidebar,finder.show_sidebar,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
 window,sidebar_width,finder.sidebar_width,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
-window,default_view,finder.default_view,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
+window,default_view,finder.default_view,0.3.0,partial,D-FINDER-02,Icon/list/column view records with nested defaults and overrides; native column window behavior and legacy coverflow remain unqualified.
 window,show_icon_preview,finder.show_icon_preview,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
 window,include_icon_view_settings,finder.include_icon_view_settings,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
 window,include_list_view_settings,finder.include_list_view_settings,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
