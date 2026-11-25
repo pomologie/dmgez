@@ -103,7 +103,43 @@ def check_cli(cli, image, native, *input_options):
     return report
 
 
-def qualify(cli, scratch):
+def check_verification(cli, image, discovery, *input_options):
+    arguments = (cli, "verify", image, "--full", "--filesystem", "apfs", "--json", *input_options)
+    xid = discovery["checkpoint_xid"]
+    raw = "--raw" in input_options
+    payload = "not_present" if raw else "passed"
+    ambiguous = run(*arguments, check=False)
+    rejection = json.loads(ambiguous.stdout)
+    assert ambiguous.returncode == 1 and rejection["outcome"] == "failed", rejection
+    assert rejection["coverage"]["payload"] == payload, rejection
+    assert rejection["diagnostic"]["detail"] == {
+        "kind": "filesystem_volume_selection",
+        "candidates": len(discovery["volumes"]),
+    }, rejection
+    checked = []
+    for volume, key in zip(discovery["volumes"], ("uuid", "object_id"), strict=True):
+        result = run(*arguments, "--volume", volume[key], "--xid", xid, check=False)
+        report = json.loads(result.stdout)
+        assert result.returncode == 1 and report["outcome"] == "partial", report
+        assert report["coverage"]["structure"] == "passed", report
+        assert report["coverage"]["payload"] == payload, report
+        assert ("checksums" in report) != raw, report
+        assert report["coverage"]["filesystem"] == "partial", report
+        assert "diagnostic" not in report, report
+        check = report["filesystem_check"]
+        assert check["window"]["id"]["kind"] == "whole_disk", check
+        assert check["all_filesystems_checked"] is False, check
+        evidence = check["evidence"]
+        assert evidence["scope"] == "reachable_data", evidence
+        assert evidence["volume_object_id"] == volume["object_id"], evidence
+        assert evidence["volume_uuid"] == volume["uuid"], evidence
+        assert evidence["checkpoint_xid"] == xid, evidence
+        assert evidence["logical_payload_bytes_read"].isdigit(), evidence
+        checked.append(report)
+    return {"ambiguous": rejection, "selected": checked}
+
+
+def qualify(cli, scratch, verify):
     source = scratch / "source.dmg"
     run(
         HDIUTIL, "create", "-size", IMAGE_SIZE, "-type", "UDIF", "-fs", "APFS",
@@ -127,7 +163,7 @@ def qualify(cli, scratch):
 
     reports = (check_cli(cli, raw, native, "--raw"), check_cli(cli, image, native))
     assert reports[0] == reports[1], reports
-    return {
+    evidence = {
         "macos_version": run(SW_VERS, "-productVersion").stdout.decode().strip(),
         "macos_build": run(SW_VERS, "-buildVersion").stdout.decode().strip(),
         "architecture": run(UNAME, "-m").stdout.decode().strip(),
@@ -137,6 +173,17 @@ def qualify(cli, scratch):
         "native_check_stderr": native_result.stderr.decode().splitlines(),
         "volume_discovery": reports[0],
     }
+    if verify:
+        verify_udzo = run(HDIUTIL, "verify", image)
+        evidence["native_udzo_check"] = verify_udzo.stdout.decode().splitlines()
+        evidence["native_udzo_check_stderr"] = verify_udzo.stderr.decode().splitlines()
+        evidence["verification"] = {
+            "raw": check_verification(cli, raw, reports[0], "--raw"),
+            "udzo": check_verification(cli, image, reports[1]),
+        }
+        assert digest(raw) == evidence["raw_sha256"]
+        assert digest(image) == evidence["udzo_sha256"]
+    return evidence
 
 
 def digest(path):
@@ -147,13 +194,14 @@ def digest(path):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("cli", type=Path, help="path to the composed apfs-read dmgez binary")
+    parser.add_argument("--verify", action="store_true", help="also check selected-volume verification")
     args = parser.parse_args()
     if sys.platform != "darwin":
         parser.error("this native qualification requires macOS")
     cli = args.cli.resolve(strict=True)
     try:
         with TemporaryDirectory(prefix="dmgez-apfs-cli-") as root:
-            print(json.dumps(qualify(cli, Path(root).resolve()), indent=2))
+            print(json.dumps(qualify(cli, Path(root).resolve(), args.verify), indent=2))
     except subprocess.CalledProcessError as error:
         print(error.stdout.decode(errors="replace"), file=sys.stderr)
         print(error.stderr.decode(errors="replace"), file=sys.stderr)

@@ -1,0 +1,450 @@
+{
+  "dmgez_revision": "330fdcff9ae8fec451beacf47adacbccc6380e81",
+  "apfs_revision": "a8a0348cde041c875d20981c65a96a47fc38df78",
+  "macos_version": "14.7.2",
+  "macos_build": "23H311",
+  "architecture": "arm64",
+  "raw_sha256": "265702f41ee709d5f51a1aeb0f71b8855a5ebc139f0c9ce1528099c7e3c95188",
+  "udzo_sha256": "972e841bb1c24a8a684070c7dbcb3814f99187e04508d27db6b16c54edf6e855",
+  "native_check": [
+    "** Checking the container superblock.",
+    "   Checking the checkpoint with transaction ID 3.",
+    "** Checking the space manager.",
+    "** Checking the space manager free queue trees.",
+    "** Checking the object map.",
+    "** Checking volume <temporary directory>/source.raw.cdrs1.",
+    "** Checking the APFS volume superblock.",
+    "   The volume Pomologie APFS Primary was formatted by newfs_apfs (2236.141.1) and last modified by .",
+    "** Checking the object map.",
+    "** Checking the snapshot metadata tree.",
+    "** Checking the snapshot metadata.",
+    "** Checking the fsroot tree.",
+    "** Checking the extent ref tree.",
+    "** Verifying volume object map space.",
+    "** The volume <temporary directory>/source.raw.cdrs1 with UUID 20957A3F-2334-4104-ACDF-ACE8BBCF8708 appears to be OK.",
+    "** Checking volume <temporary directory>/source.raw.cdrs2.",
+    "** Checking the APFS volume superblock.",
+    "   The volume Pomologie APFS Secondary was formatted by storagekitd (2236.141.1) and last modified by .",
+    "** Checking the object map.",
+    "** Checking the snapshot metadata tree.",
+    "** Checking the snapshot metadata.",
+    "** Checking the fsroot tree.",
+    "** Checking the extent ref tree.",
+    "** Verifying volume object map space.",
+    "** The volume <temporary directory>/source.raw.cdrs2 with UUID C63A5DBE-7FD8-4D41-AA19-73E42334E665 appears to be OK.",
+    "** Verifying allocated space.",
+    "** The container <temporary directory>/source.raw.cdr appears to be OK."
+  ],
+  "native_check_stderr": [
+    "warning: <temporary directory>/source.raw.cdr: not a valid disk name/path"
+  ],
+  "volume_discovery": {
+    "schema_version": 1,
+    "operation": "volumes",
+    "volume": {
+      "kind": "whole_disk"
+    },
+    "checkpoint_xid": "3",
+    "volumes": [
+      {
+        "uuid": "20957a3f-2334-4104-acdf-ace8bbcf8708",
+        "object_id": "1026",
+        "name": "Pomologie APFS Primary",
+        "role": "unspecified"
+      },
+      {
+        "uuid": "c63a5dbe-7fd8-4d41-aa19-73e42334e665",
+        "object_id": "1030",
+        "name": "Pomologie APFS Secondary",
+        "role": "unspecified"
+      }
+    ],
+    "checkpoint_diagnostics": []
+  },
+  "native_udzo_check": [
+    "Checksumming whole disk (Apple_APFS : 0)…",
+    "         whole disk (Apple_APFS : 0): verified   CRC32 $31578CF5",
+    "verified   CRC32 $5AC1A939"
+  ],
+  "native_udzo_check_stderr": [
+    "hdiutil: verify: checksum of \"<temporary directory>/source-udzo.dmg\" is VALID"
+  ],
+  "verification": {
+    "raw": {
+      "ambiguous": {
+        "schema_version": 1,
+        "operation": "verify",
+        "mode": "full",
+        "outcome": "failed",
+        "capabilities": {
+          "structure": true,
+          "container_checksums": false,
+          "filesystem": true,
+          "security": false
+        },
+        "coverage": {
+          "structure": "passed",
+          "payload": "not_present",
+          "filesystem": "failed",
+          "security": "not_checked"
+        },
+        "filesystem_check": {
+          "window": {
+            "id": {
+              "kind": "whole_disk"
+            },
+            "logical": {
+              "offset_bytes": "0",
+              "length_bytes": "1073741824"
+            }
+          },
+          "all_filesystems_checked": false,
+          "charged_read_requests": "33",
+          "charged_read_bytes": "127056"
+        },
+        "diagnostic": {
+          "stage": "filesystem",
+          "category": "conflict",
+          "detail": {
+            "kind": "filesystem_volume_selection",
+            "candidates": 2
+          }
+        }
+      },
+      "selected": [
+        {
+          "schema_version": 1,
+          "operation": "verify",
+          "mode": "full",
+          "outcome": "partial",
+          "capabilities": {
+            "structure": true,
+            "container_checksums": false,
+            "filesystem": true,
+            "security": false
+          },
+          "coverage": {
+            "structure": "passed",
+            "payload": "not_present",
+            "filesystem": "partial",
+            "security": "not_checked"
+          },
+          "filesystem_check": {
+            "window": {
+              "id": {
+                "kind": "whole_disk"
+              },
+              "logical": {
+                "offset_bytes": "0",
+                "length_bytes": "1073741824"
+              }
+            },
+            "evidence": {
+              "scope": "reachable_data",
+              "volume_object_id": "1026",
+              "checkpoint_xid": "3",
+              "volume_uuid": "20957a3f-2334-4104-acdf-ace8bbcf8708",
+              "logical_payload_bytes_read": "0"
+            },
+            "all_filesystems_checked": false,
+            "charged_read_requests": "43",
+            "charged_read_bytes": "168016"
+          }
+        },
+        {
+          "schema_version": 1,
+          "operation": "verify",
+          "mode": "full",
+          "outcome": "partial",
+          "capabilities": {
+            "structure": true,
+            "container_checksums": false,
+            "filesystem": true,
+            "security": false
+          },
+          "coverage": {
+            "structure": "passed",
+            "payload": "not_present",
+            "filesystem": "partial",
+            "security": "not_checked"
+          },
+          "filesystem_check": {
+            "window": {
+              "id": {
+                "kind": "whole_disk"
+              },
+              "logical": {
+                "offset_bytes": "0",
+                "length_bytes": "1073741824"
+              }
+            },
+            "evidence": {
+              "scope": "reachable_data",
+              "volume_object_id": "1030",
+              "checkpoint_xid": "3",
+              "volume_uuid": "c63a5dbe-7fd8-4d41-aa19-73e42334e665",
+              "logical_payload_bytes_read": "0"
+            },
+            "all_filesystems_checked": false,
+            "charged_read_requests": "37",
+            "charged_read_bytes": "143440"
+          }
+        }
+      ]
+    },
+    "udzo": {
+      "ambiguous": {
+        "schema_version": 1,
+        "operation": "verify",
+        "mode": "full",
+        "outcome": "failed",
+        "capabilities": {
+          "structure": true,
+          "container_checksums": true,
+          "filesystem": true,
+          "security": false
+        },
+        "coverage": {
+          "structure": "passed",
+          "payload": "passed",
+          "filesystem": "failed",
+          "security": "not_checked"
+        },
+        "container": {
+          "format": "udif_v4",
+          "segment_count": 1,
+          "segment_id": "14085bbbdb264eef852d723978765713",
+          "variant": 2,
+          "sector_bytes": 512,
+          "physical_bytes": "25541",
+          "logical_bytes": "1073741824",
+          "data_fork": {
+            "offset_bytes": "0",
+            "length_bytes": "21961"
+          },
+          "resource_xml": {
+            "offset_bytes": "21961",
+            "length_bytes": "3068"
+          },
+          "data_fork_checksum": {
+            "algorithm": "crc32",
+            "value": 4160250009
+          },
+          "master_checksum": {
+            "algorithm": "crc32",
+            "value": 1522641209
+          },
+          "block_map_count": 1,
+          "runs": {
+            "total": 6,
+            "raw": 0,
+            "zero": 0,
+            "ignore": 1,
+            "zlib": 5,
+            "lzfse": 0,
+            "lzma2": 0,
+            "unsupported": 0,
+            "decode_unavailable": 0
+          }
+        },
+        "checksums": {
+          "data_fork": "passed",
+          "tables": [
+            "passed"
+          ],
+          "master": "passed"
+        },
+        "filesystem_check": {
+          "window": {
+            "id": {
+              "kind": "whole_disk"
+            },
+            "logical": {
+              "offset_bytes": "0",
+              "length_bytes": "1073741824"
+            }
+          },
+          "all_filesystems_checked": false,
+          "charged_read_requests": "33",
+          "charged_read_bytes": "127056"
+        },
+        "diagnostic": {
+          "stage": "filesystem",
+          "category": "conflict",
+          "detail": {
+            "kind": "filesystem_volume_selection",
+            "candidates": 2
+          }
+        }
+      },
+      "selected": [
+        {
+          "schema_version": 1,
+          "operation": "verify",
+          "mode": "full",
+          "outcome": "partial",
+          "capabilities": {
+            "structure": true,
+            "container_checksums": true,
+            "filesystem": true,
+            "security": false
+          },
+          "coverage": {
+            "structure": "passed",
+            "payload": "passed",
+            "filesystem": "partial",
+            "security": "not_checked"
+          },
+          "container": {
+            "format": "udif_v4",
+            "segment_count": 1,
+            "segment_id": "14085bbbdb264eef852d723978765713",
+            "variant": 2,
+            "sector_bytes": 512,
+            "physical_bytes": "25541",
+            "logical_bytes": "1073741824",
+            "data_fork": {
+              "offset_bytes": "0",
+              "length_bytes": "21961"
+            },
+            "resource_xml": {
+              "offset_bytes": "21961",
+              "length_bytes": "3068"
+            },
+            "data_fork_checksum": {
+              "algorithm": "crc32",
+              "value": 4160250009
+            },
+            "master_checksum": {
+              "algorithm": "crc32",
+              "value": 1522641209
+            },
+            "block_map_count": 1,
+            "runs": {
+              "total": 6,
+              "raw": 0,
+              "zero": 0,
+              "ignore": 1,
+              "zlib": 5,
+              "lzfse": 0,
+              "lzma2": 0,
+              "unsupported": 0,
+              "decode_unavailable": 0
+            }
+          },
+          "checksums": {
+            "data_fork": "passed",
+            "tables": [
+              "passed"
+            ],
+            "master": "passed"
+          },
+          "filesystem_check": {
+            "window": {
+              "id": {
+                "kind": "whole_disk"
+              },
+              "logical": {
+                "offset_bytes": "0",
+                "length_bytes": "1073741824"
+              }
+            },
+            "evidence": {
+              "scope": "reachable_data",
+              "volume_object_id": "1026",
+              "checkpoint_xid": "3",
+              "volume_uuid": "20957a3f-2334-4104-acdf-ace8bbcf8708",
+              "logical_payload_bytes_read": "0"
+            },
+            "all_filesystems_checked": false,
+            "charged_read_requests": "43",
+            "charged_read_bytes": "168016"
+          }
+        },
+        {
+          "schema_version": 1,
+          "operation": "verify",
+          "mode": "full",
+          "outcome": "partial",
+          "capabilities": {
+            "structure": true,
+            "container_checksums": true,
+            "filesystem": true,
+            "security": false
+          },
+          "coverage": {
+            "structure": "passed",
+            "payload": "passed",
+            "filesystem": "partial",
+            "security": "not_checked"
+          },
+          "container": {
+            "format": "udif_v4",
+            "segment_count": 1,
+            "segment_id": "14085bbbdb264eef852d723978765713",
+            "variant": 2,
+            "sector_bytes": 512,
+            "physical_bytes": "25541",
+            "logical_bytes": "1073741824",
+            "data_fork": {
+              "offset_bytes": "0",
+              "length_bytes": "21961"
+            },
+            "resource_xml": {
+              "offset_bytes": "21961",
+              "length_bytes": "3068"
+            },
+            "data_fork_checksum": {
+              "algorithm": "crc32",
+              "value": 4160250009
+            },
+            "master_checksum": {
+              "algorithm": "crc32",
+              "value": 1522641209
+            },
+            "block_map_count": 1,
+            "runs": {
+              "total": 6,
+              "raw": 0,
+              "zero": 0,
+              "ignore": 1,
+              "zlib": 5,
+              "lzfse": 0,
+              "lzma2": 0,
+              "unsupported": 0,
+              "decode_unavailable": 0
+            }
+          },
+          "checksums": {
+            "data_fork": "passed",
+            "tables": [
+              "passed"
+            ],
+            "master": "passed"
+          },
+          "filesystem_check": {
+            "window": {
+              "id": {
+                "kind": "whole_disk"
+              },
+              "logical": {
+                "offset_bytes": "0",
+                "length_bytes": "1073741824"
+              }
+            },
+            "evidence": {
+              "scope": "reachable_data",
+              "volume_object_id": "1030",
+              "checkpoint_xid": "3",
+              "volume_uuid": "c63a5dbe-7fd8-4d41-aa19-73e42334e665",
+              "logical_payload_bytes_read": "0"
+            },
+            "all_filesystems_checked": false,
+            "charged_read_requests": "37",
+            "charged_read_bytes": "143440"
+          }
+        }
+      ]
+    }
+  }
+}
