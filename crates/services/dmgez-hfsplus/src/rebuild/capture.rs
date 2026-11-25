@@ -25,7 +25,7 @@ use hfsplus_reader::{
 };
 use thiserror::Error;
 
-use super::{Attributes, File, Kind, LinkIdentity, Node, Payload, Snapshot};
+use super::{Attributes, CREATION_DATE, File, Kind, LinkIdentity, Node, Payload, Snapshot};
 
 mod attributes;
 mod finder;
@@ -83,6 +83,12 @@ pub enum CaptureError<E: Error + 'static> {
 	},
 	#[error("HFS+ entry {} contains a Finder alias or layout exceeding the store byte budget", .0.0)]
 	FinderStoreBudget(CatalogId),
+	#[error("Finder background alias in HFS+ entry {} does not match the source volume identity", .0.0)]
+	FinderBackgroundVolume(CatalogId),
+	#[error("Finder background alias in HFS+ entry {} does not name an exact ordinary file in the source catalog", .0.0)]
+	FinderBackgroundTarget(CatalogId),
+	#[error("Finder background alias in HFS+ entry {} does not match the target catalog IDs or creation date", .0.0)]
+	FinderBackgroundIdentity(CatalogId),
 	#[error("HFS+ catalog record {} has unsupported path syntax or spelling", .0.0)]
 	CatalogName(CatalogId),
 	#[error("an HFS+ name could not be normalized")]
@@ -149,18 +155,30 @@ where
 		entries: BTreeMap::new(),
 		linked: BTreeMap::new(),
 		visible_dirs: 0,
-		root_created: root_metadata.dates[0],
+		root_created: root_metadata.dates[CREATION_DATE],
 		finder_store_name: normalize(STORE_NAME)?,
 	};
 	capture.walk(root.metadata.id, "", 0)?;
 	capture.check_inventory(&report)?;
+	let backgrounds = finder::backgrounds(
+		&capture.entries,
+		&name,
+		header.dates[CREATION_DATE],
+		&mut capture.remaining,
+	)?;
+	let mut entries = BTreeMap::new();
+	// Transfer the budgeted records without cloning their paths or payloads.
+	while let Some((path, captured)) = capture.entries.pop_first() {
+		entries.insert(path, captured.node);
+	}
 	Ok(Snapshot {
 		name,
 		root: root_metadata,
 		dates: header.dates,
 		finder_info: header.finder_info,
 		block_size: header.geometry.block_size(),
-		entries: capture.entries,
+		entries,
+		backgrounds,
 		root_attributes,
 	})
 }
@@ -171,11 +189,18 @@ struct Capture<'catalog, 'volume, S> {
 	limits: CheckLimits,
 	remaining: usize,
 	attributes: AttributeInventory,
-	entries: BTreeMap<VirtualPath, Node<'volume, S>>,
+	entries: BTreeMap<VirtualPath, CapturedNode<'volume, S>>,
 	linked: BTreeMap<CatalogId, SharedFile<'volume, S>>,
 	visible_dirs: usize,
 	root_created: u32,
 	finder_store_name: NormalizedName,
+}
+
+struct CapturedNode<'volume, S> {
+	node: Node<'volume, S>,
+	// Source catalog IDs are only needed to qualify the captured aliases.
+	id: CatalogId,
+	parent_id: CatalogId,
 }
 
 struct SharedFile<'volume, S> {
@@ -209,7 +234,11 @@ where
 				}
 				match self.entries.entry(path) {
 					MapEntry::Vacant(slot) => {
-						slot.insert(node);
+						slot.insert(CapturedNode {
+							node,
+							id: entry.metadata.id,
+							parent_id: entry.parent,
+						});
 					}
 					MapEntry::Occupied(slot) => {
 						return Err(CaptureError::DuplicatePath(slot.key().clone()));
@@ -233,7 +262,7 @@ where
 		}
 		charge(
 			&mut self.remaining,
-			bytes + size_of::<Node<'volume, S>>() + size_of::<VirtualPath>(),
+			bytes + size_of::<CapturedNode<'volume, S>>() + size_of::<VirtualPath>(),
 		)?;
 		let mut path = String::new();
 		path.try_reserve_exact(bytes)?;

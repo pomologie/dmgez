@@ -23,6 +23,7 @@ use hfsplus_format::volume::CatalogId;
 use hfsplus_reader::{Volume, catalog::Catalog, overflow::ResolvedFork};
 use thiserror::Error;
 
+mod background;
 mod capture;
 mod overlay;
 mod prepared;
@@ -34,6 +35,7 @@ pub use prepared::{PrepareError, PreparedEdit};
 
 const IMAGE_SEPARATOR: char = '/';
 const VOLUME_DATE_COUNT: usize = 4;
+const CREATION_DATE: usize = 0;
 const FINDER_INFO_BYTES: usize = 32;
 
 type Attribute = (String, Vec<u8>);
@@ -47,6 +49,7 @@ struct Snapshot<'volume, S> {
 	block_size: u32,
 	entries: BTreeMap<VirtualPath, Node<'volume, S>>,
 	root_attributes: Vec<Attribute>,
+	backgrounds: BTreeMap<VirtualPath, VirtualPath>,
 }
 
 struct Node<'volume, S> {
@@ -209,8 +212,8 @@ where
 	S::Error: StdError + 'static,
 {
 	let mut snapshot = capture::capture(volume, catalog, capture::MAX_CAPTURE_BYTES)?;
-	overlay::apply(&mut snapshot, edits, changes_dir)?;
-	seal_volume(volume, &snapshot)
+	let backgrounds = overlay::apply(&mut snapshot, edits, changes_dir)?;
+	seal_volume(volume, &snapshot, &backgrounds)
 }
 
 /// Seal a rebuild with the host inputs captured for this exact edit batch.
@@ -228,26 +231,29 @@ where
 	S::Error: StdError + 'static,
 {
 	let mut snapshot = capture::capture(volume, catalog, prepared.capture_budget())?;
-	overlay::apply_with_copies(&mut snapshot, prepared.edits(), prepared.nodes()?)?;
-	seal_volume(volume, &snapshot)
+	let backgrounds =
+		overlay::apply_with_copies(&mut snapshot, prepared.edits(), prepared.nodes()?)?;
+	seal_volume(volume, &snapshot, &backgrounds)
 }
 
 fn seal_volume<'volume, S: ReadAt>(
 	volume: &Volume<S>,
 	snapshot: &Snapshot<'volume, S>,
+	backgrounds: &background::Bindings,
 ) -> Result<RebuiltVolume<'volume, S>, RebuildError<S::Error>>
 where
 	S::Error: StdError + 'static,
 {
 	let entries = snapshot.entries.len();
 	let original_bytes = volume.header().geometry.allocation_bytes();
-	let plan = seal_snapshot(snapshot, original_bytes)?;
+	let plan = seal_snapshot(snapshot, original_bytes, backgrounds)?;
 	Ok(RebuiltVolume { plan, entries })
 }
 
 fn seal_snapshot<'volume, S: ReadAt>(
 	snapshot: &Snapshot<'volume, S>,
 	original_bytes: u64,
+	backgrounds: &background::Bindings,
 ) -> Result<SealedPlan<Payload<'volume, S>>, RebuildError<S::Error>>
 where
 	S::Error: StdError + 'static,
@@ -262,8 +268,7 @@ where
 	attributes.try_reserve_exact(snapshot.entries.len())?;
 	let mut hard_links = BTreeMap::<LinkIdentity, LinkedPaths<'_, 'volume, S>>::new();
 	for (path, node) in &snapshot.entries {
-		// VirtualPath always begins with one ASCII separator.
-		let relative = &path.as_str()[IMAGE_SEPARATOR.len_utf8()..];
+		let relative = relative_path(path);
 		if let Kind::File {
 			file,
 			inode: Some(inode),
@@ -277,7 +282,15 @@ where
 			group.paths.try_reserve(1)?;
 			group.paths.push(relative);
 		} else {
-			entries.push(manifest_entry(relative, node));
+			let mut entry = manifest_entry(relative, node);
+			if let Kind::FinderStore { file, .. } = &node.kind
+				&& backgrounds.contains_key(path)
+			{
+				entry.kind = EntryKind::GeneratedFile {
+					resource: file.resource.clone().map(ForkSource::whole),
+				};
+			}
+			entries.push(entry);
 			attributes.push((relative, node.attributes.as_ref()));
 		}
 	}
@@ -298,6 +311,7 @@ where
 		}
 	}
 	let mut draft = volume::plan_with_hard_links(options, entries, groups)?;
+	background::bind(&mut draft, snapshot, backgrounds)?;
 	for (name, value) in &snapshot.root_attributes {
 		draft.add_inline_attribute("", name, value)?;
 	}
@@ -310,6 +324,11 @@ where
 	let minimum = draft.capacity(CapacityPolicy::Auto { free_space })?;
 	let bytes = ByteLen(original_bytes.max(minimum.image_bytes().0));
 	Ok(draft.seal_with_capacity(CapacityPolicy::Exact { bytes, free_space })?)
+}
+
+fn relative_path(path: &VirtualPath) -> &str {
+	// VirtualPath always begins with one ASCII separator.
+	&path.as_str()[IMAGE_SEPARATOR.len_utf8()..]
 }
 
 fn manifest_entry<'path, 'volume, S: ReadAt>(

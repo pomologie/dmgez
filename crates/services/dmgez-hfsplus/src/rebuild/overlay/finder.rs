@@ -1,5 +1,17 @@
 use std::{collections::BTreeMap, rc::Rc};
 
+use super::super::{
+	File, Kind, Node, Payload, Snapshot,
+	background::{Binding, Bindings, Positions},
+	capture::MAX_ENTRIES,
+};
+use super::{
+	OverlayError,
+	paths::{
+		PATH_SEPARATOR, PathIndex, Route, TreeKind, canonical_file_path, charge, check_path_bounds,
+		stored_name,
+	},
+};
 use dmgez_config::{VirtualPath, project_edit::FieldChange};
 use dmgez_finder::{
 	STORE_NAME,
@@ -8,17 +20,8 @@ use dmgez_finder::{
 	write_store,
 };
 use hfsplus_builder::volume::EntryMetadata;
-use hfsplus_core::names::normalize;
-
-use super::super::{File, Kind, Node, Payload, capture::MAX_ENTRIES};
-use super::{
-	OverlayError,
-	paths::{PATH_SEPARATOR, PathIndex, Route, TreeKind, charge, check_path_bounds},
-};
 
 const GENERATED_STORE_MODE: u16 = 0o644;
-
-type Positions = BTreeMap<String, IconLocationRecord>;
 
 pub(super) struct PositionEdit {
 	index: usize,
@@ -49,6 +52,7 @@ impl PositionEdit {
 pub(super) struct LayoutPlan<'volume, S> {
 	pub(super) additions: Vec<(VirtualPath, Node<'volume, S>)>,
 	pub(super) replacements: BTreeMap<VirtualPath, Kind<'volume, S>>,
+	pub(super) backgrounds: Bindings,
 }
 
 struct Location<'source> {
@@ -59,17 +63,19 @@ struct Location<'source> {
 }
 
 pub(super) fn plan<'source, 'volume, S>(
-	entries: &'source BTreeMap<VirtualPath, Node<'volume, S>>,
+	snapshot: &'source Snapshot<'volume, S>,
 	routes: &[Route],
 	original_paths: &PathIndex<'source, TreeKind>,
 	final_paths: &PathIndex<'_, TreeKind>,
 	positions: BTreeMap<&'source VirtualPath, PositionEdit>,
 ) -> Result<LayoutPlan<'volume, S>, OverlayError> {
+	let entries = &snapshot.entries;
 	let mut retained = read_positions(entries, original_paths)?;
-	if retained.is_empty() && positions.is_empty() {
+	if retained.is_empty() && positions.is_empty() && snapshot.backgrounds.is_empty() {
 		return Ok(LayoutPlan {
 			additions: Vec::new(),
 			replacements: BTreeMap::new(),
+			backgrounds: Bindings::new(),
 		});
 	}
 	let destinations: BTreeMap<_, _> = entries.keys().zip(routes).collect();
@@ -127,6 +133,8 @@ pub(super) fn plan<'source, 'volume, S>(
 	}
 
 	let mut replacements = BTreeMap::new();
+	let mut backgrounds = Bindings::new();
+	let mut canonical_targets = BTreeMap::new();
 	for ((original, entry), route) in entries.iter().zip(routes) {
 		let Kind::FinderStore { file, layout } = &entry.kind else {
 			continue;
@@ -137,6 +145,32 @@ pub(super) fn plan<'source, 'volume, S>(
 		let (parent, _) = components(destination)?;
 		let folder = canonical_folder(final_paths, parent, destination)?;
 		let positions = by_folder.remove(folder).unwrap_or_default();
+		if let Some(target) = snapshot.backgrounds.get(original) {
+			let routed = destinations
+				.get(target)
+				.and_then(|route| route.path(target))
+				.ok_or_else(|| OverlayError::FinderBackgroundRemoved {
+					store: original.clone(),
+					target: target.clone(),
+				})?;
+			let target = match canonical_targets.entry(routed) {
+				std::collections::btree_map::Entry::Occupied(entry) => Rc::clone(entry.get()),
+				std::collections::btree_map::Entry::Vacant(entry) => {
+					let canonical = canonical_file_path(final_paths, routed)?;
+					charge(
+						&mut retained_bytes,
+						canonical.as_str().len() + size_of::<VirtualPath>(),
+					)?;
+					Rc::clone(entry.insert(Rc::new(canonical)))
+				}
+			};
+			charge(
+				&mut retained_bytes,
+				destination.as_str().len() + size_of::<(VirtualPath, Binding)>(),
+			)?;
+			backgrounds.insert(destination.clone(), Binding { target, positions });
+			continue;
+		}
 		if let Some(bytes) = layout
 			.encode(&positions)
 			.map_err(|source| layout_error(destination, source))?
@@ -185,6 +219,7 @@ pub(super) fn plan<'source, 'volume, S>(
 	Ok(LayoutPlan {
 		additions,
 		replacements,
+		backgrounds,
 	})
 }
 
@@ -253,15 +288,6 @@ fn canonical_folder<'path>(
 		Some((path, TreeKind::Directory)) => Ok(path.as_str()),
 		_ => Err(unavailable()),
 	}
-}
-
-fn stored_name(path: &VirtualPath, name: &str) -> Result<String, OverlayError> {
-	let normalized = normalize(name).map_err(|source| OverlayError::PathName {
-		path: path.clone(),
-		source,
-	})?;
-	String::from_utf16(normalized.as_units())
-		.map_err(|_| OverlayError::PathProfile { path: path.clone() })
 }
 
 fn prepared_store<'volume, S>(

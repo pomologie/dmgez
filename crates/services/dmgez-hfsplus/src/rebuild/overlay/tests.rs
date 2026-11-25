@@ -50,6 +50,7 @@ fn snapshot() -> TestSnapshot {
 		block_size: 4096,
 		entries,
 		root_attributes: Vec::new(),
+		backgrounds: BTreeMap::new(),
 	}
 }
 

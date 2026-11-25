@@ -14,7 +14,7 @@ use hfsplus_core::{
 };
 use thiserror::Error;
 
-use super::{Kind, Node, Snapshot, capture::MAX_ENTRIES};
+use super::{Kind, Node, Snapshot, background::Bindings, capture::MAX_ENTRIES};
 
 mod finder;
 mod finder_flags;
@@ -83,6 +83,18 @@ pub enum OverlayError {
 	FinderStore { path: VirtualPath },
 	#[error("Finder store {path:?} cannot resolve an unambiguous catalog child for {name:?}")]
 	FinderRecordTarget { path: VirtualPath, name: String },
+	#[error("Finder background target would not survive the edit: {target:?} for {store:?}")]
+	FinderBackgroundRemoved {
+		store: VirtualPath,
+		target: VirtualPath,
+	},
+	#[error(
+		"Finder background target or parent is missing from the rebuilt catalog: {target:?} for {store:?}"
+	)]
+	FinderBackgroundTarget {
+		store: VirtualPath,
+		target: VirtualPath,
+	},
 	#[error("Finder store {path:?} cannot represent the edited layout")]
 	FinderLayout {
 		path: VirtualPath,
@@ -113,7 +125,7 @@ pub(super) fn apply<S: ReadAt>(
 	snapshot: &mut Snapshot<'_, S>,
 	edits: &[ProjectEdit],
 	_changes_dir: &Path,
-) -> Result<(), OverlayError>
+) -> Result<Bindings, OverlayError>
 where
 	S::Error: StdError + 'static,
 {
@@ -126,7 +138,7 @@ pub(super) fn apply_with_copies<'volume, S: ReadAt>(
 	snapshot: &mut Snapshot<'volume, S>,
 	edits: &[ProjectEdit],
 	copies: Vec<(VirtualPath, Node<'volume, S>)>,
-) -> Result<(), OverlayError>
+) -> Result<Bindings, OverlayError>
 where
 	S::Error: StdError + 'static,
 {
@@ -137,9 +149,9 @@ where
 			.values()
 			.any(|entry| matches!(entry.kind, Kind::FinderStore { .. }))
 	{
-		return Ok(());
+		return Ok(Bindings::new());
 	}
-	let mut plan = plan(&snapshot.entries, edits, copies)?;
+	let mut plan = plan(snapshot, edits, copies)?;
 	let mut entries = BTreeMap::new();
 	for (index, ((original, mut entry), route)) in std::mem::take(&mut snapshot.entries)
 		.into_iter()
@@ -163,7 +175,7 @@ where
 	if let Some(label) = plan.label {
 		snapshot.name = label.to_owned();
 	}
-	Ok(())
+	Ok(plan.backgrounds)
 }
 
 struct Plan<'edit, 'v, S> {
@@ -171,17 +183,19 @@ struct Plan<'edit, 'v, S> {
 	additions: Vec<(VirtualPath, Node<'v, S>)>,
 	replacements: BTreeMap<VirtualPath, Kind<'v, S>>,
 	finder_flags: FlagPlan,
+	backgrounds: Bindings,
 	label: Option<&'edit str>,
 }
 
 fn plan<'edit, 'v, S: ReadAt>(
-	entries: &BTreeMap<VirtualPath, Node<'v, S>>,
+	snapshot: &Snapshot<'v, S>,
 	edits: &'edit [ProjectEdit],
 	mut additions: Vec<(VirtualPath, Node<'v, S>)>,
 ) -> Result<Plan<'edit, 'v, S>, OverlayError>
 where
 	S::Error: StdError + 'static,
 {
+	let entries = &snapshot.entries;
 	let captured_count = additions.len();
 	if captured_count > MAX_ENTRIES {
 		return Err(OverlayError::Budget);
@@ -284,7 +298,7 @@ where
 						.map(|(path, entry)| (path, TreeKind::from_kind(&entry.kind))),
 				),
 		)?;
-		finder::plan(entries, &routes, &index, &final_paths, positions)?
+		finder::plan(snapshot, &routes, &index, &final_paths, positions)?
 	};
 	additions.try_reserve(layout.additions.len())?;
 	additions.extend(layout.additions);
@@ -293,6 +307,7 @@ where
 		additions,
 		replacements: layout.replacements,
 		finder_flags,
+		backgrounds: layout.backgrounds,
 		label,
 	})
 }

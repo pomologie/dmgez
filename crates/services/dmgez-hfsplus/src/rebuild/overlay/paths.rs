@@ -217,6 +217,57 @@ pub(super) fn charge(total: &mut usize, bytes: usize) -> Result<(), OverlayError
 	Ok(())
 }
 
+/// Recover the exact stored spelling of each ancestor and the final file name.
+/// Explicit edit destinations can spell existing parents by HFS+ equivalence.
+pub(super) fn canonical_file_path(
+	paths: &PathIndex<'_, TreeKind>,
+	path: &VirtualPath,
+) -> Result<VirtualPath, OverlayError> {
+	let bad_path = || OverlayError::PathProfile { path: path.clone() };
+	let bad_parent = || OverlayError::Parent { path: path.clone() };
+	let mut components = Vec::new();
+	let mut current = path;
+	let mut len = 0;
+	loop {
+		let (parent, leaf) = current
+			.as_str()
+			.rsplit_once(PATH_SEPARATOR)
+			.filter(|(_, leaf)| !leaf.is_empty())
+			.ok_or_else(bad_path)?;
+		let name = stored_name(path, leaf)?;
+		len += PATH_SEPARATOR.len_utf8() + name.len();
+		components.try_reserve(1)?;
+		components.push(name);
+		if parent.is_empty() {
+			break;
+		}
+		let source = parent.parse().map_err(|_| bad_parent())?;
+		let Some((parent, TreeKind::Directory)) = paths.find(&source)? else {
+			return Err(bad_parent());
+		};
+		current = parent;
+	}
+	if len > MAX_PATH_BYTES {
+		return Err(OverlayError::Budget);
+	}
+	let mut canonical = String::new();
+	canonical.try_reserve_exact(len)?;
+	for name in components.iter().rev() {
+		canonical.push(PATH_SEPARATOR);
+		canonical.push_str(name);
+	}
+	canonical.parse().map_err(|_| bad_path())
+}
+
+pub(super) fn stored_name(path: &VirtualPath, name: &str) -> Result<String, OverlayError> {
+	let normalized = normalize(name).map_err(|source| OverlayError::PathName {
+		path: path.clone(),
+		source,
+	})?;
+	String::from_utf16(normalized.as_units())
+		.map_err(|_| OverlayError::PathProfile { path: path.clone() })
+}
+
 fn component_key(component: &str) -> Result<Vec<u16>, NameError> {
 	COLLATION.key(normalize(component)?.as_units())
 }
