@@ -11,7 +11,7 @@ env:
 
 jobs:
   build:
-    name: Build and verify a DMG (${{ matrix.os }})
+    name: Build, sign, and verify DMGs (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -54,7 +54,7 @@ jobs:
           "PROJECT_CI_DIR=$work" >> $env:GITHUB_ENV
           "TEMP=$work" >> $env:GITHUB_ENV
           "TMP=$work" >> $env:GITHUB_ENV
-      - name: Build and verify dmg.toml
+      - name: Build, sign, and verify dmg.toml
         id: project
         shell: python
         run: |
@@ -93,11 +93,14 @@ jobs:
               subprocess.run([*compose, "--test"], check=True)
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               print(f"dmg={image / 'installer.dmg'}", file=output)
-      - name: Upload the verified DMG
+              print(f"signed_dmg={image / 'installer-adhoc.dmg'}", file=output)
+      - name: Upload the verified DMGs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: project-image-${{ matrix.os }}
-          path: ${{ steps.project.outputs.dmg }}
+          path: |
+            ${{ steps.project.outputs.dmg }}
+            ${{ steps.project.outputs.signed_dmg }}
           if-no-files-found: error
           compression-level: 0
 
@@ -113,11 +116,13 @@ jobs:
       - name: Verify byte-for-byte equality
         shell: bash
         run: |
-          files=(
-            images/project-image-ubuntu-24.04/installer.dmg
-            images/project-image-macos-15/installer.dmg
-            images/project-image-windows-2025/installer.dmg
-          )
-          sha256sum "${files[@]}"
-          cmp "${files[0]}" "${files[1]}"
-          cmp "${files[0]}" "${files[2]}"
+          for image in installer.dmg installer-adhoc.dmg; do
+            files=(
+              "images/project-image-ubuntu-24.04/$image"
+              "images/project-image-macos-15/$image"
+              "images/project-image-windows-2025/$image"
+            )
+            sha256sum "${files[@]}"
+            cmp "${files[0]}" "${files[1]}"
+            cmp "${files[0]}" "${files[2]}"
+          done
