@@ -13,7 +13,7 @@ dmgez-udif = { version = "=0.1.0", path = @dmgez-udif@, default-features = false
 dmgez-vfs = { version = "=0.1.0", path = @dmgez-vfs@, default-features = false, features = ["zlib"] }
 
 # Workspace adapters
-dmgez-apfs-read = { version = "=0.1.0", path = @dmgez-apfs-read@, default-features = false }
+dmgez-apfs = { version = "=0.1.0", path = @dmgez-apfs@, default-features = false }
 
 # APFS libraries
 apfs-container = { version = "=0.1.0", path = @apfs-container@, default-features = false }

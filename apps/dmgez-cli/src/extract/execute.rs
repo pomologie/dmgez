@@ -23,8 +23,8 @@ enum Backend {
 	Hfsplus,
 	#[cfg(feature = "apfs-extract")]
 	Apfs {
-		volume: Option<dmgez_apfs_read::VolumeSelector>,
-		xid: Option<dmgez_apfs_read::TransactionId>,
+		volume: Option<dmgez_apfs::VolumeSelector>,
+		xid: Option<dmgez_apfs::TransactionId>,
 	},
 }
 

@@ -1,6 +1,6 @@
 use std::{num::NonZeroU32, path::Path};
 
-use dmgez_apfs_read::{
+use dmgez_apfs::{
 	ApfsBackend, ApfsContainer, CheckpointDiagnostic, OpenError, TransactionId, VolumeInfo,
 	VolumeSelector, WindowSource, probe_partitionless,
 };

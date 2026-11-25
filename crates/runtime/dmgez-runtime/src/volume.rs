@@ -54,10 +54,10 @@ pub enum Error {
 	Hfsplus(#[from] dmgez_hfsplus::browse::Error),
 	#[cfg(feature = "apfs-volume")]
 	#[error(transparent)]
-	Apfs(#[from] dmgez_apfs_read::OpenError),
+	Apfs(#[from] dmgez_apfs::OpenError),
 	#[cfg(feature = "apfs-volume")]
 	#[error(transparent)]
-	ApfsProbe(#[from] dmgez_apfs_read::ProbeError),
+	ApfsProbe(#[from] dmgez_apfs::ProbeError),
 	#[cfg(feature = "apfs-volume")]
 	#[error(transparent)]
 	Checkpoint(#[from] UncertainCheckpoint),

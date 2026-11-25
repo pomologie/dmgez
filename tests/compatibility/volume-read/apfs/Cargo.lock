@@ -97,7 +97,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "dmgez-apfs-read"
+name = "dmgez-apfs"
 version = "0.1.0"
 dependencies = [
  "apfs-container",
@@ -116,7 +116,7 @@ dependencies = [
  "apfs-core",
  "apfs-format",
  "apfs-reader",
- "dmgez-apfs-read",
+ "dmgez-apfs",
  "dmgez-operations",
  "dmgez-udif",
  "dmgez-vfs",

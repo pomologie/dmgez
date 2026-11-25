@@ -25,7 +25,7 @@ The native catalog session lends the original volume and catalog for rebuild pla
 
 ## APFS
 
-The tests exercise the production `dmgez-apfs-read` adapter. It opens a bounded disk extent, selects a checkpoint and volume through the APFS reader, and matches exact stored UTF-8 names. It keeps each hard-link entry distinct from its shared inode and lends data and resource streams independently. Symbolic links expose their exact target bytes.
+The tests exercise the production `dmgez-apfs` adapter. It opens a bounded disk extent, selects a checkpoint and volume through the APFS reader, and matches exact stored UTF-8 names. It keeps each hard-link entry distinct from its shared inode and lends data and resource streams independently. Symbolic links expose their exact target bytes.
 
 The tests passed against dmgez `1edf143` and APFS `a210ad5`. They stream a synthetic MBR and [pinned blocks](apfs/fixtures.json) from native APFS fixtures through UDZO. They exercise directory page recovery, separate hard-link and storage identities, both forks, absent and empty streams, foreign handle refusal, and an inline symlink. The fixture source refuses reads outside the captured APFS blocks.
 

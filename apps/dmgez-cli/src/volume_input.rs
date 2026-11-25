@@ -10,7 +10,7 @@ use std::{num::NonZeroU32, path::Path};
 use std::io;
 
 #[cfg(feature = "apfs-read")]
-use dmgez_apfs_read::{TransactionId, VolumeInfo, VolumeSelector};
+use dmgez_apfs::{TransactionId, VolumeInfo, VolumeSelector};
 #[cfg(feature = "hfsplus-read")]
 use dmgez_hfsplus::browse::HfsView;
 use dmgez_runtime::{

@@ -6,7 +6,7 @@ use apfs_container::{Container, LookupOptions};
 use apfs_core::{ByteOffset, ReadAt};
 use apfs_format::object::{ObjectId, TransactionId};
 use apfs_reader::{Error as NativeError, Limit, TreeLimits, VolumeView as NativeView};
-use dmgez_apfs_read::{ApfsContainer, OpenError, VolumeRole, VolumeSelector};
+use dmgez_apfs::{ApfsContainer, OpenError, VolumeRole, VolumeSelector};
 use dmgez_apfs_volume_read_compatibility::{AdapterError, ApfsBackend};
 use dmgez_operations::extract::{
 	NameError, NameLimits, NamePlanError, NameProfile, preflight_names,

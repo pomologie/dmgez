@@ -10,7 +10,7 @@ use std::{
 };
 
 #[cfg(feature = "apfs-volume")]
-use dmgez_apfs_read::{TransactionId, VolumeInfo, VolumeSelector};
+use dmgez_apfs::{TransactionId, VolumeInfo, VolumeSelector};
 use dmgez_operations::install::InstallerReport;
 #[cfg(any(feature = "hfsplus-volume", feature = "apfs-volume"))]
 use dmgez_operations::install::{InstallerLimits, check_installer};

@@ -118,7 +118,7 @@ impl Selection {
 	}
 
 	#[cfg(feature = "apfs-read")]
-	pub(super) fn apfs_volume(&self) -> io::Result<Option<dmgez_apfs_read::VolumeSelector>> {
+	pub(super) fn apfs_volume(&self) -> io::Result<Option<dmgez_apfs::VolumeSelector>> {
 		self.volume
 			.as_deref()
 			.map(apfs::volume_selector)
@@ -126,7 +126,7 @@ impl Selection {
 	}
 
 	#[cfg(feature = "apfs-read")]
-	pub(super) fn apfs_checkpoint(&self) -> Option<dmgez_apfs_read::TransactionId> {
+	pub(super) fn apfs_checkpoint(&self) -> Option<dmgez_apfs::TransactionId> {
 		apfs::checkpoint(self.xid)
 	}
 }

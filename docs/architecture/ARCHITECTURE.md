@@ -40,7 +40,7 @@ dmgez/
       dmgez-cache/               # DMG-specific block reuse, optional
     adapters/
       dmgez-hfsplus/             # feature-gated HFS+ and HFSX browsing, verification and image building
-      dmgez-apfs-read/           # APFS browsing, reachable verification and quarantine admission
+      dmgez-apfs/           # APFS browsing, reachable verification and quarantine admission
     inspection/
       dmgez-inspector/           # structured read-only reports / verification
       dmgez-diff/                # semantic and physical comparison, once substantial
@@ -76,7 +76,7 @@ Read arrows as `consumer -> dependency`.
 | `dmgez-finder` | core, config; external Finder libraries; no concrete builder |
 | `dmgez-builder` | core, config, udif writer, finder writer; Mach-O inspection for optional volume icons |
 | `dmgez-hfsplus` | independent versioned HFS+ libraries; vfs for browsing; builder, config and udif writer for image creation |
-| `dmgez-apfs-read` | independent versioned APFS container, reader and format libraries, vfs for browsing and verification |
+| `dmgez-apfs` | independent versioned APFS container, reader and format libraries, vfs for browsing and verification |
 | `dmgez-vfs` | core, udif reader, independent filesystem readers, partition adapters; no write service |
 | `dmgez-inspector` | core, vfs, udif reader, finder reader; metadata-only mode can avoid traversal |
 | `dmgez-operations` | core, vfs, writer/reader and builder when a requested operation needs them |

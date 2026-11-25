@@ -16,7 +16,7 @@ HFSPLUS_CORE_PACKAGE = "hfsplus-pomologie-core"
 HFSPLUS_ADAPTER_PACKAGE = "dmgez-hfsplus"
 HFSPLUS_ENGINE = "hfsplus"
 APFS_ENGINE = "apfs"
-APFS_ADAPTER_PACKAGE = "dmgez-apfs-read"
+APFS_ADAPTER_PACKAGE = "dmgez-apfs"
 HFSX_FEATURE = "hfsx-fixture"
 DMGEZ_PACKAGES = {
     "dmgez-operations": "crates/runtime/dmgez-operations",

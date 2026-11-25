@@ -67,7 +67,7 @@ APFS_PACKAGES = {
     "apfs-container": "crates/container/apfs-container",
     APFS_READER: "crates/filesystem/apfs-reader",
 }
-APFS_ADAPTER = "dmgez-apfs-read"
+APFS_ADAPTER = "dmgez-apfs"
 COMPOSED_CRATE_GROUPS = {
     "dmgez-builder": "build",
     ADAPTER: "adapters",

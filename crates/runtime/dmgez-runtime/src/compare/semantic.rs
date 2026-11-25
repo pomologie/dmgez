@@ -3,7 +3,7 @@
 use std::{error::Error as StdError, hash::Hash, num::NonZeroU32, path::Path};
 
 #[cfg(feature = "apfs-volume")]
-use dmgez_apfs_read::{AdapterError, SourceError, TransactionId, VolumeInfo, VolumeSelector};
+use dmgez_apfs::{AdapterError, SourceError, TransactionId, VolumeInfo, VolumeSelector};
 use dmgez_diff::{
 	Side,
 	semantic::{self, Limits, Options},

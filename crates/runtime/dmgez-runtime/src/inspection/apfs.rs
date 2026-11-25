@@ -1,6 +1,6 @@
 use std::{error::Error, num::NonZeroU32};
 
-use dmgez_apfs_read::{
+use dmgez_apfs::{
 	CheckData, CheckFailureKind, CheckpointDiagnostic, TransactionId, VerificationEvidence,
 	VolumeSelector, check, probe,
 };

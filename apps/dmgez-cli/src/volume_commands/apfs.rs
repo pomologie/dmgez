@@ -5,7 +5,7 @@ use std::{
 	num::NonZeroU64,
 };
 
-use dmgez_apfs_read::{
+use dmgez_apfs::{
 	CheckpointCorruption, CheckpointDiagnostic, ObjectId, OpenError, TransactionId, VolumeInfo,
 	VolumeRole, VolumeSelector,
 };
