@@ -12,16 +12,23 @@ use ds_parser::{
 use thiserror::Error;
 
 use crate::{
-	inspection::{ReadBudget, ReadError, ReadLimits, RecordValue, ViewKind, visit_records},
+	BackgroundAliasError, ImageBackgroundIdentity,
+	inspection::{
+		BackgroundAlias, ReadBudget, ReadError, ReadLimits, RecordValue, ViewKind, visit_records,
+	},
 	layout::{
-		DEFAULT_BACKGROUND_TYPE, SOLID_BACKGROUND_TYPE, VIEW_OPTIONS_VERSION, known_arrangement,
-		list::known_column,
+		DEFAULT_BACKGROUND_TYPE, IMAGE_BACKGROUND_TYPE, SOLID_BACKGROUND_TYPE,
+		VIEW_OPTIONS_VERSION, known_arrangement, list::known_column,
 	},
 	records::{
 		CURRENT_FOLDER, LEAF_HEADER_BYTES, LENGTH_BYTES, LOCATION_BYTES, STORE_VERSION,
 		record_wire_bytes, validate_item_name,
 	},
 };
+
+mod background;
+
+use background::ImageBackground;
 
 const COORDINATES_BYTES: usize = 2 * size_of::<u32>();
 const TRAILING_BYTES: usize = LOCATION_BYTES - COORDINATES_BYTES;
@@ -68,6 +75,12 @@ pub enum StoreEditError {
 	MissingFolderSettings,
 	#[error("Finder store differs from the qualified single-leaf writer framing")]
 	UnqualifiedFraming,
+	#[error("Finder background alias differs from the qualified version-two writer profile")]
+	UnqualifiedBackgroundAlias,
+	#[error("Finder store does not contain an admitted background alias")]
+	MissingBackgroundAlias,
+	#[error(transparent)]
+	BackgroundAlias(#[from] BackgroundAliasError),
 	#[error("Finder position name {0:?} is outside the writer's item name profile")]
 	InvalidName(String),
 	#[error("Finder position name {0:?} collides with another name")]
@@ -81,13 +94,21 @@ pub enum StoreEditError {
 }
 
 /// A bounded store whose folder settings can be retained when item names change.
-/// The profile uses canonical single-leaf framing, known folder settings without
-/// identity references, and ASCII child names for position records.
+/// The profile uses canonical single-leaf framing, known folder settings and
+/// ASCII child names for position records. Background aliases require explicit
+/// admission and validation against the source catalog by the caller.
 #[derive(Debug)]
 pub struct EditableStore {
 	folder: Vec<FolderRecord>,
 	positions: Vec<(String, IconLocationRecord)>,
+	background: Option<ImageBackground>,
 	limits: ReadLimits,
+}
+
+#[derive(Clone, Copy)]
+enum AliasProfile {
+	Reject,
+	CanonicalImage,
 }
 
 impl EditableStore {
@@ -96,9 +117,31 @@ impl EditableStore {
 	/// Rejects opaque fields, identity references, unsupported view settings or
 	/// icon trailers, malformed or noncanonical framing, and exceeded limits.
 	pub fn open(bytes: &[u8], limits: ReadLimits) -> Result<Self, StoreEditError> {
+		Self::open_with_profile(bytes, limits, AliasProfile::Reject)
+	}
+
+	/// Admits a store with an optional canonical dmgez image-background alias.
+	/// The alias is checked against the wire profile only. The caller must check
+	/// its reported identity against the source catalog before retaining or rebinding it.
+	/// # Errors
+	/// Rejects aliases outside the canonical version-two file profile and other
+	/// unsupported records, noncanonical framing, or exceeded limits.
+	pub fn open_with_image_background(
+		bytes: &[u8],
+		limits: ReadLimits,
+	) -> Result<Self, StoreEditError> {
+		Self::open_with_profile(bytes, limits, AliasProfile::CanonicalImage)
+	}
+
+	fn open_with_profile(
+		bytes: &[u8],
+		limits: ReadLimits,
+		profile: AliasProfile,
+	) -> Result<Self, StoreEditError> {
 		let mut store = Self {
 			folder: Vec::new(),
 			positions: Vec::new(),
+			background: None,
 			limits,
 		};
 		visit_records(bytes, limits, |record, payload, _| {
@@ -121,7 +164,11 @@ impl EditableStore {
 					.push((record.name, IconLocationRecord { x, y, trailing }));
 			} else {
 				store.folder.try_reserve(1)?;
-				store.folder.push(FolderRecord::admit(record, payload)?);
+				let (record, background) = FolderRecord::admit(record, payload, profile)?;
+				if background.is_some() {
+					store.background = background;
+				}
+				store.folder.push(record);
 			}
 			Ok::<(), StoreEditError>(())
 		})?;
@@ -133,7 +180,7 @@ impl EditableStore {
 		// Inspection alone does not qualify padding, allocator clients, property
 		// list object tables, or record ordering for rewrite. Exact re-encoding
 		// checks the original against the same writer used for the result.
-		if store.write(store.positions())? != bytes {
+		if store.write(store.positions(), None)? != bytes {
 			return Err(StoreEditError::UnqualifiedFraming);
 		}
 		Ok(store)
@@ -144,6 +191,12 @@ impl EditableStore {
 		self.positions
 			.iter()
 			.map(|(name, location)| (name.as_str(), *location))
+	}
+
+	/// The canonical alias's stored identity, pending validation by the caller.
+	#[must_use]
+	pub fn image_background(&self) -> Option<ImageBackgroundIdentity<'_>> {
+		self.background.as_ref().map(ImageBackground::identity)
 	}
 
 	/// Retained payload, name, and record storage to charge against a capture budget.
@@ -162,6 +215,10 @@ impl EditableStore {
 				.iter()
 				.map(|(name, _)| name.capacity())
 				.sum::<usize>()
+			+ self
+				.background
+				.as_ref()
+				.map_or(0, ImageBackground::retained_bytes)
 	}
 
 	/// Encodes the given final item positions with the original folder settings.
@@ -172,7 +229,43 @@ impl EditableStore {
 		&self,
 		positions: &BTreeMap<String, IconLocationRecord>,
 	) -> Result<Option<Vec<u8>>, StoreEditError> {
-		if self.positions.len() == positions.len()
+		self.encode_changes(positions, None)
+	}
+
+	/// Encodes final positions and rebinds an existing image-background alias.
+	/// The caller supplies identity from the final catalog and volume, including
+	/// exact stored names and dates. Other folder properties are retained.
+	/// Returns `None` when the source store already matches.
+	/// # Errors
+	/// Rejects a store without an admitted alias, an unencodable identity,
+	/// unsupported position names, case collisions, or exceeded write limits.
+	pub fn encode_with_image_background(
+		&self,
+		positions: &BTreeMap<String, IconLocationRecord>,
+		identity: ImageBackgroundIdentity<'_>,
+	) -> Result<Option<Vec<u8>>, StoreEditError> {
+		let original = self
+			.image_background()
+			.ok_or(StoreEditError::MissingBackgroundAlias)?;
+		if original == identity {
+			return self.encode(positions);
+		}
+		let icon_view = self
+			.folder
+			.iter()
+			.find(|record| record.field == FieldKey::icvp)
+			.ok_or(StoreEditError::MissingBackgroundAlias)?;
+		let replacement = background::replace(&icon_view.payload, identity)?;
+		self.encode_changes(positions, Some(&replacement))
+	}
+
+	fn encode_changes(
+		&self,
+		positions: &BTreeMap<String, IconLocationRecord>,
+		image_properties: Option<&[u8]>,
+	) -> Result<Option<Vec<u8>>, StoreEditError> {
+		if image_properties.is_none()
+			&& self.positions.len() == positions.len()
 			&& self
 				.positions()
 				.all(|(name, location)| positions.get(name) == Some(&location))
@@ -183,6 +276,7 @@ impl EditableStore {
 			positions
 				.iter()
 				.map(|(name, location)| (name.as_str(), *location)),
+			image_properties,
 		)
 		.map(Some)
 	}
@@ -190,6 +284,7 @@ impl EditableStore {
 	fn write<'name>(
 		&self,
 		positions: impl ExactSizeIterator<Item = (&'name str, IconLocationRecord)>,
+		image_properties: Option<&[u8]>,
 	) -> Result<Vec<u8>, StoreEditError> {
 		let count = self.folder.len().saturating_add(positions.len());
 		if count > self.limits.records || count > BTreeMaster::PAGE_SIZE.as_usize() {
@@ -201,11 +296,17 @@ impl EditableStore {
 		records.try_reserve_exact(count)?;
 		let mut page_bytes = LEAF_HEADER_BYTES;
 		for record in &self.folder {
-			page_bytes += record_wire_bytes(CURRENT_FOLDER.len(), record.wire_payload_bytes());
-			records.push(record.encode()?);
-		}
-		if page_bytes > BTreeMaster::PAGE_SIZE.as_usize() {
-			return Err(StoreEditError::LeafBudget);
+			let payload = if record.field == FieldKey::icvp {
+				image_properties.unwrap_or(&record.payload)
+			} else {
+				&record.payload
+			};
+			page_bytes +=
+				record_wire_bytes(CURRENT_FOLDER.len(), record.wire_payload_bytes(payload));
+			if page_bytes > BTreeMaster::PAGE_SIZE.as_usize() {
+				return Err(StoreEditError::LeafBudget);
+			}
+			records.push(record.encode(payload)?);
 		}
 		for (name, location) in positions {
 			check_name(name, self.limits)?;
@@ -241,17 +342,30 @@ struct FolderRecord {
 }
 
 impl FolderRecord {
-	fn admit(record: crate::inspection::Record, payload: &[u8]) -> Result<Self, StoreEditError> {
+	fn admit(
+		record: crate::inspection::Record,
+		payload: &[u8],
+		profile: AliasProfile,
+	) -> Result<(Self, Option<ImageBackground>), StoreEditError> {
+		let mut background = None;
 		let known = match record.value {
 			RecordValue::Window(window) => window.unreported_keys.is_empty(),
 			RecordValue::IconView(view) => {
 				view.unreported_keys.is_empty()
-					&& view.background_alias.is_none()
-					&& matches!(
-						view.background_type,
-						Some(DEFAULT_BACKGROUND_TYPE | SOLID_BACKGROUND_TYPE)
-					) && view.arrangement.as_deref().is_some_and(known_arrangement)
+					&& view.arrangement.as_deref().is_some_and(known_arrangement)
 					&& view.view_options_version == Some(VIEW_OPTIONS_VERSION)
+					&& match (view.background_type, view.background_alias, profile) {
+						(Some(DEFAULT_BACKGROUND_TYPE | SOLID_BACKGROUND_TYPE), None, _) => true,
+						(
+							Some(IMAGE_BACKGROUND_TYPE),
+							Some(BackgroundAlias::File(target)),
+							AliasProfile::CanonicalImage,
+						) => {
+							background = Some(ImageBackground::admit(*target, payload)?);
+							true
+						}
+						_ => false,
+					}
 			}
 			RecordValue::ListView(view) => {
 				view.unreported_keys.is_empty()
@@ -278,28 +392,29 @@ impl FolderRecord {
 				field: record.field,
 			});
 		}
-		Ok(Self {
+		let folder = Self {
 			field: FieldKey::from_fourcc(FourCC::from(record.field)),
 			payload: payload.into(),
-		})
+		};
+		Ok((folder, background))
 	}
 
-	fn wire_payload_bytes(&self) -> usize {
-		self.payload.len()
+	fn wire_payload_bytes(&self, payload: &[u8]) -> usize {
+		payload.len()
 			+ match self.field {
 				FieldKey::icvl | FieldKey::vSrn => 0,
 				_ => LENGTH_BYTES,
 			}
 	}
 
-	fn encode(&self) -> Result<Record, ReadError> {
+	fn encode(&self, payload: &[u8]) -> Result<Record, ReadError> {
 		let value = match self.field {
 			FieldKey::icvl => Value::Type(FourCC::from(
-				*self.payload.first_chunk().ok_or(ReadError::Truncated)?,
+				*payload.first_chunk().ok_or(ReadError::Truncated)?,
 			)),
 			FieldKey::vSrn => Value::Long(STORE_VERSION),
 			// The bounded inspector has already decoded and qualified this payload.
-			_ => Value::PropertyList(plist::Value::from_reader(Cursor::new(&self.payload))?),
+			_ => Value::PropertyList(plist::Value::from_reader(Cursor::new(payload))?),
 		};
 		Ok(Record::new(CURRENT_FOLDER, self.field, value))
 	}
