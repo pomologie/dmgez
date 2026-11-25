@@ -21,6 +21,16 @@ pub struct DisplayFlags {
 }
 
 impl DisplayFlags {
+	/// Reads both ordinary Finder display bits from a stored FinderInfo value.
+	#[must_use]
+	pub fn read(finder_info: &[u8; FINDER_INFO_BYTES]) -> Self {
+		let flags = read_flags(finder_info);
+		Self {
+			hidden: Some(flags & INVISIBLE != 0),
+			hide_extension: Some(flags & HIDE_EXTENSION != 0),
+		}
+	}
+
 	/// Set or clear the selected bits in the ordinary Finder flags word.
 	pub fn apply(self, finder_info: &mut [u8; FINDER_INFO_BYTES]) {
 		update_flags(finder_info, |mut flags| {
@@ -45,7 +55,11 @@ pub(super) fn add_flags(finder_info: &mut [u8; FINDER_INFO_BYTES], set: u16) {
 }
 
 fn update_flags(finder_info: &mut [u8; FINDER_INFO_BYTES], update: impl FnOnce(u16) -> u16) {
-	let flags = &mut finder_info[FLAGS];
-	let current = u16::from_be_bytes([flags[0], flags[1]]);
-	flags.copy_from_slice(&update(current).to_be_bytes());
+	let current = read_flags(finder_info);
+	finder_info[FLAGS].copy_from_slice(&update(current).to_be_bytes());
+}
+
+fn read_flags(finder_info: &[u8; FINDER_INFO_BYTES]) -> u16 {
+	let flags = &finder_info[FLAGS];
+	u16::from_be_bytes([flags[0], flags[1]])
 }

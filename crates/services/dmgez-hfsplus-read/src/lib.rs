@@ -6,6 +6,8 @@ pub mod analysis;
 pub mod browse;
 #[cfg(feature = "verify")]
 mod error;
+#[cfg(feature = "preview")]
+pub mod preview;
 #[cfg(feature = "verify")]
 mod verification;
 

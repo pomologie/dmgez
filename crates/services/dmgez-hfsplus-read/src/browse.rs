@@ -150,16 +150,27 @@ pub fn with_view_signature<S: LogicalDisk, T>(
 	read: impl FnOnce(&mut HfsView<'_, '_, S>, VolumeSignature) -> T,
 ) -> Result<T, Error> {
 	with_catalog(disk, selected, limits, |volume, catalog| {
-		let backend = HfsBackend {
-			volume,
-			catalog,
-			limits,
-		};
 		read(
-			&mut VolumeView::new(selected, backend),
+			&mut view_for_catalog(selected, volume, catalog, limits),
 			volume.header().signature,
 		)
 	})
+}
+
+pub(crate) fn view_for_catalog<'volume, 'disk, S: LogicalDisk>(
+	selected: VolumeId,
+	volume: &'volume Volume<WindowSource<'disk, S>>,
+	catalog: Catalog<'volume, WindowSource<'disk, S>>,
+	limits: Limits,
+) -> HfsView<'volume, 'disk, S> {
+	VolumeView::new(
+		selected,
+		HfsBackend {
+			volume,
+			catalog,
+			limits,
+		},
+	)
 }
 
 impl<'volume, 'disk, S: LogicalDisk> HfsBackend<'volume, 'disk, S> {

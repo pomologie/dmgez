@@ -13,6 +13,7 @@ default = []
 # Volume browsing, analysis and verification
 browse = ["dep:dmgez-vfs"]
 analysis = ["browse", "dep:serde"]
+preview = ["browse", "dep:dmgez-finder", "dep:dmgez-preview"]
 verify = []
 
 # File compression
@@ -21,6 +22,10 @@ decmpfs-zlib = ["hfsplus-reader/decmpfs-zlib"]
 [dependencies]
 # Workspace foundation
 dmgez-vfs = { path = "../../foundation/dmgez-vfs", default-features = false, optional = true }
+
+# Workspace presentation
+dmgez-finder = { path = "../../presentation/dmgez-finder", default-features = false, optional = true }
+dmgez-preview = { path = "../../presentation/dmgez-preview", default-features = false, features = ["actual", "png-render"], optional = true }
 
 # HFS+ libraries
 hfsplus-core = { package = "hfsplus-pomologie-core", version = "=0.1.0" }
