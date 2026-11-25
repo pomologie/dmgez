@@ -5,9 +5,11 @@ use crate::{
 	signature::report_base,
 };
 
+pub(super) mod app;
 mod artifact;
 pub(super) mod disk;
 mod identity;
+mod policy;
 mod runner;
 mod stage;
 

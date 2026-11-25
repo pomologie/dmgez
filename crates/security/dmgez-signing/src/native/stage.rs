@@ -1,6 +1,7 @@
 //! Private, same-directory staging for a path-based native signer.
 
 use std::{
+	cell::Cell,
 	ffi::{OsStr, OsString},
 	fs::{self, File},
 	io,
@@ -14,6 +15,8 @@ use rustix::{
 };
 use thiserror::Error;
 
+mod cleanup;
+
 #[cfg(test)]
 mod tests;
 
@@ -23,9 +26,11 @@ const PARENT_DIRECTORY: &[u8] = b"..";
 const CURRENT_DIRECTORY_BYTES: &[u8] = b".";
 const PATH_SEPARATOR: u8 = b'/';
 const IMAGE_EXTENSION: &str = "dmg";
+const APP_EXTENSION: &str = "app";
 const STAGE_PREFIX: &str = ".dmgez-signing-";
 const STAGE_SUFFIX: &str = ".stage";
 const STAGED_IMAGE: &str = "image.dmg";
+const STAGED_APP: &str = "Application.app";
 const DIRECTORY_FLAGS: OFlags = OFlags::RDONLY
 	.union(OFlags::DIRECTORY)
 	.union(OFlags::NOFOLLOW)
@@ -40,11 +45,15 @@ const CREATE_FLAGS: OFlags = OFlags::RDWR
 
 #[derive(Debug, Error)]
 pub(super) enum Error {
-	#[error("signed output must name a .dmg file")]
+	#[error("signed output must name a .dmg file or .app bundle of the requested kind")]
 	InvalidDestination,
+	#[error("could not open the source bundle directory")]
+	SourceDirectory(#[source] io::Error),
+	#[error("signed output cannot be inside the source bundle")]
+	InsideSource,
 	#[error("could not open the output directory")]
 	Directory(#[source] io::Error),
-	#[error("could not inspect the signed image output or stage")]
+	#[error("could not inspect the signed output or stage")]
 	Inspect(#[source] io::Error),
 	#[error("signed output already exists")]
 	AlreadyExists,
@@ -54,12 +63,34 @@ pub(super) enum Error {
 	OpenImage(#[source] io::Error),
 	#[error("the output directory changed during signing")]
 	DirectoryChanged,
-	#[error("the staging directory or its image changed during signing")]
+	#[error("the staging directory or its artifact changed during signing")]
 	StageChanged,
-	#[error("could not sync the verified signing image")]
+	#[error("could not sync the verified signing artifact")]
 	Sync(#[source] io::Error),
-	#[error("could not publish the verified signing image")]
+	#[error("could not publish the verified signing artifact")]
 	Commit(#[source] io::Error),
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Kind {
+	Image,
+	App,
+}
+
+impl Kind {
+	fn extension(self) -> &'static str {
+		match self {
+			Self::Image => IMAGE_EXTENSION,
+			Self::App => APP_EXTENSION,
+		}
+	}
+
+	fn slot(self) -> &'static str {
+		match self {
+			Self::Image => STAGED_IMAGE,
+			Self::App => STAGED_APP,
+		}
+	}
 }
 
 /// Owns the private stage and holds stable descriptors for both directories.
@@ -67,22 +98,41 @@ pub(super) enum Error {
 /// The native signer needs an absolute pathname and can replace its input
 /// during signing. Use a trusted local output parent whose namespace remains
 /// stable while the native tool runs. The final rename never replaces an
-/// existing entry. The signed file is synced before publication.
+/// existing entry. The verified artifact is synced before publication.
 pub(super) struct Stage {
 	output_directory: OwnedFd,
 	output_path: PathBuf,
 	output_name: OsString,
 	stage_directory: OwnedFd,
 	stage_name: OsString,
-	image_path: PathBuf,
+	staged_path: PathBuf,
+	kind: Kind,
+	app_root: Cell<Option<Stat>>,
 }
 
 impl Stage {
 	pub(super) fn new(destination: &Path) -> Result<Self, Error> {
-		let (parent, output_name) = output_parts(destination)?;
+		Self::create(destination, Kind::Image, None)
+	}
+
+	pub(super) fn new_app(destination: &Path, source: &Path) -> Result<Self, Error> {
+		let source = fs::canonicalize(source).map_err(Error::SourceDirectory)?;
+		let directory = open_directory(&source)
+			.and_then(unix::fstat)
+			.map_err(|error| Error::SourceDirectory(error.into()))?;
+		Self::create(destination, Kind::App, Some(&directory))
+	}
+
+	fn create(destination: &Path, kind: Kind, source: Option<&Stat>) -> Result<Self, Error> {
+		let (parent, output_name) = output_parts(destination, kind.extension())?;
 		let parent = fs::canonicalize(parent).map_err(Error::Directory)?;
 		let output_directory =
 			open_directory(&parent).map_err(|error| Error::Directory(error.into()))?;
+		if let Some(source) = source
+			&& has_ancestor(&output_directory, source).map_err(inspect)?
+		{
+			return Err(Error::InsideSource);
+		}
 		match stat_entry(&output_directory, output_name) {
 			Ok(_) => return Err(Error::AlreadyExists),
 			Err(Errno::NOENT) => {}
@@ -96,21 +146,23 @@ impl Stage {
 			.make_in(&parent, |path| create_directory(&output_directory, path))
 			.map_err(Error::CreateStage)?;
 		let ((stage_directory, stage_name), _) = named.into_parts();
-		let image_path = parent.join(&stage_name).join(STAGED_IMAGE);
+		let staged_path = parent.join(&stage_name).join(kind.slot());
 		let stage = Self {
 			output_directory,
 			output_path: parent.join(output_name),
 			output_name: output_name.to_os_string(),
 			stage_directory,
 			stage_name,
-			image_path,
+			staged_path,
+			kind,
+			app_root: Cell::new(None),
 		};
 		stage.validate()?;
 		Ok(stage)
 	}
 
 	pub(super) fn path(&self) -> &Path {
-		&self.image_path
+		&self.staged_path
 	}
 
 	pub(super) fn destination(&self) -> &Path {
@@ -118,6 +170,7 @@ impl Stage {
 	}
 
 	pub(super) fn create_image(&self) -> Result<File, Error> {
+		self.require_kind(Kind::Image)?;
 		self.validate()?;
 		unix::openat(
 			&self.stage_directory,
@@ -159,17 +212,45 @@ impl Stage {
 	}
 
 	pub(super) fn validate_image(&self, file: &File) -> Result<(), Error> {
+		self.require_kind(Kind::Image)?;
 		let expected = unix::fstat(file).map_err(inspect)?;
 		if !is_private_file(&expected) {
 			return Err(Error::StageChanged);
 		}
+		self.validate_artifact(&expected)
+	}
+
+	pub(super) fn validate_app(&self, directory: &File) -> Result<(), Error> {
+		self.require_kind(Kind::App)?;
+		let expected = unix::fstat(directory).map_err(inspect)?;
+		if FileType::from_raw_mode(expected.st_mode) != FileType::Directory
+			|| self
+				.app_root
+				.get()
+				.is_some_and(|root| !same_identity(&root, &expected))
+		{
+			return Err(Error::StageChanged);
+		}
+		self.validate_artifact(&expected)?;
+		self.app_root.set(Some(expected));
+		Ok(())
+	}
+
+	fn require_kind(&self, kind: Kind) -> Result<(), Error> {
+		if self.kind != kind {
+			return Err(Error::StageChanged);
+		}
+		Ok(())
+	}
+
+	fn validate_artifact(&self, expected: &Stat) -> Result<(), Error> {
 		self.validate()?;
-		let current = match stat_entry(&self.stage_directory, OsStr::new(STAGED_IMAGE)) {
+		let current = match stat_entry(&self.stage_directory, OsStr::new(self.kind.slot())) {
 			Ok(current) => current,
 			Err(Errno::NOENT) => return Err(Error::StageChanged),
 			Err(error) => return Err(inspect(error)),
 		};
-		if !same_stamp(&expected, &current) {
+		if !same_stamp(expected, &current) {
 			return Err(Error::StageChanged);
 		}
 		Ok(())
@@ -178,9 +259,20 @@ impl Stage {
 	pub(super) fn publish(self, verified: &File) -> Result<PathBuf, Error> {
 		verified.sync_all().map_err(Error::Sync)?;
 		self.validate_image(verified)?;
+		self.rename()
+	}
+
+	pub(super) fn publish_app(self, verified: &File) -> Result<PathBuf, Error> {
+		self.validate_app(verified)?;
+		verified.sync_all().map_err(Error::Sync)?;
+		self.validate_app(verified)?;
+		self.rename()
+	}
+
+	fn rename(&self) -> Result<PathBuf, Error> {
 		match unix::renameat_with(
 			&self.stage_directory,
-			STAGED_IMAGE,
+			self.kind.slot(),
 			&self.output_directory,
 			&self.output_name,
 			RenameFlags::NOREPLACE,
@@ -196,7 +288,16 @@ impl Drop for Stage {
 	fn drop(&mut self) {
 		// The child slot belongs to this directory descriptor. No recursive
 		// pathname cleanup can touch an unrelated replacement stage.
-		let _ = unix::unlinkat(&self.stage_directory, STAGED_IMAGE, AtFlags::empty());
+		match self.kind {
+			Kind::Image => {
+				let _ = unix::unlinkat(&self.stage_directory, STAGED_IMAGE, AtFlags::empty());
+			}
+			Kind::App => cleanup::remove_app(
+				&self.stage_directory,
+				OsStr::new(STAGED_APP),
+				self.app_root.get().as_ref(),
+			),
+		}
 		if let Ok(original) = unix::fstat(&self.stage_directory)
 			&& let Ok(current) = stat_entry(&self.output_directory, &self.stage_name)
 			&& same_identity(&original, &current)
@@ -206,7 +307,10 @@ impl Drop for Stage {
 	}
 }
 
-fn output_parts(destination: &Path) -> Result<(&Path, &OsStr), Error> {
+fn output_parts<'a>(
+	destination: &'a Path,
+	extension: &str,
+) -> Result<(&'a Path, &'a OsStr), Error> {
 	match destination
 		.as_os_str()
 		.as_encoded_bytes()
@@ -220,7 +324,7 @@ fn output_parts(destination: &Path) -> Result<(&Path, &OsStr), Error> {
 	}
 	if !destination
 		.extension()
-		.is_some_and(|extension| extension.eq_ignore_ascii_case(IMAGE_EXTENSION))
+		.is_some_and(|actual| actual.eq_ignore_ascii_case(extension))
 	{
 		return Err(Error::InvalidDestination);
 	}
@@ -230,6 +334,23 @@ fn output_parts(destination: &Path) -> Result<(&Path, &OsStr), Error> {
 		.filter(|path| !path.as_os_str().is_empty())
 		.unwrap_or_else(|| Path::new(CURRENT_DIRECTORY));
 	Ok((parent, name))
+}
+
+fn has_ancestor(directory: &OwnedFd, source: &Stat) -> rustix::io::Result<bool> {
+	let mut current = unix::openat(directory, CURRENT_DIRECTORY, DIRECTORY_FLAGS, Mode::empty())?;
+	let mut identity = unix::fstat(&current)?;
+	loop {
+		if same_identity(&identity, source) {
+			return Ok(true);
+		}
+		let parent = unix::openat(&current, PARENT_DIRECTORY, DIRECTORY_FLAGS, Mode::empty())?;
+		let parent_identity = unix::fstat(&parent)?;
+		if same_identity(&identity, &parent_identity) {
+			return Ok(false);
+		}
+		current = parent;
+		identity = parent_identity;
+	}
 }
 
 fn open_directory(path: &Path) -> rustix::io::Result<OwnedFd> {

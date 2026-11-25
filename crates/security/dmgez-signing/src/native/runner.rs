@@ -14,6 +14,7 @@ use rustix::fs::{OFlags, fcntl_getfl, fcntl_setfl};
 mod tests;
 
 const CODESIGN: &str = "/usr/bin/codesign";
+const DITTO: &str = "/usr/bin/ditto";
 const HDIUTIL: &str = "/usr/bin/hdiutil";
 const SECURITY: &str = "/usr/bin/security";
 const IDENTITY_LOOKUP: &[&str] = &["find-identity", "-v", "-p", "codesigning"];
@@ -53,6 +54,10 @@ pub(super) enum Error {
 
 pub(super) fn codesign(args: &[&OsStr]) -> Result<Output, Error> {
 	run(Command::new(CODESIGN).args(args), TIMEOUT, MAX_OUTPUT_BYTES)
+}
+
+pub(super) fn ditto(args: &[&OsStr]) -> Result<Output, Error> {
+	run(Command::new(DITTO).args(args), TIMEOUT, MAX_OUTPUT_BYTES)
 }
 
 pub(super) fn hdiutil(args: &[&OsStr]) -> Result<Output, Error> {

@@ -12,4 +12,7 @@ pub use report::{
 	ArtifactKind, Backend, Operation, PolicyAssessment, Report, ResolvedBackend, Status,
 };
 pub use signature::{ArtifactProblem, Error, check_signature};
-pub use signing::{DiskSigningReport, SignError, sign_disk_image};
+pub use signing::{
+	AppEntitlements, AppSigningItemReport, AppSigningReport, DiskSigningReport, SignError,
+	sign_application, sign_disk_image,
+};

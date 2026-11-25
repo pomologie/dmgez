@@ -8,15 +8,17 @@ repository.workspace = true
 description = "Explicit code signing and signature checks for dmgez"
 
 [features]
-native = ["dep:dmgez-udif", "dep:plist", "dep:rustix", "dep:sha2", "dep:tempfile"]
+native = ["dep:dmgez-macho", "dep:dmgez-udif", "dep:plist", "dep:quick-xml", "dep:rustix", "dep:sha2", "dep:tempfile"]
 
 [dependencies]
 serde.workspace = true
 thiserror.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
+dmgez-macho = { workspace = true, optional = true }
 dmgez-udif = { workspace = true, optional = true }
-plist = { workspace = true, optional = true, features = ["serde"] }
+plist = { workspace = true, optional = true, features = ["serde", "enable_unstable_features_that_may_break_with_minor_version_bumps"] }
+quick-xml = { workspace = true, optional = true }
 rustix = { workspace = true, optional = true }
 sha2 = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }
