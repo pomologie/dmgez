@@ -7,6 +7,8 @@ use std::{
 
 use serde_json::Value;
 
+#[cfg(all(feature = "signing-native", target_os = "macos"))]
+use super::POLICY_OPTIONS;
 use super::{APP, BINARY, BUNDLE, install};
 
 const PROJECT: &str = "dmg.toml";
@@ -67,6 +69,8 @@ fn plans_and_publishes_one_verified_bundle_without_overwrite() {
 
 	let copied = report(install(&image, &destination, &["--json"]), "complete", true);
 	assert_eq!(copied["published"], true);
+	assert!(copied["signature_check"].is_null());
+	assert!(copied["gatekeeper_assessment"].is_null());
 	assert_eq!(copied["plan"], planned["plan"]);
 	assert!(copied["residual_stage_name"].is_null());
 	let bundle = destination.join(BUNDLE);
@@ -103,6 +107,43 @@ fn plans_and_publishes_one_verified_bundle_without_overwrite() {
 	assert!(conflict["error"].as_str().unwrap().contains("exists"));
 	assert_eq!(fs::read(&binary).unwrap(), PROGRAM);
 	assert_eq!(fs::read(&image).unwrap(), original);
+}
+
+#[cfg(all(feature = "signing-native", target_os = "macos"))]
+#[test]
+fn dry_run_reports_requested_checks_and_signature_refusal_prevents_publication() {
+	let temporary = tempfile::tempdir().unwrap();
+	let root = temporary.path().canonicalize().unwrap();
+	let image = build(&root, LINK_TARGET);
+	let destination = root.join("destination");
+	fs::create_dir(&destination).unwrap();
+	let [signature_option, assessment_option] = POLICY_OPTIONS;
+	let planned = report(
+		install(
+			&image,
+			&destination,
+			&[signature_option, assessment_option, "--dry-run", "--json"],
+		),
+		"planned",
+		true,
+	);
+	assert_eq!(planned["signature_check"], "pending");
+	assert_eq!(planned["gatekeeper_assessment"], "pending");
+	assert_empty(&destination);
+	let refused = report(
+		install(&image, &destination, &[signature_option, "--json"]),
+		"failed",
+		false,
+	);
+	assert_eq!(refused["signature_check"], "failed");
+	assert!(refused["gatekeeper_assessment"].is_null());
+	assert_eq!(refused["published"], false);
+	assert!(!destination.join(BUNDLE).exists());
+	let residual = refused["residual_stage_name"].as_str().unwrap();
+	assert_eq!(
+		fs::read(destination.join(residual).join(BUNDLE).join(EXECUTABLE)).unwrap(),
+		PROGRAM
+	);
 }
 
 #[test]

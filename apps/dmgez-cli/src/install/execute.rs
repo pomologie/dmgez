@@ -10,7 +10,10 @@ use dmgez_config::VirtualPath;
 use dmgez_inspector::SCHEMA_VERSION;
 use dmgez_operations::{
 	extract::{NameLimits, NameProfile, host::StableDestination},
-	install::{CopyLimits, CopySummary, execute_copy, prepare_application, prepare_copy},
+	install::{
+		CopyLimits, CopySummary, execute_copy, execute_copy_with_check, prepare_application,
+		prepare_copy,
+	},
 };
 use dmgez_vfs::volume::{VolumeBackend, VolumeView};
 use serde::Serialize;
@@ -28,6 +31,8 @@ use crate::{
 };
 
 use super::{Arguments, COMMAND, MAX_BYTES_OPTION};
+
+mod policy;
 
 const STAGING_DEPTH: usize = 2;
 
@@ -65,7 +70,7 @@ pub(super) fn apfs(arguments: &Arguments) -> CliResult {
 
 fn run(arguments: &Arguments, perform: impl FnOnce(&mut Report<'_>) -> CliResult) -> CliResult {
 	let directory = absolute(&arguments.destination)?;
-	let mut report = Report::new(&arguments.app, &directory);
+	let mut report = Report::new(arguments, &directory);
 	let result = perform(&mut report);
 	report.status = match (&result, arguments.dry_run, report.published) {
 		(Ok(()), true, _) => Status::Planned,
@@ -113,7 +118,20 @@ where
 		verify_source()?;
 		return Ok(());
 	}
-	match execute_copy(view, &plan, &directory.directory(), verify_source, || false) {
+	let destination = directory.directory();
+	let result = if report.checks.requested() {
+		execute_copy_with_check(
+			view,
+			&plan,
+			&destination,
+			verify_source,
+			|| false,
+			|path| report.checks.verify(path),
+		)
+	} else {
+		execute_copy(view, &plan, &destination, verify_source, || false)
+	};
+	match result {
 		Ok(_) => {
 			report.published = true;
 			Ok(())
@@ -177,6 +195,8 @@ struct Report<'input> {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	apfs_volume: Option<VolumeIdentity>,
 	plan: Option<Plan>,
+	#[serde(flatten)]
+	checks: policy::Checks,
 	published: bool,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	residual_stage_name: Option<String>,
@@ -185,12 +205,12 @@ struct Report<'input> {
 }
 
 impl<'input> Report<'input> {
-	fn new(source_path: &'input str, destination: &'input Path) -> Self {
+	fn new(arguments: &'input Arguments, destination: &'input Path) -> Self {
 		Self {
 			schema_version: SCHEMA_VERSION,
 			operation: COMMAND,
 			status: Status::Failed,
-			source_path,
+			source_path: &arguments.app,
 			destination,
 			destination_directory: destination.to_string_lossy(),
 			destination_bytes: destination
@@ -201,6 +221,7 @@ impl<'input> Report<'input> {
 			#[cfg(feature = "apfs-install")]
 			apfs_volume: None,
 			plan: None,
+			checks: policy::Checks::new(arguments),
 			published: false,
 			residual_stage_name: None,
 			error: None,
@@ -227,6 +248,7 @@ impl<'input> Report<'input> {
 			writeln!(output, "planned_attributes = {}", plan.attributes)?;
 		}
 		writeln!(output, "published = {}", self.published)?;
+		self.checks.write(output)?;
 		if let Some(name) = &self.residual_stage_name {
 			writeln!(output, "residual_stage_name = {}", EscapedText(name))?;
 		}
