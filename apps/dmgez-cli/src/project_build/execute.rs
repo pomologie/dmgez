@@ -2,16 +2,14 @@ use std::{
 	cell::Cell,
 	io::{self, Write},
 	path::Path,
-	thread,
 };
 
-use dmgez_builder::{
-	planning::PreparedBuild,
-	preflight::{OutputIntent, PreflightOptions, ReleaseIntent, ReleasePlan},
-	progress::BuildProgress,
+use dmgez_builder::{partition::Layout, preflight::ReleasePlan, progress::BuildProgress};
+use dmgez_config::ConfigOverride;
+use dmgez_hfsplus::MetadataLoss;
+use dmgez_runtime::project_build::{
+	BuildError, BuildEvent, BuildMode, BuildOutcome, BuildProject, PlanSummary, ProjectRequest,
 };
-use dmgez_config::{ConfigOverride, ImageFormat, Project};
-use dmgez_hfsplus::{self as hfsplus, HfsImage, MetadataLoss};
 
 use crate::{CliResult, project_input};
 
@@ -19,97 +17,83 @@ use super::Arguments;
 #[cfg(feature = "project-release")]
 use super::release::ReleaseRequest;
 
-const OVERWRITE_ASSIGNMENT: &str = "build.overwrite=true";
 const MAX_LOSS_DETAILS: usize = 20;
 const READ_PROGRESS_STEPS: u64 = 10;
-const RELATIVE_WORKING_DIRECTORY: &str = "working directory must be absolute";
-const MISSING_PROJECT_DIRECTORY: &str = "project path has no parent directory";
 const DUPLICATE_OVERWRITE: &str = "choose either --overwrite or --set build.overwrite";
+#[cfg(not(feature = "project-release"))]
+const RELEASE_FEATURE_REQUIRED: &str = "release builds require the project-release feature";
 const RELEASE_DEFERRED: &str =
 	"Configured release stages were deferred. Published an unsigned image.";
 
 pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> CliResult {
-	if !working_directory.is_absolute() {
-		return Err(RELATIVE_WORKING_DIRECTORY.into());
-	}
 	#[cfg(not(feature = "project-release"))]
 	if arguments.release {
-		return Err("release builds require the project-release feature".into());
+		return Err(RELEASE_FEATURE_REQUIRED.into());
 	}
-	let path = working_directory.join(&arguments.project).canonicalize()?;
-	let directory = path.parent().ok_or(MISSING_PROJECT_DIRECTORY)?;
-	let input = project_input::read(&path)?;
-	let defines = project_input::definitions(&arguments.define)?;
-	let mut overrides = arguments
+	let definitions = project_input::definitions(&arguments.define)?;
+	let overrides = arguments
 		.set
 		.iter()
 		.map(|assignment| ConfigOverride::parse(assignment))
 		.collect::<Result<Vec<_>, _>>()?;
-	if arguments.overwrite {
-		let overwrite = ConfigOverride::parse(OVERWRITE_ASSIGNMENT)?;
-		if overrides
-			.iter()
-			.any(|assignment| assignment.key() == overwrite.key())
-		{
-			return Err(DUPLICATE_OVERWRITE.into());
-		}
-		overrides.push(overwrite);
-	}
-	let project = Project::parse_with_overrides(&input, &defines, &overrides, working_directory)?;
-	#[cfg(feature = "project-release")]
-	let release = ReleaseRequest::admit(&project, &arguments, working_directory)?;
+	let project = match BuildProject::load(ProjectRequest {
+		path: &arguments.project,
+		working_directory,
+		definitions: &definitions,
+		overrides,
+		overwrite: arguments.overwrite,
+	}) {
+		Err(BuildError::DuplicateOverwrite) => return Err(DUPLICATE_OVERWRITE.into()),
+		result => result?,
+	};
 	let progress = Progress::default();
-	let capabilities = hfsplus::capabilities();
 	#[cfg(feature = "project-release")]
-	let capabilities = {
-		let mut capabilities = capabilities;
-		if release.is_some() {
-			capabilities.release = dmgez_builder::preflight::Availability::Available;
-			capabilities.verify = dmgez_builder::preflight::Availability::Available;
+	if let Some(release) = ReleaseRequest::admit(project.project(), &arguments, working_directory)?
+	{
+		let prepared =
+			project.prepare_release(Default::default(), |event| progress.update(event))?;
+		let sealed = prepared.seal()?;
+		report_losses(sealed.metadata_losses());
+		if arguments.dry_run {
+			let summary = PlanSummary::from_sealed(prepared.prepared(), &sealed);
+			write_dry_run(io::stdout().lock(), &summary)?;
+			return Ok(());
 		}
-		capabilities
-	};
-	let intent = if arguments.release {
-		ReleaseIntent::Release
-	} else {
-		ReleaseIntent::Unsigned
-	};
-	let prepared = hfsplus::prepare_with_progress(
-		&project,
-		directory,
-		PreflightOptions {
-			capabilities,
-			output: OutputIntent::Path,
-			release: intent,
-			host_threads: thread::available_parallelism()?,
-		},
-		Default::default(),
-		|event| progress.update(event),
-	)?;
-	let sealed = prepared.seal()?;
-	let losses = report_losses(sealed.metadata_losses());
-	if arguments.dry_run {
-		write_dry_run(io::stdout().lock(), prepared.prepared(), &sealed, losses)?;
-		return Ok(());
-	}
-	#[cfg(feature = "project-release")]
-	if let Some(release) = release {
 		return release.run(sealed, prepared.prepared(), arguments.json, |event| {
 			progress.update(event)
 		});
 	}
-	let report = sealed.publish_with_progress(None, |event| progress.update(event))?;
-	if report.report.release == ReleasePlan::ConfiguredStagesDeferred {
+	let mode = if arguments.dry_run {
+		BuildMode::Plan
+	} else {
+		BuildMode::Publish
+	};
+	let (report, losses) = match project.run(mode, Default::default(), |event| match event {
+		BuildEvent::Progress(event) => progress.update(event),
+		BuildEvent::MetadataLosses(entries) => {
+			report_losses(entries);
+		}
+	})? {
+		BuildOutcome::Planned(summary) => {
+			write_dry_run(io::stdout().lock(), &summary)?;
+			return Ok(());
+		}
+		BuildOutcome::Published {
+			report,
+			metadata_losses,
+		} => (report, metadata_losses),
+	};
+	if report.release == ReleasePlan::ConfiguredStagesDeferred {
 		writeln!(io::stderr().lock(), "{RELEASE_DEFERRED}")?;
 	}
 	#[cfg(feature = "compression-cache")]
-	if let Some(cache) = report.report.cache {
+	if let Some(cache) = report.cache {
 		let mut output = io::stderr().lock();
 		writeln!(output, "cache_hits={}", cache.hits)?;
 		writeln!(output, "cache_misses={}", cache.misses)?;
 		writeln!(output, "cache_rejected={}", cache.rejected)?;
 	}
-	let image = report.report.image;
+	let image = report.image;
 	writeln!(
 		io::stdout().lock(),
 		"{} logical bytes, {} physical bytes, {losses} metadata losses",
@@ -119,45 +103,34 @@ pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> CliResult
 	Ok(())
 }
 
-fn write_dry_run(
-	mut output: impl Write,
-	prepared: &PreparedBuild,
-	image: &HfsImage<'_>,
-	losses: usize,
-) -> io::Result<()> {
-	let profile = prepared.profile();
-	let manifest = prepared.manifest();
-	#[cfg(feature = "finder-write")]
-	let finder_assets = prepared.finder_asset_count();
-	#[cfg(not(feature = "finder-write"))]
-	let finder_assets = 0;
+fn write_dry_run(mut output: impl Write, summary: &PlanSummary) -> io::Result<()> {
 	writeln!(output, "mode=dry-run")?;
-	writeln!(output, "format={:?}", profile.format())?;
-	writeln!(output, "filesystem={:?}", profile.filesystem())?;
-	if profile.partition() != dmgez_builder::partition::Layout::Partitionless {
-		writeln!(output, "partition={:?}", profile.partition())?;
+	writeln!(output, "format={:?}", summary.format)?;
+	writeln!(output, "filesystem={:?}", summary.filesystem)?;
+	if summary.partition != Layout::Partitionless {
+		writeln!(output, "partition={:?}", summary.partition)?;
 	}
-	writeln!(output, "finder={:?}", profile.finder())?;
-	writeln!(output, "output={:?}", prepared.output_path())?;
-	writeln!(output, "publication={:?}", profile.output())?;
-	writeln!(output, "release={:?}", profile.release())?;
-	if profile.cache().is_some() {
+	writeln!(output, "finder={:?}", summary.finder)?;
+	writeln!(output, "output={:?}", summary.output)?;
+	writeln!(output, "publication={:?}", summary.publication)?;
+	writeln!(output, "release={:?}", summary.release)?;
+	if summary.compression_cache {
 		writeln!(output, "compression_cache=enabled")?;
 	}
-	writeln!(output, "logical_bytes={}", image.logical_bytes())?;
-	if profile.format() == ImageFormat::Udrw {
-		writeln!(output, "physical_bytes={}", image.logical_bytes())?;
+	writeln!(output, "logical_bytes={}", summary.logical_bytes)?;
+	if let Some(physical_bytes) = summary.physical_bytes {
+		writeln!(output, "physical_bytes={physical_bytes}")?;
 	} else {
 		writeln!(output, "physical_bytes=unknown")?;
 	}
-	writeln!(output, "resolved_entries={}", manifest.entries().len())?;
+	writeln!(output, "resolved_entries={}", summary.resolved_entries)?;
 	writeln!(
 		output,
 		"source_payload_bytes={}",
-		manifest.regular_payload_bytes()
+		summary.source_payload_bytes
 	)?;
-	writeln!(output, "finder_assets={finder_assets}")?;
-	writeln!(output, "metadata_losses={losses}")?;
+	writeln!(output, "finder_assets={}", summary.finder_assets)?;
+	writeln!(output, "metadata_losses={}", summary.metadata_losses)?;
 	Ok(())
 }
 

@@ -24,6 +24,7 @@ class ReleaseCompositionTests(unittest.TestCase):
         features = tomllib.loads(text)["features"]
         self.assertIn(compose.PROJECT_RELEASE_FEATURE, features["default"])
         self.assertIn("signing-rust", features["default"])
+        self.assertIn("dmgez-runtime/project-build", features["project-build"])
         for line in original.splitlines():
             if line.startswith("# "):
                 self.assertIn(line, text.splitlines())
@@ -270,6 +271,9 @@ class WindowsCompositionTests(unittest.TestCase):
             (root / compose.MANIFEST).write_text("[workspace]\n", encoding="utf-8")
             original = compose.ROOT / compose.CLI / compose.MANIFEST
             (root / compose.CLI / compose.MANIFEST).write_bytes(original.read_bytes())
+            (root / compose.RUNTIME).mkdir(parents=True)
+            runtime = compose.ROOT / compose.RUNTIME / compose.MANIFEST
+            (root / compose.RUNTIME / compose.MANIFEST).write_bytes(runtime.read_bytes())
             with patch.object(compose, "ROOT", root):
                 compose.prepare_workspace(workspace, {compose.HFSPLUS_BUILDER: package})
 
@@ -277,6 +281,11 @@ class WindowsCompositionTests(unittest.TestCase):
             self.assertEqual(manifest["patch"]["crates-io"][compose.HFSPLUS_BUILDER]["path"], str(package))
             cli = compose.load_toml(workspace / compose.CLI / compose.MANIFEST)
             self.assertIn("project-build", cli["features"]["build"])
+            runtime = compose.load_toml(workspace / compose.RUNTIME / compose.MANIFEST)
+            self.assertIn("dep:dmgez-hfsplus", runtime["features"]["project-build"])
+            self.assertEqual(
+                runtime["dependencies"][compose.ADAPTER]["path"], "../../adapters/dmgez-hfsplus",
+            )
 
     def test_windows_test_mode_runs_native_ntfs_regression(self):
         directory = Path.cwd()

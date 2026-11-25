@@ -86,8 +86,9 @@ PROJECT_EDIT_TEST = "project_edit_cli"
 IMAGE_EDIT_FEATURE = "image-edit"
 IMAGE_EDIT_TEST = "image_edit_cli"
 SOURCE_DIRS = ("apps", "crates", "tests", "third_party")
+RUNTIME = Path("crates/runtime/dmgez-runtime")
 PROJECT_FEATURES = {
-    "project-build": ["dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config"],
+    "project-build": ["dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config", "dmgez-runtime/project-build"],
     PROJECT_RELEASE_FEATURE: ["project-build", "inspect", "dep:dmgez-signing", "dep:sha2", "dep:tempfile"],
     PROJECT_EDIT_FEATURE: [
         "project-build", "dep:dmgez-core", "dep:dmgez-operations", "dmgez-operations/edit",
@@ -97,7 +98,7 @@ PROJECT_FEATURES = {
     PARTITION_WRITE_FEATURE: ["project-build", f"{ADAPTER}/partition-write"],
 }
 FINDER_FEATURES = {
-    "finder-write": ["dmgez-builder?/finder-write", f"{ADAPTER}?/finder-write"],
+    "finder-write": ["dmgez-builder?/finder-write", f"{ADAPTER}?/finder-write", "dmgez-runtime?/finder-write"],
     "volume-icon": ["finder-write", f"{ADAPTER}?/volume-icon"],
     "badge-icons": ["volume-icon", f"{ADAPTER}?/badge-icons"],
 }
@@ -269,6 +270,34 @@ def compose_desktop_manifest(manifest):
     )
 
 
+def compose_runtime_manifest(manifest):
+    dependency_section = "\n[dependencies]\n"
+    dependencies = [
+        'dmgez-hfsplus = { path = "../../adapters/dmgez-hfsplus", optional = true, default-features = false }',
+    ]
+    features = [
+        render_feature("project-build", [
+            "project-input", "dep:dmgez-builder", "dep:dmgez-hfsplus", "dep:dmgez-udif", "dmgez-udif/write",
+        ]),
+        render_feature("finder-write", ["dmgez-builder?/finder-write"]),
+    ]
+    before, boundary, after = manifest.partition(dependency_section)
+    if not boundary:
+        raise ValueError("could not find the runtime dependencies section")
+    return before + "\n# Composed project workflows\n" + "\n".join(features) + "\n" + (
+        boundary + "# Composed filesystem dependencies\n" + "\n".join(dependencies) + "\n\n" + after
+    )
+
+
+def replace_manifest(directory, relative, transform):
+    path = directory / relative / MANIFEST
+    if not path.parent.resolve().is_relative_to(directory.resolve()):
+        raise ValueError("copied manifest directory points outside the temporary workspace")
+    updated = transform(path.read_text(encoding="utf-8"))
+    path.unlink()
+    path.write_text(updated, encoding="utf-8")
+
+
 def prepare_workspace(directory, packages, *, desktop=False):
     for name in SOURCE_DIRS:
         shutil.copytree(
@@ -292,21 +321,18 @@ def prepare_workspace(directory, packages, *, desktop=False):
     )
 
     # Replace the copied entry or symlink without writing through to the checkout.
-    app_manifest = directory / (DESKTOP if desktop else CLI) / MANIFEST
-    if not app_manifest.parent.resolve().is_relative_to(directory.resolve()):
-        raise ValueError("copied app directory points outside the temporary workspace")
-    original = app_manifest.read_text(encoding="utf-8")
+    build = HFSPLUS_BUILDER in packages
+    if build:
+        replace_manifest(directory, RUNTIME, compose_runtime_manifest)
     if desktop:
-        text = compose_desktop_manifest(original)
+        replace_manifest(directory, DESKTOP, compose_desktop_manifest)
     else:
-        text = compose_cli_manifest(
-            original,
+        replace_manifest(directory, CLI, lambda manifest: compose_cli_manifest(
+            manifest,
             reader=HFSPLUS_READER in packages,
-            build=HFSPLUS_BUILDER in packages,
+            build=build,
             apfs=APFS_READER in packages,
-        )
-    app_manifest.unlink()
-    app_manifest.write_text(text, encoding="utf-8")
+        ))
 
 
 def registry_packages(lock):

@@ -9,6 +9,7 @@ description = "Shared disk image workflows for dmgez applications"
 
 [features]
 image = ["dep:dmgez-inspector", "dep:dmgez-udif", "dep:dmgez-vfs", "dep:thiserror"]
+project-input = ["dep:dmgez-config", "dep:thiserror"]
 raw-export = ["image", "dep:dmgez-core", "dmgez-core/staging"]
 
 [dependencies]
@@ -16,8 +17,12 @@ raw-export = ["image", "dep:dmgez-core", "dmgez-core/staging"]
 dmgez-udif = { workspace = true, optional = true, features = ["read"] }
 
 # Workspace foundation
+dmgez-config = { workspace = true, optional = true }
 dmgez-core = { workspace = true, optional = true }
 dmgez-vfs = { workspace = true, optional = true }
+
+# Workspace build
+dmgez-builder = { workspace = true, optional = true }
 
 # Workspace inspection
 dmgez-inspector = { workspace = true, optional = true }

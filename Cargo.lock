@@ -1329,6 +1329,8 @@ dependencies = [
 name = "dmgez-runtime"
 version = "0.1.0"
 dependencies = [
+ "dmgez-builder",
+ "dmgez-config",
  "dmgez-core",
  "dmgez-inspector",
  "dmgez-udif",
