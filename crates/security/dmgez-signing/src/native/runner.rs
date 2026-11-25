@@ -14,6 +14,9 @@ use rustix::fs::{OFlags, fcntl_getfl, fcntl_setfl};
 mod tests;
 
 const CODESIGN: &str = "/usr/bin/codesign";
+const HDIUTIL: &str = "/usr/bin/hdiutil";
+const SECURITY: &str = "/usr/bin/security";
+const IDENTITY_LOOKUP: &[&str] = &["find-identity", "-v", "-p", "codesigning"];
 const SYSTEM_ROOT: &str = "/";
 const SYSTEM_PATH: &str = "/usr/bin:/bin";
 const LOCALE: &str = "C";
@@ -30,17 +33,17 @@ pub(super) struct Output {
 
 #[derive(Debug, thiserror::Error)]
 pub(super) enum Error {
-	#[error("could not start codesign")]
+	#[error("could not start the native tool")]
 	Spawn(#[source] io::Error),
-	#[error("could not collect codesign output or exit status")]
+	#[error("could not collect the native tool's output or exit status")]
 	Capture(#[source] io::Error),
-	#[error("could not allocate the bounded codesign output buffer")]
+	#[error("could not allocate the bounded native tool output buffer")]
 	Allocation(#[from] TryReserveError),
-	#[error("codesign did not finish within {timeout:?}")]
+	#[error("native tool did not finish within {timeout:?}")]
 	Timeout { timeout: Duration },
-	#[error("codesign exceeded its combined output limit of {limit} bytes")]
+	#[error("native tool exceeded its combined output limit of {limit} bytes")]
 	OutputLimit { limit: usize },
-	#[error("could not clean up codesign after {operation}")]
+	#[error("could not clean up the native tool after {operation}")]
 	Cleanup {
 		operation: Box<Error>,
 		#[source]
@@ -50,6 +53,18 @@ pub(super) enum Error {
 
 pub(super) fn codesign(args: &[&OsStr]) -> Result<Output, Error> {
 	run(Command::new(CODESIGN).args(args), TIMEOUT, MAX_OUTPUT_BYTES)
+}
+
+pub(super) fn hdiutil(args: &[&OsStr]) -> Result<Output, Error> {
+	run(Command::new(HDIUTIL).args(args), TIMEOUT, MAX_OUTPUT_BYTES)
+}
+
+pub(super) fn find_code_signing_identities() -> Result<Output, Error> {
+	run(
+		Command::new(SECURITY).args(IDENTITY_LOOKUP),
+		TIMEOUT,
+		MAX_OUTPUT_BYTES,
+	)
 }
 
 fn run(command: &mut Command, timeout: Duration, output_limit: usize) -> Result<Output, Error> {

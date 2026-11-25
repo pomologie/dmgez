@@ -18,7 +18,7 @@ pub(super) struct Artifact {
 	kind: ArtifactKind,
 	initial: Metadata,
 	// Keep the inode alive while the system tool opens the path independently.
-	_file: File,
+	file: File,
 }
 
 impl Artifact {
@@ -60,7 +60,7 @@ impl Artifact {
 			path,
 			kind,
 			initial,
-			_file: file,
+			file,
 		})
 	}
 
@@ -70,6 +70,14 @@ impl Artifact {
 
 	pub(super) fn kind(&self) -> ArtifactKind {
 		self.kind
+	}
+
+	pub(super) fn file(&self) -> &File {
+		&self.file
+	}
+
+	pub(super) fn len(&self) -> u64 {
+		self.initial.len()
 	}
 
 	pub(super) fn invalid(&self, problem: ArtifactProblem) -> Error {

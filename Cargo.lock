@@ -1144,8 +1144,11 @@ name = "dmgez-signing"
 version = "0.1.0"
 dependencies = [
  "dmgez-udif",
+ "plist",
  "rustix 1.1.6",
  "serde",
+ "sha2",
+ "tempfile",
  "thiserror 2.0.21",
 ]
 

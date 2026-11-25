@@ -5,10 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "Explicit code signature inspection and validation for dmgez"
+description = "Explicit code signing and signature checks for dmgez"
 
 [features]
-native = ["dep:dmgez-udif", "dep:rustix"]
+native = ["dep:dmgez-udif", "dep:plist", "dep:rustix", "dep:sha2", "dep:tempfile"]
 
 [dependencies]
 serde.workspace = true
@@ -16,7 +16,10 @@ thiserror.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 dmgez-udif = { workspace = true, optional = true }
+plist = { workspace = true, optional = true, features = ["serde"] }
 rustix = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+tempfile = { workspace = true, optional = true }
 
 [lints]
 workspace = true

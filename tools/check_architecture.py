@@ -20,7 +20,7 @@ PROFILES = {
     "installer_lint": (["--no-default-features", "--features", "installer-lint"], {"dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-lint", "dmgez-preview", "dmgez-udif", "serde_json"}),
     "appdmg_import": (["--no-default-features", "--features", "appdmg-import"], {"dmgez-config", "dmgez-core", "serde_json"}),
     "native_signing": (["--no-default-features", "--features", "signing-native"],
-                       {"dmgez-signing", "serde_json"} | ({"dmgez-udif"} if sys.platform == "darwin" else set())),
+                       {"dmgez-signing", "serde_json"} | ({"dmgez-udif", "sha2"} if sys.platform == "darwin" else set())),
 }
 OUTSIDE_DEFAULT = {
     "apple-codesign", "apple-dmg", "apfs", "apfs-container", "apfs-core", "apfs-format", "apfs-reader",
@@ -28,7 +28,7 @@ OUTSIDE_DEFAULT = {
     "hfsplus-reader", "lzfse_rust", "lzma-rust2", "notify",
     "reqwest", "rmcp", "tokio", "udif", "winfsp",
 }
-PROFILE_DEPS = {"blake3", "dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-inspector", "dmgez-lint", "dmgez-operations", "dmgez-preview", "dmgez-signing", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "rayon", "serde_json"}
+PROFILE_DEPS = {"blake3", "dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-inspector", "dmgez-lint", "dmgez-operations", "dmgez-preview", "dmgez-signing", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "rayon", "serde_json", "sha2"}
 
 
 def main():

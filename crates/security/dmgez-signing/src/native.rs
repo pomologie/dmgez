@@ -6,7 +6,10 @@ use crate::{
 };
 
 mod artifact;
+pub(super) mod disk;
+mod identity;
 mod runner;
+mod stage;
 
 #[cfg(test)]
 mod tests;
