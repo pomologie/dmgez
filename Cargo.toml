@@ -15,6 +15,9 @@ members = [
 	"crates/foundation/dmgez-core",
 	"crates/foundation/dmgez-vfs",
 
+	# Platform
+	"crates/platform/dmgez-mount",
+
 	# Presentation
 	"crates/presentation/dmgez-finder",
 	"crates/presentation/dmgez-preview",
@@ -56,6 +59,9 @@ dmgez-udif = { path = "crates/formats/dmgez-udif", default-features = false }
 dmgez-config = { path = "crates/foundation/dmgez-config" }
 dmgez-core = { path = "crates/foundation/dmgez-core", default-features = false }
 dmgez-vfs = { path = "crates/foundation/dmgez-vfs", default-features = false }
+
+# Workspace platform
+dmgez-mount = { path = "crates/platform/dmgez-mount", default-features = false }
 
 # Workspace presentation
 dmgez-finder = { path = "crates/presentation/dmgez-finder" }
