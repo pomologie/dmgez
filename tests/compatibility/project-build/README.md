@@ -51,14 +51,27 @@ python3 check_finder_background.py --dmgez /path/to/dmgez --hfsplus /path/to/hfs
 
 The native check verifies each image with Apple tools, runs the HFS+ filesystem checker, and mounts the image read-only. Core Foundation resolves each alias without opening UI or mounting another volume. The test checks the catalog IDs and exact static PNG or prebuilt TIFF bytes. ImageIO compares both TIFF representations to the source pixels, and AppKit confirms their logical sizes and selection at 1× and 2×. The prebuilt case uses native `tiffutil` to create its input. [Core Foundation resolution options](https://developer.apple.com/documentation/corefoundation/bookmark-data-resolution-options?changes=l_2&language=objc)
 
-Use `--volume-icon` with a prebuilt ICNS configured relative to the project.
+Use `--volume-icon` with a prebuilt ICNS or a set of PNG representations configured relative to the project.
 
 ```toml
 [volume_icon]
 source = "artwork/Example.icns"
 ```
 
-The adapter preserves the validated source bytes in the root .VolumeIcon.icns file and sets the custom-icon bit on the root catalog record. Dry-run checks the asset and includes it in the planned capacity without staging an output. The source uses the same identity and output-alias checks as copied content. Its encoded bytes count toward the metadata budget, and the validator reserves decoder space against the build working budget. The [prebuilt profile and native evidence](../../../crates/presentation/dmgez-finder/VOLUME_ICON.md) describe covered ICNS encodings.
+```toml
+[volume_icon.images]
+"16" = "artwork/icon_16x16.png"
+"16@2x" = "artwork/icon_16x16@2x.png"
+"512" = "artwork/icon_512x512.png"
+```
+
+The adapter writes the ICNS to the root `.VolumeIcon.icns` file and sets the custom-icon bit on the root catalog record. Dry-run checks the asset and includes it in the planned capacity without staging an output. Each source uses the same identity and output-alias checks as copied content. The retained ICNS counts toward the metadata budget, and the validation and assembly workspace counts toward the build working budget. The [volume icon profile](../../../crates/presentation/dmgez-finder/VOLUME_ICON.md) describes the encodings and limitations.
+
+The native PNG-set check uses Apple's Swift compiler and `iconutil`. It publishes a disposable project image, verifies and mounts it read-only, checks the root flag with `GetFileInfo`, and checks dimensions and pixels for all ten input slots.
+
+```sh
+python3 check_finder_volume_icon.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplus
+```
 
 The qualified source profile covers ordinary regular file permissions and ownership, timestamp conversion at HFS+ precision, inline attributes, Finder information, a buffered resource fork, and exact symlink target bytes. The Unicode profile gives included regular-file hard links distinct catalog entries that share one chain-free inode, with both forks and attributes captured once. Source checks cover every alias before publication. Shared metadata losses name the representative and its other image paths. The strict policy rejects unavailable required directory and symlink attributes, subsecond date loss, unsupported BSD flags and attribute encodings, and hard-link groups outside the supported regular-file profile. Report policy records those losses, and an explicit hard-link preservation opt-out emits independent files with omission diagnostics. Explicit timestamp omission and an explicit generated epoch suit deterministic synthetic fixtures.
 

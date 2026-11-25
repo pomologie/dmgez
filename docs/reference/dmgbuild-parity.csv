@@ -10,9 +10,9 @@ content,symlinks,"contents[].type=symlink,target",0.2.0,planned,D-BUILD-02,Neste
 content,hide,contents[].hidden,0.2.0,planned,D-BUILD-02,Nested arbitrary paths; explicit root or folder-relative positions.
 content,hide_extensions,contents[].hide_extension,0.2.0,planned,D-BUILD-02,Nested arbitrary paths; explicit root or folder-relative positions.
 content,icon_locations,contents[].position,0.2.0,planned,D-BUILD-02,Nested arbitrary paths; explicit root or folder-relative positions.
-content,icon,volume_icon.source,0.2.0,planned,D-FINDER-01,Existing ICNS
+content,icon,volume_icon.source or volume_icon.images,0.2.0,partial,D-FINDER-01,Optional prebuilt ICNS and explicit PNG representations. Finder-window visual verification remains open.
 content,badge_icon,volume_icon.badge,0.3.0,planned,D-FINDER-03,Optional badge-icons; independent base artwork; native system icon may differ.
-window,background,finder.background,0.3.0,partial,D-FINDER-02,Static PNG and hex solid colors supported. Paired Retina PNG and compatible prebuilt TIFF supported. Finder visual and template parity remain open.
+window,background,finder.background,0.3.0,partial,D-FINDER-02,Static PNG and opaque solid colors supported. Paired Retina PNG and compatible prebuilt TIFF supported. Finder visual and template parity remain open.
 window,window_rect,finder.window_position+window_size,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
 window,show_status_bar,finder.show_status_bar,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.
 window,show_tab_view,finder.show_tab_view,0.3.0,planned,D-FINDER-02,Actual supported Finder behavior varies; legacy coverflow serialized only when qualified.

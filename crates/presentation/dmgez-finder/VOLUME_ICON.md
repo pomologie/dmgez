@@ -1,4 +1,4 @@
-# Prebuilt volume icons
+# Volume icon sources
 
 The optional volume-icon feature admits a prebuilt .icns file and borrows its original encoded bytes. A builder reserves .VolumeIcon.icns before catalog ID allocation, stores those bytes as the generated root asset, and applies the custom-icon flag to the root folder's catalog Finder information. The catalog field is distinct from the HFS+ volume-header field that contains boot and volume identity data. [Apple TN1150](https://developer.apple.com/library/archive/technotes/tn/tn1150.html#FinderInfo)
 
@@ -6,7 +6,13 @@ The parser limits the encoded ICNS file to 16 MiB, verifies every element bounda
 
 An optional info record may carry a binary property-list dictionary. The validator streams up to 256 events from at most 4 KiB of encoded bytes. Repeated references therefore cannot expand into an unbounded owned property-list tree. The application preserves this data without interpreting the archived metadata. This module uses the unstable stream API of plist 1.10.4, as locked in Cargo.lock. Revalidate the stream's allocation, iteration, and error behavior when updating that package. [plist 1.10.4 BinaryReader](https://docs.rs/plist/1.10.4/plist/stream/struct.BinaryReader.html)
 
-JPEG 2000, legacy icon elements, image generation, badging, and per-item icons require additional qualification. The validator performs no file I/O. Its caller reads a bounded, identity-checked local source and accounts for the decoder's working set.
+JPEG 2000, legacy icon elements, badging, and per-item icons require additional qualification. The validator performs no file I/O. Its caller reads bounded, identity-checked local sources and accounts for the decoder's working set.
+
+## PNG representations
+
+With the optional feature, the builder can also assemble a volume icon from an explicit `[volume_icon.images]` map. Supported logical sizes are 16, 32, 128, 256, and 512 points, each at standard or Retina scale. A key such as `"16@2x"` requires a 32 × 32 pixel PNG. The builder emits only the supplied slots, in ascending logical size with standard scale first. It checks complete PNG framing, checksums, dimensions, and decodability, and rejects animation. [Apple iconset reference](https://developer.apple.com/library/archive/documentation/Xcode/Reference/xcode_ref-Asset_Catalog_Format/IconSetType.html)
+
+The standard 16- and 32-point slots are encoded as Apple's planar ARGB types. Those slots require samples and color metadata that fit eight-bit sRGB. Unsupported color profiles or orientation data fail during build planning. The other eight slots preserve their validated PNG bytes. The builder bounds aggregate encoded input and ICNS output, charges the generated ICNS to the metadata budget, and checks every source again at publication.
 
 ## Native evidence
 
@@ -21,6 +27,8 @@ A scratch integration with Rust 1.99.1 on aarch64-apple-darwin used the Finder v
 The TOML runner then resolved a relative source with its `--volume-icon` feature enabled. The local integration used dmgez 049ab26 with the builder changes and hfsplus 5c87256. Dry-run reported both Finder assets without creating the output. Apple verified the 31,236-byte UDZO file, mounted its 94,208-byte logical HFS+ volume read-only, reported the custom-icon flag, and returned every input ICNS byte. The separate raw catalog check passed.
 
 These observations cover prebuilt asset admission, TOML build, and root flag placement for D-FINDER-01-T01 and D-FINDER-03-T01, plus the representation and wrong-dimension checks of D-FINDER-03-T02. Native Finder rendering still requires a separate check.
+
+For the generated profile, the composed HFS+ runner built a 1 MiB logical image from ten distinct synthetic RGBA PNGs on macOS 14.7.2 (23H311), arm64. Apple verified and mounted the 4,831-byte UDZO read-only. GetFileInfo read the root's custom-icon bit, iconutil found all ten named slots at the expected dimensions, and ImageIO matched the pixels and alpha of each isolated ICNS element. The pixel test isolates each element because full-family decoding can select the same image for slots that share physical pixel dimensions. The independent container test also verifies the planar ARGB samples and exact bytes of the other eight PNG payloads. [Native generated profile check](../../../tests/compatibility/project-build/check_finder_volume_icon.py)
 
 ~~~sh
 cargo test --locked -p dmgez-finder --features volume-icon --test volume_icon
