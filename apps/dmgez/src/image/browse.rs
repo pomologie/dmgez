@@ -10,6 +10,8 @@ use dmgez_inspector::{
 	DiskLimits,
 	volume_queries::{MAX_LIST_OFFSET, StorageMetadata, inspect_storage},
 };
+#[cfg(feature = "actual-preview")]
+use dmgez_preview::ItemVisibility;
 use dmgez_runtime::disk::{Encoding, with_logical_disk};
 use dmgez_udif::{
 	Cancellation, Error as ImageError,
@@ -25,8 +27,10 @@ use thiserror::Error;
 
 use super::{ImageSnapshot, ImageSource};
 
+pub(crate) mod history;
 #[cfg(feature = "actual-preview")]
 pub(crate) mod preview;
+pub(crate) mod search;
 
 pub(crate) const PAGE_ENTRIES: u64 = 64;
 const SCAN_BATCH_ENTRIES: u16 = 128;
@@ -40,6 +44,8 @@ pub(crate) struct Browser {
 	pub showing: bool,
 	pub page: Option<Page>,
 	pub details: Option<Details>,
+	pub history: history::History,
+	pub search: search::State,
 	#[cfg(feature = "actual-preview")]
 	pub preview: Option<preview::Presented>,
 }
@@ -48,19 +54,32 @@ impl Browser {
 	pub(crate) fn invalidate(&mut self) {
 		self.page = None;
 		self.details = None;
+		self.history = history::History::default();
+		self.search.clear();
 		#[cfg(feature = "actual-preview")]
 		{
 			self.preview = None;
 		}
 	}
 
-	pub(crate) fn show_page(&mut self, page: Page) {
+	pub(crate) fn show_page(&mut self, page: Page, direction: Option<history::Direction>) -> bool {
+		if !self.history.arrived(self.page.as_ref(), &page, direction) {
+			return false;
+		}
+		if self
+			.page
+			.as_ref()
+			.is_none_or(|old| old.location != page.location)
+		{
+			self.search.clear();
+		}
 		self.page = Some(page);
 		self.details = None;
 		#[cfg(feature = "actual-preview")]
 		{
 			self.preview = None;
 		}
+		true
 	}
 }
 
@@ -105,10 +124,15 @@ pub(crate) enum Request {
 		folder: Location,
 		name: RawName,
 	},
+	Search {
+		location: Location,
+		query: String,
+	},
 	#[cfg(feature = "actual-preview")]
 	Preview {
 		location: Location,
 		max_side: usize,
+		visibility: ItemVisibility,
 	},
 }
 
@@ -125,6 +149,7 @@ impl Request {
 pub(crate) enum Observation {
 	Page(Page),
 	Details(Details),
+	Search(search::Report),
 	#[cfg(feature = "actual-preview")]
 	Preview(preview::Prepared),
 }
@@ -174,6 +199,8 @@ pub(crate) enum Error {
 	NotDirectory,
 	#[error("catalog returned an empty incomplete page")]
 	StalledDirectory,
+	#[error(transparent)]
+	Search(#[from] dmgez_inspector::volume_queries::SearchError<browse::Error>),
 	#[cfg(feature = "actual-preview")]
 	#[error(transparent)]
 	Preview(#[from] dmgez_runtime::preview::actual::RenderError),
@@ -212,6 +239,7 @@ fn browse_image(source: impl ReadAt, request: Request) -> Result<Observation, Er
 	let volume = match &request {
 		Request::Page { location, .. } => location.volume,
 		Request::Details { folder, .. } => folder.volume,
+		Request::Search { location, .. } => location.volume,
 		#[cfg(feature = "actual-preview")]
 		Request::Preview { location, .. } => location.volume,
 	};
@@ -234,10 +262,17 @@ fn browse_image(source: impl ReadAt, request: Request) -> Result<Observation, Er
 					entry_details(view, &folder, name)
 				})?
 			}
-			#[cfg(feature = "actual-preview")]
-			Request::Preview { location, max_side } => {
-				preview::render(&mut disk, selected, limits, location, max_side)
+			Request::Search { location, query } => {
+				browse::with_view(&mut disk, selected, limits, |view| {
+					search::folder_search(view, location, query)
+				})?
 			}
+			#[cfg(feature = "actual-preview")]
+			Request::Preview {
+				location,
+				max_side,
+				visibility,
+			} => preview::render(&mut disk, selected, limits, location, max_side, visibility),
 		}
 	})
 }

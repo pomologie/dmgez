@@ -31,6 +31,7 @@ mod quarantine;
 mod session;
 mod xattrs;
 
+pub use native_names::NameFragment;
 pub use session::{SourceError, WindowSource, with_catalog};
 
 const HFS_SYMLINK_LIMIT: NonZeroUsize = NonZeroUsize::new(MAX_SYMLINK_TARGET_BYTES).unwrap();

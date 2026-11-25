@@ -56,7 +56,7 @@ fn shows_exact_attribute_names_and_resource_size_even_without_a_data_decoder() {
 	let mut tab = wrap(&materialize_sparse(&fixture(COMPRESSED)));
 	tab.browser.showing = true;
 	let observed = page(&tab, Location::root(VolumeId::WholeDisk), 0);
-	tab.browser.show_page(observed);
+	assert!(tab.browser.show_page(observed, None));
 	let Action::Browse(request @ Request::Details { .. }) =
 		activate(&mut tab, "Details for resource")
 	else {

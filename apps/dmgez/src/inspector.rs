@@ -28,6 +28,8 @@ pub(crate) enum Action {
 	#[cfg(feature = "actual-preview")]
 	ShowList,
 	#[cfg(feature = "hfsplus-read")]
+	History(crate::image::browse::history::Direction),
+	#[cfg(feature = "hfsplus-read")]
 	Browse(crate::image::browse::Request),
 }
 
@@ -112,7 +114,7 @@ pub(crate) fn show(ui: &mut Ui, image: &mut ImageTab, idle: bool) -> Option<Acti
 				.show(ui, |ui| {
 					#[cfg(feature = "hfsplus-read")]
 					if image.browser.showing {
-						return browse::show(ui, &image.browser, report.disk.as_ref(), idle);
+						return browse::show(ui, &mut image.browser, report.disk.as_ref(), idle);
 					}
 					show_disk(ui, report.disk.as_ref());
 					ui.separator();

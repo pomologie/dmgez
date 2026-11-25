@@ -97,13 +97,14 @@ impl Canvas {
 		min: CanvasPoint,
 		max: CanvasPoint,
 		directory: bool,
-	) -> Result<(), Error> {
+	) -> Result<[Range<usize>; 2], Error> {
 		let mut outer = Rect {
 			left: min.x(),
 			top: min.y(),
 			right: max.x(),
 			bottom: max.y(),
 		};
+		let bounds = self.clip(outer);
 		self.outline(outer, ICON_EDGE, ICON_SURFACE)?;
 		let inset = (outer.right - outer.left) * MARK_INSET_FRACTION;
 		outer = outer.inset(inset);
@@ -121,10 +122,11 @@ impl Canvas {
 					..outer
 				},
 				ICON_MARK,
-			)
+			)?;
 		} else {
-			self.outline(outer, ICON_MARK, ICON_SURFACE)
+			self.outline(outer, ICON_MARK, ICON_SURFACE)?;
 		}
+		Ok(bounds)
 	}
 
 	pub(super) fn paint(&mut self, rect: Rect, color: Rgb) -> Result<(), Error> {

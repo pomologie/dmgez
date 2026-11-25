@@ -14,6 +14,7 @@ use crate::{
 	inspector::{self, Action},
 };
 
+mod search;
 mod storage;
 
 const NATIVE_APM: &[u8] =
@@ -230,7 +231,28 @@ fn accessible_file_controls_request_volume_pages_and_folder_navigation() {
 				0
 			}
 		);
-		tab.browser.page = Some(observed);
+		assert!(tab.browser.show_page(observed, None));
+	}
+	for (control, direction) in [
+		("Back", history::Direction::Back),
+		("Forward", history::Direction::Forward),
+	] {
+		assert!(
+			matches!(activate(&mut tab, control), Action::History(actual) if actual == direction)
+		);
+		let request = tab.browser.history.request(direction).unwrap();
+		let Observation::Page(observed) = tab
+			.snapshot
+			.browse(request, &Cancellation::default())
+			.unwrap()
+		else {
+			panic!("expected folder page from {control}");
+		};
+		assert_eq!(
+			observed.location.path.len(),
+			usize::from(direction == history::Direction::Back)
+		);
+		assert!(tab.browser.show_page(observed, Some(direction)));
 	}
 }
 
@@ -245,7 +267,7 @@ fn folder_preview_uses_the_admitted_location_and_a_bounded_texture() {
 	let location = root.child(&nested).unwrap();
 	tab.browser.showing = true;
 	let selected = page(&tab, location.clone(), 0);
-	tab.browser.show_page(selected);
+	assert!(tab.browser.show_page(selected, None));
 
 	let Action::Browse(request @ Request::Preview { .. }) = activate(&mut tab, "Preview folder")
 	else {
@@ -265,14 +287,15 @@ fn folder_preview_uses_the_admitted_location_and_a_bounded_texture() {
 	assert!(presented.texture.size().iter().all(|&side| side > 1));
 	tab.browser.preview = Some(presented);
 	let root_page = page(&tab, root, 0);
-	tab.browser.show_page(root_page);
+	assert!(tab.browser.show_page(root_page, None));
 	assert!(tab.browser.preview.is_none());
 
 	assert!(matches!(
 		tab.snapshot.browse(
 			Request::Preview {
 				location,
-				max_side: 1
+				max_side: 1,
+				visibility: ItemVisibility::Visible,
 			},
 			&Cancellation::default()
 		),

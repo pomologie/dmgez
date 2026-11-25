@@ -17,6 +17,9 @@ use dmgez_vfs::{
 };
 use serde_json::{json, to_value};
 
+#[path = "volume_queries/search.rs"]
+mod search;
+
 const ROOT: u16 = 2;
 const FOLDER: u16 = 10;
 const PAYLOAD: u16 = 11;

@@ -1,7 +1,42 @@
 use dmgez_vfs::volume::{LookupName, NativeNameKey, NativeNameProfile};
-use hfsplus_core::names::{MAX_NAME_UNITS, NameCollation, NameError};
+use hfsplus_core::names::{
+	MAX_NAME_UNITS, NameCollation, NameError, NameFragment as HfsNameFragment,
+};
 
 use super::Error;
+
+/// A normalized filename fragment compared with the volume's catalog collation.
+#[derive(Debug)]
+pub struct NameFragment(HfsNameFragment);
+
+impl NameFragment {
+	/// Maximum UTF-16 length of the decomposed fragment.
+	pub const MAX_UNITS: usize = HfsNameFragment::MAX_UNITS;
+
+	/// Uses HFS+ decomposition and the selected volume's native name profile.
+	///
+	/// Returns `None` for an empty or entirely ignorable fragment.
+	///
+	/// # Errors
+	/// Returns an error for an unsupported collation, an overlong fragment, or
+	/// failed allocation.
+	pub fn new(profile: Option<NativeNameProfile>, fragment: &str) -> Result<Option<Self>, Error> {
+		let collation = match profile {
+			Some(NativeNameProfile::HfsUnicodeFolded) => NameCollation::CaseFolded,
+			Some(NativeNameProfile::HfsXBinary) => NameCollation::Binary,
+			_ => return Err(Error::LookupEncoding),
+		};
+		Ok(HfsNameFragment::new(collation, fragment)?.map(Self))
+	}
+
+	/// Tests a stored UTF-16 name without changing the original units.
+	///
+	/// # Errors
+	/// Returns an error if the engine cannot compare this stored name.
+	pub fn matches(&self, name: &[u16]) -> Result<bool, Error> {
+		Ok(self.0.matches(name)?)
+	}
+}
 
 pub(super) const fn profile(collation: NameCollation) -> Option<NativeNameProfile> {
 	match collation {

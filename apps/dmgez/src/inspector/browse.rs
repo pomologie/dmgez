@@ -6,12 +6,17 @@ use dmgez_vfs::{
 };
 use eframe::egui::{self, Grid, Panel, ScrollArea, Ui};
 
-use crate::image::browse::{Browser, Details, Location, PAGE_ENTRIES, Page, Request, label};
+use crate::image::browse::{
+	Browser, Details, Entry, Location, PAGE_ENTRIES, Page, Request,
+	history::{Direction, History},
+	label,
+};
 
 use super::{Action, bytes, field};
 
 #[cfg(feature = "actual-preview")]
 mod preview;
+mod search;
 
 const VOLUME_MENU_HEIGHT: f32 = 280.0;
 const DETAILS_WIDTH: f32 = 220.0;
@@ -38,7 +43,7 @@ pub(super) fn navigation(ui: &mut Ui, browser: &Browser, idle: bool) -> Option<A
 
 pub(super) fn show(
 	ui: &mut Ui,
-	browser: &Browser,
+	browser: &mut Browser,
 	disk: Option<&DiskReport>,
 	idle: bool,
 ) -> Option<Action> {
@@ -53,7 +58,12 @@ pub(super) fn show(
 		.map(Action::Browse)
 		.or_else(|| {
 			let page = browser.page.as_ref()?;
-			let navigation = folder_navigation(ui, page).map(Action::Browse);
+			let navigation = folder_navigation(ui, page, &browser.history);
+			let (results_visible, search) = search::show(ui, &page.location, &mut browser.search);
+			let navigation = navigation.or(search.map(Action::Browse));
+			if results_visible {
+				return navigation;
+			}
 			#[cfg(feature = "actual-preview")]
 			let navigation = {
 				let action = preview::show(ui, &page.location, browser.preview.as_ref());
@@ -155,24 +165,32 @@ fn volume_label(id: VolumeId) -> String {
 	}
 }
 
-fn folder_navigation(ui: &mut Ui, page: &Page) -> Option<Request> {
+fn folder_navigation(ui: &mut Ui, page: &Page, history: &History) -> Option<Action> {
 	let at_root = page.location.path.is_empty();
 	ui.horizontal_wrapped(|ui| {
 		ui.label(match page.filesystem {
 			VolumeSignature::HfsPlus => "HFS+",
 			VolumeSignature::HfsX => "HFSX",
 		});
-		let mut request = None;
+		let mut action = None;
+		for (direction, title) in [(Direction::Back, "Back"), (Direction::Forward, "Forward")] {
+			if ui
+				.add_enabled(history.available(direction), egui::Button::new(title))
+				.clicked()
+			{
+				action = Some(Action::History(direction));
+			}
+		}
 		if ui.add_enabled(!at_root, egui::Button::new("Up")).clicked() {
-			request = Some(Request::first(
+			action = Some(Action::Browse(Request::first(
 				page.location.ancestor(page.location.path.len() - 1),
-			));
+			)));
 		}
 		if ui
 			.add_enabled(!at_root, egui::Button::new("Root"))
 			.clicked()
 		{
-			request = Some(Request::first(page.location.ancestor(0)));
+			action = Some(Action::Browse(Request::first(page.location.ancestor(0))));
 		}
 		for (index, name) in page.location.path.iter().enumerate() {
 			let depth = index + 1;
@@ -181,10 +199,12 @@ fn folder_navigation(ui: &mut Ui, page: &Page) -> Option<Request> {
 			if depth == page.location.path.len() {
 				ui.strong(title);
 			} else if ui.button(title).clicked() {
-				request = Some(Request::first(page.location.ancestor(depth)));
+				action = Some(Action::Browse(Request::first(
+					page.location.ancestor(depth),
+				)));
 			}
 		}
-		request
+		action
 	})
 	.inner
 }
@@ -220,14 +240,18 @@ fn show_folder_entries(ui: &mut Ui, page: &Page) -> Option<Request> {
 	if page.truncated {
 		ui.label("More entries exist beyond the directory browsing limit.");
 	}
-	let entry = Grid::new("volume_files")
+	paging.or(show_entries(ui, &page.location, &page.entries))
+}
+
+fn show_entries(ui: &mut Ui, location: &Location, entries: &[Entry]) -> Option<Request> {
+	Grid::new("volume_files")
 		.striped(true)
 		.show(ui, |ui| {
 			let mut request = None;
-			for (index, entry) in page.entries.iter().enumerate() {
+			for (index, entry) in entries.iter().enumerate() {
 				let name = label(&entry.name);
 				if entry.kind == NodeKind::Directory {
-					let child = page.location.child(&entry.name);
+					let child = location.child(&entry.name);
 					let open = ui.push_id((index, FOLDER_CELL), |ui| {
 						ui.add_enabled(child.is_some(), egui::Button::new(name.as_str()))
 					});
@@ -253,7 +277,7 @@ fn show_folder_entries(ui: &mut Ui, page: &Page) -> Option<Request> {
 				});
 				if details.inner.clicked() {
 					request = Some(Request::Details {
-						folder: page.location.clone(),
+						folder: location.clone(),
 						name: entry.name.clone(),
 					});
 				}
@@ -261,8 +285,7 @@ fn show_folder_entries(ui: &mut Ui, page: &Page) -> Option<Request> {
 			}
 			request
 		})
-		.inner;
-	paging.or(entry)
+		.inner
 }
 
 pub(super) fn details_panel(ui: &mut Ui, details: &Details) {

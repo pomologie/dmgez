@@ -1,8 +1,10 @@
-use std::io::Write;
+use std::{io::Write, ops::Range};
 
 use crate::{
 	CanvasPoint, ItemVisibility,
-	actual::{Background, BackgroundAsset, BackgroundStatus, Coverage, Entry, Scene, Store},
+	actual::{
+		Background, BackgroundAsset, BackgroundStatus, Coverage, Entry, EntryKind, Scene, Store,
+	},
 };
 
 use super::{
@@ -20,6 +22,21 @@ const PNG_MAGIC: [u8; 8] = *b"\x89PNG\r\n\x1a\n";
 pub struct ActualPreview {
 	canvas: Canvas,
 	coverage: Coverage,
+	items: Vec<ActualItem>,
+}
+
+/// The clipped icon region and stored identity of a visible image entry.
+#[derive(Debug)]
+#[non_exhaustive]
+pub struct ActualItem {
+	/// Exact stored UTF-16 name, including any unpaired units.
+	pub name: Vec<u16>,
+	/// Entry kind observed in the catalog.
+	pub kind: EntryKind,
+	/// Horizontal pixel range in the raster.
+	pub columns: Range<usize>,
+	/// Vertical pixel range in the raster.
+	pub rows: Range<usize>,
 }
 
 impl ActualPreview {
@@ -44,8 +61,10 @@ impl ActualPreview {
 		let dimensions = Dimensions::from_size(style.window_size)?;
 		let (mut canvas, background) = paint_background(dimensions, scene.background)?;
 		let mut labels = Labels::new(style.text_size);
+		let mut items = Vec::new();
+		items.try_reserve_exact(scene.items.len())?;
 		for item in scene.items {
-			paint_item(
+			let [columns, rows] = paint_item(
 				&mut canvas,
 				&mut labels,
 				viewport,
@@ -54,12 +73,27 @@ impl ActualPreview {
 				item.is_directory(),
 				style.label_position,
 			)?;
+			if !columns.is_empty() && !rows.is_empty() {
+				let mut name = Vec::new();
+				name.try_reserve_exact(item.entry.name.len())?;
+				name.extend_from_slice(&item.entry.name);
+				items.push(ActualItem {
+					name,
+					kind: item.entry.kind,
+					columns,
+					rows,
+				});
+			}
 		}
 		let coverage = Coverage {
 			background,
 			..scene.coverage
 		};
-		Ok(Self { canvas, coverage })
+		Ok(Self {
+			canvas,
+			coverage,
+			items,
+		})
 	}
 
 	/// The raster's width and height in pixels.
@@ -78,6 +112,12 @@ impl ActualPreview {
 	#[must_use]
 	pub const fn coverage(&self) -> Coverage {
 		self.coverage
+	}
+
+	/// Consumes the preview and returns the icon targets in paint order.
+	#[must_use]
+	pub fn into_items(self) -> Vec<ActualItem> {
+		self.items
 	}
 
 	/// Writes an actual-image PNG to the supplied stream.

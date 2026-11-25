@@ -106,7 +106,7 @@ pub(crate) struct Scene<'a> {
 }
 
 pub(crate) struct Item<'a> {
-	entry: &'a Entry,
+	pub(crate) entry: &'a Entry,
 	display: String,
 	pub(crate) bounds: FolderRect,
 }

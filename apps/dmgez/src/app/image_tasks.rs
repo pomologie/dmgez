@@ -3,16 +3,22 @@ use dmgez_udif::{Cancellation, Error};
 use eframe::egui::Context;
 
 #[cfg(feature = "hfsplus-read")]
-use crate::image::browse::{self, Observation};
+use crate::image::browse::{self, Observation, history::Direction};
 use crate::inspector::Action;
 
 use super::{App, Completion, Document, Opened};
+
+#[cfg(feature = "hfsplus-read")]
+mod folder;
 
 pub(super) enum ImageCompletion {
 	Runs(Result<(RunPage, Option<usize>), Error>),
 	Checked(Box<VerificationReport>),
 	#[cfg(feature = "hfsplus-read")]
-	Browsed(Result<Observation, browse::Error>),
+	Browsed {
+		direction: Option<Direction>,
+		result: Result<Observation, browse::Error>,
+	},
 	Exported(Result<std::path::PathBuf, dmgez_runtime::image::InspectionExportError>),
 }
 
@@ -61,19 +67,20 @@ impl App {
 			#[cfg(feature = "actual-preview")]
 			Action::ShowList => image.browser.preview = None,
 			#[cfg(feature = "hfsplus-read")]
+			Action::History(direction) => {
+				if let Some(request) = image.browser.history.request(direction) {
+					self.start_browse(ctx, snapshot, request, Some(direction));
+				}
+			}
+			#[cfg(feature = "hfsplus-read")]
 			Action::Browse(request) => {
-				let cancellation = Cancellation::default();
-				self.start_worker(ctx, Some(cancellation.clone()), move || {
-					Completion::Image(ImageCompletion::Browsed(
-						snapshot.browse(request, &cancellation),
-					))
-				});
+				self.start_browse(ctx, snapshot, request, None);
 			}
 		}
 	}
 
 	pub(super) fn finish_image(&mut self, ctx: &Context, completion: ImageCompletion) {
-		#[cfg(not(feature = "actual-preview"))]
+		#[cfg(not(feature = "hfsplus-read"))]
 		let _ = ctx;
 		let Some(Opened {
 			document: Document::Image(image),
@@ -110,36 +117,9 @@ impl App {
 				Self::finish_image_export(image, &mut self.error, result);
 			}
 			#[cfg(feature = "hfsplus-read")]
-			ImageCompletion::Browsed(result) => match result {
-				Ok(Observation::Page(page)) => image.browser.show_page(page),
-				Ok(Observation::Details(details)) => image.browser.details = Some(details),
-				#[cfg(feature = "actual-preview")]
-				Ok(Observation::Preview(preview)) => {
-					if image.browser.showing
-						&& image
-							.browser
-							.page
-							.as_ref()
-							.is_some_and(|page| page.location == preview.location)
-					{
-						match preview.present(ctx) {
-							Ok(presented) => {
-								image.browser.preview = Some(presented);
-								image.browser.details = None;
-							}
-							Err(error) => self.error = Some(error.to_string()),
-						}
-					}
-				}
-				Err(error) => {
-					if matches!(error, browse::Error::Image(Error::SourceChanged)) {
-						image.verification = None;
-						image.run_navigation.select(None);
-						image.browser.invalidate();
-					}
-					self.error = Some(format!("Could not browse the volume. {error}"));
-				}
-			},
+			ImageCompletion::Browsed { direction, result } => {
+				self.finish_browse(ctx, direction, result);
+			}
 		}
 	}
 }

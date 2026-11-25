@@ -6,7 +6,7 @@ mod background;
 mod canvas;
 mod label;
 
-use std::{collections::TryReserveError, io::Write, path::Path};
+use std::{collections::TryReserveError, io::Write, ops::Range, path::Path};
 
 use dmgez_config::{Arrangement, BackgroundColorError, LabelPosition, Project, VirtualPath};
 use thiserror::Error;
@@ -17,7 +17,7 @@ use crate::{
 };
 
 #[cfg(feature = "actual")]
-pub use actual::ActualPreview;
+pub use actual::{ActualItem, ActualPreview};
 use canvas::{Canvas, Dimensions};
 use label::Labels;
 
@@ -158,11 +158,12 @@ fn paint_item(
 	name: &str,
 	directory: bool,
 	label_position: LabelPosition,
-) -> Result<(), Error> {
+) -> Result<[Range<usize>; 2], Error> {
 	let start = viewport.to_canvas(bounds.min())?;
 	let end = viewport.to_canvas(bounds.max())?;
-	canvas.paint_icon(start, end, directory)?;
-	labels.paint(canvas, name, start, end, label_position)
+	let pixels = canvas.paint_icon(start, end, directory)?;
+	labels.paint(canvas, name, start, end, label_position)?;
+	Ok(pixels)
 }
 
 fn write_png(canvas: &Canvas, output: impl Write, description: &str) -> Result<(), Error> {
