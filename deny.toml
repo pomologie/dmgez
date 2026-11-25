@@ -15,6 +15,10 @@ exceptions = [
 	{ allow = ["BSD-3-Clause"], crate = "subtle@=2.6.1" },
 	{ allow = ["ISC"], crate = "untrusted@=0.9.0" },
 	{ allow = ["CDLA-Permissive-2.0"], crate = "webpki-roots@=1.0.12" },
+
+	# Vendored Apple code signing
+	{ allow = ["MPL-2.0"], crate = "apple-codesign@=0.29.0" },
+	{ allow = ["BSD-3-Clause"], crate = "bcder@=0.7.7" },
 ]
 confidence-threshold = 0.9
 

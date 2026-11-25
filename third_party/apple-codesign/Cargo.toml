@@ -1,0 +1,28 @@
+[package]
+name = "apple-codesign"
+version = "0.29.0"
+authors = ["Gregory Szorc <gregory.szorc@gmail.com>"]
+edition = "2021"
+rust-version = "1.81"
+license = "MPL-2.0"
+description = "Vendored offline ad hoc DMG signing profile from apple-codesign"
+repository = "https://github.com/indygreg/apple-platform-rs"
+publish = false
+
+[dependencies]
+# Signature encoding and parsing
+bcder = "0.7.4"
+bitflags = "2.6.0"
+hex = "0.4.3"
+num-traits = "0.2.19"
+plist = "1.7.0"
+rasn = "0.20.2"
+scroll = { version = "0.12.0", features = ["derive"] }
+
+# Hashes and timestamps stored in requirement expressions
+chrono = "0.4.38"
+ring = "0.17.8"
+
+# Diagnostics
+log = "0.4.22"
+thiserror = "2.0.3"
