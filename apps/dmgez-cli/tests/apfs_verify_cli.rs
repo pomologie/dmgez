@@ -21,7 +21,7 @@ use fixture::{
 };
 
 #[cfg(feature = "apfs-read")]
-#[path = "apfs_verify_cli/native_mutations.rs"]
+#[path = "support/native_apfs_mutations.rs"]
 mod native_mutations;
 
 #[cfg(all(feature = "build", feature = "apfs-read"))]
@@ -197,49 +197,18 @@ fn raw_payload_limit_charges_native_sparse_holes_without_claiming_completed_evid
 #[cfg(feature = "apfs-read")]
 #[test]
 fn newest_rejected_checkpoint_is_reported_with_earlier_native_evidence() {
-	use native_mutations::{edit_object, replace_field};
+	use native_mutations::{INCOMPLETE_CHECKPOINT_XID, advertise_incomplete_checkpoint};
 
-	const BOOTSTRAP_BLOCK: u64 = 0;
-	const INCOMPLETE_DESCRIPTOR_BLOCK: u64 = 6;
-	const HEADER_XID_OFFSET: usize = 2 * size_of::<u64>();
-	const NXSB_NEXT_XID_OFFSET: usize = 96;
-	const NATIVE_XID: u64 = 4;
-	const EARLIER_DESCRIPTOR_XID: u64 = 3;
-	const INCOMPLETE_XID: u64 = 5;
-	const NEXT_XID: u64 = INCOMPLETE_XID + 1;
 	let directory = tempfile::tempdir().unwrap();
 	let image = directory.path().join("incomplete-checkpoint.raw");
 	materialize(&image, HARD_LINK_FIXTURE, &[]);
-	edit_object(&image, BOOTSTRAP_BLOCK, |block| {
-		replace_field(
-			block,
-			HEADER_XID_OFFSET,
-			NATIVE_XID.to_le_bytes(),
-			INCOMPLETE_XID.to_le_bytes(),
-		);
-		replace_field(
-			block,
-			NXSB_NEXT_XID_OFFSET,
-			INCOMPLETE_XID.to_le_bytes(),
-			NEXT_XID.to_le_bytes(),
-		);
-	});
-	// The descriptor is checksummed as XID 5, but its adjacent mapping block
-	// still belongs to XID 3. The retained Apple XID 4 is complete.
-	edit_object(&image, INCOMPLETE_DESCRIPTOR_BLOCK, |block| {
-		replace_field(
-			block,
-			HEADER_XID_OFFSET,
-			EARLIER_DESCRIPTOR_XID.to_le_bytes(),
-			INCOMPLETE_XID.to_le_bytes(),
-		);
-	});
+	advertise_incomplete_checkpoint(&image);
 
 	let default = verify(&image, &["--raw"], false);
 	let check = assert_native_reachable_data(&default);
 	let warnings = &check["evidence"]["checkpoint_diagnostics"];
 	assert_eq!(warnings["rejected_descriptors"], 1);
-	let incomplete = INCOMPLETE_XID.to_string();
+	let incomplete = INCOMPLETE_CHECKPOINT_XID.to_string();
 	assert_eq!(warnings["advertised_xid"], incomplete);
 
 	let exact = verify(&image, &["--raw", "--xid", &incomplete], false);

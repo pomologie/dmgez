@@ -6,6 +6,42 @@ use std::{
 
 use super::fixture::NATIVE_BLOCK_BYTES;
 
+pub(super) const INCOMPLETE_CHECKPOINT_XID: u64 = 5;
+
+pub(super) fn advertise_incomplete_checkpoint(raw: &Path) {
+	const BOOTSTRAP_BLOCK: u64 = 0;
+	const INCOMPLETE_DESCRIPTOR_BLOCK: u64 = 6;
+	const HEADER_XID_OFFSET: usize = 2 * size_of::<u64>();
+	const NXSB_NEXT_XID_OFFSET: usize = 96;
+	const NATIVE_XID: u64 = 4;
+	const EARLIER_DESCRIPTOR_XID: u64 = 3;
+	const NEXT_XID: u64 = INCOMPLETE_CHECKPOINT_XID + 1;
+	edit_object(raw, BOOTSTRAP_BLOCK, |block| {
+		replace_field(
+			block,
+			HEADER_XID_OFFSET,
+			NATIVE_XID.to_le_bytes(),
+			INCOMPLETE_CHECKPOINT_XID.to_le_bytes(),
+		);
+		replace_field(
+			block,
+			NXSB_NEXT_XID_OFFSET,
+			INCOMPLETE_CHECKPOINT_XID.to_le_bytes(),
+			NEXT_XID.to_le_bytes(),
+		);
+	});
+	// The descriptor advertises XID 5 with a valid checksum, but the adjacent
+	// mapping block still belongs to XID 3. The retained Apple XID 4 is complete.
+	edit_object(raw, INCOMPLETE_DESCRIPTOR_BLOCK, |block| {
+		replace_field(
+			block,
+			HEADER_XID_OFFSET,
+			EARLIER_DESCRIPTOR_XID.to_le_bytes(),
+			INCOMPLETE_CHECKPOINT_XID.to_le_bytes(),
+		);
+	});
+}
+
 pub(super) fn edit_object(
 	raw: &Path,
 	address: u64,
