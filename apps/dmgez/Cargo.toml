@@ -25,9 +25,10 @@ dmgez-core = { workspace = true, features = ["staging"] }
 dmgez-preview.workspace = true
 
 # Workspace runtime
-dmgez-runtime = { workspace = true, features = ["project-save", "report-export"] }
+dmgez-runtime = { workspace = true, features = ["compare", "project-save", "report-export"] }
 
 # Workspace inspection
+dmgez-diff.workspace = true
 dmgez-inspector = { workspace = true, features = ["zlib"] }
 dmgez-lint.workspace = true
 

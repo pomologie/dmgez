@@ -1215,6 +1215,7 @@ version = "0.1.0"
 dependencies = [
  "dmgez-config",
  "dmgez-core",
+ "dmgez-diff",
  "dmgez-inspector",
  "dmgez-lint",
  "dmgez-preview",

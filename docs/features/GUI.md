@@ -38,6 +38,8 @@ The run table accepts a decimal or hexadecimal logical byte offset and selects t
 
 The inspector exports current inspection and completed verification reports as versioned JSON. A selected run with an available decoder can be exported as logical bytes within the 64 MiB limit. All exports stage to a new path and revalidate the held source before publication. [Export tests](../../apps/dmgez/src/app/image_exports/tests.rs)
 
+**Compare…** compares the open image with a separately selected DMG on the document worker. Compare stored image bytes, decoded disk bytes, or files when the corresponding HFS+ or APFS reader is composed. A logical byte difference can open its run in the inspector. Filesystem comparison shows changed paths side by side, with the compared fields, partition slots, and selected APFS volumes and checkpoints. Each result is bounded and revalidates the held input files. [Comparison tests](../../apps/dmgez/src/app/image_compare/tests.rs)
+
 Split image tree (container -> partitions -> volumes -> folders/internal structures) and typed property/detail panels. Search/sort tables for UDIF runs, offsets, compression, extents, checksums, node counts, raw record hex view with pagination; select file to highlight covering UDIF blocks. Separate actual status vs requested verification. Export JSON, report and selected safe raw bytes. Diff view side-by-side tree and changes (file bytes, metadata, presentation, format); click to drill. Integrate layout lint preview overlay. No data recovery controls. Large image still usable via lazy reads/cancellation and capped previews. Build analyzer only displays historical timing if report provided, no inferred times.
 
 ## Actual OS drag-out and mount

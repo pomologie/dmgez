@@ -39,6 +39,7 @@ impl RunNavigation {
 
 #[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 pub(crate) mod browse;
+pub(crate) mod compare;
 pub(crate) mod exports;
 
 impl ImageTab {

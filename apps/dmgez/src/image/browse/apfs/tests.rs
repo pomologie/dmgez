@@ -193,3 +193,37 @@ fn apfs_refuses_a_foreign_window_cancelled_work_and_a_changed_held_source() {
 		Err(Error::Image(ImageError::SourceChanged))
 	));
 }
+
+#[test]
+fn compares_explicit_apfs_volumes_from_held_sources() {
+	use dmgez_diff::semantic::{Options, Outcome};
+
+	use crate::image::compare::{Report, Request, Selection};
+
+	let (_workspace, dmg) = disk_image(fixture::HARD_LINK_FIXTURE);
+	let tab = ImageTab::open(File::open(&dmg).unwrap()).unwrap();
+	let selection = Selection {
+		volume: Some(ObjectId(fixture::HARD_LINK_VOLUME_OID.parse().unwrap())),
+		checkpoint: Some(TransactionId(
+			fixture::HARD_LINK_CHECKPOINT_XID.parse().unwrap(),
+		)),
+		..Selection::default()
+	};
+	let request = Request::Apfs {
+		left: selection,
+		right: selection,
+		options: Options::default(),
+	};
+	let report = tab
+		.snapshot
+		.compare_file(&dmg, request, &Cancellation::default())
+		.unwrap();
+	let Report::Filesystem(report) = report else {
+		panic!("expected the APFS filesystem comparison");
+	};
+	let checkpoint = format!("XID {}", fixture::HARD_LINK_CHECKPOINT_XID);
+	assert!(report.left.contains(&checkpoint));
+	assert_eq!(report.left, report.right);
+	assert_eq!(report.comparison.outcome, Outcome::Equal);
+	assert!(report.comparison.left_entries > 1);
+}

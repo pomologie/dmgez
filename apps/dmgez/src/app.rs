@@ -13,6 +13,7 @@ use eframe::egui::{
 use crate::document::{self, Document, IMAGE_EXTENSION, Opened, PROJECT_EXTENSION};
 use crate::{import, inspector};
 
+mod image_compare;
 mod image_exports;
 mod image_tasks;
 #[cfg(test)]
@@ -41,6 +42,7 @@ pub(crate) struct App {
 	copy_name: String,
 	closing: bool,
 	error: Option<String>,
+	comparison: image_compare::ComparePanel,
 	recent: recent_files::RecentFiles,
 	#[cfg(feature = "project-build")]
 	build: project_tasks::BuildPanel,
@@ -72,6 +74,7 @@ enum Completion {
 		edits: Result<Vec<ProjectEdit>, import::Error>,
 	},
 	Image(ImageCompletion),
+	Compared(Result<image_compare::Completed, crate::image::compare::Error>),
 	#[cfg(feature = "project-build")]
 	Build(project_tasks::BuildCompletion),
 	Cancelled,
@@ -106,6 +109,7 @@ impl App {
 			copy_name: String::new(),
 			closing: false,
 			error: None,
+			comparison: image_compare::ComparePanel::default(),
 			recent: recent_files::RecentFiles::default(),
 			#[cfg(feature = "project-build")]
 			build: project_tasks::BuildPanel::default(),
@@ -166,6 +170,7 @@ impl App {
 			Completion::Opened(opened) => {
 				self.remember_open(ctx, &opened);
 				self.opened = Some(opened);
+				self.comparison = image_compare::ComparePanel::default();
 				#[cfg(feature = "project-build")]
 				{
 					self.build = project_tasks::BuildPanel::default();
@@ -182,6 +187,7 @@ impl App {
 			Completion::Failed(error) => self.error = Some(error.to_string()),
 			Completion::SaveFailed(error) => self.error = Some(error.to_string()),
 			Completion::Image(result) => self.finish_image(ctx, result),
+			Completion::Compared(result) => self.finish_comparison(result),
 			#[cfg(feature = "project-build")]
 			Completion::Build(result) => self.build.finish(result),
 			Completion::Saved {
@@ -273,6 +279,7 @@ impl App {
 						self.ask_open(ui.ctx());
 					}
 					self.recent_menu(ui);
+					self.compare_action(ui);
 					if matches!(
 						&self.opened,
 						Some(Opened {
@@ -449,6 +456,7 @@ impl eframe::App for App {
 		if let Some(action) = image_action {
 			self.image_action(&ctx, action);
 		}
+		self.show_comparison(&ctx);
 		self.modal(&ctx);
 	}
 }

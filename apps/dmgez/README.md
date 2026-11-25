@@ -33,6 +33,8 @@ Choose **Verify container** to scan stored runs and declared container checksums
 
 Export the current inspection or completed verification as JSON from the sidebar. After jumping to a run, **Export selected run…** saves its decoded logical bytes when the decoder is available and the run is at most 64 MiB. Exports require a fresh destination and recheck the open image before publication.
 
+Use **Compare…** to compare the open image with another DMG. Choose logical disk bytes, stored image bytes, or a filesystem supported by the composed desktop build. A logical difference can take you to its run. Filesystem results show the changed paths and their fields. Use **Disk and metadata selection** to choose partition slots or APFS object IDs and checkpoint XIDs when an image has more than one candidate.
+
 ### Browse HFS+ and HFSX files
 
 From the workspace root, compose the desktop app with the sibling HFS+ reader.
