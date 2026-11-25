@@ -52,7 +52,7 @@ impl HostName {
 		&self.0
 	}
 
-	pub(super) fn admit(
+	pub(crate) fn admit(
 		name: RawName,
 		profile: NameProfile,
 		max_bytes: usize,

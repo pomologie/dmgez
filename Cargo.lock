@@ -1131,6 +1131,7 @@ dependencies = [
  "dmgez-udif",
  "dmgez-vfs",
  "plist",
+ "quick-xml 0.42.0",
  "rustix 1.1.6",
  "serde",
  "tempfile",
