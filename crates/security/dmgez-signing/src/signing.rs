@@ -53,7 +53,7 @@ pub struct DiskSigningReport {
 	pub assessment: PolicyAssessment,
 }
 
-/// An error prevented a signed artifact from being published.
+/// A signing or signed-artifact verification operation failed.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum SignError {
@@ -71,7 +71,7 @@ pub enum SignError {
 	IdentityLookup(#[source] Box<dyn std::error::Error + Send + Sync>),
 	#[error("the source image must have an unsigned signature state")]
 	ExpectedUnsigned,
-	#[error("unsigned image is outside the signing size limit")]
+	#[error("disk image is outside the signing size limit")]
 	ImageSize,
 	#[error("could not prepare or publish the private stage")]
 	Stage(#[source] Box<dyn std::error::Error + Send + Sync>),
@@ -128,6 +128,31 @@ pub fn sign_disk_image(
 		return crate::native::disk::sign(source, destination, identity, identifier);
 	}
 	let _ = (source, destination, identity, identifier);
+	Err(SignError::BackendUnavailable { backend })
+}
+
+/// Revalidates a signed disk image against an explicit Developer ID signer.
+///
+/// The native backend verifies the Apple Developer ID Application requirement,
+/// public certificate fingerprint, identifier, secure timestamp, and image
+/// checksum. Keep the image stable and in a trusted directory during the check.
+/// It requires no private key. Ticket and platform policy checks are separate.
+///
+/// # Errors
+///
+/// Fails when the backend is unavailable, the image or selector is invalid,
+/// the image changes during inspection, or a verification check fails.
+pub fn verify_signed_disk_image(
+	path: &Path,
+	identity: &str,
+	identifier: &str,
+	backend: Backend,
+) -> Result<(), SignError> {
+	#[cfg(all(feature = "native", target_os = "macos"))]
+	if backend != Backend::Rust {
+		return crate::native::disk::verify(path, identity, identifier);
+	}
+	let _ = (path, identity, identifier);
 	Err(SignError::BackendUnavailable { backend })
 }
 

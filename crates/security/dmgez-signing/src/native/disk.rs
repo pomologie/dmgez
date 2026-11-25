@@ -49,11 +49,31 @@ pub(crate) fn sign(
 	})
 }
 
-fn open_unsigned(path: &Path) -> Result<Artifact, SignError> {
+pub(crate) fn verify(path: &Path, identity: &str, identifier: &str) -> Result<(), SignError> {
+	let developer = DeveloperId::new(identity, identifier)?;
+	let artifact = open_image(path)?;
+	let trailer = image::read_trailer(artifact.file())?;
+	let signature = dmgez_udif::signed_signature_range(&trailer, artifact.len())
+		.map_err(|error| SignError::ImageIntegrity(Box::new(error)))?;
+	if signature.end - signature.start > image::MAX_SIGNATURE_BYTES {
+		return Err(SignError::ImageSize);
+	}
+	developer.verify(&artifact)?;
+	image::verify_checksum(&artifact)?;
+	artifact.validate()?;
+	Ok(())
+}
+
+fn open_image(path: &Path) -> Result<Artifact, SignError> {
 	let artifact = Artifact::open(path)?;
 	if artifact.kind() != ArtifactKind::DiskImage {
 		return Err(artifact.invalid(ArtifactProblem::Kind).into());
 	}
+	Ok(artifact)
+}
+
+fn open_unsigned(path: &Path) -> Result<Artifact, SignError> {
+	let artifact = open_image(path)?;
 	image::validate_unsigned(&artifact)?;
 	let report = inspect(&artifact)?;
 	match report.status {
