@@ -26,9 +26,13 @@ pub(super) fn finder_plan(
 			.require(BuildFeature::FinderCustomIcon)?;
 	}
 	if project
-		.contents
-		.iter()
-		.any(|entry| entry.hidden.is_some() || entry.hide_extension.is_some())
+		.finder
+		.as_ref()
+		.is_some_and(|finder| !finder.hide.is_empty() || !finder.hide_extensions.is_empty())
+		|| project
+			.contents
+			.iter()
+			.any(|entry| entry.hidden.is_some() || entry.hide_extension.is_some())
 	{
 		capabilities
 			.finder_flags

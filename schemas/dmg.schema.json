@@ -821,6 +821,22 @@
         "show_item_info": {
           "type": "boolean"
         },
+        "hide": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^/[^\\x00]+$"
+          }
+        },
+        "hide_extensions": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^/[^\\x00]+$"
+          }
+        },
         "folders": {
           "type": "array",
           "items": {

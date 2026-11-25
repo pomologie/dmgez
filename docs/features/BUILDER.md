@@ -25,7 +25,25 @@ Use `dmgez build dmg.toml --dry-run --json` to get the admitted plan or `dmgez b
 
 Build progress and diagnostics go to stderr. Failed unsigned builds return a nonzero exit code with no success report on stdout. A dry run with `--release` reports the planned release policy. Executed releases emit the [release report](RELEASE.md). The composed CLI regression exercises planning, publication, and refusal to replace an occupied destination for D-BUILD-01 and D-BUILD-05 and covers the unsigned report interface required by D-CI-03. [JSON build regression](../../apps/dmgez-cli/tests/project_build/json.rs)
 
+### Finder flags on copied entries
+
 With `finder-write` enabled, `hidden` and `hide_extension` apply to file, directory and symlink catalog records after host metadata capture. Set either option to `false` to clear its bit. Omit an option to preserve the captured value. Hard-link aliases share FinderInfo, so conflicting explicit values are rejected. The builder checks affected paths and sources for signing-sensitive content before applying display overrides. [Apple code-signing restrictions](https://developer.apple.com/library/archive/qa/qa1940/_index.html)
+
+For a recursive copy, use `[finder]` to select individual children by their resolved destination paths.
+
+```toml
+[[contents]]
+source = "release"
+destination = "/Kit"
+
+[finder]
+hide = ["/Kit/Internal Notes.txt"]
+hide_extensions = ["/Kit/Manual.pdf"]
+```
+
+Each list takes distinct absolute paths within the image. Use the exact destination spelling, including the destination of the copied tree. A path can appear in both lists. Selections apply after include and exclude filtering, so every listed item must exist in the manifest. A list entry conflicts with an explicit `false` for the same flag. The existing signing and hard-link checks apply to these selections.
+
+The recursive-copy visibility case of D-FINDER-01-T02 verified the UDIF with Apple's `hdiutil` on macOS 14.7.2 (23H311). 7-Zip decoded the image and read back the files. An independent catalog decoder matched the flags for three selected items and an unselected control. [Independent Finder flag check](../../tests/compatibility/project-build/check_finder_visibility.py)
 
 ### Write an APM or GPT disk layout
 

@@ -2,6 +2,7 @@
 
 use super::*;
 
+mod finder_capabilities;
 mod partition;
 mod raw_output;
 
@@ -52,31 +53,6 @@ fn admits_limits_and_geometry_without_opening_sources() {
 		profile.validate_logical_bytes(7 * MIB),
 		Err(PreflightError::Capacity)
 	));
-}
-
-#[test]
-fn qualifies_item_icon_capability_before_source_access() {
-	let project = project("\n[[contents]]\nsource = 'absent'\ncustom_icon = 'also-absent.icns'\n");
-	let mut options = options();
-	options.capabilities.finder_custom_icon = Availability::Unavailable;
-	let rejected = preflight(&project, options);
-	if cfg!(feature = "volume-icon") {
-		assert!(matches!(
-			rejected,
-			Err(PreflightError::BackendUnavailable(
-				BuildFeature::FinderCustomIcon
-			))
-		));
-		options.capabilities.finder_custom_icon = Availability::Available;
-		preflight(&project, options).unwrap();
-	} else {
-		assert!(matches!(
-			rejected,
-			Err(PreflightError::FeatureNotCompiled(
-				BuildFeature::FinderCustomIcon
-			))
-		));
-	}
 }
 
 #[test]

@@ -213,6 +213,29 @@ fn rejects_unknown_fields_in_all_scopes_and_omits_values_from_errors() {
 }
 
 #[test]
+fn finder_visibility_selections_name_distinct_absolute_destinations() {
+	let settings = "[finder]\nhide = ['/Kit/Details']\nhide_extensions = ['/Kit/Details', '/Kit/Manual.pdf']\n";
+	let finder = Project::parse(&format!("{HEADER}{settings}"))
+		.unwrap()
+		.finder
+		.unwrap();
+	assert_eq!(finder.hide[0].as_str(), "/Kit/Details");
+	assert_eq!(finder.hide_extensions[1].as_str(), "/Kit/Manual.pdf");
+	for settings in [
+		"[finder]\nhide = ['/']",
+		"[finder]\nhide = ['/Kit/../Details']",
+		"[finder]\nhide = ['/Kit/Details', '/Kit/Details']",
+		"[finder]\nhide_extensions = ['Kit/Manual.pdf']",
+		"[[finder.folders]]\npath = '/Kit'\nhide = ['/Kit/Details']",
+	] {
+		assert!(
+			Project::parse(&format!("{HEADER}{settings}")).is_err(),
+			"{settings}"
+		);
+	}
+}
+
+#[test]
 fn resolves_capacity_and_rejects_invalid_size_and_compression() {
 	let raw = Project::parse(&format!(
 		"{HEADER}size='8MiB'\nshrink=true\nfree_space=1024\n"

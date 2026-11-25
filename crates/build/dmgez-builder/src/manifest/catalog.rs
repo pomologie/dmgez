@@ -4,10 +4,22 @@ use std::{
 	path::PathBuf,
 };
 
+use dmgez_config::Finder;
+
 use super::{
 	Budget, Entry, EntryKind, Error, FinderOverrides, Limits, Manifest, PATH_SEPARATOR,
 	SourceSnapshot, VirtualPath,
 };
+
+/// A Finder flag selected by a project-wide path list.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[non_exhaustive]
+pub enum VisibilityFlag {
+	/// Mark the entry invisible in Finder.
+	Hidden,
+	/// Hide the entry's name extension in Finder.
+	HideExtension,
+}
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(super) enum Origin {
@@ -218,6 +230,42 @@ impl Catalog {
 			regular_payload_bytes: self.regular_payload_bytes,
 			metadata_bytes: self.metadata_bytes,
 		})
+	}
+
+	pub(super) fn select_visibility(
+		&mut self,
+		finder: &Finder,
+		cancelled: &mut impl FnMut() -> bool,
+	) -> Result<(), Error> {
+		for (flag, selection) in [
+			(VisibilityFlag::Hidden, &finder.hide),
+			(VisibilityFlag::HideExtension, &finder.hide_extensions),
+		] {
+			for path in selection {
+				if cancelled() {
+					return Err(Error::Cancelled);
+				}
+				let entry =
+					self.entries
+						.get_mut(path)
+						.ok_or_else(|| Error::FinderTargetMissing {
+							path: path.clone(),
+							flag,
+						})?;
+				let value = match flag {
+					VisibilityFlag::Hidden => &mut entry.finder.hidden,
+					VisibilityFlag::HideExtension => &mut entry.finder.hide_extension,
+				};
+				if *value == Some(false) {
+					return Err(Error::FinderTargetConflict {
+						path: path.clone(),
+						flag,
+					});
+				}
+				*value = Some(true);
+			}
+		}
+		Ok(())
 	}
 }
 

@@ -11,6 +11,11 @@ use super::{BINARY, Command, MANIFEST_NAME};
 
 const OUTPUT: &str = "project.dmg";
 const PAYLOAD: &str = "payload.txt";
+const COPIED_TREE: &str = r#"
+[[contents]]
+source = "source"
+destination = "/Toolkit"
+"#;
 const FINDER_FLAGS_OFFSET: usize = 8;
 const FINDER_INVISIBLE: u16 = 0x4000;
 const FINDER_HIDE_EXTENSION: u16 = 0x0010;
@@ -65,6 +70,71 @@ hide_extension = true
 	);
 }
 
+#[test]
+fn selects_named_children_of_a_recursive_copy_for_finder_flags() {
+	const OPTIONS: &str = r#"
+[finder]
+hide = ["/Toolkit/Data/Artwork.ext", "/Toolkit/Folder.ext"]
+hide_extensions = ["/Toolkit/Data/Artwork.ext", "/Toolkit/Manual.pdf"]
+"#;
+	let directory = tempfile::tempdir().unwrap();
+	let root = directory.path();
+	fs::create_dir_all(root.join("source/Data")).unwrap();
+	fs::create_dir(root.join("source/Folder.ext")).unwrap();
+	for name in ["Data/Artwork.ext", "Manual.pdf", "Control.txt"] {
+		fs::write(root.join("source").join(name), b"fixture").unwrap();
+	}
+	let output = build(root, &format!("{COPIED_TREE}{OPTIONS}"));
+	assert!(output.status.success(), "{output:?}");
+	check_flags(
+		&root.join(OUTPUT),
+		&[
+			(
+				"Toolkit/Data/Artwork.ext",
+				FINDER_INVISIBLE | FINDER_HIDE_EXTENSION,
+				NodeKind::RegularFile,
+			),
+			("Toolkit/Folder.ext", FINDER_INVISIBLE, NodeKind::Directory),
+			(
+				"Toolkit/Manual.pdf",
+				FINDER_HIDE_EXTENSION,
+				NodeKind::RegularFile,
+			),
+			("Toolkit/Control.txt", 0, NodeKind::RegularFile),
+		],
+	);
+}
+
+#[test]
+fn rejects_excluded_or_explicitly_cleared_finder_targets() {
+	const EXCLUDED: &str = r#"
+exclude = ["Excluded.ext"]
+[finder]
+hide = ["/Toolkit/Excluded.ext"]
+"#;
+	const CONTRADICTION: &str = r#"
+[[contents]]
+type = "directory"
+destination = "/Flags.ext"
+hide_extension = false
+[finder]
+hide_extensions = ["/Flags.ext"]
+"#;
+	let directory = tempfile::tempdir().unwrap();
+	let root = directory.path();
+	fs::create_dir(root.join("source")).unwrap();
+	fs::write(root.join("source/Excluded.ext"), b"excluded fixture").unwrap();
+	assert_rejected(
+		build(root, &format!("{COPIED_TREE}{EXCLUDED}")),
+		"selection has no resolved entry",
+	);
+	assert_rejected(
+		build(root, CONTRADICTION),
+		"selection conflicts with an explicit false",
+	);
+	assert!(!root.join(OUTPUT).exists());
+}
+
 #[cfg(unix)]
 #[test]
 fn merges_compatible_shared_inode_flags_and_refuses_contradictions() {
@@ -113,16 +183,20 @@ destination = "/Renamed/Contents/_CodeSignature/CodeResources"
 [[contents]]
 source = "payload.txt"
 destination = "/Renamed/Contents/Document.txt"
-hide_extension = true
 "#;
 	let directory = tempfile::tempdir().unwrap();
 	let root = directory.path();
 	fs::write(root.join(PAYLOAD), b"sealed resource").unwrap();
 	fs::write(root.join("signature-marker"), b"synthetic marker").unwrap();
-	assert_rejected(
-		build(root, CONTENTS),
-		"protected application bundle or framework",
-	);
+	for selection in [
+		"hide_extension = true\n",
+		"[finder]\nhide_extensions = ['/Renamed/Contents/Document.txt']\n",
+	] {
+		assert_rejected(
+			build(root, &format!("{CONTENTS}{selection}")),
+			"protected application bundle or framework",
+		);
+	}
 	assert!(!root.join(OUTPUT).exists());
 }
 
@@ -191,9 +265,20 @@ fn check_flags(path: &Path, expected: &[(&str, u16, NodeKind)]) {
 	let source = Image::open(bytes.as_slice(), UdifLimits::default()).unwrap();
 	let mut disk = Disk::discover(source, dmgez_vfs::Limits::default()).unwrap();
 	with_view(&mut disk, VolumeId::WholeDisk, Limits::default(), |view| {
-		let root = view.root().unwrap();
 		for &(name, expected_flags, kind) in expected {
-			let entry = view.lookup(&root, LookupName::Utf8(name)).unwrap().unwrap();
+			let (parents, leaf) = name.rsplit_once('/').unwrap_or(("", name));
+			let mut parent = view.root().unwrap();
+			for component in parents.split('/').filter(|component| !component.is_empty()) {
+				parent = view
+					.lookup(&parent, LookupName::Utf8(component))
+					.unwrap()
+					.unwrap()
+					.node;
+			}
+			let entry = view
+				.lookup(&parent, LookupName::Utf8(leaf))
+				.unwrap()
+				.unwrap();
 			assert_eq!(entry.kind, kind, "{name}");
 			let flags = match view.finder_info(&entry.node).unwrap() {
 				FinderInfo::Absent => 0,

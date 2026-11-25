@@ -22,6 +22,7 @@ mod signed_bundle;
 #[cfg(any(unix, windows))]
 mod walk;
 
+pub use catalog::VisibilityFlag;
 use catalog::{Body, Catalog, Origin};
 pub use copies::{CopyInput, discover_copies};
 pub use inspection::{AssetInspector, discover_for_inspection, inspect_tree};
@@ -165,7 +166,7 @@ pub enum EntryKind {
 	Symlink(Vec<u8>),
 }
 
-/// Explicit Finder settings from a content declaration.
+/// Explicit Finder settings from content declarations and visibility selections.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct FinderOverrides {
 	pub position: Option<[Coordinate; 2]>,
@@ -364,6 +365,16 @@ pub enum Error {
 	DestinationConflict { path: VirtualPath },
 	#[error("destination has a non-directory parent: {path:?}")]
 	ParentConflict { path: VirtualPath },
+	#[error("Finder {flag:?} selection has no resolved entry at {path:?}")]
+	FinderTargetMissing {
+		path: VirtualPath,
+		flag: VisibilityFlag,
+	},
+	#[error("Finder {flag:?} selection conflicts with an explicit false at {path:?}")]
+	FinderTargetConflict {
+		path: VirtualPath,
+		flag: VisibilityFlag,
+	},
 	#[error("manifest discovery exceeded the {0:?} budget")]
 	Limit(Budget),
 	#[error("manifest discovery was cancelled")]
@@ -479,6 +490,9 @@ pub(crate) fn discover_for_output(
 			}
 			_ => return Err(Error::UnsupportedContent),
 		}
+	}
+	if let Some(finder) = &project.finder {
+		catalog.select_visibility(finder, &mut cancelled)?;
 	}
 	catalog.finish()
 }

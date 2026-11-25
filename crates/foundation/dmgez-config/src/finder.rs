@@ -17,12 +17,16 @@ type Point = [Coordinate; 2];
 type Extent = Dimension<MINIMUM_SIZE>;
 type Width = Dimension<MINIMUM_WIDTH>;
 
-/// Root Finder options and explicit folder overrides.
+/// Root Finder layout, explicit folder overrides, and display selections.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Finder {
 	pub options: FinderOptions,
 	pub folders: Vec<Folder>,
+	/// Exact destination paths whose entries Finder should mark invisible.
+	pub hide: Vec<VirtualPath>,
+	/// Exact destination paths to display with their extensions hidden.
+	pub hide_extensions: Vec<VirtualPath>,
 }
 
 /// Finder presentation settings used for either the image root or a folder.
@@ -58,7 +62,7 @@ pub struct Folder {
 // Keep each external shape closed while sharing the common TOML keys. Serde's
 // flatten attribute cannot be combined with deny_unknown_fields.
 macro_rules! finder_fields {
-	($name:ident, $(#[$attribute:meta])* $field:ident: $field_type:ty $(,)?) => {
+	($name:ident, $($(#[$attribute:meta])* $field:ident: $field_type:ty),+ $(,)?) => {
 		#[derive(Deserialize)]
 		#[serde(deny_unknown_fields)]
 		struct $name {
@@ -78,12 +82,14 @@ macro_rules! finder_fields {
 			show_sidebar: Option<bool>,
 			show_icon_preview: Option<bool>,
 			show_item_info: Option<bool>,
-			$(#[$attribute])*
-			$field: $field_type,
+			$(
+				$(#[$attribute])*
+				$field: $field_type,
+			)+
 		}
 
 		impl $name {
-			fn into_parts(self) -> (FinderOptions, $field_type) {
+			fn into_parts(self) -> (FinderOptions, $($field_type),+) {
 				let options = FinderOptions {
 					background: self.background,
 					window_position: self.window_position,
@@ -102,28 +108,48 @@ macro_rules! finder_fields {
 					show_icon_preview: self.show_icon_preview,
 					show_item_info: self.show_item_info,
 				};
-				(options, self.$field)
+				(options, $(self.$field),+)
 			}
 		}
 	};
 }
 
-finder_fields!(RawFinder, #[serde(default)] folders: Vec<Folder>,);
+finder_fields!(
+	RawFinder,
+	#[serde(default)] folders: Vec<Folder>,
+	#[serde(default)] hide: Vec<VirtualPath>,
+	#[serde(default)] hide_extensions: Vec<VirtualPath>,
+);
 finder_fields!(RawFolder, path: VirtualPath);
 
 impl<'de> Deserialize<'de> for Finder {
 	fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
-		let (options, folders) = RawFinder::deserialize(deserializer)?.into_parts();
-		let mut paths = BTreeSet::new();
-		for folder in &folders {
-			if folder.path.is_root() || !paths.insert(&folder.path) {
-				return Err(de::Error::custom(
-					"Finder folder paths must be distinct non-root paths",
-				));
-			}
+		let (options, folders, hide, hide_extensions) =
+			RawFinder::deserialize(deserializer)?.into_parts();
+		if !distinct_children(folders.iter().map(|folder| &folder.path)) {
+			return Err(de::Error::custom(
+				"Finder folder paths must be distinct non-root paths",
+			));
 		}
-		Ok(Self { options, folders })
+		if !distinct_children(&hide) || !distinct_children(&hide_extensions) {
+			return Err(de::Error::custom(
+				"each Finder visibility selection must contain distinct non-root paths",
+			));
+		}
+		Ok(Self {
+			options,
+			folders,
+			hide,
+			hide_extensions,
+		})
 	}
+}
+
+fn distinct_children<'path>(paths: impl IntoIterator<Item = &'path VirtualPath>) -> bool {
+	let mut seen = BTreeSet::new();
+	paths
+		.into_iter()
+		.all(|path| !path.is_root() && seen.insert(path))
 }
 
 impl<'de> Deserialize<'de> for Folder {
