@@ -90,6 +90,8 @@ target/hfsplus-cli/debug/dmgez build project.toml
 
 Use `--hfsplus-packages PATH` for unpacked packages, or `--no-default-features --features build` for a serial build with Finder support. The compose tool's `--test` mode runs the build command's integration tests. Use `dmgez capabilities` to check whether the binary includes project building. The [compatibility runner](tests/compatibility/project-build/README.md) exercises the same build service and command implementation with the native fixtures.
 
+Compose `project-edit` to preview a typed TOML edit batch and rebuild to a verified unsigned image at a fresh path. [Edit and rebuild a project](docs/features/ADVANCED.md#edit-and-rebuild-a-project)
+
 To check reachable HFS+ and HFSX structure and read stored payloads, compose the CLI with `hfsplus-verify`.
 
 ```sh

@@ -6,6 +6,30 @@ Raw export streams logical disk bytes from qualified UDIF, no file-system interp
 
 `dmgez-operations` provides project-backed rebuild planning with its `edit` feature. It checks the exact source TOML revision, applies one atomic edit batch, and passes the validated project to the ordinary builder for unsigned, no-clobber publication to a fresh path. The original manifest and image remain available. This library path was exercised with a renamed file and exact payload readback from a new HFS+ image on macOS. Direct editing of an existing image remains open. [Rebuild planner](../../crates/services/dmgez-operations/src/edit.rs) · [Planner tests](../../crates/services/dmgez-operations/tests/project_rebuild.rs)
 
+### Edit and rebuild a project
+
+Compose the CLI with the HFS+ builder and `project-edit`. Pass the original project, a versioned edit batch and a fresh output path.
+
+```sh
+python3 tools/compose_filesystem_cli.py --hfsplus ../hfsplus --features project-edit -- \
+	edit dmg.toml --changes edits.toml --output updated.dmg --dry-run --json
+```
+
+```toml
+schema_version = 1
+
+[[edits]]
+operation = "modify"
+target = "/My App.app"
+destination = "/Updated App.app"
+```
+
+The batch runs in order. Use `add_copy` with `source` and optional `destination`, `add_directory` with `destination`, `add_symlink` with `destination` and `target`, `remove` with `target`, or `set_image_name` with `name`. A `modify` entry takes `target` and can change `destination`, `position`, `hidden` and `hide_extension`. Set `clear_position`, `clear_hidden` or `clear_hide_extension` to `true` to clear that field and omit its replacement. An empty `edits = []` requests a rebuild without overlay changes.
+
+Project source paths and `--output` resolve relative to the project directory and accept project substitutions from `--define NAME=VALUE`. The dry run resolves and validates the project and reports its SHA-256. Supply that value to `--expect-project-sha256` to require the same project revision on a later run. To build, omit `--dry-run`. The CLI verifies the staged UDIF, rechecks both TOML inputs, and publishes only to a fresh path. The original TOML and image remain intact. The new image is unsigned, and the report identifies any configured signing or notarization stages deferred by the rebuild.
+
+The CLI regression tests cover the project-backed portion of D-OPS-01-T01 and D-OPS-01-T02. They exercise stale revision and occupied destination rejection, signed original preservation on macOS, unsigned output, and file data and resource fork read-back through the composed HFS+ reader. [CLI regressions](../../apps/dmgez-cli/tests/project_edit_cli/rebuild.rs) · [Test catalog](../reference/test-catalog.json)
+
 ## Modern variants and stretch matrix
 
 `ulfo`/LZFSE and `ulmo`/LZMA (not assumed XZ) qualified by actual macOS output and decoder checks; separate codec gates. `udrw` not obsolete, read and raw container creation later; mutability of container is not writable filesystem support. Partitioned GPT/APM creation later, MBR low priority; only libraries or qualified native adapter, no rewrite of general-purpose partition formats. Multiple partitions/volumes explicit selection. Sparse image, sparsebundle and ASIF are distinct optional formats: classify, map holes/bands and verify bounds; sparsebundle is directory container with manifest/band ownership, reject traversal/symlinks, atomic manifest updates and crash safety before writes/compaction. ASIF is research-gated, never infer rules from filename; need evidence for macOS-specific variant. Segmented images (`segmented`) require segment identity/count/number/running offsets, bounded segment resolver and no remote/path discovery outside authorized root. Legacy off by default umbrella: UDBZ/bzip2, UDCO/ADC, old UDIF variants, NDIF, DC42 read first then qualified write; exact variant ledger, separate parser for non-UDIF families; no modern OS mounting claims for obsolete formats. Classic HFS filesystem support is a separate independent effort only if needed, not an implicit requirement of reading legacy containers. Deprecated license resources `license` off by default: locale/default-language mapping, plain text/RTF, label/buttons mapping, resource serialization qualified against old and current tools; unsupported native presentation explicitly documented. No arbitrary RTF execution. These gates are stretch/nonblocking even if historically supported by dmgbuild. Encryption: detect supported envelopes and differentiate from APFS volume encryption. Research algorithms/framing/key records with lawful fixtures; use established crypto, explicit credentials, bounded KDF iterations/key records/ciphertext sizes, no brute force or recovery/bypass. Read-only first, create/rotate only after independent Apple interoperability, tamper/error tests and security review. Some encryption modes may not authenticate all ciphertext; do not call them authenticated or secure by default. Keep keys and plaintext caches ephemeral and scoped, zeroize where feasible. Never claim password changes securely erase old copies. No writable mounts or unsafe in-place edits until filesystem crash consistency plus container persistence proven.

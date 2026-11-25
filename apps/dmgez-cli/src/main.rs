@@ -2,6 +2,7 @@ use std::{error::Error, num::NonZeroU32, path::PathBuf, process::ExitCode};
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
+mod capabilities;
 #[cfg(feature = "convert")]
 mod convert;
 mod diff;
@@ -19,6 +20,7 @@ mod notarize;
 #[cfg(feature = "convert")]
 mod optimize;
 mod project_build;
+mod project_edit;
 #[cfg(any(feature = "appdmg-import", feature = "lint", feature = "project-build"))]
 mod project_input;
 #[cfg(any(
@@ -26,11 +28,12 @@ mod project_input;
 	feature = "apfs-read",
 	feature = "signing-native",
 	feature = "project-release",
+	feature = "project-edit",
 	all(feature = "installer-lint", any(unix, windows)),
 ))]
 mod report_output;
 mod signing;
-#[cfg(feature = "project-release")]
+#[cfg(any(feature = "project-edit", feature = "project-release"))]
 mod staged_image;
 mod staple;
 mod verify_command;
@@ -86,6 +89,8 @@ enum Command {
 	/// Plan or build an HFS+ disk image from a TOML project.
 	#[command(name = BUILD_PROJECT_COMMAND)]
 	Build(project_build::Arguments),
+	/// Apply a typed edit batch to a project and rebuild to a new image.
+	Edit(project_edit::Arguments),
 	/// Wrap a regular file of raw sectors in a UDIF image.
 	#[command(name = WRAP_RAW_COMMAND)]
 	WrapRaw {
@@ -310,83 +315,14 @@ fn main() -> ExitCode {
 fn run(command: Command) -> CliResult<ExitCode> {
 	let result = match command {
 		Command::Capabilities => {
-			let report_field = |name: &str, value: &str| println!("{name} = {value}");
-			for (name, compiled) in [
-				(BUILD_PROJECT_COMMAND, cfg!(feature = "project-build")),
-				(BUILD_RELEASE_CAPABILITY, cfg!(feature = "project-release")),
-				(WRAP_RAW_COMMAND, cfg!(feature = "build")),
-				(
-					PARALLEL_FEATURE,
-					cfg!(all(
-						any(feature = "build", feature = "convert"),
-						feature = "parallel"
-					)),
-				),
-				(
-					LZFSE_FEATURE,
-					cfg!(all(
-						feature = "lzfse",
-						any(feature = "build", feature = "inspect", feature = "diff")
-					)),
-				),
-				(
-					LZMA_FEATURE,
-					cfg!(all(
-						feature = "lzma",
-						any(feature = "build", feature = "inspect", feature = "diff")
-					)),
-				),
-				(INSPECT_COMMAND, cfg!(feature = "inspect")),
-				(VERIFY_HFSPLUS_CAPABILITY, cfg!(feature = "hfsplus-verify")),
-				(VERIFY_APFS_CAPABILITY, cfg!(feature = "apfs-read")),
-				(
-					HFSPLUS_DECMPFS_CAPABILITY,
-					cfg!(feature = "hfsplus-decmpfs"),
-				),
-				(
-					volume_commands::HFSPLUS_READ_FEATURE,
-					cfg!(feature = "hfsplus-read"),
-				),
-				(
-					volume_commands::APFS_READ_FEATURE,
-					cfg!(feature = "apfs-read"),
-				),
-				(extract::HFSPLUS_FEATURE, extract::HFSPLUS_COMPILED),
-				(extract::APFS_FEATURE, extract::APFS_COMPILED),
-				(install::HFSPLUS_FEATURE, install::HFSPLUS_COMPILED),
-				(install::APFS_FEATURE, install::APFS_COMPILED),
-				(installer_test::FEATURE, installer_test::COMPILED),
-				(ANALYZE_COMMAND, cfg!(feature = "inspect")),
-				(CONVERT_COMMAND, cfg!(feature = "convert")),
-				(OPTIMIZE_COMMAND, cfg!(feature = "convert")),
-				(diff::COMMAND, cfg!(feature = "diff")),
-				(diff::HFSPLUS_CAPABILITY, diff::HFSPLUS_COMPILED),
-				(diff::APFS_CAPABILITY, diff::APFS_COMPILED),
-				(
-					diff::DIFF_HASH_FEATURE,
-					cfg!(feature = "diff-hash") && (diff::HFSPLUS_COMPILED || diff::APFS_COMPILED),
-				),
-				(
-					diff::FINDER_DIFF_FEATURE,
-					cfg!(feature = "finder-diff")
-						&& (diff::HFSPLUS_COMPILED || diff::APFS_COMPILED),
-				),
-				(IMPORT_APPDMG_COMMAND, cfg!(feature = "appdmg-import")),
-				(LINT_COMMAND, cfg!(feature = "lint")),
-				(INSTALLER_LINT_FEATURE, INSTALLER_LINT_COMPILED),
-				(VERIFY_CONTAINER_CAPABILITY, cfg!(feature = "inspect")),
-				(UNWRAP_RAW_COMMAND, cfg!(feature = "inspect")),
-			] {
-				report_field(name, if compiled { COMPILED } else { NOT_COMPILED });
-			}
-			report_field(signing::NATIVE_FEATURE, signing::NATIVE_CAPABILITY);
-			report_field(notarize::NATIVE_FEATURE, notarize::NATIVE_CAPABILITY);
+			capabilities::write();
 			Ok(())
 		}
 		#[cfg(feature = "project-build")]
 		Command::Build(arguments) => project_build::build(arguments, &std::env::current_dir()?),
 		#[cfg(not(feature = "project-build"))]
 		Command::Build(_) => Err("project building requires an HFS+ composed CLI".into()),
+		Command::Edit(arguments) => project_edit::run(&arguments),
 		#[cfg(feature = "build")]
 		Command::WrapRaw {
 			source,

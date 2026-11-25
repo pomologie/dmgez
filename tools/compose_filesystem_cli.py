@@ -66,10 +66,16 @@ APFS_INSTALL_FEATURE = "apfs-install"
 APFS_PROFILES = (APFS_FEATURE, APFS_EXTRACT_FEATURE, APFS_INSTALL_FEATURE)
 APFS_FIXTURES_ENV = "DMGEZ_APFS_FIXTURES"
 PROJECT_RELEASE_FEATURE = "project-release"
+PROJECT_EDIT_FEATURE = "project-edit"
+PROJECT_EDIT_TEST = "project_edit_cli"
 SOURCE_DIRS = ("apps", "crates", "tests")
 FEATURE_ADDITIONS = {
     "project-build": ["dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config"],
     PROJECT_RELEASE_FEATURE: ["project-build", "inspect", "dep:dmgez-signing", "dep:sha2", "dep:tempfile"],
+    PROJECT_EDIT_FEATURE: [
+        "project-build", "dep:dmgez-core", "dep:dmgez-operations", "dmgez-operations/edit",
+        "dep:dmgez-udif", "dmgez-udif/read", "dep:serde", "dep:serde_json", "dep:sha2",
+    ],
     "finder-write": ["dmgez-builder?/finder-write", f"{ADAPTER}?/finder-write"],
     "volume-icon": ["finder-write", f"{ADAPTER}?/volume-icon"],
     "badge-icons": ["volume-icon", f"{ADAPTER}?/badge-icons"],
@@ -273,6 +279,8 @@ def run_cli(cargo, directory, options, packages):
             command.extend(("--test", INSTALLER_TEST))
         if HFSPLUS_BUILDER in packages:
             command.extend(("--test", CLI_TEST))
+            if has_cli_feature(options, PROJECT_EDIT_FEATURE):
+                command.extend(("--test", PROJECT_EDIT_TEST))
             if has_cli_feature(options, PROJECT_RELEASE_FEATURE):
                 command.extend(("--bin", CLI_BINARY))
             if sys.platform == "win32":
@@ -323,6 +331,8 @@ def main():
             parser.error(f"{feature} requires --apfs or --apfs-packages")
     if has_cli_feature(options, INSTALL_FEATURE) and not use_hfsplus:
         parser.error(f"{INSTALL_FEATURE} requires --hfsplus or --hfsplus-packages")
+    if has_cli_feature(options, PROJECT_EDIT_FEATURE) and not use_hfsplus:
+        parser.error(f"{PROJECT_EDIT_FEATURE} requires --hfsplus or --hfsplus-packages")
     if use_apfs and not any(has_cli_feature(options, feature) for feature in APFS_PROFILES):
         options.features.append(APFS_FEATURE)
     if options.target_dir is None:

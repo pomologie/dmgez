@@ -22,6 +22,8 @@ mod release_settings;
 
 #[cfg(feature = "project-build")]
 pub(crate) use execute::build;
+#[cfg(feature = "project-edit")]
+pub(crate) use execute::{Progress, report_losses};
 
 const DEFINE_VALUE_NAME: &str = "NAME=VALUE";
 const OVERRIDE_VALUE_NAME: &str = "SECTION.FIELD=VALUE";

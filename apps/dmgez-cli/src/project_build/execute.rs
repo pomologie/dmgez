@@ -1,6 +1,5 @@
 use std::{
 	cell::Cell,
-	collections::BTreeMap,
 	io::{self, Write},
 	path::Path,
 	thread,
@@ -20,13 +19,11 @@ use super::Arguments;
 #[cfg(feature = "project-release")]
 use super::release::ReleaseRequest;
 
-const DEFINITION_SEPARATOR: char = '=';
 const OVERWRITE_ASSIGNMENT: &str = "build.overwrite=true";
 const MAX_LOSS_DETAILS: usize = 20;
 const READ_PROGRESS_STEPS: u64 = 10;
 const RELATIVE_WORKING_DIRECTORY: &str = "working directory must be absolute";
 const MISSING_PROJECT_DIRECTORY: &str = "project path has no parent directory";
-const INVALID_DEFINITION: &str = "expected a definition in NAME=VALUE form";
 const DUPLICATE_OVERWRITE: &str = "choose either --overwrite or --set build.overwrite";
 const RELEASE_DEFERRED: &str =
 	"Configured release stages were deferred. Published an unsigned image.";
@@ -42,13 +39,7 @@ pub(crate) fn build(arguments: Arguments, working_directory: &Path) -> CliResult
 	let path = working_directory.join(&arguments.project).canonicalize()?;
 	let directory = path.parent().ok_or(MISSING_PROJECT_DIRECTORY)?;
 	let input = project_input::read(&path)?;
-	let mut defines = BTreeMap::new();
-	for definition in &arguments.define {
-		let (name, value) = definition
-			.split_once(DEFINITION_SEPARATOR)
-			.ok_or(INVALID_DEFINITION)?;
-		defines.insert(name.to_owned(), value.to_owned());
-	}
+	let defines = project_input::definitions(&arguments.define)?;
 	let mut overrides = arguments
 		.set
 		.iter()
@@ -153,7 +144,7 @@ fn write_dry_run(
 	Ok(())
 }
 
-fn report_losses(entries: &[MetadataLoss<'_>]) -> usize {
+pub(crate) fn report_losses(entries: &[MetadataLoss<'_>]) -> usize {
 	let total = entries.iter().map(|entry| entry.details.len()).sum();
 	let details = entries
 		.iter()
@@ -180,12 +171,12 @@ fn report_losses(entries: &[MetadataLoss<'_>]) -> usize {
 }
 
 #[derive(Default)]
-struct Progress {
+pub(crate) struct Progress {
 	read_step: Cell<u64>,
 }
 
 impl Progress {
-	fn update(&self, event: BuildProgress) {
+	pub(crate) fn update(&self, event: BuildProgress) {
 		let mut stderr = io::stderr().lock();
 		let _ = match event {
 			BuildProgress::Discovering => writeln!(stderr, "Discovering source paths"),
