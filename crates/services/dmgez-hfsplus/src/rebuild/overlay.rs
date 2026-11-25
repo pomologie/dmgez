@@ -1,8 +1,10 @@
-use std::{collections::BTreeMap, collections::TryReserveError, path::Path};
+use std::{
+	collections::BTreeMap, collections::TryReserveError, error::Error as StdError, path::Path,
+};
 
 use dmgez_config::{
 	VirtualPath,
-	project_edit::{ContentDraft, FieldChange, ProjectEdit},
+	project_edit::{ContentDraft, ProjectEdit},
 };
 use dmgez_finder::edit::StoreEditError;
 use hfsplus_builder::volume::{EntryMetadata, MAX_SYMLINK_TARGET_BYTES};
@@ -15,10 +17,12 @@ use thiserror::Error;
 use super::{Kind, Node, Snapshot, capture::MAX_ENTRIES};
 
 mod finder;
+mod finder_flags;
 mod paths;
 #[cfg(test)]
 mod tests;
 
+use finder_flags::{FlagEdits, FlagPlan};
 use paths::{
 	COLLATION, PATH_SEPARATOR, PathIndex, Route, TreeKind, charge, check_path_bounds,
 	route_entries, validate_tree,
@@ -36,12 +40,14 @@ pub enum OverlayError {
 	ConflictingEdit { index: usize },
 	#[error("image edit {index} selects the volume root as an entry destination")]
 	RootDestination { index: usize },
-	#[error("Finder flag changes are unsupported for existing images (edit {index})")]
-	FinderChange { index: usize },
 	#[error(
 		"Finder position in image edit {index} requires nonnegative whole points in the u32 range"
 	)]
 	FinderPosition { index: usize },
+	#[error("Finder flag edit would change signing-sensitive metadata: {path:?}")]
+	FinderSignedTarget { path: VirtualPath },
+	#[error("could not inspect the Finder flag edit target {path:?} for code signing: {reason}")]
+	FinderSigningProbe { path: VirtualPath, reason: String },
 	#[error("image edit {index} would copy host content without a qualified metadata capture")]
 	HostCopy { index: usize },
 	#[error("the captured host copies do not belong to this edit batch")]
@@ -107,7 +113,10 @@ pub(super) fn apply<S: ReadAt>(
 	snapshot: &mut Snapshot<'_, S>,
 	edits: &[ProjectEdit],
 	_changes_dir: &Path,
-) -> Result<(), OverlayError> {
+) -> Result<(), OverlayError>
+where
+	S::Error: StdError + 'static,
+{
 	apply_with_copies(snapshot, edits, Vec::new())
 }
 
@@ -117,7 +126,10 @@ pub(super) fn apply_with_copies<'volume, S: ReadAt>(
 	snapshot: &mut Snapshot<'volume, S>,
 	edits: &[ProjectEdit],
 	copies: Vec<(VirtualPath, Node<'volume, S>)>,
-) -> Result<(), OverlayError> {
+) -> Result<(), OverlayError>
+where
+	S::Error: StdError + 'static,
+{
 	if copies.is_empty()
 		&& edits.is_empty()
 		&& !snapshot
@@ -129,12 +141,16 @@ pub(super) fn apply_with_copies<'volume, S: ReadAt>(
 	}
 	let mut plan = plan(&snapshot.entries, edits, copies)?;
 	let mut entries = BTreeMap::new();
-	for ((original, mut entry), route) in std::mem::take(&mut snapshot.entries)
+	for (index, ((original, mut entry), route)) in std::mem::take(&mut snapshot.entries)
 		.into_iter()
 		.zip(plan.routes)
+		.enumerate()
 	{
 		if let Some(kind) = plan.replacements.remove(&original) {
 			entry.kind = kind;
+		}
+		if let Some(info) = plan.finder_flags.remove(&index) {
+			entry.metadata.finder_info = info;
 		}
 		match route {
 			Route::Keep => entries.insert(original, entry),
@@ -154,14 +170,18 @@ struct Plan<'edit, 'v, S> {
 	routes: Vec<Route>,
 	additions: Vec<(VirtualPath, Node<'v, S>)>,
 	replacements: BTreeMap<VirtualPath, Kind<'v, S>>,
+	finder_flags: FlagPlan,
 	label: Option<&'edit str>,
 }
 
-fn plan<'edit, 'v, S>(
+fn plan<'edit, 'v, S: ReadAt>(
 	entries: &BTreeMap<VirtualPath, Node<'v, S>>,
 	edits: &'edit [ProjectEdit],
 	mut additions: Vec<(VirtualPath, Node<'v, S>)>,
-) -> Result<Plan<'edit, 'v, S>, OverlayError> {
+) -> Result<Plan<'edit, 'v, S>, OverlayError>
+where
+	S::Error: StdError + 'static,
+{
 	let captured_count = additions.len();
 	if captured_count > MAX_ENTRIES {
 		return Err(OverlayError::Budget);
@@ -180,6 +200,7 @@ fn plan<'edit, 'v, S>(
 	let mut copy_edits = 0;
 	let mut changes = BTreeMap::new();
 	let mut positions = BTreeMap::new();
+	let mut finder_flags = FlagEdits::default();
 	let mut label = None;
 	let mut index = PathIndex::default();
 	for (path, entry) in entries {
@@ -207,14 +228,10 @@ fn plan<'edit, 'v, S>(
 					changes: fields,
 				} => {
 					let target = ordinary_target(&index, edit_index, target)?;
-					if fields.hidden != FieldChange::Keep
-						|| fields.hide_extension != FieldChange::Keep
-					{
-						return Err(OverlayError::FinderChange { index: edit_index });
-					}
 					if matches!(changes.get(target), Some(Change::Remove)) {
 						return Err(OverlayError::ConflictingEdit { index: edit_index });
 					}
+					finder_flags.record(target, &entries[target], edit_index, fields);
 					if let Some(change) = finder::PositionEdit::read(edit_index, fields.position)? {
 						positions.insert(target, change);
 					}
@@ -232,6 +249,7 @@ fn plan<'edit, 'v, S>(
 				ProjectEdit::Remove { target } => {
 					let target = ordinary_target(&index, edit_index, target)?;
 					if positions.contains_key(target)
+						|| finder_flags.targets(target)
 						|| changes.insert(target, Change::Remove).is_some()
 					{
 						return Err(OverlayError::ConflictingEdit { index: edit_index });
@@ -249,6 +267,7 @@ fn plan<'edit, 'v, S>(
 		return Err(OverlayError::UnexpectedHostCopies);
 	}
 	let routes = route_entries(entries, &changes, added_path_bytes)?;
+	let finder_flags = finder_flags.finish(entries, &routes, &additions)?;
 	let layout = {
 		let final_paths = validate_tree(
 			entries
@@ -273,6 +292,7 @@ fn plan<'edit, 'v, S>(
 		routes,
 		additions,
 		replacements: layout.replacements,
+		finder_flags,
 		label,
 	})
 }

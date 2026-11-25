@@ -54,5 +54,9 @@ mod rebuild;
 mod finder;
 
 #[cfg(feature = "image-edit")]
+#[path = "image_edit_cli/finder_flags.rs"]
+mod finder_flags;
+
+#[cfg(feature = "image-edit")]
 #[path = "image_edit_cli/host_copy.rs"]
 mod host_copy;

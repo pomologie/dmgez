@@ -1,6 +1,6 @@
 use super::super::{File, Payload, capture::MAX_DEPTH};
 use super::*;
-use dmgez_config::project_edit::ContentChanges;
+use dmgez_config::project_edit::{ContentChanges, FieldChange};
 use dmgez_finder::{
 	edit::{EditableStore, IconLocationRecord},
 	inspection::ReadLimits,
@@ -319,7 +319,7 @@ fn collisions_and_removal_conflicts_leave_the_snapshot_untouched() {
 }
 
 #[test]
-fn refuses_unqualified_finder_and_copy_operations() {
+fn refuses_reserved_store_paths_and_unprepared_host_copies() {
 	let mut image = snapshot();
 	assert!(matches!(
 		apply(
@@ -328,19 +328,6 @@ fn refuses_unqualified_finder_and_copy_operations() {
 			Path::new(".")
 		),
 		Err(OverlayError::FinderStore { .. })
-	));
-	let mut changes = ContentChanges::default();
-	changes.hidden = FieldChange::Set(true);
-	assert!(matches!(
-		apply(
-			&mut image,
-			&[ProjectEdit::Modify {
-				target: path("/Right"),
-				changes
-			},],
-			Path::new(".")
-		),
-		Err(OverlayError::FinderChange { index: 0 })
 	));
 	assert!(matches!(
 		apply(
@@ -354,6 +341,30 @@ fn refuses_unqualified_finder_and_copy_operations() {
 		Err(OverlayError::HostCopy { index: 0 })
 	));
 	assert_eq!(image.entries.len(), 7);
+}
+
+#[test]
+fn a_flag_edit_cannot_target_content_removed_with_its_parent() {
+	let mut image = snapshot();
+	let target = path("/Discard/Nested/Shortcut");
+	let before = image.entries[&target].metadata.finder_info;
+	let mut changes = ContentChanges::default();
+	changes.hidden = FieldChange::Set(true);
+	assert!(matches!(
+		apply(
+			&mut image,
+			&[
+				ProjectEdit::Modify {
+					target: target.clone(),
+					changes,
+				},
+				remove("/Discard"),
+			],
+			Path::new(".")
+		),
+		Err(OverlayError::ConflictingEdit { index: 0 })
+	));
+	assert_eq!(image.entries[&target].metadata.finder_info, before);
 }
 
 #[test]
