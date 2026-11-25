@@ -10,7 +10,13 @@ pub(super) fn hfsplus_fixture(name: &str) -> Vec<u8> {
 
 // Sibling fixture ledgers describe the sparse format and the independent
 // filesystem oracles. The CLI receives reconstructed raw disk bytes.
-pub(super) fn materialize_sparse(mut fixture: &[u8], expected_length: usize) -> Vec<u8> {
+pub(super) fn materialize_sparse(fixture: &[u8], expected_length: usize) -> Vec<u8> {
+	let mut bytes = vec![0; expected_length];
+	overlay_sparse(&mut bytes, fixture);
+	bytes
+}
+
+pub(super) fn overlay_sparse(bytes: &mut [u8], mut fixture: &[u8]) {
 	fn read_field<const WIDTH: usize>(input: &mut &[u8]) -> [u8; WIDTH] {
 		let (value, rest) = input.split_first_chunk().unwrap();
 		*input = rest;
@@ -18,9 +24,8 @@ pub(super) fn materialize_sparse(mut fixture: &[u8], expected_length: usize) -> 
 	}
 
 	let len = usize::try_from(u64::from_be_bytes(read_field(&mut fixture))).unwrap();
-	assert_eq!(len, expected_length);
+	assert_eq!(len, bytes.len());
 	let runs = u16::from_be_bytes(read_field(&mut fixture));
-	let mut bytes = vec![0; len];
 	for _ in 0..runs {
 		let start = usize::try_from(u64::from_be_bytes(read_field(&mut fixture))).unwrap();
 		let count = usize::try_from(u32::from_be_bytes(read_field(&mut fixture))).unwrap();
@@ -29,5 +34,4 @@ pub(super) fn materialize_sparse(mut fixture: &[u8], expected_length: usize) -> 
 		fixture = rest;
 	}
 	assert!(fixture.is_empty());
-	bytes
 }

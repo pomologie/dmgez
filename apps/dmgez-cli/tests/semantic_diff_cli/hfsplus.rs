@@ -11,13 +11,14 @@ use serde_json::json;
 #[cfg(feature = "project-build")]
 use super::BINARY;
 use super::{
-	DIFFERENT, EQUAL,
-	native_hfsplus::{hfsplus_fixture, materialize_sparse},
+	DIFFERENT, EQUAL, XATTR_OPTION,
+	native_hfsplus::{hfsplus_fixture, materialize_sparse, overlay_sparse},
 	report, semantic_diff,
 };
 
 const HFSPLUS: &str = "hfsplus";
 const BOTH_RAW: &[&str] = &["--left-raw", "--right-raw"];
+const RAW_WITH_XATTRS: &[&str] = &["--left-raw", "--right-raw", XATTR_OPTION];
 const HFSX_FIXTURE: &str = "native-hfsx.bin";
 const HFSX_VOLUME_BYTES: usize = 24 * (1 << 20);
 const UPPERCASE_FILE_DATA: &[u8] = b"capital\0\x01\xff\n";
@@ -47,6 +48,50 @@ fn native_hfsx_distinguishes_the_two_case_sensitive_file_names() {
 		changed["changes"],
 		json!([{"path": ["Cases", "Case.txt"], "kind": "changed", "fields": ["data_fork"]}]),
 		"{changed:#}"
+	);
+}
+
+#[test]
+fn compares_the_native_contiguous_and_fragmented_hfsplus_attribute_forks() {
+	const STRUCTURE: &str = "native-attribute-structure.bin";
+	const FORKS: &str = "native-attribute-forks.bin";
+	const VOLUME_BYTES: usize = 16 * (1 << 20);
+	const CONTIGUOUS_AT: usize = 3_026_944;
+	// This continuation extent starts after the first comparison chunk.
+	const FRAGMENTED_AT: usize = 3_158_016;
+	let root = tempfile::tempdir().unwrap();
+	let left = root.path().join("left.raw");
+	let right = root.path().join("right.raw");
+	// Both captures document ranges of the same native image. The structure
+	// supplies the catalog independently of the attribute tree and payloads.
+	let mut bytes = materialize_sparse(&hfsplus_fixture(STRUCTURE), VOLUME_BYTES);
+	overlay_sparse(&mut bytes, &hfsplus_fixture(FORKS));
+	fs::write(&left, &bytes).unwrap();
+
+	assert_eq!(bytes[CONTIGUOUS_AT], b'0');
+	assert_eq!(bytes[FRAGMENTED_AT], 20);
+	bytes[CONTIGUOUS_AT] ^= 1;
+	bytes[FRAGMENTED_AT] ^= 1;
+	fs::write(&right, bytes).unwrap();
+
+	let baseline = report(&semantic_diff(&left, &right, HFSPLUS, BOTH_RAW), EQUAL);
+	assert_eq!(baseline["changes"], json!([]));
+	let actual = report(
+		&semantic_diff(&left, &right, HFSPLUS, RAW_WITH_XATTRS),
+		DIFFERENT,
+	);
+	assert_eq!(
+		actual["changes"],
+		json!([{
+			"path": ["sample"],
+			"kind": "changed",
+			"fields": ["extended_attributes"],
+			"xattrs": [
+				{ "name": "org.pomologie.contiguous", "kind": "changed" },
+				{ "name": "org.pomologie.fragmented", "kind": "changed" },
+			],
+		}]),
+		"{actual:#}",
 	);
 }
 

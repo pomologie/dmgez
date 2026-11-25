@@ -9,6 +9,7 @@ const ERROR: i32 = 2;
 const EQUAL: i32 = 0;
 #[cfg(all(feature = "diff", any(feature = "hfsplus-read", feature = "apfs-read")))]
 const DIFFERENT: i32 = 1;
+const XATTR_OPTION: &str = "--xattrs";
 
 #[cfg(all(feature = "diff", feature = "apfs-read"))]
 #[path = "semantic_diff_cli/apfs.rs"]
@@ -73,6 +74,29 @@ fn semantic_diff_refuses_a_nonregular_input_before_opening_it() {
 	}
 }
 
+#[cfg(feature = "diff")]
+#[test]
+fn byte_diff_rejects_the_attribute_option_before_opening_inputs() {
+	let directory = tempfile::tempdir().unwrap();
+	let absent = directory.path().join("unused.dmg");
+	for mode in ["logical", "physical"] {
+		let output = Command::new(BINARY)
+			.arg("diff")
+			.arg(&absent)
+			.arg(&absent)
+			.args(["--mode", mode, XATTR_OPTION, "--json"])
+			.output()
+			.unwrap();
+		let stderr = String::from_utf8_lossy(&output.stderr);
+		assert_eq!(output.status.code(), Some(ERROR), "{stderr}");
+		assert!(output.stdout.is_empty(), "{output:?}");
+		assert!(
+			stderr.contains("--xattrs requires --mode semantic"),
+			"{stderr}"
+		);
+	}
+}
+
 #[cfg(not(all(feature = "diff", feature = "hfsplus-read", feature = "apfs-read")))]
 #[test]
 fn unavailable_semantic_backend_refuses_before_opening_inputs() {
@@ -90,15 +114,17 @@ fn unavailable_semantic_backend_refuses_before_opening_inputs() {
 		if compiled {
 			continue;
 		}
-		let output = semantic_diff(&left, &right, filesystem, &[]);
-		let stderr = String::from_utf8_lossy(&output.stderr);
-		assert_eq!(output.status.code(), Some(ERROR), "{stderr}");
-		assert!(output.stdout.is_empty(), "{output:?}");
 		let expected = if cfg!(feature = "diff") {
 			format!("requires the composed {filesystem}-read profile")
 		} else {
 			String::from("feature not compiled: diff")
 		};
-		assert!(stderr.contains(&expected), "{stderr}");
+		for options in [&[][..], &[XATTR_OPTION][..]] {
+			let output = semantic_diff(&left, &right, filesystem, options);
+			let stderr = String::from_utf8_lossy(&output.stderr);
+			assert_eq!(output.status.code(), Some(ERROR), "{stderr}");
+			assert!(output.stdout.is_empty(), "{output:?}");
+			assert!(stderr.contains(&expected), "{stderr}");
+		}
 	}
 }

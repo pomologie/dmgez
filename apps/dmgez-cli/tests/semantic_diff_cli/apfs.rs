@@ -8,21 +8,26 @@ use std::{
 use serde_json::json;
 
 use super::{
-	BINARY, DIFFERENT, EQUAL, ERROR,
+	BINARY, DIFFERENT, EQUAL, ERROR, XATTR_OPTION,
 	fixture::{
 		HARD_LINK_CHECKPOINT_XID, HARD_LINK_FIXTURE, HARD_LINK_VOLUME_OID, HARD_LINK_VOLUME_UUID,
 		NATIVE_BLOCK_BYTES, NATIVE_VOLUME_BYTES, SPARSE_FIXTURE, materialize,
 	},
-	native_apfs_mutations::advertise_incomplete_checkpoint,
+	native_apfs_mutations::{advertise_incomplete_checkpoint, edit_object, replace_field},
 	report, semantic_diff,
 };
 
 const APFS: &str = "apfs";
 const BOTH_RAW: &[&str] = &["--left-raw", "--right-raw"];
+const RAW_WITH_XATTRS: &[&str] = &["--left-raw", "--right-raw", XATTR_OPTION];
 const DATA_BLOCK: u64 = 201;
 const RESOURCE_BLOCK: u64 = 204;
 const DATA_PATTERN: &[u8] = b"APFS shared data fork\n";
 const RESOURCE_PATTERN: &[u8] = b"APFS shared resource fork\n";
+const MARKER: &str = "com.pomologie.marker";
+const MARKER_RENAMED: &str = "com.pomologie.markez";
+const MARKER_BYTES: &[u8; 21] = b"com.pomologie.marker\0";
+const MARKER_RENAMED_BYTES: &[u8; 21] = b"com.pomologie.markez\0";
 
 #[test]
 fn same_native_volume_compares_equal_across_disk_layouts() {
@@ -123,10 +128,10 @@ fn distinguishes_one_changed_fork_on_each_shared_alias() {
 		change_native_fork_byte(&right, block, original);
 
 		let output = semantic_diff(&left, &right, APFS, BOTH_RAW);
-		let report = report(&output, DIFFERENT);
-		assert_eq!(report["outcome"], "different", "{report:#}");
-		let changes = report["changes"].as_array().unwrap();
-		assert_eq!(changes.len(), 3, "{report:#}");
+		let baseline = report(&output, DIFFERENT);
+		assert_eq!(baseline["outcome"], "different", "{baseline:#}");
+		let changes = baseline["changes"].as_array().unwrap();
+		assert_eq!(changes.len(), 3, "{baseline:#}");
 		for path in [
 			json!(["Docs", "alias.bin"]),
 			json!(["More", "Écho.bin"]),
@@ -136,10 +141,149 @@ fn distinguishes_one_changed_fork_on_each_shared_alias() {
 				changes.iter().any(|change| change["path"] == path
 					&& change["kind"] == "changed"
 					&& change["fields"] == json!([field])),
-				"missing {path}: {report:#}",
+				"missing {path}: {baseline:#}",
+			);
+		}
+		if field == "resource_fork" {
+			let with_attributes = report(
+				&semantic_diff(&left, &right, APFS, RAW_WITH_XATTRS),
+				DIFFERENT,
+			);
+			assert_eq!(with_attributes["changes"], baseline["changes"]);
+			assert!(
+				with_attributes["policy"]["xattrs"]["excluded_names"]
+					.as_array()
+					.unwrap()
+					.contains(&json!("com.apple.ResourceFork"))
 			);
 		}
 	}
+}
+
+#[test]
+fn compares_a_shared_inode_attribute_without_reporting_its_values() {
+	const OLD_VALUE: &[u8; 11] = b"hidden-left";
+	const NEW_VALUE: &[u8; 11] = b"hidden-rght";
+	let root = tempfile::tempdir().unwrap();
+	let left = root.path().join("left.raw");
+	let right = root.path().join("right.raw");
+	shared_marker_image(&left, MARKER_BYTES, OLD_VALUE);
+	shared_marker_image(&right, MARKER_BYTES, NEW_VALUE);
+
+	let baseline = report(&semantic_diff(&left, &right, APFS, BOTH_RAW), EQUAL);
+	assert_eq!(baseline["changes"], json!([]));
+	assert!(baseline["policy"].get("xattrs").is_none());
+
+	let output = semantic_diff(&left, &right, APFS, RAW_WITH_XATTRS);
+	let actual = report(&output, DIFFERENT);
+	assert_shared_marker_changes(&actual, json!([{ "name": MARKER, "kind": "changed" }]));
+	let stdout = std::str::from_utf8(&output.stdout).unwrap();
+	assert!(!stdout.contains(std::str::from_utf8(OLD_VALUE).unwrap()));
+	assert!(!stdout.contains(std::str::from_utf8(NEW_VALUE).unwrap()));
+
+	let budget = baseline["compared_bytes"].as_str().unwrap();
+	let exhausted = semantic_diff(
+		&left,
+		&left,
+		APFS,
+		&[
+			"--left-raw",
+			"--right-raw",
+			XATTR_OPTION,
+			"--max-bytes",
+			budget,
+		],
+	);
+	let stderr = String::from_utf8_lossy(&exhausted.stderr);
+	assert_eq!(exhausted.status.code(), Some(ERROR), "{stderr}");
+	assert!(exhausted.stdout.is_empty(), "{exhausted:?}");
+	assert!(stderr.contains("budget"), "{stderr}");
+}
+
+#[test]
+fn reports_present_empty_attributes_when_the_exact_name_changes() {
+	let root = tempfile::tempdir().unwrap();
+	let left = root.path().join("left.raw");
+	let right = root.path().join("right.raw");
+	shared_marker_image(&left, MARKER_BYTES, b"");
+	shared_marker_image(&right, MARKER_RENAMED_BYTES, b"");
+
+	let equal = report(&semantic_diff(&left, &left, APFS, RAW_WITH_XATTRS), EQUAL);
+	assert_eq!(equal["changes"], json!([]));
+	let changed = report(
+		&semantic_diff(&left, &right, APFS, RAW_WITH_XATTRS),
+		DIFFERENT,
+	);
+	assert_shared_marker_changes(
+		&changed,
+		json!([
+			{ "name": MARKER, "kind": "removed" },
+			{ "name": MARKER_RENAMED, "kind": "added" }
+		]),
+	);
+}
+
+fn assert_shared_marker_changes(actual: &serde_json::Value, attributes: serde_json::Value) {
+	assert_eq!(
+		actual["changes"],
+		json!([
+			{
+				"path": ["Docs", "alias.bin"],
+				"kind": "changed",
+				"fields": ["extended_attributes"],
+				"xattrs": attributes,
+			},
+			{
+				"path": ["More", "Écho.bin"],
+				"kind": "changed",
+				"fields": ["extended_attributes"],
+				"xattrs": attributes,
+			},
+			{
+				"path": ["primary.bin"],
+				"kind": "changed",
+				"fields": ["extended_attributes"],
+				"xattrs": attributes,
+			},
+		]),
+		"{actual:#}",
+	);
+}
+
+fn shared_marker_image(image: &Path, name: &[u8; 21], value: &[u8]) {
+	const FSROOT_BLOCK: u64 = 206;
+	const KEY_NAME_AT: usize = 499;
+	const VALUE_AT: usize = 3491;
+	const SLOT_VALUE_LENGTH_AT: usize = 166;
+	const INLINE_HEADER_BYTES: usize = 2 * size_of::<u16>();
+	const ORIGINAL_VALUE_BYTES: usize = 11;
+	const PROVENANCE: [u8; 21] = *b"com.apple.provenance\0";
+	const INLINE: u16 = 2;
+
+	assert!(value.is_empty() || value.len() == ORIGINAL_VALUE_BYTES);
+	materialize(image, HARD_LINK_FIXTURE, &[]);
+	edit_object(image, FSROOT_BLOCK, |block| {
+		// The three hard links share this inode and its single inline record.
+		// Both replacement names preserve its field width and key ordering.
+		replace_field(block, KEY_NAME_AT, PROVENANCE, *name);
+		assert_eq!(block[VALUE_AT..][..size_of::<u16>()], INLINE.to_le_bytes());
+		let old_length = u16::try_from(ORIGINAL_VALUE_BYTES).unwrap();
+		let new_length = u16::try_from(value.len()).unwrap();
+		let header_length = u16::try_from(INLINE_HEADER_BYTES).unwrap();
+		replace_field(
+			block,
+			VALUE_AT + size_of::<u16>(),
+			old_length.to_le_bytes(),
+			new_length.to_le_bytes(),
+		);
+		replace_field(
+			block,
+			SLOT_VALUE_LENGTH_AT,
+			(old_length + header_length).to_le_bytes(),
+			(new_length + header_length).to_le_bytes(),
+		);
+		block[VALUE_AT + INLINE_HEADER_BYTES..][..value.len()].copy_from_slice(value);
+	});
 }
 
 #[test]
