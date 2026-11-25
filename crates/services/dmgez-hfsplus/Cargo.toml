@@ -11,6 +11,7 @@ description = "Compose the versioned HFS+ builder with dmgez image planning"
 default = ["finder-write", "parallel"]
 badge-icons = ["volume-icon", "dmgez-builder/badge-icons"]
 finder-write = ["dmgez-builder/finder-write"]
+image-edit = ["dmgez-config/project-edit", "dep:hfsplus-reader"]
 lzfse = ["dmgez-builder/lzfse"]
 lzma = ["dmgez-builder/lzma"]
 parallel = ["dmgez-builder/parallel"]
@@ -27,6 +28,7 @@ dmgez-udif = { version = "=0.1.0", path = "../../formats/dmgez-udif", default-fe
 hfsplus-builder = "=0.1.0"
 hfsplus-core = { package = "hfsplus-pomologie-core", version = "=0.1.0" }
 hfsplus-format = "=0.1.0"
+hfsplus-reader = { version = "=0.1.0", optional = true }
 
 # Diagnostics
 thiserror = "=2.0.21"

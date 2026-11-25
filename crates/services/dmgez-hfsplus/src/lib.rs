@@ -5,6 +5,8 @@
 #![cfg(any(target_os = "linux", target_os = "macos", windows))]
 
 mod hfsplus;
+#[cfg(feature = "image-edit")]
+pub mod rebuild;
 
 pub use hfsplus::{
 	Error, HfsBuildReport, HfsImage, MetadataLoss, PreparedHfsBuild, capabilities, prepare,
