@@ -201,15 +201,15 @@ impl ImageSnapshot {
 }
 
 fn browse_image(source: impl ReadAt, request: Request) -> Result<Observation, Error> {
-	let location = match &request {
-		Request::Page { location, .. } => location,
-		Request::Details { folder, .. } => folder,
+	let volume = match &request {
+		Request::Page { location, .. } => location.volume,
+		Request::Details { folder, .. } => folder.volume,
 		#[cfg(feature = "actual-preview")]
-		Request::Preview { location, .. } => location,
+		Request::Preview { location, .. } => location.volume,
 	};
 	with_logical_disk(source, Encoding::Udif(Limits::default()), |logical| {
 		let mut disk = Disk::discover(logical, DiskLimits::default())?;
-		let selected = disk.select_volume(Some(location.volume))?;
+		let selected = disk.select_volume(Some(volume))?;
 		let limits = browse::Limits {
 			max_read_requests: MAX_FS_READS,
 			max_read_bytes: MAX_FS_READ_BYTES,
