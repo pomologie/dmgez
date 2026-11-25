@@ -1,13 +1,14 @@
-use std::io::Write;
-
 use super::*;
 
 const LC_UUID: u32 = 0x1b;
 
 fn probe(bytes: &[u8]) -> bool {
-	let mut file = tempfile::tempfile().unwrap();
-	file.write_all(bytes).unwrap();
-	has_or_may_have_signature(&CapturedFile::new(file).unwrap()).unwrap()
+	has_or_may_have_signature_at(bytes.len() as u64, |offset, output| {
+		let start = offset as usize;
+		output.copy_from_slice(&bytes[start..start + output.len()]);
+		Ok::<(), io::Error>(())
+	})
+	.unwrap()
 }
 
 fn thin(order: ByteOrder, wide: bool, signed: bool) -> Vec<u8> {
@@ -155,6 +156,109 @@ fn permits_java_class_files_that_share_the_universal_magic() {
 		}
 		class.extend_from_slice(&[0, 0x21, 0, 1, 0, 3, 0, 0, 0, 0, 0, 0, 0, 0]);
 		assert!(!probe(&class));
+		assert_eq!(
+			classify(&mut io::Cursor::new(class)).unwrap(),
+			Classification::Other
+		);
 	}
 	assert!(!probe(b"an ordinary data file"));
+}
+
+fn typed_thin(order: ByteOrder, wide: bool, file_type: u32) -> Vec<u8> {
+	let mut bytes = thin(order, wide, false);
+	let encoded = match order {
+		ByteOrder::Big => file_type.to_be_bytes(),
+		ByteOrder::Little => file_type.to_le_bytes(),
+	};
+	let offset = MACH_HEADER_FILE_TYPE_OFFSET as usize;
+	bytes[offset..offset + size_of::<u32>()].copy_from_slice(&encoded);
+	bytes
+}
+
+#[test]
+fn classifies_supported_thin_code_kinds() {
+	for order in [ByteOrder::Big, ByteOrder::Little] {
+		for wide in [false, true] {
+			for (file_type, kind) in [
+				(MH_EXECUTE, CodeKind::Executable),
+				(MH_DYLIB, CodeKind::Library),
+				(MH_BUNDLE, CodeKind::Library),
+			] {
+				let bytes = typed_thin(order, wide, file_type);
+				assert_eq!(
+					classify(&mut io::Cursor::new(bytes)).unwrap(),
+					Classification::Code(kind)
+				);
+			}
+		}
+	}
+}
+
+#[test]
+fn refuses_to_choose_a_kind_for_mixed_or_truncated_slices() {
+	let main = typed_thin(ByteOrder::Little, true, MH_EXECUTE);
+	let library = typed_thin(ByteOrder::Big, false, MH_DYLIB);
+	let mixed = universal(ByteOrder::Big, false, &[main.clone(), library]);
+	assert_eq!(
+		classify(&mut io::Cursor::new(mixed)).unwrap(),
+		Classification::Uncertain
+	);
+	let executables = universal(ByteOrder::Little, true, &[main.clone(), main]);
+	assert_eq!(
+		classify(&mut io::Cursor::new(executables)).unwrap(),
+		Classification::Code(CodeKind::Executable)
+	);
+	assert_eq!(
+		classify(&mut io::Cursor::new(MH_MAGIC.to_be_bytes())).unwrap(),
+		Classification::Uncertain
+	);
+}
+
+#[test]
+fn distinguishes_linker_inputs_from_unknown_file_types() {
+	for (file_type, classification) in [
+		(MH_OBJECT, Classification::Other),
+		(MH_DSYM, Classification::Other),
+		(u32::MAX, Classification::Uncertain),
+	] {
+		let bytes = typed_thin(ByteOrder::Little, true, file_type);
+		assert_eq!(
+			classify(&mut io::Cursor::new(bytes)).unwrap(),
+			classification,
+		);
+	}
+}
+
+#[test]
+fn reads_addressable_slices_and_rejects_table_disagreement() {
+	const CPU_X86_64: u32 = 0x0100_0007;
+	const ARM64_ALL: u32 = 0;
+	const X86_64_ALL: u32 = 3;
+	let with_cpu = |cpu: u32, subtype: u32| {
+		let mut thin = typed_thin(ByteOrder::Little, true, MH_EXECUTE);
+		thin[4..8].copy_from_slice(&cpu.to_le_bytes());
+		thin[8..12].copy_from_slice(&subtype.to_le_bytes());
+		thin
+	};
+	let arm = with_cpu(CPU_TYPE_ARM64, ARM64_ALL);
+	let x86 = with_cpu(CPU_X86_64, X86_64_ALL);
+	assert_eq!(
+		architectures(&mut io::Cursor::new(&arm)).unwrap(),
+		Some(vec![Architecture::Arm64])
+	);
+
+	let mut image = universal(ByteOrder::Big, false, &[arm.clone(), x86]);
+	let mut set_cpu = |index: usize, cpu: u32, subtype: u32| {
+		let start = FAT_HEADER_SIZE as usize + index * FAT_ARCH_SIZE as usize;
+		image[start..start + 4].copy_from_slice(&cpu.to_be_bytes());
+		image[start + 4..start + 8].copy_from_slice(&subtype.to_be_bytes());
+	};
+	set_cpu(0, CPU_TYPE_ARM64, ARM64_ALL);
+	set_cpu(1, CPU_X86_64, X86_64_ALL);
+	assert_eq!(
+		architectures(&mut io::Cursor::new(&image)).unwrap(),
+		Some(vec![Architecture::Arm64, Architecture::X86_64])
+	);
+	image[8..12].copy_from_slice(&CPU_X86_64.to_be_bytes());
+	assert_eq!(architectures(&mut io::Cursor::new(&image)).unwrap(), None);
 }

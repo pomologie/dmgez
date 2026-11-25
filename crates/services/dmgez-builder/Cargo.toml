@@ -14,13 +14,14 @@ finder-write = ["dep:dmgez-finder", "dep:flate2", "dep:png", "dep:tiff"]
 lzfse = ["dmgez-udif/lzfse"]
 lzma = ["dmgez-udif/lzma"]
 parallel = ["dmgez-udif/parallel"]
-volume-icon = ["finder-write", "dmgez-finder/volume-icon"]
+volume-icon = ["finder-write", "dmgez-finder/volume-icon", "dep:dmgez-macho"]
 zlib = ["dmgez-udif/zlib"]
 
 [dependencies]
 dmgez-config.workspace = true
 dmgez-core = { workspace = true, features = ["source", "staging"] }
 dmgez-finder = { workspace = true, optional = true }
+dmgez-macho = { workspace = true, optional = true }
 dmgez-udif = { workspace = true, features = ["write"] }
 flate2 = { workspace = true, optional = true }
 png = { version = "=0.18.1", optional = true }

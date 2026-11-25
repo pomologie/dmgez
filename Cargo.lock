@@ -994,6 +994,7 @@ dependencies = [
  "dmgez-config",
  "dmgez-core",
  "dmgez-finder",
+ "dmgez-macho",
  "dmgez-udif",
  "flate2",
  "fs_at",
@@ -1115,6 +1116,10 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
 ]
+
+[[package]]
+name = "dmgez-macho"
+version = "0.1.0"
 
 [[package]]
 name = "dmgez-operations"

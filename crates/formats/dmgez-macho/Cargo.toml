@@ -1,0 +1,11 @@
+[package]
+name = "dmgez-macho"
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Inspect Mach-O code kind and signature markers with bounded reads"
+
+[lints]
+workspace = true

@@ -3,6 +3,7 @@ resolver = "3"
 members = [
 	"apps/dmgez",
 	"apps/dmgez-cli",
+	"crates/formats/dmgez-macho",
 	"crates/formats/dmgez-udif",
 	"crates/foundation/dmgez-config",
 	"crates/foundation/dmgez-core",
@@ -41,6 +42,7 @@ dmgez-diff = { path = "crates/services/dmgez-diff" }
 dmgez-finder = { path = "crates/presentation/dmgez-finder" }
 dmgez-inspector = { path = "crates/services/dmgez-inspector", default-features = false }
 dmgez-lint = { path = "crates/services/dmgez-lint" }
+dmgez-macho = { path = "crates/formats/dmgez-macho" }
 dmgez-operations = { path = "crates/services/dmgez-operations", default-features = false }
 dmgez-preview = { path = "crates/presentation/dmgez-preview" }
 dmgez-signing = { path = "crates/security/dmgez-signing", default-features = false }
