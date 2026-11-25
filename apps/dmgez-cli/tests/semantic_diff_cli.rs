@@ -51,6 +51,28 @@ fn report(output: &Output, exit: i32) -> serde_json::Value {
 	parsed
 }
 
+#[cfg(all(feature = "diff", any(feature = "hfsplus-read", feature = "apfs-read")))]
+#[test]
+fn semantic_diff_refuses_a_nonregular_input_before_opening_it() {
+	let directory = tempfile::tempdir().unwrap();
+	let absent = directory.path().join("unused.dmg");
+	for (filesystem, available) in [
+		("hfsplus", cfg!(feature = "hfsplus-read")),
+		("apfs", cfg!(feature = "apfs-read")),
+	] {
+		if available {
+			let output = semantic_diff(directory.path(), &absent, filesystem, &[]);
+			let stderr = String::from_utf8_lossy(&output.stderr);
+			assert_eq!(output.status.code(), Some(ERROR), "{stderr}");
+			assert!(output.stdout.is_empty());
+			assert!(
+				stderr.contains("comparison input is not a regular file"),
+				"{stderr}"
+			);
+		}
+	}
+}
+
 #[cfg(not(all(feature = "diff", feature = "hfsplus-read", feature = "apfs-read")))]
 #[test]
 fn unavailable_semantic_backend_refuses_before_opening_inputs() {

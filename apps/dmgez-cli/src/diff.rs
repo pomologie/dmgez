@@ -9,7 +9,7 @@ use clap::{Args, ValueEnum};
 #[cfg(feature = "diff")]
 use dmgez_diff::Side;
 #[cfg(feature = "diff")]
-use std::{error::Error as StdError, fmt};
+use std::{error::Error as StdError, fmt, path::Path};
 
 use crate::{
 	CliResult,
@@ -164,6 +164,16 @@ fn missing_backend(feature: &str) -> CliResult<ExitCode> {
 #[cfg(feature = "diff")]
 fn invalid(message: &'static str) -> std::io::Error {
 	std::io::Error::new(std::io::ErrorKind::InvalidInput, message)
+}
+
+#[cfg(feature = "diff")]
+fn require_regular_file(path: &Path) -> Result<(), dmgez_udif::Error> {
+	if !path.metadata()?.is_file() {
+		return Err(dmgez_udif::Error::InvalidFormat(
+			"comparison input is not a regular file",
+		));
+	}
+	Ok(())
 }
 
 #[cfg(feature = "diff")]

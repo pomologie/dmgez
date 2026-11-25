@@ -28,7 +28,7 @@ use crate::{
 	volume_input::with_apfs_view_for_comparison,
 };
 
-use super::{Arguments, DIFFERENT_EXIT_CODE, with_side};
+use super::{Arguments, DIFFERENT_EXIT_CODE, require_regular_file, with_side};
 #[cfg(feature = "apfs-read")]
 use super::{LEFT_VOLUME_OPTION, RIGHT_VOLUME_OPTION};
 
@@ -36,6 +36,7 @@ const FILESYSTEM_SPACE: &str = "filesystem";
 
 #[cfg(feature = "hfsplus-read")]
 pub(super) fn hfsplus(arguments: &Arguments) -> CliResult<ExitCode> {
+	require_regular_inputs(arguments)?;
 	let options = &arguments.options;
 	let attempt = with_hfs_view_with_signature(
 		&arguments.left,
@@ -83,6 +84,7 @@ pub(super) fn apfs(arguments: &Arguments) -> CliResult<ExitCode> {
 			.transpose(),
 		Side::Right,
 	)?;
+	require_regular_inputs(arguments)?;
 	let attempt = with_apfs_view_for_comparison(
 		&arguments.left,
 		options.left_raw,
@@ -114,6 +116,12 @@ pub(super) fn apfs(arguments: &Arguments) -> CliResult<ExitCode> {
 	.map_err(|error| with_named_selector_guidance(error, LEFT_VOLUME_OPTION));
 	let comparison = with_side(attempt, Side::Left)??;
 	comparison?.write(arguments.json)
+}
+
+fn require_regular_inputs(arguments: &Arguments) -> CliResult {
+	with_side(require_regular_file(&arguments.left), Side::Left)?;
+	with_side(require_regular_file(&arguments.right), Side::Right)?;
+	Ok(())
 }
 
 fn compare_open<L: VolumeBackend, R: VolumeBackend>(

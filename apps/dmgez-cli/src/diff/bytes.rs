@@ -15,7 +15,7 @@ use serde::Serialize;
 
 use crate::CliResult;
 
-use super::{Arguments, DIFFERENT_EXIT_CODE, with_side};
+use super::{Arguments, DIFFERENT_EXIT_CODE, require_regular_file, with_side};
 
 const LOGICAL_SPACE: &str = "logical_disk";
 const PHYSICAL_SPACE: &str = "physical_file";
@@ -75,10 +75,6 @@ pub(super) fn run(arguments: &Arguments, logical: bool) -> CliResult<ExitCode> {
 }
 
 fn open_file(path: &Path) -> Result<FileSource, UdifError> {
-	if !path.metadata()?.is_file() {
-		return Err(UdifError::InvalidFormat(
-			"comparison input is not a regular file",
-		));
-	}
+	require_regular_file(path)?;
 	FileSource::new(File::open(path)?)
 }
