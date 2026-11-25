@@ -18,7 +18,9 @@ On the same host a disposable HFS+ image returned 0 from GetFileInfo -aC before 
 
 A scratch integration with Rust 1.99.1 on aarch64-apple-darwin used the Finder validator and root flag API, the sibling HFS+ builder at 9db2cb9, and the UDIF writer at dmgez a4da64b with the local Finder changes. Apple verified the UDZO checksum and mounted the image read-only. GetFileInfo reported the custom-icon flag, the mounted ICNS matched the input, and the raw export placed the bit in the root catalog record.
 
-These observations cover prebuilt asset admission and flag placement for D-FINDER-01-T01 and D-FINDER-03-T01, plus the representation and wrong-dimension checks of D-FINDER-03-T02. Native Finder rendering and the TOML-to-image path still require separate checks.
+The TOML runner then resolved a relative source with its `--volume-icon` feature enabled. The local integration used dmgez 049ab26 with the builder changes and hfsplus 5c87256. Dry-run reported both Finder assets without creating the output. Apple verified the 31,236-byte UDZO file, mounted its 94,208-byte logical HFS+ volume read-only, reported the custom-icon flag, and returned every input ICNS byte. The separate raw catalog check passed.
+
+These observations cover prebuilt asset admission, TOML build, and root flag placement for D-FINDER-01-T01 and D-FINDER-03-T01, plus the representation and wrong-dimension checks of D-FINDER-03-T02. Native Finder rendering still requires a separate check.
 
 ~~~sh
 cargo test --locked -p dmgez-finder --features volume-icon --test volume_icon

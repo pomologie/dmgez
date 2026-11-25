@@ -20,6 +20,10 @@ use hfsplus_format::{
 };
 use rustix::fs::{XattrFlags, fsetxattr};
 
+#[cfg(feature = "volume-icon")]
+#[path = "smoke/volume_icon.rs"]
+mod volume_icon;
+
 const PROJECT_HEADER: &str =
 	"schema_version = 1\n[image]\nname = 'Compose'\noutput = 'image.dmg'\n";
 const IMAGE: &str = "image.dmg";

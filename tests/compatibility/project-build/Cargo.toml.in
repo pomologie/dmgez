@@ -10,6 +10,7 @@ default = ["finder-write", "parallel"]
 finder-write = ["dmgez-builder/finder-write"]
 lzma = ["dmgez-builder/lzma", "dmgez-udif/lzma"]
 parallel = ["dmgez-builder/parallel"]
+volume-icon = ["finder-write", "dmgez-builder/volume-icon"]
 
 [dependencies]
 clap = { version = "=4.6.8", features = ["derive"] }

@@ -12,6 +12,7 @@ from tempfile import TemporaryDirectory
 
 COMPATIBILITY = Path(__file__).resolve().parent
 HFSPLUS_VERSION = "0.1.0"
+VOLUME_ICON_FIXTURE = "crates/presentation/dmgez-finder/tests/fixtures/apple-iconutil.icns"
 DMGEZ_PACKAGES = {
     "dmgez-builder": "crates/services/dmgez-builder",
     "dmgez-config": "crates/foundation/dmgez-config",
@@ -64,6 +65,8 @@ def main():
     parser.add_argument("--no-default-features", action="store_true",
                         help="use the serial profile without Finder store generation")
     parser.add_argument("--lzma", action="store_true", help="enable the optional ULMO codec")
+    parser.add_argument("--volume-icon", action="store_true",
+                        help="enable prebuilt ICNS volume icons")
     options = parser.parse_args()
     if not (sys.platform == "darwin" or sys.platform.startswith("linux")):
         parser.error("the development adapter requires a macOS or Linux host metadata adapter")
@@ -83,6 +86,8 @@ def main():
         command.append("--no-default-features")
     if options.lzma:
         command.extend(["--features", "lzma"])
+    if options.volume_icon:
+        command.extend(["--features", "volume-icon"])
     if options.project:
         command.extend(["--quiet", "--", "--working-directory", str(Path.cwd())])
         if options.dry_run:
@@ -101,6 +106,8 @@ def main():
             shutil.copy2(COMPATIBILITY / required, isolated / required)
         for required in ("src", "tests"):
             shutil.copytree(COMPATIBILITY / required, isolated / required)
+        if options.volume_icon and not options.project:
+            shutil.copy2(dmgez_source / VOLUME_ICON_FIXTURE, isolated / "tests" / "smoke")
         (isolated / "Cargo.toml").write_text(isolated_manifest(paths, options.hfsplus_packages is not None), encoding="utf-8")
         # Preserve the command's status without echoing its definition values on failure.
         raise SystemExit(subprocess.run(command, cwd=isolated).returncode)

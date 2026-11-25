@@ -199,7 +199,7 @@ impl Progress {
 				"Resolved {entries} entries with {regular_payload_bytes} source bytes"
 			),
 			BuildProgress::FinderAssetsPrepared { assets } => {
-				writeln!(stderr, "Prepared {assets} Finder stores")
+				writeln!(stderr, "Prepared {assets} Finder assets")
 			}
 			BuildProgress::WritingImage { logical_bytes } => {
 				writeln!(stderr, "Encoding {logical_bytes} logical bytes")

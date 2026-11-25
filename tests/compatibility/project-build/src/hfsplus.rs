@@ -131,6 +131,9 @@ pub fn capabilities() -> BuildCapabilities {
 	if cfg!(feature = "finder-write") {
 		capabilities.finder_icon_view = Availability::Available;
 	}
+	if cfg!(feature = "volume-icon") {
+		capabilities.finder_volume_icon = Availability::Available;
+	}
 	capabilities
 }
 
@@ -349,6 +352,8 @@ fn seal<'build>(
 	options.limits.max_metadata_bytes =
 		ByteLen(u64::try_from(remaining).map_err(|_| Error::MetadataBudget)?);
 	options.root = generated_metadata(DEFAULT_FOLDER_MODE, generated_seconds);
+	#[cfg(feature = "volume-icon")]
+	prepared.apply_root_finder_info(&mut options.root.finder_info);
 	options.dates = [
 		generated_seconds,
 		generated_seconds,
