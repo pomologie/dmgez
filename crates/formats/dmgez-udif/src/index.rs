@@ -2,9 +2,17 @@ use std::ops::Range;
 
 use crate::{
 	Error, SECTOR_BYTES,
-	blkx::{Kind, NO_RUN_COMMENT, Table},
+	blkx::{Kind, NO_RUN_COMMENT, Record, Table},
 	validation::checked_range,
 };
+
+#[cfg(test)]
+#[path = "../verification/run_index_properties.rs"]
+mod run_index_properties;
+
+#[cfg(kani)]
+#[path = "../verification/kani/run_admission.rs"]
+mod run_admission_proof;
 
 #[cfg(kani)]
 #[path = "../verification/kani/read_ranges.rs"]
@@ -22,90 +30,169 @@ pub(crate) fn normalize(
 	disk_len: u64,
 	data: &Range<u64>,
 ) -> Result<Vec<Run>, Error> {
-	let logical = checked_range(
-		bytes(table.first_sector)?,
-		bytes(table.sector_count)?,
+	let mut admission = TableAdmission::new(
+		table.first_sector,
+		table.sector_count,
+		table.base,
 		disk_len,
-	)
-	.filter(|range| !range.is_empty())
-	.ok_or(Error::Corrupt("mish logical range outside disk"))?;
-	let data_len = data.end - data.start;
+		data,
+	)?;
 	let Some((end, records)) = table.records.split_last() else {
 		return Err(Error::Corrupt("mish has no terminator"));
 	};
-	if end.kind != Kind::End
-		|| end.first_sector != table.sector_count
-		|| end.sector_count != 0
-		|| end.stored_len != 0
-		|| end.comment != NO_RUN_COMMENT
-	{
-		return Err(Error::Corrupt("invalid mish terminator"));
-	}
-	let terminal_offset = table
-		.base
-		.checked_add(end.offset)
-		.ok_or(Error::Corrupt("mish terminator offset overflow"))?;
-	if terminal_offset > data_len {
-		return Err(Error::Corrupt(
-			"mish terminator offset outside the data fork",
-		));
-	}
+	admission.check_terminator(end)?;
 	let mut runs = Vec::with_capacity(records.len());
-	let mut expected_sector = 0;
 	for record in records {
-		let offset = table
+		if let Some(run) = admission.admit(record)? {
+			runs.push(run);
+		}
+	}
+	admission.finish()?;
+	Ok(runs)
+}
+
+struct TableAdmission {
+	logical_start: u64,
+	sector_count: u64,
+	base: u64,
+	data_start: u64,
+	data_len: u64,
+	next_sector: u64,
+}
+
+enum AdmissionError {
+	Corrupt(&'static str),
+	Unsupported(&'static str),
+}
+
+impl From<AdmissionError> for Error {
+	fn from(error: AdmissionError) -> Self {
+		match error {
+			AdmissionError::Corrupt(reason) => Self::Corrupt(reason),
+			AdmissionError::Unsupported(reason) => Self::Unsupported(reason),
+		}
+	}
+}
+
+impl TableAdmission {
+	fn new(
+		first_sector: u64,
+		sector_count: u64,
+		base: u64,
+		disk_len: u64,
+		data: &Range<u64>,
+	) -> Result<Self, AdmissionError> {
+		let logical = checked_range(
+			sector_bytes(first_sector)?,
+			sector_bytes(sector_count)?,
+			disk_len,
+		)
+		.filter(|range| !range.is_empty())
+		.ok_or(AdmissionError::Corrupt("mish logical range outside disk"))?;
+		Ok(Self {
+			logical_start: logical.start,
+			sector_count,
+			base,
+			data_start: data.start,
+			data_len: data.end - data.start,
+			next_sector: 0,
+		})
+	}
+
+	fn check_terminator(&self, end: &Record) -> Result<(), AdmissionError> {
+		if end.kind != Kind::End
+			|| end.first_sector != self.sector_count
+			|| end.sector_count != 0
+			|| end.stored_len != 0
+			|| end.comment != NO_RUN_COMMENT
+		{
+			return Err(AdmissionError::Corrupt("invalid mish terminator"));
+		}
+		let terminal_offset = self
+			.base
+			.checked_add(end.offset)
+			.ok_or(AdmissionError::Corrupt("mish terminator offset overflow"))?;
+		if terminal_offset > self.data_len {
+			return Err(AdmissionError::Corrupt(
+				"mish terminator offset outside the data fork",
+			));
+		}
+		Ok(())
+	}
+
+	fn admit(&mut self, record: &Record) -> Result<Option<Run>, AdmissionError> {
+		let offset = self
 			.base
 			.checked_add(record.offset)
-			.ok_or(Error::Corrupt("mish data offset overflow"))?;
-		let physical = checked_range(offset, record.stored_len, data_len)
-			.ok_or(Error::Corrupt("mish run outside the data fork"))?;
+			.ok_or(AdmissionError::Corrupt("mish data offset overflow"))?;
+		let physical = checked_range(offset, record.stored_len, self.data_len)
+			.ok_or(AdmissionError::Corrupt("mish run outside the data fork"))?;
 		match record.kind {
-			Kind::End => return Err(Error::Corrupt("early mish terminator")),
+			Kind::End => return Err(AdmissionError::Corrupt("early mish terminator")),
 			Kind::Comment => {
 				if record.sector_count != 0
 					|| record.stored_len != 0
-					|| record.first_sector > table.sector_count
+					|| record.first_sector > self.sector_count
 				{
-					return Err(Error::Corrupt("comment run describes image data"));
+					return Err(AdmissionError::Corrupt("comment run describes image data"));
 				}
-				continue;
+				return Ok(None);
 			}
 			_ => {}
 		}
 		if record.comment != NO_RUN_COMMENT {
-			return Err(Error::Unsupported("nonzero data-run flags"));
+			return Err(AdmissionError::Unsupported("nonzero data-run flags"));
 		}
-		if record.first_sector != expected_sector || record.sector_count == 0 {
-			return Err(Error::Corrupt("misordered, overlapping or empty mish run"));
+		if record.first_sector != self.next_sector || record.sector_count == 0 {
+			return Err(AdmissionError::Corrupt(
+				"misordered, overlapping or empty mish run",
+			));
 		}
-		let sectors = checked_range(record.first_sector, record.sector_count, table.sector_count)
-			.ok_or(Error::Corrupt("mish run outside its logical table"))?;
-		expected_sector = sectors.end;
-		let decoded_len = bytes(record.sector_count)?;
+		let sectors = checked_range(record.first_sector, record.sector_count, self.sector_count)
+			.ok_or(AdmissionError::Corrupt(
+				"mish run outside its logical table",
+			))?;
+		let decoded_len = sector_bytes(record.sector_count)?;
 		match record.kind {
 			Kind::Raw if record.stored_len != decoded_len => {
-				return Err(Error::Corrupt(
+				return Err(AdmissionError::Corrupt(
 					"raw run length differs from its sector count",
 				));
 			}
-			Kind::Zlib if physical.is_empty() => return Err(Error::Corrupt("empty zlib run")),
-			Kind::Lzfse if physical.is_empty() => return Err(Error::Corrupt("empty LZFSE run")),
-			Kind::Lzma2 if physical.is_empty() => return Err(Error::Corrupt("empty LZMA2 run")),
+			Kind::Zlib if physical.is_empty() => {
+				return Err(AdmissionError::Corrupt("empty zlib run"));
+			}
+			Kind::Lzfse if physical.is_empty() => {
+				return Err(AdmissionError::Corrupt("empty LZFSE run"));
+			}
+			Kind::Lzma2 if physical.is_empty() => {
+				return Err(AdmissionError::Corrupt("empty LZMA2 run"));
+			}
 			Kind::Zero | Kind::Ignore if !physical.is_empty() => {
-				return Err(Error::Corrupt("zero or ignore run has physical data"));
+				return Err(AdmissionError::Corrupt(
+					"zero or ignore run has physical data",
+				));
 			}
 			_ => {}
 		}
-		runs.push(Run {
-			logical: logical.start + bytes(sectors.start)?..logical.start + bytes(sectors.end)?,
-			physical: data.start + physical.start..data.start + physical.end,
+		let run = Run {
+			logical: self.logical_start + sector_bytes(sectors.start)?
+				..self.logical_start + sector_bytes(sectors.end)?,
+			physical: self.data_start + physical.start..self.data_start + physical.end,
 			kind: record.kind,
-		});
+		};
+		self.next_sector = sectors.end;
+		Ok(Some(run))
 	}
-	if expected_sector != table.sector_count {
-		return Err(Error::Corrupt("mish runs do not cover their table"));
+
+	fn finish(self) -> Result<(), AdmissionError> {
+		if self.next_sector != self.sector_count {
+			return Err(AdmissionError::Corrupt(
+				"mish runs do not cover their table",
+			));
+		}
+		Ok(())
 	}
-	Ok(runs)
 }
 
 pub(crate) fn order_runs(runs: &[Run], disk_len: u64) -> Result<Vec<usize>, Error> {
@@ -167,7 +254,13 @@ impl ReadCursor {
 }
 
 pub(crate) fn bytes(sectors: u64) -> Result<u64, Error> {
+	sector_bytes(sectors).map_err(Error::from)
+}
+
+fn sector_bytes(sectors: u64) -> Result<u64, AdmissionError> {
 	sectors
 		.checked_mul(SECTOR_BYTES)
-		.ok_or(Error::Corrupt("sector count overflows byte geometry"))
+		.ok_or(AdmissionError::Corrupt(
+			"sector count overflows byte geometry",
+		))
 }

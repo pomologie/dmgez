@@ -7,3 +7,6 @@ cargo kani --manifest-path "$verification_dir/../Cargo.toml" \
 cargo kani --manifest-path "$verification_dir/../Cargo.toml" \
 	--no-default-features --features read \
 	--harness indexed_read_cursor
+cargo kani --manifest-path "$verification_dir/../Cargo.toml" \
+	--no-default-features --features read \
+	--harness run_admission --output-format terse
