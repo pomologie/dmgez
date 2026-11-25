@@ -24,6 +24,7 @@ APFS_VERIFY_TEST = "apfs_verify_cli"
 APFS_EXTRACT_TEST = "apfs_extract_cli"
 EXTRACT_TEST = "extract_cli"
 INSTALL_TEST = "install_cli"
+INSTALLER_TEST = "installer_test_cli"
 DECMPFS_TEST = "hfs_decmpfs_cli"
 SEMANTIC_DIFF_TEST = "semantic_diff_cli"
 TOOLCHAIN = "rust-toolchain.toml"
@@ -46,6 +47,7 @@ VERIFY_FEATURE = "hfsplus-verify"
 EXTRACT_FEATURE = "hfsplus-extract"
 DECMPFS_FEATURE = "hfsplus-decmpfs"
 INSTALL_FEATURE = "hfsplus-install"
+INSTALLER_TEST_FEATURE = "installer-test"
 DIFF_FEATURE = "diff"
 DIFF_HASH_FEATURE = "diff-hash"
 FINDER_DIFF_FEATURE = "finder-diff"
@@ -124,6 +126,7 @@ def compose_cli_manifest(manifest, reader, build, apfs):
         dependencies_to_add.extend(("dmgez-builder", ADAPTER))
     if reader:
         additions[READ_FEATURE] = ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse"]
+        features[INSTALLER_TEST_FEATURE].append(READ_FEATURE)
         additions[VERIFY_FEATURE] = ["inspect", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/verify"]
         additions[EXTRACT_FEATURE] = [READ_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract"]
         additions[DECMPFS_FEATURE] = [READ_FEATURE, f"{READ_ADAPTER}/decmpfs-zlib"]
@@ -135,6 +138,7 @@ def compose_cli_manifest(manifest, reader, build, apfs):
         dependencies_to_add.append(READ_ADAPTER)
     if apfs:
         additions[APFS_FEATURE] = ["inspect", f"dep:{APFS_ADAPTER}"]
+        features[INSTALLER_TEST_FEATURE].append(APFS_FEATURE)
         additions[APFS_EXTRACT_FEATURE] = [
             APFS_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract",
         ]
@@ -265,6 +269,8 @@ def run_cli(cargo, directory, options, packages):
                 command.extend(("--test", EXTRACT_TEST))
         if any(has_cli_feature(options, name) for name in (INSTALL_FEATURE, APFS_INSTALL_FEATURE)):
             command.extend(("--test", INSTALL_TEST))
+        if has_cli_feature(options, INSTALLER_TEST_FEATURE):
+            command.extend(("--test", INSTALLER_TEST))
         if HFSPLUS_BUILDER in packages:
             command.extend(("--test", CLI_TEST))
             if has_cli_feature(options, PROJECT_RELEASE_FEATURE):
@@ -322,7 +328,10 @@ def main():
     if options.target_dir is None:
         options.target_dir = ROOT / "target" / ("apfs-cli" if use_apfs else "hfsplus-cli")
     reader = any(has_cli_feature(options, name) for name in (*READ_PROFILES, VERIFY_FEATURE)) or (
-        use_hfsplus and sys.platform == "darwin" and has_cli_feature(options, PROJECT_RELEASE_FEATURE)
+        use_hfsplus and (
+            has_cli_feature(options, INSTALLER_TEST_FEATURE) or
+            sys.platform == "darwin" and has_cli_feature(options, PROJECT_RELEASE_FEATURE)
+        )
     )
     if sys.platform == "win32":
         if use_apfs or reader:

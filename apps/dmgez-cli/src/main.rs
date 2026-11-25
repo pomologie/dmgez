@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Display, num::NonZeroU32, path::PathBuf, process::ExitCode};
+use std::{error::Error, num::NonZeroU32, path::PathBuf, process::ExitCode};
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
@@ -11,6 +11,7 @@ mod import_appdmg;
 #[cfg(feature = "inspect")]
 mod inspect;
 mod install;
+mod installer_test;
 #[cfg(feature = "lint")]
 mod lint;
 mod native_assessment;
@@ -179,6 +180,8 @@ enum Command {
 	},
 	/// Check container integrity and, when requested, filesystem integrity.
 	Verify(verify_command::Arguments),
+	/// Test the finished installer image and explicitly requested release checks.
+	Test(installer_test::Arguments),
 	/// List a page of visible directory entries in a disk image.
 	Ls(volume_commands::ListArguments),
 	/// Browse a directory tree in a disk image.
@@ -282,6 +285,7 @@ fn main() -> ExitCode {
 			| Command::Sign { .. }
 			| Command::Notarize(_)
 			| Command::Staple(_)
+			| Command::Test(_)
 	) {
 		ExitCode::from(REPORT_ERROR_EXIT_CODE)
 	} else {
@@ -304,6 +308,7 @@ fn main() -> ExitCode {
 fn run(command: Command) -> CliResult<ExitCode> {
 	let result = match command {
 		Command::Capabilities => {
+			let report_field = |name: &str, value: &str| println!("{name} = {value}");
 			for (name, compiled) in [
 				(BUILD_PROJECT_COMMAND, cfg!(feature = "project-build")),
 				(BUILD_RELEASE_CAPABILITY, cfg!(feature = "project-release")),
@@ -348,6 +353,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 				(extract::APFS_FEATURE, extract::APFS_COMPILED),
 				(install::HFSPLUS_FEATURE, install::HFSPLUS_COMPILED),
 				(install::APFS_FEATURE, install::APFS_COMPILED),
+				(installer_test::FEATURE, installer_test::COMPILED),
 				(ANALYZE_COMMAND, cfg!(feature = "inspect")),
 				(CONVERT_COMMAND, cfg!(feature = "convert")),
 				(OPTIMIZE_COMMAND, cfg!(feature = "convert")),
@@ -477,6 +483,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		Command::Volumes(arguments) => volume_commands::volumes(&arguments),
 		Command::Extract(arguments) => extract::run(&arguments),
 		Command::Install(arguments) => install::run(&arguments),
+		Command::Test(arguments) => return installer_test::run(&arguments),
 		#[cfg(feature = "inspect")]
 		Command::UnwrapRaw {
 			image,
@@ -490,8 +497,4 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		| Command::UnwrapRaw { .. } => Err("feature not compiled: inspect".into()),
 	};
 	result.map(|()| ExitCode::SUCCESS)
-}
-
-fn report_field(key: impl Display, value: impl Display) {
-	println!("{key} = {value}");
 }

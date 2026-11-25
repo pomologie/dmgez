@@ -16,7 +16,7 @@ use dmgez_udif::reader::{FileSource, Image, Limits};
 use dmgez_vfs::{Disk, Layout, PartitionId, VolumeId};
 use serde::Serialize;
 
-use crate::{CliResult, report_field, verify_command, volume_commands::Filesystem};
+use crate::{CliResult, verify_command, volume_commands::Filesystem};
 
 #[cfg(feature = "apfs-read")]
 mod apfs;
@@ -70,6 +70,10 @@ const LZFSE_ENCODING: &str = "lzfse";
 const LZMA2_ENCODING: &str = "lzma2";
 const OTHER_ENCODING: &str = "other";
 const PARTITION_COPY_BUFFER_BYTES: usize = 64 * 1024;
+
+fn report_field(key: impl std::fmt::Display, value: impl std::fmt::Display) {
+	println!("{key} = {value}");
+}
 
 pub(super) fn open_source(path: &Path) -> Result<FileSource, dmgez_udif::Error> {
 	FileSource::new(File::open(path)?)

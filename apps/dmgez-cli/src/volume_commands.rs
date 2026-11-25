@@ -13,6 +13,11 @@ mod apfs;
 #[cfg(any(
 	all(feature = "diff", feature = "apfs-read"),
 	all(
+		feature = "installer-test",
+		feature = "apfs-read",
+		any(target_os = "linux", target_os = "macos")
+	),
+	all(
 		any(feature = "apfs-extract", feature = "apfs-install"),
 		any(target_os = "linux", target_os = "macos")
 	)

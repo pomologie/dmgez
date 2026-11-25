@@ -31,6 +31,60 @@ mod udzo;
 const BINARY: &str = env!("CARGO_BIN_EXE_dmgez");
 const APFS_VERIFY: &[&str] = &["--full", "--filesystem", "apfs"];
 
+#[cfg(all(
+	feature = "installer-test",
+	feature = "build",
+	feature = "apfs-read",
+	any(target_os = "linux", target_os = "macos")
+))]
+#[test]
+fn checks_finished_installer_layout_on_a_selected_native_apfs_checkpoint() {
+	let directory = tempfile::tempdir().unwrap();
+	let raw = directory.path().join("native.raw");
+	let image = directory.path().join("native.dmg");
+	materialize(&raw, HARD_LINK_FIXTURE, &[]);
+	let wrapped = Command::new(BINARY)
+		.arg("wrap-raw")
+		.arg(raw)
+		.arg("--output")
+		.arg(&image)
+		.args(["--format", "udzo"])
+		.output()
+		.unwrap();
+	assert!(wrapped.status.success(), "{wrapped:?}");
+	let checked = Command::new(BINARY)
+		.arg("test")
+		.arg(&image)
+		.args([
+			"--profile",
+			"installer",
+			"--filesystem",
+			"apfs",
+			"--volume",
+			HARD_LINK_VOLUME_OID,
+			"--xid",
+			HARD_LINK_CHECKPOINT_XID,
+			"--json",
+		])
+		.output()
+		.unwrap();
+	assert_eq!(checked.status.code(), Some(1), "{checked:?}");
+	let report: Value = serde_json::from_slice(&checked.stdout).unwrap();
+	assert_eq!(report["filesystem"], "apfs");
+	assert_eq!(report["apfs_volume"]["object_id"], HARD_LINK_VOLUME_OID);
+	assert_eq!(
+		report["apfs_volume"]["checkpoint_xid"],
+		HARD_LINK_CHECKPOINT_XID
+	);
+	assert_eq!(report["container"]["status"], "passed");
+	assert_eq!(report["layout"]["status"], "failed");
+	assert_eq!(report["layout"]["evidence"]["applications"], 0);
+	assert_eq!(
+		report["layout"]["evidence"]["diagnostics"][0]["rule"],
+		"missing_application"
+	);
+}
+
 // The engine's native hard-link witness records two forks and four inline
 // provenance attributes. Three hard-link names share one set of payloads.
 #[cfg(feature = "apfs-read")]

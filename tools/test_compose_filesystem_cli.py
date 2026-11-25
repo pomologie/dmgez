@@ -15,6 +15,16 @@ import compose_filesystem_cli as compose
 
 
 class ReleaseCompositionTests(unittest.TestCase):
+    def test_installer_test_uses_only_the_composed_filesystem_readers(self):
+        manifest = (compose.ROOT / compose.CLI / compose.MANIFEST).read_text(encoding="utf-8")
+        for reader in (False, True):
+            for apfs in (False, True):
+                with self.subTest(reader=reader, apfs=apfs):
+                    text = compose.compose_cli_manifest(manifest, reader=reader, build=True, apfs=apfs)
+                    features = tomllib.loads(text)["features"][compose.INSTALLER_TEST_FEATURE]
+                    self.assertEqual(compose.READ_FEATURE in features, reader)
+                    self.assertEqual(compose.APFS_FEATURE in features, apfs)
+
     def test_release_forwards_install_only_when_the_hfsplus_reader_is_present(self):
         manifest = (compose.ROOT / compose.CLI / compose.MANIFEST).read_text(encoding="utf-8")
         for reader in (False, True):

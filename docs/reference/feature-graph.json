@@ -60,6 +60,9 @@
     "installer-lint": [
       "lint"
     ],
+    "installer-test": [
+      "inspect"
+    ],
     "appdmg-import": [],
     "convert": [
       "udif-read",

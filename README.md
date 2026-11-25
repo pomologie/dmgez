@@ -72,6 +72,8 @@ With `notarization-native` on macOS, `notarize` submits a signed DMG with a priv
 
 `staple` matches a DMG to the accepted record's SHA-256, validates a ticket on a private copy, and publishes to a new path. [Staple a notarized disk image](docs/features/RELEASE.md#staple-a-notarized-disk-image)
 
+Compose `installer-test` to check the finished image with `dmgez test installer.dmg --profile installer --json`. The report keeps container and app layout results separate from the requested signature, ticket, and native policy checks. [Finished installer test](docs/features/RELEASE.md#test-a-finished-installer)
+
 `import-appdmg` translates documented appdmg JSON settings into a new version-one TOML manifest. Relative asset paths keep their original settings directory. A relative `--image-output` is interpreted from the new manifest's directory. The command reports unmapped behavior and refuses to replace an existing manifest.
 
 ## Build from a TOML project

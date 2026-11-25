@@ -107,10 +107,19 @@ fn with_source<T>(
 	read: impl FnOnce(&mut HfsView<'_, '_, &mut dyn LogicalDisk>, VolumeSignature) -> CliResult<T>,
 ) -> CliResult<T> {
 	with_logical_disk(source, raw, |logical| {
-		let mut disk = Disk::discover(logical, DiskLimits::default())?;
-		let selected = select(&disk, partition)?;
-		browse::with_view_signature(&mut disk, selected, browse::Limits::default(), read)?
+		with_hfs_disk(logical, partition, read)
 	})
+}
+
+#[cfg(feature = "hfsplus-read")]
+pub(super) fn with_hfs_disk<T>(
+	logical: &mut dyn LogicalDisk,
+	partition: Option<NonZeroU32>,
+	read: impl FnOnce(&mut HfsView<'_, '_, &mut dyn LogicalDisk>, VolumeSignature) -> CliResult<T>,
+) -> CliResult<T> {
+	let mut disk = Disk::discover(logical, DiskLimits::default())?;
+	let selected = select(&disk, partition)?;
+	browse::with_view_signature(&mut disk, selected, browse::Limits::default(), read)?
 }
 
 #[cfg(feature = "apfs-read")]
@@ -190,11 +199,16 @@ pub(super) fn with_apfs_view_verified<T>(
 #[cfg(any(
 	all(feature = "diff", feature = "apfs-read"),
 	all(
+		feature = "installer-test",
+		feature = "apfs-read",
+		any(target_os = "linux", target_os = "macos")
+	),
+	all(
 		any(feature = "apfs-extract", feature = "apfs-install"),
 		any(target_os = "linux", target_os = "macos")
 	)
 ))]
-fn require_apfs_checkpoint(
+pub(super) fn require_apfs_checkpoint(
 	requested: Option<TransactionId>,
 	diagnostics: &[CheckpointDiagnostic],
 ) -> io::Result<()> {
@@ -256,12 +270,22 @@ fn with_apfs_container_source<T>(
 	read: impl FnOnce(VolumeId, &ApfsContainer<'_, &mut dyn LogicalDisk>) -> CliResult<T>,
 ) -> CliResult<T> {
 	with_logical_disk(source, raw, |logical| {
-		let mut disk = Disk::discover(logical, DiskLimits::default())?;
-		disk.recognize_partitionless(Filesystem::Apfs, probe_partitionless)?;
-		let selected = select(&disk, partition)?;
-		let container = ApfsContainer::open(disk.data_window(selected)?, xid)?;
-		read(selected, &container)
+		with_apfs_disk(logical, partition, xid, read)
 	})
+}
+
+#[cfg(feature = "apfs-read")]
+pub(super) fn with_apfs_disk<T>(
+	logical: &mut dyn LogicalDisk,
+	partition: Option<NonZeroU32>,
+	xid: Option<TransactionId>,
+	read: impl FnOnce(VolumeId, &ApfsContainer<'_, &mut dyn LogicalDisk>) -> CliResult<T>,
+) -> CliResult<T> {
+	let mut disk = Disk::discover(logical, DiskLimits::default())?;
+	disk.recognize_partitionless(Filesystem::Apfs, probe_partitionless)?;
+	let selected = select(&disk, partition)?;
+	let container = ApfsContainer::open(disk.data_window(selected)?, xid)?;
+	read(selected, &container)
 }
 
 #[cfg(all(
