@@ -12,6 +12,7 @@ use crate::partition::Layout;
 
 mod capabilities;
 mod finder;
+mod partition;
 mod profile;
 mod release;
 #[cfg(test)]
@@ -20,6 +21,7 @@ mod udrw;
 
 pub use capabilities::{Availability, BuildCapabilities, BuildFeature};
 use finder::{admit_volume_icon, finder_plan};
+use partition::partition_layout;
 pub use profile::{ExecutionProfile, ResourceLimits};
 use release::release_plan;
 
@@ -303,24 +305,6 @@ pub fn preflight(
 		_ => {}
 	}
 	Ok(result)
-}
-
-fn partition_layout(partition: Partition, format: ImageFormat) -> Result<Layout, PreflightError> {
-	let layout = match partition {
-		Partition::None => return Ok(Layout::Partitionless),
-		Partition::Apm => Layout::Apm,
-		Partition::Gpt => Layout::Gpt,
-		_ => return Err(PreflightError::Partition(partition)),
-	};
-	if !cfg!(feature = "partition-write") {
-		return Err(PreflightError::FeatureNotCompiled(
-			BuildFeature::PartitionWrite,
-		));
-	}
-	if !matches!(format, ImageFormat::Udro | ImageFormat::Udzo) {
-		return Err(PreflightError::PartitionFormat { partition, format });
-	}
-	Ok(layout)
 }
 
 fn filesystem_profile(
