@@ -43,13 +43,13 @@ The check runs the project in dry-run and build modes, verifies the UDIF with Ap
 
 On macOS 14.7.2 (23H311), the fixture produced a 1 MiB logical disk with two Finder assets and zero metadata losses. Apple verified the UDIF and both mounted stores matched the expected binary-plist types and values.
 
-The background fixtures use synthetic 2×2 RGB PNGs. The compatibility suite checks root and inherited aliases, nested image and color overrides, exact file data, malformed images, source mutation, and catalog identity. Use `--include-ignored` in test mode to enable the pinned Python alias decoder. With `ds_store` 1.3.4 and `mac_alias` 2.2.3 available, run the native mount check on macOS.
+The background fixtures use synthetic 2×2 RGB PNGs and a 4×4 RGBA Retina PNG. The compatibility suite checks root and inherited aliases, nested image and color overrides, exact file data, malformed images, source mutation, and catalog identity. Its TIFF check reads both directories and compares density, pixel data, and alpha. Use `--include-ignored` in test mode to enable the independent Python alias checks. With `ds_store` 1.3.4, `mac_alias` 2.2.3, and Apple's Swift compiler available, run the native mount check on macOS.
 
 ```sh
 python3 check_finder_background.py --dmgez /path/to/dmgez --hfsplus /path/to/hfsplus
 ```
 
-This check runs Apple verification, HFS+ filesystem checking, and read-only mounting. Core Foundation resolves the written aliases without opening UI or mounting another volume. The check compares the resolved file, PNG bytes, and native catalog IDs, then detaches the disposable image. [Core Foundation resolution options](https://developer.apple.com/documentation/corefoundation/bookmark-data-resolution-options?changes=l_2&language=objc)
+The native check verifies each image with Apple tools, runs the HFS+ filesystem checker, and mounts the image read-only. Core Foundation resolves each alias without opening UI or mounting another volume. The test checks the catalog IDs and exact static PNG or prebuilt TIFF bytes. ImageIO compares both TIFF representations to the source pixels, and AppKit confirms their logical sizes and selection at 1× and 2×. The prebuilt case uses native `tiffutil` to create its input. [Core Foundation resolution options](https://developer.apple.com/documentation/corefoundation/bookmark-data-resolution-options?changes=l_2&language=objc)
 
 Use `--volume-icon` with a prebuilt ICNS configured relative to the project.
 
