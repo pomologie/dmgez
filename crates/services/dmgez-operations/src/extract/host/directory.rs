@@ -161,7 +161,7 @@ impl<'root> DestinationDirectory<'root> {
 	/// and filesystem failures. [`HostError::CreatedDirectoryUnavailable`]
 	/// indicates creation succeeded before attachment could be confirmed.
 	pub fn create_child(&self, name: &HostName) -> Result<Self, HostError> {
-		self.create_child_with(name, || self.open_created_child(name))
+		self.create_child_with(name, || self.open_child(name))
 	}
 
 	pub(super) fn create_child_with(
@@ -184,7 +184,11 @@ impl<'root> DestinationDirectory<'root> {
 		})
 	}
 
-	fn open_created_child(&self, name: &HostName) -> Result<Self, HostError> {
+	pub(crate) fn open_child(&self, name: &HostName) -> Result<Self, HostError> {
+		if self.chain.len() >= DEFAULT_MAX_DEPTH {
+			return Err(HostError::Depth);
+		}
+		self.check_attachment()?;
 		let name_path = name.as_str();
 		let parent = self.descriptor();
 		let observed =
@@ -237,6 +241,16 @@ impl<'root> DestinationDirectory<'root> {
 
 	pub(super) fn root_path(&self) -> &Path {
 		&self.root.path
+	}
+
+	#[cfg(feature = "install")]
+	pub(crate) fn attached_path(&self) -> Result<PathBuf, HostError> {
+		self.check_attachment()?;
+		let mut path = self.root.path.clone();
+		for step in &self.chain {
+			path.push(step.name.as_str());
+		}
+		Ok(path)
 	}
 
 	/// Checks that the admitted destination name is absent without following links.

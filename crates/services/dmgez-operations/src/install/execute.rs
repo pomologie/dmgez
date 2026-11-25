@@ -1,4 +1,4 @@
-use std::{collections::TryReserveError, error::Error as StdError, io};
+use std::{collections::TryReserveError, error::Error as StdError, io, path::Path};
 
 use dmgez_vfs::volume::{NodeHandle, ViewError, VolumeBackend, VolumeView};
 use thiserror::Error;
@@ -83,6 +83,8 @@ pub enum InstallFailure<E: StdError + 'static> {
 	UnsupportedMetadata(#[from] HostMetadataError),
 	#[error("staged object does not match the source bytes, metadata, or name binding")]
 	ReadBack,
+	#[error("the requested prepublication application check failed")]
+	Prepublication(#[source] io::Error),
 	#[error("could not reserve application staging memory")]
 	Reserve(#[from] TryReserveError),
 	#[error(transparent)]
@@ -107,8 +109,56 @@ pub fn execute_copy<B: VolumeBackend>(
 	view: &mut VolumeView<B>,
 	plan: &CopyPlan<B::Id>,
 	destination: &DestinationDirectory<'_>,
+	verify_source: impl FnMut() -> io::Result<()>,
+	cancelled: impl FnMut() -> bool,
+) -> Result<CopySummary, InstallError<B::Error>> {
+	execute(
+		view,
+		plan,
+		destination,
+		verify_source,
+		cancelled,
+		None::<fn(&Path) -> io::Result<()>>,
+	)
+}
+
+/// Stage a copy, run an explicit read-only check, then verify and publish it.
+///
+/// The checker receives the attachment-checked path of the private bundle.
+/// The caller must keep the containing namespace stable and restrict access
+/// to the stage throughout the operation. The completed tree is checked again
+/// against the source before the no-clobber publication. The host may attach
+/// its own provenance attribute on macOS. A rejected nonempty stage may
+/// remain under its reported private name.
+///
+/// # Errors
+/// Reports the same failures as [`execute_copy`] and any error from the check
+/// or the subsequent staged read-back.
+pub fn execute_copy_with_check<B: VolumeBackend>(
+	view: &mut VolumeView<B>,
+	plan: &CopyPlan<B::Id>,
+	destination: &DestinationDirectory<'_>,
+	verify_source: impl FnMut() -> io::Result<()>,
+	cancelled: impl FnMut() -> bool,
+	check: impl FnOnce(&Path) -> io::Result<()>,
+) -> Result<CopySummary, InstallError<B::Error>> {
+	execute(
+		view,
+		plan,
+		destination,
+		verify_source,
+		cancelled,
+		Some(check),
+	)
+}
+
+fn execute<B: VolumeBackend>(
+	view: &mut VolumeView<B>,
+	plan: &CopyPlan<B::Id>,
+	destination: &DestinationDirectory<'_>,
 	mut verify_source: impl FnMut() -> io::Result<()>,
 	mut cancelled: impl FnMut() -> bool,
+	check: Option<impl FnOnce(&Path) -> io::Result<()>>,
 ) -> Result<CopySummary, InstallError<B::Error>> {
 	let name = plan.application().destination_name();
 	let mut run = Run {
@@ -128,6 +178,15 @@ pub fn execute_copy<B: VolumeBackend>(
 	})?;
 	let result = run
 		.fill(plan, &children, &stage)
+		.and_then(|()| {
+			if let Some(check) = check {
+				run.check_ready()?;
+				let path = stage.path_for_check()?;
+				check(&path).map_err(InstallFailure::Prepublication)?;
+				run.verify_tree(plan, &children, stage.directory())?;
+			}
+			Ok(())
+		})
 		.and_then(|()| run.check_ready())
 		.and_then(|()| stage.publish().map_err(Into::into));
 	if let Err(failure) = result {

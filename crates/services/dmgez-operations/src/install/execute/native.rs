@@ -21,6 +21,8 @@ use crate::{
 
 use super::{HostMetadataError, InstallFailure, Run};
 
+mod readback;
+
 const CHUNK_BYTES: usize = 64 << 10;
 const SYMLINK_MODE: u16 = 0o777;
 const PRIVATE_FILE: Mode = Mode::RUSR.union(Mode::WUSR);
@@ -40,9 +42,10 @@ const PROTECTED_PREFIXES: [&str; 5] = [
 	"com.apple.system.",
 	"com.apple.security.",
 ];
+const PROVENANCE_ATTRIBUTE: &str = "com.apple.provenance";
 const PROTECTED_ATTRIBUTES: [&str; 4] = [
 	"com.apple.macl",
-	"com.apple.provenance",
+	PROVENANCE_ATTRIBUTE,
 	"com.apple.quarantine",
 	"com.apple.rootless",
 ];
@@ -102,22 +105,7 @@ impl<B: VolumeBackend> Run<'_, '_, B> {
 		self.check_ready()?;
 		let mut reader = File::from(os(fs::openat(directory, name, READ_FILE, Mode::empty()))?);
 		verify_file(&writer, &reader, *data_bytes)?;
-		let mut buffer = [0; CHUNK_BYTES];
-		self.view
-			.with_fork(source, ForkKind::Data, |fork| {
-				transfer(fork, *data_bytes, self.cancelled, |bytes| {
-					let actual = &mut buffer[..bytes.len()];
-					reader.read_exact(actual)?;
-					if actual != bytes {
-						return Err(InstallFailure::ReadBack);
-					}
-					Ok(())
-				})
-			})?
-			.ok_or(InstallFailure::SourceChanged)??;
-		if reader.read(&mut [0])? != 0 {
-			return Err(InstallFailure::ReadBack);
-		}
+		self.verify_data(source, *data_bytes, &mut reader)?;
 		if let Some(bytes) = *resource_bytes {
 			let value = self
 				.view
@@ -145,6 +133,31 @@ impl<B: VolumeBackend> Run<'_, '_, B> {
 		let opened = os(fs::fstat(&reader))?;
 		let named = os(fs::statat(directory, name, AtFlags::SYMLINK_NOFOLLOW))?;
 		if !same_file(&opened, &named, *data_bytes) {
+			return Err(InstallFailure::ReadBack);
+		}
+		Ok(())
+	}
+
+	fn verify_data(
+		&mut self,
+		source: &NodeHandle<B::Id>,
+		bytes: u64,
+		reader: &mut File,
+	) -> Result<(), InstallFailure<B::Error>> {
+		let mut buffer = [0; CHUNK_BYTES];
+		self.view
+			.with_fork(source, ForkKind::Data, |fork| {
+				transfer(fork, bytes, self.cancelled, |expected| {
+					let actual = &mut buffer[..expected.len()];
+					reader.read_exact(actual)?;
+					if actual != expected {
+						return Err(InstallFailure::ReadBack);
+					}
+					Ok(())
+				})
+			})?
+			.ok_or(InstallFailure::SourceChanged)??;
+		if reader.read(&mut [0])? != 0 {
 			return Err(InstallFailure::ReadBack);
 		}
 		Ok(())
@@ -217,6 +230,14 @@ fn set_attribute<E: StdError + 'static>(
 	value: &[u8],
 ) -> Result<(), InstallFailure<E>> {
 	os(fs::fsetxattr(fd.as_fd(), name, value, XattrFlags::CREATE))?;
+	verify_attribute(fd, name, value)
+}
+
+fn verify_attribute<E: StdError + 'static>(
+	fd: impl AsFd,
+	name: &str,
+	value: &[u8],
+) -> Result<(), InstallFailure<E>> {
 	if os(fs::fgetxattr_query(fd.as_fd(), name))? != value.len() {
 		return Err(InstallFailure::ReadBack);
 	}
@@ -290,10 +311,23 @@ pub(super) fn write_link<E: StdError + 'static>(
 		host_mode(mode),
 		AtFlags::SYMLINK_NOFOLLOW,
 	))?;
+	verify_link(parent, name, target, mode)
+}
+
+fn verify_link<E: StdError + 'static>(
+	parent: impl AsFd,
+	name: &str,
+	target: &[u8],
+	mode: u16,
+) -> Result<(), InstallFailure<E>> {
 	let mut buffer = Vec::new();
 	buffer.try_reserve_exact(target.len() + 1)?;
 	buffer.resize(target.len() + 1, 0);
-	let count = os(fs::readlinkat_raw(parent, name, buffer.as_mut_slice()))?;
+	let count = os(fs::readlinkat_raw(
+		parent.as_fd(),
+		name,
+		buffer.as_mut_slice(),
+	))?;
 	let observed = os(fs::statat(parent, name, AtFlags::SYMLINK_NOFOLLOW))?;
 	if buffer.get(..count) != Some(target)
 		|| FileType::from_raw_mode(observed.st_mode) != FileType::Symlink

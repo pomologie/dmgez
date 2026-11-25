@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, path::PathBuf};
 
 use rustix::{
 	fs::{self, AtFlags, FileType, Mode, RenameFlags},
@@ -110,16 +110,18 @@ impl<'root> DirectoryStage<'_, 'root> {
 		)
 	}
 
+	/// Supplies an attachment-checked path to an explicitly requested checker.
+	pub(crate) fn path_for_check(&self) -> Result<PathBuf, HostError> {
+		self.check_staging()?;
+		self.directory.attached_path()
+	}
+
 	/// Atomically publish the already verified directory at the absent target.
 	///
 	/// A successful rename remains published if subsequent identity checks or
 	/// removal of the private wrapper fail. Read [`Self::is_published`] on error.
 	pub(crate) fn publish(&mut self) -> Result<(), HostError> {
-		if !matches!(self.state, State::Staging) {
-			return Err(HostError::DirectoryStageChanged);
-		}
-		self.directory.check_attachment()?;
-		owner_only(&self.private)?;
+		self.check_staging()?;
 		fs::renameat_with(
 			self.private.descriptor(),
 			self.target.as_str(),
@@ -138,6 +140,14 @@ impl<'root> DirectoryStage<'_, 'root> {
 		self.check_publication()
 			.map_err(|error| HostError::PublishedDirectoryUnavailable(Box::new(error)))?;
 		self.cleanup()
+	}
+
+	fn check_staging(&self) -> Result<(), HostError> {
+		if !matches!(self.state, State::Staging) {
+			return Err(HostError::DirectoryStageChanged);
+		}
+		self.directory.check_attachment()?;
+		owner_only(&self.private)
 	}
 
 	/// Remove only empty stage directories whose attachments still match.
