@@ -11,17 +11,20 @@ use apfs_reader::{
 };
 use dmgez_vfs::volume::{
 	DirectoryEntry, DirectoryPage, DirectoryReader, ForkKind, ForkReader, HardLink, LookupName,
-	Metadata, NodeKind, RawName, VolumeBackend,
+	Metadata, NodeKind, Quarantine, QuarantineScope, RawName, VolumeBackend,
 };
 use thiserror::Error;
 
 use crate::VolumeInfo;
 
-/// Visible identity retains the APFS sibling ID while forks use the inode.
+mod quarantine;
+
+/// Visible identity retains the APFS sibling ID and its admitted parent.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct Node {
 	inode: InodeId,
 	sibling: Option<ObjectId>,
+	parent: Option<InodeId>,
 }
 
 #[derive(Debug, Error)]
@@ -76,11 +79,20 @@ where
 		Ok(Node {
 			inode: self.view.root().id,
 			sibling: None,
+			parent: None,
 		})
 	}
 
 	fn numeric_id(&self, node: Node) -> Option<u64> {
 		Some(node.inode.as_raw())
+	}
+
+	fn quarantine(
+		&mut self,
+		node: Node,
+		scope: QuarantineScope,
+	) -> Result<Quarantine, Self::Error> {
+		self.check_quarantine(node, scope)
 	}
 
 	fn lookup(
@@ -94,7 +106,7 @@ where
 		Ok(self
 			.view
 			.lookup_stored_name(parent.inode, name)?
-			.map(directory_entry))
+			.map(|entry| directory_entry(parent.inode, entry)))
 	}
 
 	fn stat(&mut self, node: Node) -> Result<Option<Metadata<u64>>, Self::Error> {
@@ -115,7 +127,10 @@ where
 				.view
 				.hard_links(node.inode)?
 				.ok_or(AdapterError::LinkIdentity)?;
-			if !group.iter().any(|link| link.sibling.as_raw() == sibling.0) {
+			if !group
+				.iter()
+				.any(|link| link.sibling.as_raw() == sibling.0 && Some(link.parent) == node.parent)
+			{
 				return Err(AdapterError::LinkIdentity);
 			}
 			Some(HardLink {
@@ -194,7 +209,7 @@ where
 			{
 				return Err(AdapterError::DirectoryEntry);
 			}
-			entries.push(directory_entry(entry));
+			entries.push(directory_entry(self.directory, entry));
 		}
 		self.cursor = page.next;
 		Ok(DirectoryPage {
@@ -232,12 +247,13 @@ where
 	}
 }
 
-fn directory_entry(entry: NativeEntry) -> DirectoryEntry<Node> {
+fn directory_entry(parent: InodeId, entry: NativeEntry) -> DirectoryEntry<Node> {
 	DirectoryEntry {
 		name: RawName::Utf8(entry.name),
 		node: Node {
 			inode: entry.inode,
 			sibling: entry.sibling,
+			parent: Some(parent),
 		},
 		kind: node_kind(entry.kind),
 	}
