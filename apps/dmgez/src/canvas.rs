@@ -218,13 +218,7 @@ pub(crate) fn show(
 				),
 				StrokeKind::Inside,
 			);
-			let label = if item.hide_extension {
-				item.name.rsplit_once('.').map_or(item.name, |(stem, _)| {
-					if stem.is_empty() { item.name } else { stem }
-				})
-			} else {
-				item.name
-			};
+			let label = item.display_name();
 			let (anchor, align) = match style.label_position {
 				LabelPosition::Right => (
 					pos2(icon.right() + LABEL_MARGIN, center.y),

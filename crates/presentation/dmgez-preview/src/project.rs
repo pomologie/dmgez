@@ -81,6 +81,21 @@ pub struct PlacedItem<'project> {
 	pub hide_extension: bool,
 }
 
+impl<'project> PlacedItem<'project> {
+	/// Returns the display name after applying the configured extension visibility.
+	#[must_use]
+	pub fn display_name(self) -> &'project str {
+		const EXTENSION_SEPARATOR: char = '.';
+		if self.hide_extension
+			&& let Some((stem, _)) = self.name.rsplit_once(EXTENSION_SEPARATOR)
+			&& !stem.is_empty()
+		{
+			return stem;
+		}
+		self.name
+	}
+}
+
 /// Selection policy for items marked hidden in the image metadata.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ItemVisibility {

@@ -1313,6 +1313,9 @@ name = "dmgez-preview"
 version = "0.1.0"
 dependencies = [
  "dmgez-config",
+ "dmgez-core",
+ "epaint",
+ "png",
  "proptest",
  "thiserror 2.0.21",
 ]

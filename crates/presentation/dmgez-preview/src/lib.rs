@@ -6,6 +6,8 @@
 mod declared;
 mod geometry;
 mod project;
+#[cfg(feature = "png-render")]
+pub mod raster;
 
 pub use declared::{DeclaredEntry, DeclaredTree, DeclaredTreeError};
 pub use geometry::{
