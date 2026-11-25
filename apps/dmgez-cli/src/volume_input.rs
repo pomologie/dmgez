@@ -56,14 +56,9 @@ pub(super) fn with_hfs_view_verified<T>(
 		&dyn Fn() -> io::Result<()>,
 	) -> CliResult<T>,
 ) -> CliResult<T> {
-	let file = std::fs::File::open(image)?;
-	let source = FileSource::new(file.try_clone()?)?;
-	let verify_source = || {
-		dmgez_operations::extract::host::check_source_quarantine(&file)?;
-		source.check_unchanged().map_err(io::Error::other)
-	};
-	verify_source()?;
-	with_source(&source, raw, partition, |view| read(view, &verify_source))
+	with_verified_source(image, |source, verify_source| {
+		with_source(source, raw, partition, |view| read(view, verify_source))
+	})
 }
 
 #[cfg(feature = "hfsplus-read")]
@@ -81,28 +76,66 @@ fn with_source<T>(
 }
 
 #[cfg(feature = "apfs-read")]
+type ApfsView<'volume, 'disk, 'logical> =
+	VolumeView<ApfsBackend<'volume, WindowSource<'disk, &'logical mut dyn LogicalDisk>>>;
+
+#[cfg(feature = "apfs-read")]
 pub(super) fn with_apfs_view<T>(
 	image: &Path,
 	raw: bool,
 	partition: Option<NonZeroU32>,
 	selector: Option<VolumeSelector>,
 	xid: Option<TransactionId>,
-	read: impl FnOnce(
-		&mut VolumeView<ApfsBackend<'_, WindowSource<'_, &mut dyn LogicalDisk>>>,
-		&VolumeInfo,
-	) -> CliResult<T>,
+	read: impl FnOnce(&mut ApfsView<'_, '_, '_>, &VolumeInfo) -> CliResult<T>,
 ) -> CliResult<T> {
 	with_apfs_container(image, raw, partition, xid, |selected, container| {
 		use io::Write as _;
 
 		let backend = container.open_volume(selector)?;
-		let info = backend.info().clone();
+		let info = backend.info();
 		let mut stderr = io::stderr().lock();
 		for diagnostic in container.diagnostics() {
 			writeln!(stderr, "APFS checkpoint warning: {diagnostic:?}")?;
 		}
 		drop(stderr);
 		read(&mut VolumeView::new(selected, backend), &info)
+	})
+}
+
+#[cfg(all(
+	feature = "apfs-extract",
+	any(target_os = "linux", target_os = "macos")
+))]
+pub(super) fn with_apfs_view_verified<T>(
+	image: &Path,
+	raw: bool,
+	partition: Option<NonZeroU32>,
+	selector: Option<VolumeSelector>,
+	xid: Option<TransactionId>,
+	read: impl FnOnce(
+		&mut ApfsView<'_, '_, '_>,
+		&VolumeInfo,
+		&dyn Fn() -> io::Result<()>,
+	) -> CliResult<T>,
+) -> CliResult<T> {
+	with_verified_source(image, |source, verify_source| {
+		with_apfs_container_source(source, raw, partition, xid, |selected, container| {
+			// Rejected descriptors can hide a newer checkpoint and its provenance.
+			if xid.is_none() && !container.diagnostics().is_empty() {
+				return Err(io::Error::new(
+					io::ErrorKind::PermissionDenied,
+					"extraction cannot establish the latest APFS checkpoint; inspect checkpoints and explicitly select a retained XID",
+				)
+				.into());
+			}
+			let backend = container.open_volume(selector)?;
+			let info = backend.info();
+			read(
+				&mut VolumeView::new(selected, backend),
+				&info,
+				verify_source,
+			)
+		})
 	})
 }
 
@@ -140,15 +173,44 @@ fn with_apfs_container<T>(
 	read: impl FnOnce(VolumeId, &ApfsContainer<'_, &mut dyn LogicalDisk>) -> CliResult<T>,
 ) -> CliResult<T> {
 	let source = open_source(image)?;
-	let result = with_logical_disk(&source, raw, |logical| {
+	let result = with_apfs_container_source(&source, raw, partition, xid, read)?;
+	source.check_unchanged()?;
+	Ok(result)
+}
+
+#[cfg(feature = "apfs-read")]
+fn with_apfs_container_source<T>(
+	source: &FileSource,
+	raw: bool,
+	partition: Option<NonZeroU32>,
+	xid: Option<TransactionId>,
+	read: impl FnOnce(VolumeId, &ApfsContainer<'_, &mut dyn LogicalDisk>) -> CliResult<T>,
+) -> CliResult<T> {
+	with_logical_disk(source, raw, |logical| {
 		let mut disk = Disk::discover(logical, DiskLimits::default())?;
 		disk.recognize_partitionless(Filesystem::Apfs, probe_partitionless)?;
 		let selected = select(&disk, partition)?;
 		let container = ApfsContainer::open(disk.data_window(selected)?, xid)?;
 		read(selected, &container)
-	})?;
-	source.check_unchanged()?;
-	Ok(result)
+	})
+}
+
+#[cfg(all(
+	any(feature = "hfsplus-extract", feature = "apfs-extract"),
+	any(target_os = "linux", target_os = "macos")
+))]
+fn with_verified_source<T>(
+	image: &Path,
+	read: impl FnOnce(&FileSource, &dyn Fn() -> io::Result<()>) -> CliResult<T>,
+) -> CliResult<T> {
+	let file = std::fs::File::open(image)?;
+	let source = FileSource::new(file.try_clone()?)?;
+	let verify_source = || {
+		dmgez_operations::extract::host::check_source_quarantine(&file)?;
+		source.check_unchanged().map_err(io::Error::other)
+	};
+	verify_source()?;
+	read(&source, &verify_source)
 }
 
 fn with_logical_disk<T>(

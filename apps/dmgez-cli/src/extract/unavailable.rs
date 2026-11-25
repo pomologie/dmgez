@@ -1,16 +1,23 @@
 use std::fmt;
 
-use super::FEATURE;
-
 #[derive(Debug)]
-pub(super) struct Error;
+pub(super) struct Error {
+	feature: &'static str,
+	compiled: bool,
+}
+
+impl Error {
+	pub(super) const fn new(feature: &'static str, compiled: bool) -> Self {
+		Self { feature, compiled }
+	}
+}
 
 impl fmt::Display for Error {
 	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-		if cfg!(feature = "hfsplus-extract") {
+		if self.compiled {
 			formatter.write_str("host extraction requires macOS or Linux")
 		} else {
-			write!(formatter, "feature not compiled: {FEATURE}")
+			write!(formatter, "feature not compiled: {}", self.feature)
 		}
 	}
 }

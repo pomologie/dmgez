@@ -4,6 +4,8 @@ use dmgez_inspector::SCHEMA_VERSION;
 use dmgez_operations::extract::{PlanReport, Progress};
 use serde::Serialize;
 
+#[cfg(feature = "apfs-extract")]
+use crate::volume_commands::VolumeIdentity;
 use crate::{
 	CliResult,
 	report_output::{EscapedBytes, EscapedText, write_report},
@@ -54,6 +56,9 @@ pub(super) struct Report<'a> {
 	destination: Cow<'a, str>,
 	#[serde(skip_serializing_if = "Option::is_none")]
 	destination_bytes: Option<&'a [u8]>,
+	#[cfg(feature = "apfs-extract")]
+	#[serde(skip_serializing_if = "Option::is_none")]
+	pub(super) apfs_volume: Option<VolumeIdentity>,
 	pub(super) plan: Option<PlanReport>,
 	pub(super) progress: Option<Progress>,
 	#[serde(skip_serializing_if = "Option::is_none")]
@@ -74,6 +79,8 @@ impl<'a> Report<'a> {
 				.to_str()
 				.is_none()
 				.then_some(destination.as_os_str().as_bytes()),
+			#[cfg(feature = "apfs-extract")]
+			apfs_volume: None,
 			plan: None,
 			progress: None,
 			error: None,
@@ -121,6 +128,10 @@ impl<'a> Report<'a> {
 						.unwrap_or(self.destination.as_bytes())
 				)
 			)?;
+			#[cfg(feature = "apfs-extract")]
+			if let Some(volume) = self.apfs_volume {
+				volume.write(output)?;
+			}
 			if let Some(plan) = self.plan {
 				write!(output, "{SELECTION_KEY} = ")?;
 				serde_json::to_writer(&mut *output, &plan.selection)?;

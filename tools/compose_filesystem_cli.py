@@ -51,6 +51,7 @@ APFS_PACKAGES = {
 }
 APFS_ADAPTER = "dmgez-apfs-read"
 APFS_FEATURE = "apfs-read"
+APFS_EXTRACT_FEATURE = "apfs-extract"
 APFS_FIXTURES_ENV = "DMGEZ_APFS_FIXTURES"
 SOURCE_DIRS = ("apps", "crates", "tests")
 FEATURE_ADDITIONS = {
@@ -117,6 +118,9 @@ def compose_cli_manifest(manifest, reader, build, apfs):
         dependencies_to_add.append(READ_ADAPTER)
     if apfs:
         additions[APFS_FEATURE] = ["inspect", f"dep:{APFS_ADAPTER}"]
+        additions[APFS_EXTRACT_FEATURE] = [
+            APFS_FEATURE, "dep:dmgez-operations", "dmgez-operations/extract",
+        ]
         dependencies_to_add.append(APFS_ADAPTER)
     if features.keys() & additions.keys():
         raise ValueError("CLI manifest already has filesystem composition features")
@@ -272,9 +276,12 @@ def main():
     use_apfs = options.apfs is not None or options.apfs_packages is not None
     if not (use_hfsplus or use_apfs):
         parser.error("supply an HFS+ or APFS package source")
-    if has_cli_feature(options, APFS_FEATURE) and not use_apfs:
-        parser.error(f"{APFS_FEATURE} requires --apfs or --apfs-packages")
-    if use_apfs and not has_cli_feature(options, APFS_FEATURE):
+    for feature in (APFS_FEATURE, APFS_EXTRACT_FEATURE):
+        if has_cli_feature(options, feature) and not use_apfs:
+            parser.error(f"{feature} requires --apfs or --apfs-packages")
+    if use_apfs and not any(
+        has_cli_feature(options, feature) for feature in (APFS_FEATURE, APFS_EXTRACT_FEATURE)
+    ):
         options.features.append(APFS_FEATURE)
     if options.target_dir is None:
         options.target_dir = ROOT / "target" / ("apfs-cli" if use_apfs else "hfsplus-cli")

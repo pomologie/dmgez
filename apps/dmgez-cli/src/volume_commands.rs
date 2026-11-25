@@ -10,6 +10,11 @@ use crate::CliResult;
 
 #[cfg(feature = "apfs-read")]
 mod apfs;
+#[cfg(all(
+	feature = "apfs-extract",
+	any(target_os = "linux", target_os = "macos")
+))]
+pub(super) use apfs::{VolumeIdentity, with_selector_guidance};
 #[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 mod execute;
 #[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]

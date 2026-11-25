@@ -2,11 +2,19 @@ use std::path::PathBuf;
 
 use clap::{Args, ValueEnum};
 
-use crate::{CliResult, volume_commands::InputArguments};
+use crate::{
+	CliResult,
+	volume_commands::{Filesystem, InputArguments, Selection},
+};
 
-pub(super) const FEATURE: &str = "hfsplus-extract";
-pub(super) const COMPILED: bool = cfg!(all(
+pub(super) const HFSPLUS_FEATURE: &str = "hfsplus-extract";
+pub(super) const HFSPLUS_COMPILED: bool = cfg!(all(
 	feature = "hfsplus-extract",
+	any(target_os = "linux", target_os = "macos")
+));
+pub(super) const APFS_FEATURE: &str = "apfs-extract";
+pub(super) const APFS_COMPILED: bool = cfg!(all(
+	feature = "apfs-extract",
 	any(target_os = "linux", target_os = "macos")
 ));
 
@@ -18,6 +26,8 @@ const BYTE_COUNT_VALUE_NAME: &str = "BYTES";
 pub(super) struct Arguments {
 	#[command(flatten)]
 	input: InputArguments,
+	#[command(flatten)]
+	filesystem: Selection,
 	/// Absolute source path inside the selected volume.
 	path: String,
 	/// An absent destination file or directory under an existing parent.
@@ -54,29 +64,55 @@ enum Fork {
 }
 
 #[cfg(all(
-	feature = "hfsplus-extract",
+	any(feature = "hfsplus-extract", feature = "apfs-extract"),
 	any(target_os = "linux", target_os = "macos")
 ))]
 mod execute;
 
-#[cfg(all(
-	feature = "hfsplus-extract",
-	any(target_os = "linux", target_os = "macos")
-))]
-pub(super) fn run(arguments: &Arguments) -> CliResult {
-	execute::run(arguments)
-}
-
 #[cfg(not(all(
 	feature = "hfsplus-extract",
+	feature = "apfs-extract",
 	any(target_os = "linux", target_os = "macos")
 )))]
 mod unavailable;
 
-#[cfg(not(all(
-	feature = "hfsplus-extract",
-	any(target_os = "linux", target_os = "macos")
-)))]
-pub(super) fn run(_arguments: &Arguments) -> CliResult {
-	Err(Box::new(unavailable::Error))
+pub(super) fn run(arguments: &Arguments) -> CliResult {
+	arguments.filesystem.validate()?;
+	match arguments.filesystem.filesystem() {
+		Filesystem::Hfsplus => {
+			#[cfg(all(
+				feature = "hfsplus-extract",
+				any(target_os = "linux", target_os = "macos")
+			))]
+			{
+				execute::hfsplus(arguments)
+			}
+			#[cfg(not(all(
+				feature = "hfsplus-extract",
+				any(target_os = "linux", target_os = "macos")
+			)))]
+			{
+				Err(
+					unavailable::Error::new(HFSPLUS_FEATURE, cfg!(feature = "hfsplus-extract"))
+						.into(),
+				)
+			}
+		}
+		Filesystem::Apfs => {
+			#[cfg(all(
+				feature = "apfs-extract",
+				any(target_os = "linux", target_os = "macos")
+			))]
+			{
+				execute::apfs(arguments)
+			}
+			#[cfg(not(all(
+				feature = "apfs-extract",
+				any(target_os = "linux", target_os = "macos")
+			)))]
+			{
+				Err(unavailable::Error::new(APFS_FEATURE, cfg!(feature = "apfs-extract")).into())
+			}
+		}
+	}
 }

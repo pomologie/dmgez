@@ -46,7 +46,7 @@ pub(super) fn volume_selector(value: &str) -> io::Result<VolumeSelector> {
 	))
 }
 
-pub(super) fn with_selector_guidance(error: Box<dyn Error>) -> Box<dyn Error> {
+pub(crate) fn with_selector_guidance(error: Box<dyn Error>) -> Box<dyn Error> {
 	if matches!(
 		error.downcast_ref::<OpenError>(),
 		Some(OpenError::AmbiguousVolumes(_))
@@ -106,7 +106,7 @@ pub(super) fn volumes(arguments: &VolumesArguments) -> CliResult {
 }
 
 #[derive(Clone, Copy, Serialize)]
-pub(super) struct VolumeIdentity {
+pub(crate) struct VolumeIdentity {
 	uuid: VolumeUuid,
 	object_id: DecimalId,
 	checkpoint_xid: DecimalId,
@@ -123,7 +123,7 @@ impl From<&VolumeInfo> for VolumeIdentity {
 }
 
 impl VolumeIdentity {
-	pub(super) fn write(self, output: &mut impl Write) -> io::Result<()> {
+	pub(crate) fn write(self, output: &mut impl Write) -> io::Result<()> {
 		writeln!(output, "{APFS_VOLUME_UUID_KEY} = {}", self.uuid)?;
 		writeln!(output, "{APFS_VOLUME_OBJECT_ID_KEY} = {}", self.object_id.0)?;
 		writeln!(output, "{CHECKPOINT_XID_KEY} = {}", self.checkpoint_xid.0)
