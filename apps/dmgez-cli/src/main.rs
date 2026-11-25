@@ -30,6 +30,8 @@ mod project_input;
 ))]
 mod report_output;
 mod signing;
+#[cfg(feature = "project-release")]
+mod staged_image;
 mod staple;
 mod verify_command;
 mod volume_commands;
