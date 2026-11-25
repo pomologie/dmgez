@@ -160,6 +160,6 @@ fn read(
 		})
 }
 
-fn decimal<S: Serializer>(value: &u64, serializer: S) -> Result<S::Ok, S::Error> {
+pub(super) fn decimal<S: Serializer>(value: &u64, serializer: S) -> Result<S::Ok, S::Error> {
 	serializer.collect_str(value)
 }
