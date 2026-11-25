@@ -39,8 +39,11 @@ class ReleaseCompositionTests(unittest.TestCase):
             for build in (False, True):
                 with self.subTest(reader=reader, build=build):
                     text = compose.compose_cli_manifest(manifest, reader=reader, build=build, apfs=False)
-                    features = tomllib.loads(text)["features"]
+                    composed = tomllib.loads(text)
+                    features = composed["features"]
                     self.assertEqual(compose.IMAGE_EDIT_FEATURE in features, reader and build)
+                    self.assertEqual("dmgez-finder" in composed["dev-dependencies"], reader and build)
+                    self.assertNotIn("dmgez-finder", composed["dependencies"])
                     if reader and build:
                         self.assertIn("dmgez-operations/image-edit", features[compose.IMAGE_EDIT_FEATURE])
 

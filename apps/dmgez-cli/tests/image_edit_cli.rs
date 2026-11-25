@@ -44,3 +44,7 @@ fn existing_image_edit_requires_its_composed_feature_before_accessing_paths() {
 #[cfg(feature = "image-edit")]
 #[path = "image_edit_cli/rebuild.rs"]
 mod rebuild;
+
+#[cfg(all(feature = "image-edit", feature = "finder-write"))]
+#[path = "image_edit_cli/finder.rs"]
+mod finder;

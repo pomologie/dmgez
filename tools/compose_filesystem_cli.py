@@ -170,6 +170,11 @@ def compose_cli_manifest(manifest, reader, build, apfs):
     _, boundary, dependencies = rest.partition(dependency_section)
     if not boundary:
         raise ValueError("could not find the CLI features and dependencies sections")
+    if reader and build:
+        normal, dev_boundary, development = dependencies.partition("\n[dev-dependencies]\n")
+        if not dev_boundary:
+            raise ValueError("could not find the CLI dev-dependencies section")
+        dependencies = normal + dev_boundary + "dmgez-finder.workspace = true\n" + development
     lines = "".join(f"{name} = {json.dumps(values)}\n" for name, values in features.items())
     added_dependencies = "".join(
         f'{name} = {{ path = "../../crates/services/{name}", '
