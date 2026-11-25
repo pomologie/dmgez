@@ -8,6 +8,13 @@ exceptions = [
 	{ allow = ["BlueOak-1.0.0"], crate = "ds_parser@0.4.0" },
 	{ allow = ["OFL-1.1", "Ubuntu-font-1.0"], crate = "epaint_default_fonts@=0.37.0" },
 	{ allow = ["ISC"], crate = "libloading@=0.8.9" },
+
+	# Optional HTTP range transport and its TLS trust roots
+	{ allow = ["ISC"], crate = "ring@=0.17.14" },
+	{ allow = ["ISC"], crate = "rustls-webpki@=0.103.17" },
+	{ allow = ["BSD-3-Clause"], crate = "subtle@=2.6.1" },
+	{ allow = ["ISC"], crate = "untrusted@=0.9.0" },
+	{ allow = ["CDLA-Permissive-2.0"], crate = "webpki-roots@=1.0.12" },
 ]
 confidence-threshold = 0.9
 

@@ -10,6 +10,9 @@ use std::{
 
 use dmgez_udif::{Error, reader::ReadAt};
 
+#[cfg(feature = "remote-http")]
+pub mod http;
+
 const PARTIAL_CONTENT: u16 = 206;
 const PRECONDITION_FAILED: u16 = 412;
 const BYTES_UNIT: &str = "bytes";

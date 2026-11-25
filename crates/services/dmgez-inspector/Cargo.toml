@@ -17,6 +17,7 @@ lzma = ["dmgez-udif/lzma"]
 
 # Remote sources
 remote = []
+remote-http = ["remote", "dep:ureq"]
 
 [dependencies]
 # Workspace formats
@@ -27,6 +28,9 @@ dmgez-vfs.workspace = true
 
 # Serialization and configuration
 serde.workspace = true
+
+# HTTP range transport
+ureq = { workspace = true, optional = true }
 
 [dev-dependencies]
 # Workspace formats

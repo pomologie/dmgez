@@ -113,6 +113,9 @@ globset = { version = "0.4.21", default-features = false }
 rustix = { version = "1.1.6", features = ["fs"] }
 tempfile = "3.27.0"
 
+# HTTP range transport
+ureq = { version = "=3.5.1", default-features = false, features = ["rustls"] }
+
 # Parallel execution
 rayon = "1.12.0"
 
