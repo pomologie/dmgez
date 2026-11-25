@@ -6,3 +6,5 @@ pub mod session;
 pub mod system;
 #[cfg(feature = "watch")]
 pub mod watch;
+#[cfg(all(feature = "system", target_os = "macos"))]
+pub mod workflow;
