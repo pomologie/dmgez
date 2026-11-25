@@ -5,12 +5,13 @@ use std::{
 
 use dmg_layout::{
 	AliasHeader, AliasKind, AliasMetadata, AliasTarget, AliasVolume, CatalogNodeId, DiskType,
-	FilesystemSignature, HfsTimestampSeconds,
+	ExtraPayload, ExtrasTag, FilesystemSignature, HfsTimestamp, HfsTimestampSeconds,
 };
 use dmgez_config::{FinderOptions, Project};
 use dmgez_finder::{
-	AliasRecord, Error, validate_options, validate_options_for_image_background, write_store,
-	write_store_with_background_alias,
+	AliasRecord, BackgroundAliasError, Error, ImageBackgroundIdentity,
+	build_image_background_alias, validate_options, validate_options_for_image_background,
+	write_store, write_store_with_background_alias, write_store_with_background_identity,
 };
 use ds_parser::{FieldKey, PropertyList, Value, layout::BTreeMaster};
 
@@ -27,6 +28,14 @@ const VOLUME_DATE: HfsTimestampSeconds = HfsTimestampSeconds(3_801_000_000);
 const TARGET_DATE: HfsTimestampSeconds = HfsTimestampSeconds(3_801_000_123);
 const ALIAS_VERSION: u16 = 2;
 const ORACLE: &str = include_str!("background_alias_oracle.py");
+const GENERATED_ALIAS: ImageBackgroundIdentity<'static> = ImageBackgroundIdentity {
+	volume_name: VOLUME_NAME,
+	volume_created_hfs_seconds: VOLUME_DATE.0,
+	target_created_hfs_seconds: TARGET_DATE.0,
+	parent_catalog_id: 16,
+	target_catalog_id: FILE_CNID.0,
+	volume_relative_path: "/.background/desktop.png",
+};
 
 fn options(background: &str) -> FinderOptions {
 	let project = format!(
@@ -134,11 +143,91 @@ fn refuses_conflicting_settings_invalid_aliases_and_oversized_stores() {
 }
 
 #[test]
+fn preserves_full_unicode_names_and_exact_dates_in_the_generated_alias() {
+	const LABEL: &str = "Démonstration d’installation du logiciel";
+	const FILE_NAME: &str = "écrans de démonstration et de présentation du programme officiel.png";
+	let path = format!("/{FILE_NAME}");
+	let alias = build_image_background_alias(ImageBackgroundIdentity {
+		volume_name: LABEL,
+		volume_relative_path: &path,
+		parent_catalog_id: PARENT_CNID.0,
+		volume_created_hfs_seconds: 0,
+		target_created_hfs_seconds: u32::MAX,
+		..GENERATED_ALIAS
+	})
+	.unwrap();
+	let volume_prefix = std::str::from_utf8(&alias.header.volume_name).unwrap();
+	let file_prefix = std::str::from_utf8(&alias.header.target_name).unwrap();
+	assert!(LABEL.starts_with(volume_prefix));
+	assert!(FILE_NAME.starts_with(file_prefix));
+	assert!(volume_prefix.len() < LABEL.len());
+	assert!(file_prefix.len() < FILE_NAME.len());
+	assert_eq!(alias.header.volume_date, HfsTimestampSeconds(0));
+	assert_eq!(alias.header.target_date, HfsTimestampSeconds(u32::MAX));
+	let extras: Vec<_> = alias
+		.extras()
+		.map(|extra| extra.payload().unwrap())
+		.collect();
+	assert!(extras.contains(&ExtraPayload::UnicodeVolumeName(LABEL.to_owned())));
+	assert!(extras.contains(&ExtraPayload::UnicodeTargetName(FILE_NAME.to_owned())));
+	assert!(
+		extras.contains(&ExtraPayload::HighResolutionVolumeCreationDate(
+			HfsTimestamp(0)
+		))
+	);
+	assert!(extras.contains(&ExtraPayload::HighResolutionCreationDate(
+		HfsTimestamp::from_whole_seconds(u64::from(u32::MAX)).unwrap(),
+	)));
+	assert!(
+		!alias
+			.extras()
+			.any(|extra| extra.tag() == ExtrasTag::CatalogNodeIdPath)
+	);
+}
+
+#[test]
+fn rejects_inconsistent_catalog_ids_and_paths() {
+	for invalid_path in [
+		"background.png",
+		"/",
+		"/../background.png",
+		"/.background//image.png",
+	] {
+		let invalid = ImageBackgroundIdentity {
+			volume_relative_path: invalid_path,
+			..GENERATED_ALIAS
+		};
+		assert!(matches!(
+			build_image_background_alias(invalid),
+			Err(BackgroundAliasError::TargetPath)
+		));
+	}
+	for invalid in [
+		ImageBackgroundIdentity {
+			parent_catalog_id: PARENT_CNID.0,
+			..GENERATED_ALIAS
+		},
+		ImageBackgroundIdentity {
+			target_catalog_id: GENERATED_ALIAS.parent_catalog_id,
+			..GENERATED_ALIAS
+		},
+		ImageBackgroundIdentity {
+			target_catalog_id: u32::MAX,
+			..GENERATED_ALIAS
+		},
+	] {
+		assert!(matches!(
+			build_image_background_alias(invalid),
+			Err(BackgroundAliasError::CatalogIds)
+		));
+	}
+}
+
+#[test]
 #[ignore = "requires Python ds_store 1.3.4 and mac_alias 2.2.3"]
 fn independent_decoder_recovers_the_on_volume_identity() {
 	let options = options(IMAGE_OPTIONS);
-	let alias = alias(AliasKind::File, TARGET_PATH);
-	let bytes = write_store_with_background_alias(&options, &[], &alias).unwrap();
+	let bytes = write_store_with_background_identity(&options, &[], GENERATED_ALIAS).unwrap();
 	let mut oracle = Command::new("python3")
 		.args(["-B", "-c", ORACLE])
 		.stdin(Stdio::piped())

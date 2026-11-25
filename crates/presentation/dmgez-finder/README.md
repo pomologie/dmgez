@@ -2,7 +2,9 @@
 
 `write_store` produces a deterministic `.DS_Store` for a folder in a newly built image. It takes the folder's settings and the final names and positions of its direct children. The standard records capture window bounds and chrome, icon-view preferences, default view, and icon positions. Window origins follow dmgbuild's screen coordinates with y increasing upwards. Icon positions are unsigned whole points with y increasing downwards. The color profile accepts `#RGB` and `#RRGGBB`.
 
-The writer accepts printable ASCII item names. It supports icon view and list view as the default. Column view, cover flow, gallery view, image aliases, template backgrounds, and editing existing stores require additional qualification. The caller resolves folder inheritance and reserves the generated store before planning catalog IDs.
+The writer accepts printable ASCII item names. It supports icon view and list view as the default. Column view, cover flow, gallery view, template backgrounds, and editing existing stores require additional qualification. The caller resolves folder inheritance and reserves the generated store before planning catalog IDs.
+
+`write_store_with_background_identity` writes an image-background record from the final HFS+ volume label, catalog IDs, stored creation dates, and the file's path on the volume. The version-2 Alias carries complete Unicode names, Carbon and POSIX paths, and the direct parent CNID trail for a file one folder below the volume root. It leaves the mount path unset. The independent oracle compares the emitted alias against `mac_alias` bytes. Native Finder lookup remains a separate qualification. [mac_alias implementation](https://github.com/dmgbuild/mac_alias/blob/v2.2.3/src/mac_alias/alias.py)
 
 ## List view
 
@@ -25,7 +27,7 @@ The writer is limited to one 4096-byte B-tree leaf. In a scratch test, `ds_parse
 ```sh
 python3 -m venv /tmp/dmgez-finder-oracle
 /tmp/dmgez-finder-oracle/bin/python -m pip install ds_store==1.3.4 mac_alias==2.2.3
-PATH="/tmp/dmgez-finder-oracle/bin:$PATH" cargo test --locked -p dmgez-finder --test layout --test inspection --test list_view -- --include-ignored
+PATH="/tmp/dmgez-finder-oracle/bin:$PATH" cargo test --locked -p dmgez-finder -- --include-ignored
 ```
 
 ## Read-only inspection

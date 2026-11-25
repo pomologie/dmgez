@@ -3,6 +3,7 @@ use dmgez_config::{Arrangement, Background, Column, Coordinate, FinderOptions, V
 use thiserror::Error;
 
 use crate::{
+	background_alias::BackgroundAliasError,
 	layout::{ImageBackground, Layout},
 	records::Store,
 };
@@ -58,6 +59,9 @@ pub enum Error {
 	/// The supplied alias record could not be serialized.
 	#[error("could not encode Finder background image alias")]
 	ImageBackgroundAlias(#[source] DiskImageError),
+	/// The generated background alias could not represent the supplied identity.
+	#[error(transparent)]
+	ImageBackgroundIdentity(#[from] BackgroundAliasError),
 	/// Built-in template backgrounds are outside the initial profile.
 	#[error("Finder template backgrounds are unavailable")]
 	TemplateBackground,
