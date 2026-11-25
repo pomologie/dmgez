@@ -70,8 +70,21 @@
       "zlib"
     ],
     "edit": [
-      "build",
+      "project-edit",
+      "image-edit",
       "inspect"
+    ],
+    "project-edit": [
+      "build",
+      "udif-read"
+    ],
+    "image-edit": [
+      "hfsplus-build",
+      "hfsplus-read",
+      "udif-read",
+      "udif-write",
+      "partition-maps",
+      "zlib"
     ],
     "optimize": [
       "convert"

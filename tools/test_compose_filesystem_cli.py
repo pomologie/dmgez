@@ -33,6 +33,17 @@ class ReleaseCompositionTests(unittest.TestCase):
                 features = tomllib.loads(text)["features"]
                 self.assertEqual(compose.INSTALL_FEATURE in features[compose.PROJECT_RELEASE_FEATURE], reader)
 
+    def test_image_edit_requires_both_local_hfsplus_engines(self):
+        manifest = (compose.ROOT / compose.CLI / compose.MANIFEST).read_text(encoding="utf-8")
+        for reader in (False, True):
+            for build in (False, True):
+                with self.subTest(reader=reader, build=build):
+                    text = compose.compose_cli_manifest(manifest, reader=reader, build=build, apfs=False)
+                    features = tomllib.loads(text)["features"]
+                    self.assertEqual(compose.IMAGE_EDIT_FEATURE in features, reader and build)
+                    if reader and build:
+                        self.assertIn("dmgez-operations/image-edit", features[compose.IMAGE_EDIT_FEATURE])
+
 
 class WindowsCompositionTests(unittest.TestCase):
     def test_windows_composes_the_hfsplus_builder_for_local_project_tests(self):
@@ -73,8 +84,23 @@ class WindowsCompositionTests(unittest.TestCase):
             ):
                 compose.main()
             self.assertEqual(error.exception.code, 2)
-            self.assertIn("Windows composition supports HFS+ project builds only", stderr.getvalue())
+            self.assertIn("Windows composition supports HFS+ project builds and image editing only", stderr.getvalue())
             resolve_packages.assert_not_called()
+
+    def test_windows_image_edit_resolves_both_engines_without_other_reader_profiles(self):
+        root = Path("local")
+        args = ["compose_filesystem_cli.py", "--hfsplus", str(root), "--features", compose.IMAGE_EDIT_FEATURE]
+        packages = {compose.HFSPLUS_BUILDER: root, compose.HFSPLUS_READER: root}
+        with (
+            patch.object(sys, "argv", args),
+            patch.object(sys, "platform", "win32"),
+            patch.object(compose, "resolve_hfsplus", return_value=packages) as resolve,
+            patch.object(compose, "prepare_workspace"),
+            patch.object(compose, "resolve_lock"),
+            patch.object(compose, "run_cli"),
+        ):
+            self.assertEqual(compose.main(), 0)
+        resolve.assert_called_once_with(root, None, reader=True, build=True)
 
     def test_workspace_round_trips_drive_prefix_backslashes_spaces_and_unicode(self):
         package = PureWindowsPath(r"\\?\C:\Build assets\Uñpacked 💿\hfsplus-builder-0.1.0")

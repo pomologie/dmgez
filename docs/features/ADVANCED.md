@@ -4,15 +4,15 @@
 
 Raw export streams logical disk bytes from qualified UDIF, no file-system interpretation needed. Raw import requires explicit length, geometry and chosen format; can wrap unknown filesystem data, but high-level filesystem creation HFS+/HFSX/APFS only. Container conversion preserves decoded virtual disk bytes when same geometry, rebuilds only container (including checksums), and reports changed signature/notarization state. Filesystem-changing conversion uses manifest read + metadata mapping, requires supported write backend and loss report; no claim that arbitrary partitioned/hybrid/unknown image can losslessly edit. `convert`, `edit`, `optimize`, `analyze` own bounded operations. `edit` uses immutable original + typed overlay operations add/remove/rename/replace metadata/layout; stable handles, preconditions original image digest/view, undo/redo and validation. Apply via rebuild into new image, require explicit overwrite if same target, preserve unknown records only when safe. No arbitrary raw binary patching as public editing API. Rebuild signed image invalidates trust; must explicitly re-sign. Resource free space and capacity recalculated; opaque unsupported metadata blocks lossless edit. Optimize and build-cache defined in PERFORMANCE.md. `analyze` measures compression ratios, allocation, largest content and run stats; optional build report provides stage times; no historical timing from image bytes.
 
-`dmgez-operations` provides project-backed rebuild planning with its `edit` feature. It checks the exact source TOML revision, applies one atomic edit batch, and passes the validated project to the ordinary builder for unsigned, no-clobber publication to a fresh path. The original manifest and image remain available. This library path was exercised with a renamed file and exact payload readback from a new HFS+ image on macOS. Direct editing of an existing image remains open. [Rebuild planner](../../crates/services/dmgez-operations/src/edit.rs) · [Planner tests](../../crates/services/dmgez-operations/tests/project_rebuild.rs)
+`dmgez-operations` provides project-backed rebuild planning with its `edit` feature. It checks the exact source TOML revision, applies one atomic edit batch, and passes the validated project to the ordinary builder for unsigned, no-clobber publication to a fresh path. The original manifest and image remain available. This library path was exercised with a renamed file and exact payload readback from a new HFS+ image on macOS. [Rebuild planner](../../crates/services/dmgez-operations/src/edit.rs) · [Planner tests](../../crates/services/dmgez-operations/tests/project_rebuild.rs)
 
 ### Edit and rebuild a project
 
 Compose the CLI with the HFS+ builder and `project-edit`. Pass the original project, a versioned edit batch and a fresh output path.
 
 ```sh
-python3 tools/compose_filesystem_cli.py --hfsplus ../hfsplus --features project-edit -- \
-	edit dmg.toml --changes edits.toml --output updated.dmg --dry-run --json
+python3 tools/compose_filesystem_cli.py --hfsplus ../hfsplus --features project-edit
+target/hfsplus-cli/debug/dmgez edit dmg.toml --changes edits.toml --output updated.dmg --dry-run --json
 ```
 
 ```toml
@@ -30,11 +30,22 @@ Project source paths and `--output` resolve relative to the project directory an
 
 The CLI regression tests cover the project-backed portion of D-OPS-01-T01 and D-OPS-01-T02. They exercise stale revision and occupied destination rejection, signed original preservation on macOS, unsigned output, and file data and resource fork read-back through the composed HFS+ reader. [CLI regressions](../../apps/dmgez-cli/tests/project_edit_cli/rebuild.rs) · [Test catalog](../reference/test-catalog.json)
 
-### Existing image source admission
+### Edit an existing HFS+ image
 
 The `dmgez-operations` library's `image-edit` feature admits a regular UDRO or UDZO file containing one whole-image HFS+ volume. It checks the container layout and declared CRCs, rejects opaque container resources, and records the SHA-256 of the complete file. For signed input it also checks the CodeDirectory digests. That observation establishes integrity against the embedded digest and carries no authenticity or notarization decision. Callers can revalidate the held file against its recorded revision and recheck its named entry before publication. [Source admission](../../crates/services/dmgez-operations/src/edit/image_source.rs) · [Admission tests](../../crates/services/dmgez-operations/tests/image_edit_source.rs)
 
-The budgeted native catalog session supplies exact stored metadata and streams both forks. The direct-image edit workflow still needs a filesystem overlay, fidelity checks for metadata the writer cannot preserve, and staged rebuild verification. [Catalog session](../../crates/services/dmgez-hfsplus-read/src/browse/session.rs) · [Native fixture](../../tests/compatibility/volume-read/hfsplus/tests/browse_budget.rs)
+```sh
+python3 tools/compose_filesystem_cli.py --hfsplus ../hfsplus --no-default-features --features image-edit
+target/hfsplus-cli/debug/dmgez edit-image original.dmg --changes edits.toml --output updated.dmg --dry-run --json
+```
+
+`edit-image` accepts the version-one edit batch above. It can rename or move entries, remove entries and directory subtrees, create directories and symlinks, and set the volume name. Targets resolve against the original catalog under HFS+ name matching. A move supplies the final absolute image path. New destinations need an existing or explicitly added parent directory. The command currently refuses host copies and Finder position or flag edits. [Overlay implementation](../../crates/services/dmgez-hfsplus/src/rebuild/overlay.rs)
+
+The rebuild preserves exact retained data and resource forks, supported inline attributes, regular-file hard-link groups, modes, owners, timestamps and admitted Finder information. It refuses profiles with a journal, overflow records, fork-backed attributes, `.DS_Store` layout or unsupported private catalog metadata. Finder-enabled project builds may generate `.DS_Store` even when the TOML has no explicit layout. The composition above builds compatible source projects with Finder layout disabled. The rebuilt volume regenerates its catalog and allocation structures, keeping at least the source capacity and growing as needed. [HFS+ rebuild](../../crates/services/dmgez-hfsplus/src/rebuild.rs)
+
+Use `--expect-image-sha256` with the hash from a dry run to pin the source revision across commands. Omit `--dry-run` to publish a fresh unsigned image. Before publication the CLI reopens the stage, checks the container and decoded byte digest, checks the HFS+ structure, and revalidates the source and edit batch. A signed original stays intact and the rebuilt image needs its own signature. [CLI verification](../../apps/dmgez-cli/src/image_edit/execute.rs)
+
+The existing-image regressions cover D-OPS-01-T01 for the admitted overlay operations and D-OPS-01-T02 for signed no-op rebuilds and opaque layout refusal. On macOS, the fixtures compare the retained stored metadata and both forks, check that the signed original is byte-for-byte intact, and run `hdiutil verify` on the rebuilt image. [CLI regressions](../../apps/dmgez-cli/tests/image_edit_cli/rebuild.rs) · [Test catalog](../reference/test-catalog.json)
 
 ## Modern variants and stretch matrix
 

@@ -68,6 +68,8 @@ APFS_FIXTURES_ENV = "DMGEZ_APFS_FIXTURES"
 PROJECT_RELEASE_FEATURE = "project-release"
 PROJECT_EDIT_FEATURE = "project-edit"
 PROJECT_EDIT_TEST = "project_edit_cli"
+IMAGE_EDIT_FEATURE = "image-edit"
+IMAGE_EDIT_TEST = "image_edit_cli"
 SOURCE_DIRS = ("apps", "crates", "tests")
 FEATURE_ADDITIONS = {
     "project-build": ["dep:dmgez-builder", f"dep:{ADAPTER}", "dep:dmgez-config"],
@@ -141,6 +143,12 @@ def compose_cli_manifest(manifest, reader, build, apfs):
         ]
         if build:
             additions[PROJECT_RELEASE_FEATURE] = [*additions[PROJECT_RELEASE_FEATURE], INSTALL_FEATURE]
+            additions[IMAGE_EDIT_FEATURE] = [
+                "project-build", f"{ADAPTER}/image-edit", f"dep:{READ_ADAPTER}", f"{READ_ADAPTER}/browse",
+                f"{READ_ADAPTER}/verify",
+                "dep:dmgez-core", "dep:dmgez-operations", "dmgez-operations/image-edit", "dep:dmgez-udif",
+                "dmgez-udif/read", "dmgez-udif/write", "dep:dmgez-vfs", "dep:serde", "dep:serde_json", "dep:sha2",
+            ]
         dependencies_to_add.append(READ_ADAPTER)
     if apfs:
         additions[APFS_FEATURE] = ["inspect", f"dep:{APFS_ADAPTER}"]
@@ -281,6 +289,8 @@ def run_cli(cargo, directory, options, packages):
             command.extend(("--test", CLI_TEST))
             if has_cli_feature(options, PROJECT_EDIT_FEATURE):
                 command.extend(("--test", PROJECT_EDIT_TEST))
+            if has_cli_feature(options, IMAGE_EDIT_FEATURE):
+                command.extend(("--test", IMAGE_EDIT_TEST))
             if has_cli_feature(options, PROJECT_RELEASE_FEATURE):
                 command.extend(("--bin", CLI_BINARY))
             if sys.platform == "win32":
@@ -329,28 +339,29 @@ def main():
     for feature in APFS_PROFILES:
         if has_cli_feature(options, feature) and not use_apfs:
             parser.error(f"{feature} requires --apfs or --apfs-packages")
-    if has_cli_feature(options, INSTALL_FEATURE) and not use_hfsplus:
-        parser.error(f"{INSTALL_FEATURE} requires --hfsplus or --hfsplus-packages")
-    if has_cli_feature(options, PROJECT_EDIT_FEATURE) and not use_hfsplus:
-        parser.error(f"{PROJECT_EDIT_FEATURE} requires --hfsplus or --hfsplus-packages")
+    for feature in (INSTALL_FEATURE, PROJECT_EDIT_FEATURE, IMAGE_EDIT_FEATURE):
+        if has_cli_feature(options, feature) and not use_hfsplus:
+            parser.error(f"{feature} requires --hfsplus or --hfsplus-packages")
     if use_apfs and not any(has_cli_feature(options, feature) for feature in APFS_PROFILES):
         options.features.append(APFS_FEATURE)
     if options.target_dir is None:
         options.target_dir = ROOT / "target" / ("apfs-cli" if use_apfs else "hfsplus-cli")
-    reader = any(has_cli_feature(options, name) for name in (*READ_PROFILES, VERIFY_FEATURE)) or (
+    explicit_read = any(has_cli_feature(options, name) for name in (*READ_PROFILES, VERIFY_FEATURE)) or (
         use_hfsplus and (
             has_cli_feature(options, INSTALLER_TEST_FEATURE) or
             sys.platform == "darwin" and has_cli_feature(options, PROJECT_RELEASE_FEATURE)
         )
     )
     if sys.platform == "win32":
-        if use_apfs or reader:
-            parser.error("Windows composition supports HFS+ project builds only")
+        if use_apfs or explicit_read:
+            parser.error("Windows composition supports HFS+ project builds and image editing only")
     elif sys.platform != "darwin" and not sys.platform.startswith("linux"):
         parser.error("filesystem CLI composition requires a macOS, Linux, or Windows host")
 
     try:
-        build = not reader or not options.no_default_features or any(
+        image_edit = has_cli_feature(options, IMAGE_EDIT_FEATURE)
+        reader = explicit_read or image_edit
+        build = image_edit or not reader or not options.no_default_features or any(
             has_cli_feature(options, name) for name in ("build", *FEATURE_ADDITIONS)
         )
         packages = {}

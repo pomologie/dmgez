@@ -92,6 +92,8 @@ Use `--hfsplus-packages PATH` for unpacked packages, or `--no-default-features -
 
 Compose `project-edit` to preview a typed TOML edit batch and rebuild to a verified unsigned image at a fresh path. [Edit and rebuild a project](docs/features/ADVANCED.md#edit-and-rebuild-a-project)
 
+Compose `image-edit` to apply a typed batch of moves, removals and additions to an existing HFS+ disk image and publish a verified unsigned rebuild. [Edit an existing HFS+ image](docs/features/ADVANCED.md#edit-an-existing-hfs-image)
+
 To check reachable HFS+ and HFSX structure and read stored payloads, compose the CLI with `hfsplus-verify`.
 
 ```sh

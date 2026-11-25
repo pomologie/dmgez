@@ -4,7 +4,7 @@ use super::{
 	INSTALLER_LINT_FEATURE, LINT_COMMAND, LZFSE_FEATURE, LZMA_FEATURE, NOT_COMPILED,
 	OPTIMIZE_COMMAND, PARALLEL_FEATURE, UNWRAP_RAW_COMMAND, VERIFY_APFS_CAPABILITY,
 	VERIFY_CONTAINER_CAPABILITY, VERIFY_HFSPLUS_CAPABILITY, WRAP_RAW_COMMAND, diff, extract,
-	install, installer_test, notarize, project_edit, signing, volume_commands,
+	image_edit, install, installer_test, notarize, project_edit, signing, volume_commands,
 };
 
 pub(super) fn write() {
@@ -13,6 +13,7 @@ pub(super) fn write() {
 		(BUILD_PROJECT_COMMAND, cfg!(feature = "project-build")),
 		(BUILD_RELEASE_CAPABILITY, cfg!(feature = "project-release")),
 		(project_edit::FEATURE, cfg!(feature = "project-edit")),
+		(image_edit::FEATURE, cfg!(feature = "image-edit")),
 		(WRAP_RAW_COMMAND, cfg!(feature = "build")),
 		(
 			PARALLEL_FEATURE,

@@ -6,9 +6,10 @@ mod capabilities;
 #[cfg(feature = "convert")]
 mod convert;
 mod diff;
-#[cfg(feature = "project-edit")]
+#[cfg(any(feature = "image-edit", feature = "project-edit"))]
 mod edit_input;
 mod extract;
+mod image_edit;
 #[cfg(feature = "appdmg-import")]
 mod import_appdmg;
 #[cfg(feature = "inspect")]
@@ -31,11 +32,16 @@ mod project_input;
 	feature = "signing-native",
 	feature = "project-release",
 	feature = "project-edit",
+	feature = "image-edit",
 	all(feature = "installer-lint", any(unix, windows)),
 ))]
 mod report_output;
 mod signing;
-#[cfg(any(feature = "project-edit", feature = "project-release"))]
+#[cfg(any(
+	feature = "image-edit",
+	feature = "project-edit",
+	feature = "project-release"
+))]
 mod staged_image;
 mod staple;
 mod verify_command;
@@ -93,6 +99,8 @@ enum Command {
 	Build(project_build::Arguments),
 	/// Apply a typed edit batch to a project and rebuild to a new image.
 	Edit(project_edit::Arguments),
+	/// Apply a typed edit batch to an existing HFS+ image and publish a fresh image.
+	EditImage(image_edit::Arguments),
 	/// Wrap a regular file of raw sectors in a UDIF image.
 	#[command(name = WRAP_RAW_COMMAND)]
 	WrapRaw {
@@ -325,6 +333,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		#[cfg(not(feature = "project-build"))]
 		Command::Build(_) => Err("project building requires an HFS+ composed CLI".into()),
 		Command::Edit(arguments) => project_edit::run(&arguments),
+		Command::EditImage(arguments) => image_edit::run(&arguments),
 		#[cfg(feature = "build")]
 		Command::WrapRaw {
 			source,
