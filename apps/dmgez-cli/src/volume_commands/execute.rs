@@ -8,7 +8,7 @@ use dmgez_vfs::volume::{ForkKind, VolumeBackend, VolumeView};
 use crate::CliResult;
 
 #[cfg(feature = "apfs-read")]
-use super::apfs::{VolumeIdentity, checkpoint, volume_selector, with_selector_guidance};
+use super::apfs::{VolumeIdentity, with_selector_guidance};
 use super::{
 	Fork, InputArguments, Query,
 	report::{ReadVolume, Report},
@@ -28,17 +28,12 @@ pub(super) fn hfsplus(query: &Query<'_>) -> CliResult {
 pub(super) fn apfs(query: &Query<'_>) -> CliResult {
 	let input = query.input();
 	let selection = query.selection();
-	let selector = selection
-		.volume
-		.as_deref()
-		.map(volume_selector)
-		.transpose()?;
 	let (report, identity) = crate::volume_input::with_apfs_view(
 		&input.image,
 		input.raw,
 		input.partition,
-		selector,
-		checkpoint(selection.xid),
+		selection.apfs_volume()?,
+		selection.apfs_checkpoint(),
 		|view, info| Ok((query.read(view)?, VolumeIdentity::from(info))),
 	)
 	.map_err(with_selector_guidance)?;

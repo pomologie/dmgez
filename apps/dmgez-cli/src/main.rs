@@ -20,6 +20,7 @@ mod project_build;
 mod project_input;
 #[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 mod report_output;
+mod verify_command;
 mod volume_commands;
 #[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 mod volume_input;
@@ -48,6 +49,7 @@ const LZFSE_FEATURE: &str = "lzfse";
 const LZMA_FEATURE: &str = "lzma";
 const VERIFY_CONTAINER_CAPABILITY: &str = "verify-container";
 const VERIFY_HFSPLUS_CAPABILITY: &str = "verify-hfsplus";
+const VERIFY_APFS_CAPABILITY: &str = "verify-apfs";
 const HFSPLUS_DECMPFS_CAPABILITY: &str = "hfsplus-decmpfs";
 const RUN_LIMIT_ARG: &str = "run_limit";
 const PARTITION_SLOT_VALUE: &str = "SLOT";
@@ -164,13 +166,7 @@ enum Command {
 		json: bool,
 	},
 	/// Check container integrity and, when requested, filesystem integrity.
-	Verify {
-		image: PathBuf,
-		#[arg(long)]
-		json: bool,
-		#[command(flatten)]
-		scope: VerificationFlags,
-	},
+	Verify(verify_command::Arguments),
 	/// List a page of visible directory entries in a disk image.
 	Ls(volume_commands::ListArguments),
 	/// Browse a directory tree in a disk image.
@@ -194,20 +190,6 @@ enum Command {
 		#[arg(long, value_name = PARTITION_SLOT_VALUE)]
 		partition: Option<NonZeroU32>,
 	},
-}
-
-#[derive(Args)]
-#[group(multiple = false)]
-struct VerificationFlags {
-	/// Check container structure without reading payloads.
-	#[arg(long)]
-	quick: bool,
-	/// Check structure, payload, and all declared container CRCs. This is the default.
-	#[arg(long)]
-	container: bool,
-	/// Request both container and filesystem verification.
-	#[arg(long)]
-	full: bool,
 }
 
 #[derive(Debug, Default, Clone, Copy, ValueEnum)]
@@ -329,6 +311,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 				),
 				(INSPECT_COMMAND, cfg!(feature = "inspect")),
 				(VERIFY_HFSPLUS_CAPABILITY, cfg!(feature = "hfsplus-verify")),
+				(VERIFY_APFS_CAPABILITY, cfg!(feature = "apfs-read")),
 				(
 					HFSPLUS_DECMPFS_CAPABILITY,
 					cfg!(feature = "hfsplus-decmpfs"),
@@ -427,7 +410,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		#[cfg(feature = "inspect")]
 		Command::Analyze { image, json } => inspect::analyze(&image, json),
 		#[cfg(feature = "inspect")]
-		Command::Verify { image, json, scope } => inspect::verify(&image, json, scope),
+		Command::Verify(arguments) => verify_command::run(&arguments),
 		Command::Ls(arguments) => volume_commands::run(volume_commands::Query::List(&arguments)),
 		Command::Tree(arguments) => volume_commands::run(volume_commands::Query::Tree(&arguments)),
 		Command::Stat(arguments) => volume_commands::run(volume_commands::Query::Stat(&arguments)),
@@ -443,7 +426,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		#[cfg(not(feature = "inspect"))]
 		Command::Inspect { .. }
 		| Command::Analyze { .. }
-		| Command::Verify { .. }
+		| Command::Verify(_)
 		| Command::UnwrapRaw { .. } => Err("feature not compiled: inspect".into()),
 	};
 	result.map(|()| ExitCode::SUCCESS)

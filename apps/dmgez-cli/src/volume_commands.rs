@@ -20,12 +20,12 @@ pub(super) const APFS_READ_FEATURE: &str = "apfs-read";
 pub(super) const VOLUMES_COMMAND: &str = "volumes";
 
 const ROOT_PATH: &str = "/";
-const PARTITION_SLOT_VALUE_NAME: &str = "SLOT";
-const FILESYSTEM_OPTION: &str = "filesystem";
-const APFS_FILESYSTEM_VALUE: &str = "apfs";
-const VOLUME_VALUE_NAME: &str = "UUID|OID";
+pub(super) const PARTITION_SLOT_VALUE_NAME: &str = "SLOT";
+pub(super) const FILESYSTEM_OPTION: &str = "filesystem";
+pub(super) const APFS_FILESYSTEM_VALUE: &str = "apfs";
+pub(super) const VOLUME_VALUE_NAME: &str = "UUID|OID";
 const CHECKPOINT_VALUE_NAME: &str = "XID";
-const VOLUME_OPTION: &str = "volume";
+pub(super) const VOLUME_OPTION: &str = "volume";
 const CHECKPOINT_OPTION: &str = "xid";
 
 #[derive(Args)]
@@ -41,10 +41,10 @@ pub(super) struct InputArguments {
 }
 
 #[derive(Args)]
-struct Selection {
-	/// Read the selected filesystem. HFS+ also recognizes HFSX.
-	#[arg(long = FILESYSTEM_OPTION, value_enum, default_value_t)]
-	filesystem: Filesystem,
+pub(super) struct Selection {
+	/// Select the filesystem. Defaults to HFS+, which also recognizes HFSX.
+	#[arg(long = FILESYSTEM_OPTION, value_enum)]
+	filesystem: Option<Filesystem>,
 	/// Select an APFS volume by UUID or decimal object ID.
 	#[arg(long = VOLUME_OPTION, value_name = VOLUME_VALUE_NAME)]
 	volume: Option<String>,
@@ -54,11 +54,49 @@ struct Selection {
 }
 
 #[derive(Clone, Copy, Default, ValueEnum)]
-enum Filesystem {
+pub(super) enum Filesystem {
 	#[default]
 	Hfsplus,
 	#[value(name = APFS_FILESYSTEM_VALUE)]
 	Apfs,
+}
+
+impl Selection {
+	pub(super) fn filesystem(&self) -> Filesystem {
+		self.filesystem.unwrap_or_default()
+	}
+
+	#[cfg(feature = "inspect")]
+	pub(super) fn has_options(&self) -> bool {
+		self.filesystem.is_some() || self.volume.is_some() || self.xid.is_some()
+	}
+
+	pub(super) fn validate(&self) -> io::Result<()> {
+		if matches!(self.filesystem(), Filesystem::Hfsplus)
+			&& (self.volume.is_some() || self.xid.is_some())
+		{
+			return Err(io::Error::new(
+				io::ErrorKind::InvalidInput,
+				format!(
+					"--{VOLUME_OPTION} and --{CHECKPOINT_OPTION} require --{FILESYSTEM_OPTION} {APFS_FILESYSTEM_VALUE}"
+				),
+			));
+		}
+		Ok(())
+	}
+
+	#[cfg(feature = "apfs-read")]
+	pub(super) fn apfs_volume(&self) -> io::Result<Option<dmgez_apfs_read::VolumeSelector>> {
+		self.volume
+			.as_deref()
+			.map(apfs::volume_selector)
+			.transpose()
+	}
+
+	#[cfg(feature = "apfs-read")]
+	pub(super) fn apfs_checkpoint(&self) -> Option<dmgez_apfs_read::TransactionId> {
+		apfs::checkpoint(self.xid)
+	}
 }
 
 #[derive(Args)]
@@ -166,17 +204,9 @@ impl Query<'_> {
 
 pub(super) fn run(query: Query<'_>) -> CliResult {
 	let selection = query.selection();
-	match selection.filesystem {
+	selection.validate()?;
+	match selection.filesystem() {
 		Filesystem::Hfsplus => {
-			if selection.volume.is_some() || selection.xid.is_some() {
-				return Err(io::Error::new(
-					io::ErrorKind::InvalidInput,
-					format!(
-						"--{VOLUME_OPTION} and --{CHECKPOINT_OPTION} require --{FILESYSTEM_OPTION} {APFS_FILESYSTEM_VALUE}"
-					),
-				)
-				.into());
-			}
 			#[cfg(feature = "hfsplus-read")]
 			{
 				execute::hfsplus(&query)

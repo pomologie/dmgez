@@ -9,15 +9,17 @@ use std::{
 
 use dmgez_core::output::publish_new;
 use dmgez_inspector::{
-	CheckStatus, ChecksumDeclaration, DiskLimits, DiskReport, MAX_RUN_PAGE_SIZE, RunWindow,
-	VerificationMode, VerificationOutcome, VerificationReport,
+	CheckStatus, ChecksumDeclaration, DiagnosticDetail, DiskLimits, DiskReport, MAX_RUN_PAGE_SIZE,
+	RunWindow, VerificationMode, VerificationOutcome, VerificationReport,
 };
 use dmgez_udif::reader::{FileSource, Image, Limits};
 use dmgez_vfs::{Disk, Layout, PartitionId, VolumeId};
 use serde::Serialize;
 
-use crate::{CliResult, VerificationFlags, report_field};
+use crate::{CliResult, report_field, verify_command, volume_commands::Filesystem};
 
+#[cfg(feature = "apfs-read")]
+mod apfs;
 #[cfg(feature = "hfsplus-verify")]
 mod hfsplus;
 
@@ -44,6 +46,13 @@ const MASTER_STATUS_KEY: &str = "master";
 const STRUCTURE_STATUS_KEY: &str = "structure";
 const PAYLOAD_STATUS_KEY: &str = "payload";
 const FILESYSTEM_STATUS_KEY: &str = "filesystem";
+const FILESYSTEM_SCOPE_KEY: &str = "filesystem_scope";
+const FILESYSTEM_VOLUME_UUID_KEY: &str = "filesystem_volume_uuid";
+const FILESYSTEM_VOLUME_OBJECT_ID_KEY: &str = "filesystem_volume_object_id";
+const CHECKPOINT_XID_KEY: &str = "checkpoint_xid";
+const CHECKPOINT_REJECTED_DESCRIPTORS_KEY: &str = "checkpoint_rejected_descriptors";
+const ADVERTISED_CHECKPOINT_XID_KEY: &str = "advertised_checkpoint_xid";
+const LOGICAL_PAYLOAD_BYTES_READ_KEY: &str = "logical_payload_bytes_read";
 const UDIF_V4: &str = "UDIF v4";
 const CRC32: &str = "crc32";
 const UNKNOWN: &str = "unknown";
@@ -215,15 +224,27 @@ pub(crate) fn analyze(path: &Path, json: bool) -> CliResult {
 	Ok(())
 }
 
-pub(crate) fn verify(path: &Path, json: bool, scope: VerificationFlags) -> CliResult {
-	let mode = match scope {
-		VerificationFlags { quick: true, .. } => VerificationMode::Quick,
-		VerificationFlags { full: true, .. } => VerificationMode::Full,
-		_ => VerificationMode::Container,
+pub(super) fn verify(arguments: &verify_command::Arguments, mode: VerificationMode) -> CliResult {
+	#[cfg(not(feature = "apfs-read"))]
+	if arguments.raw {
+		let feature = crate::volume_commands::APFS_READ_FEATURE;
+		return Err(format!("feature not compiled: {feature}").into());
+	}
+
+	let (report, filesystem_cause) = match arguments.selection.filesystem() {
+		Filesystem::Hfsplus => (
+			verify_hfsplus(open_source(&arguments.image)?, mode, arguments.partition),
+			None,
+		),
+		#[cfg(feature = "apfs-read")]
+		Filesystem::Apfs => apfs::verify(arguments)?,
+		#[cfg(not(feature = "apfs-read"))]
+		Filesystem::Apfs => (
+			dmgez_inspector::verify(open_source(&arguments.image)?, Limits::default(), mode),
+			None,
+		),
 	};
-	let source = open_source(path)?;
-	let report = verification_report(source, mode);
-	if json {
+	if arguments.json {
 		print_json(&report)?;
 	} else {
 		if let Some(checks) = &report.checksums {
@@ -239,24 +260,64 @@ pub(crate) fn verify(path: &Path, json: bool, scope: VerificationFlags) -> CliRe
 		report_field(STRUCTURE_STATUS_KEY, report.coverage.structure.as_str());
 		report_field(PAYLOAD_STATUS_KEY, report.coverage.payload.as_str());
 		report_field(FILESYSTEM_STATUS_KEY, report.coverage.filesystem.as_str());
-		#[cfg(feature = "hfsplus-verify")]
-		hfsplus::show_coverage(&report);
+		show_filesystem_coverage(&report);
 		report_field(VERIFICATION_KEY, outcome(report.outcome));
 	}
 	if report.passed() {
 		return Ok(());
 	}
-	Err(Box::new(VerificationFailure(report)))
+	Err(Box::new(VerificationFailure {
+		report,
+		filesystem_cause,
+	}))
 }
 
-fn verification_report(source: FileSource, mode: VerificationMode) -> VerificationReport {
+fn verify_hfsplus(
+	source: FileSource,
+	mode: VerificationMode,
+	partition: Option<NonZeroU32>,
+) -> VerificationReport {
 	#[cfg(feature = "hfsplus-verify")]
 	if mode == VerificationMode::Full {
-		return hfsplus::verify(source);
+		return hfsplus::verify(source, partition);
 	}
+	#[cfg(not(feature = "hfsplus-verify"))]
+	let _ = partition;
 	let mut report = dmgez_inspector::verify(source, Limits::default(), mode);
 	report.capabilities.filesystem = cfg!(feature = "hfsplus-verify");
 	report
+}
+
+fn show_filesystem_coverage(report: &VerificationReport) {
+	let Some(evidence) = report
+		.filesystem_check
+		.as_ref()
+		.and_then(|check| check.evidence)
+	else {
+		return;
+	};
+	report_field(FILESYSTEM_SCOPE_KEY, evidence.scope.as_str());
+	if let Some(uuid) = evidence.volume_uuid {
+		report_field(FILESYSTEM_VOLUME_UUID_KEY, uuid);
+	}
+	if let Some(id) = evidence.volume_object_id {
+		report_field(FILESYSTEM_VOLUME_OBJECT_ID_KEY, id.0);
+	}
+	if let Some(xid) = evidence.checkpoint_xid {
+		report_field(CHECKPOINT_XID_KEY, xid.0);
+	}
+	if let Some(bytes) = evidence.logical_payload_bytes_read {
+		report_field(LOGICAL_PAYLOAD_BYTES_READ_KEY, bytes);
+	}
+	if let Some(checkpoints) = evidence.checkpoint_diagnostics {
+		report_field(
+			CHECKPOINT_REJECTED_DESCRIPTORS_KEY,
+			checkpoints.rejected_descriptors,
+		);
+		if let Some(xid) = checkpoints.advertised_xid {
+			report_field(ADVERTISED_CHECKPOINT_XID_KEY, xid.0);
+		}
+	}
 }
 
 pub(crate) fn unwrap(path: &Path, destination: &Path, partition: Option<NonZeroU32>) -> CliResult {
@@ -317,20 +378,41 @@ fn outcome(value: VerificationOutcome) -> &'static str {
 }
 
 #[derive(Debug)]
-struct VerificationFailure(VerificationReport);
+struct VerificationFailure {
+	report: VerificationReport,
+	filesystem_cause: Option<Box<dyn Error>>,
+}
 
 impl fmt::Display for VerificationFailure {
 	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(
 			formatter,
 			"image verification outcome: {}",
-			outcome(self.0.outcome)
-		)
+			outcome(self.report.outcome)
+		)?;
+		if matches!(
+			self.report
+				.diagnostic
+				.as_ref()
+				.and_then(|value| value.detail.as_ref()),
+			Some(DiagnosticDetail::FilesystemVolumeSelection { .. })
+		) {
+			let option = crate::volume_commands::VOLUME_OPTION;
+			let value_name = crate::volume_commands::VOLUME_VALUE_NAME;
+			write!(
+				formatter,
+				". Select an APFS volume with --{option} {value_name}"
+			)?;
+		}
+		Ok(())
 	}
 }
 
 impl Error for VerificationFailure {
 	fn source(&self) -> Option<&(dyn Error + 'static)> {
-		self.0.cause().map(|error| error as &dyn Error)
+		self.report
+			.cause()
+			.map(|error| error as &dyn Error)
+			.or(self.filesystem_cause.as_deref())
 	}
 }
