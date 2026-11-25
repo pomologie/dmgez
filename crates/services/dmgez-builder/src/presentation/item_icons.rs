@@ -1,7 +1,6 @@
 use std::{collections::BTreeMap, mem::size_of, path::Path};
 
 use dmgez_config::{LocalPath, VirtualPath};
-use dmgez_core::source::CapturedFile;
 use dmgez_finder::{item_icon, volume_icon};
 
 use crate::{
@@ -9,15 +8,11 @@ use crate::{
 	preflight::{ExecutionProfile, FilesystemProfile},
 };
 
-use super::{AssetBudget, Error, PATH_SEPARATOR, check_cancelled, volume_icon::read_bytes};
-
-mod signed_macho;
-
-const APP_BUNDLE_SUFFIX: [u8; 4] = *b".app";
-const SIGNATURE_DIRECTORY: &str = "_CodeSignature";
-const SIGNATURE_RESOURCES: &str = "CodeResources";
-const BUNDLE_CONTENTS: &str = "Contents";
-const FRAMEWORK_VERSIONS: &str = "Versions";
+use super::{
+	AssetBudget, Error, PATH_SEPARATOR, check_cancelled,
+	signed_targets::{self, Protection, SignedTargets},
+	volume_icon::read_bytes,
+};
 
 #[derive(Debug, Default)]
 pub(crate) struct ItemIcons {
@@ -178,20 +173,12 @@ fn validate_targets(
 	profile: &ExecutionProfile,
 	budget: &AssetBudget,
 ) -> Result<(), Error> {
-	let signatures = entries.iter().filter_map(signed_bundle_root);
-	let mut roots = Vec::new();
-	let count = signatures.clone().count();
-	let check_budget = |capacity: usize| {
-		capacity
-			.checked_mul(size_of::<&str>())
-			.filter(|&bytes| bytes <= budget.metadata_bytes)
-			.ok_or(Error::MetadataBudget)
-	};
-	check_budget(count)?;
-	roots.try_reserve_exact(count)?;
-	check_budget(roots.capacity())?;
-	roots.extend(signatures);
-	roots.sort_unstable_by(|left, right| folded(left).cmp(folded(right)));
+	let targets =
+		SignedTargets::new(entries, budget.metadata_bytes).map_err(|error| match error {
+			signed_targets::Error::Budget => Error::MetadataBudget,
+			signed_targets::Error::Reserve(error) => Error::Reserve(error),
+			error => Error::SignedTargets(error),
+		})?;
 
 	for entry in entries
 		.iter()
@@ -203,110 +190,32 @@ fn validate_targets(
 			EntryKind::Directory => profile.filesystem() != FilesystemProfile::HfsplusAscii,
 			EntryKind::Symlink(_) => false,
 		};
-		let app_path = entry
-			.destination
-			.components()
-			.any(|part| has_app_suffix(part.as_bytes()))
-			|| entry.source.as_ref().is_some_and(|source| {
-				source
-					.path()
-					.components()
-					.any(|part| has_app_suffix(part.as_os_str().as_encoded_bytes()))
-			});
 		if !eligible_kind {
 			return Err(unsupported_target(&entry.destination));
 		}
-		if app_path
-			|| inside_signed_bundle(&entry.destination, &roots)
-			|| has_source_bundle_marker(entry)?
-		{
-			return Err(Error::ItemIconSignedBundle {
+		let protection = targets.protection(entry).map_err(|error| match error {
+			signed_targets::Error::Source(error) => Error::ItemIconSource(error),
+			signed_targets::Error::Read(source) => Error::ItemIconTargetRead {
 				path: entry.destination.clone(),
-			});
-		}
-		if matches!(entry.kind, EntryKind::File)
-			&& let Some(source) = &entry.source
-			&& has_executable_signature(source, &entry.destination)?
-		{
-			return Err(Error::ItemIconSignedExecutable {
-				path: entry.destination.clone(),
-			});
+				source,
+			},
+			error => Error::SignedTargets(error),
+		})?;
+		match protection {
+			Some(Protection::Bundle) => {
+				return Err(Error::ItemIconSignedBundle {
+					path: entry.destination.clone(),
+				});
+			}
+			Some(Protection::Executable) => {
+				return Err(Error::ItemIconSignedExecutable {
+					path: entry.destination.clone(),
+				});
+			}
+			None => {}
 		}
 	}
 	Ok(())
-}
-
-fn has_executable_signature(
-	source: &SourceSnapshot,
-	destination: &VirtualPath,
-) -> Result<bool, Error> {
-	let read_error = |source| Error::ItemIconTargetRead {
-		path: destination.clone(),
-		source,
-	};
-	let file = CapturedFile::new(source.open_regular().map_err(Error::ItemIconSource)?)
-		.map_err(read_error)?;
-	let signed = signed_macho::has_or_may_have_signature(&file).map_err(read_error)?;
-	source.validate().map_err(Error::ItemIconSource)?;
-	Ok(signed)
-}
-
-fn has_source_bundle_marker(entry: &Entry) -> Result<bool, Error> {
-	match entry.source.as_ref() {
-		Some(source) => source
-			.has_signed_bundle_marker()
-			.map_err(Error::ItemIconSource),
-		None => Ok(false),
-	}
-}
-
-fn has_app_suffix(name: &[u8]) -> bool {
-	name.last_chunk::<{ APP_BUNDLE_SUFFIX.len() }>()
-		.is_some_and(|suffix| suffix.eq_ignore_ascii_case(&APP_BUNDLE_SUFFIX))
-}
-
-fn signed_bundle_root(entry: &Entry) -> Option<&str> {
-	if !matches!(entry.kind, EntryKind::File) {
-		return None;
-	}
-	let (directory, resource) = entry.destination.as_str().rsplit_once(PATH_SEPARATOR)?;
-	if !resource.eq_ignore_ascii_case(SIGNATURE_RESOURCES) {
-		return None;
-	}
-	let (container, signature) = directory.rsplit_once(PATH_SEPARATOR)?;
-	if !signature.eq_ignore_ascii_case(SIGNATURE_DIRECTORY) {
-		return None;
-	}
-	let Some((parent, name)) = container.rsplit_once(PATH_SEPARATOR) else {
-		return Some(container);
-	};
-	if name.eq_ignore_ascii_case(BUNDLE_CONTENTS) {
-		return Some(parent);
-	}
-	if let Some((root, directory)) = parent.rsplit_once(PATH_SEPARATOR)
-		&& directory.eq_ignore_ascii_case(FRAMEWORK_VERSIONS)
-	{
-		return Some(root);
-	}
-	Some(container)
-}
-
-fn inside_signed_bundle(path: &VirtualPath, roots: &[&str]) -> bool {
-	let path = path.as_str();
-	std::iter::once(path)
-		.chain(
-			path.rmatch_indices(PATH_SEPARATOR)
-				.map(|(end, _)| &path[..end]),
-		)
-		.any(|component| {
-			roots
-				.binary_search_by(|root| folded(root).cmp(folded(component)))
-				.is_ok()
-		})
-}
-
-fn folded(path: &str) -> impl Iterator<Item = u8> + '_ {
-	path.bytes().map(|byte| byte.to_ascii_lowercase())
 }
 
 fn unsupported_target(destination: &VirtualPath) -> Error {

@@ -22,6 +22,8 @@ pub enum Error {
 	MetadataBudget,
 	#[error("cannot reserve Finder planning memory")]
 	Reserve(#[from] std::collections::TryReserveError),
+	#[error(transparent)]
+	SignedTargets(#[from] super::signed_targets::Error),
 	#[error("cannot represent a Finder store path in {folder:?}")]
 	StorePath {
 		folder: String,

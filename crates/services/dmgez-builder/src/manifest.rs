@@ -17,7 +17,7 @@ mod host;
 #[path = "manifest/host_windows.rs"]
 mod host;
 mod inspection;
-#[cfg(feature = "volume-icon")]
+#[cfg(feature = "finder-write")]
 mod signed_bundle;
 #[cfg(any(unix, windows))]
 mod walk;

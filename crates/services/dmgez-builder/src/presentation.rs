@@ -20,6 +20,7 @@ mod error;
 #[cfg(feature = "volume-icon")]
 mod item_icons;
 pub(crate) mod settings;
+pub mod signed_targets;
 #[cfg(feature = "volume-icon")]
 pub(crate) mod volume_icon;
 

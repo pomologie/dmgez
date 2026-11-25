@@ -5,6 +5,8 @@ mod capture;
 pub mod policy;
 pub mod sidecar;
 
+#[cfg(all(feature = "finder-write", target_os = "macos"))]
+pub use capture::has_native_signing_attributes;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub use capture::{Error, capture_regular};
 #[cfg(all(feature = "volume-icon", any(target_os = "linux", target_os = "macos")))]

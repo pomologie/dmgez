@@ -3,6 +3,8 @@
 use std::{collections::TryReserveError, fs::File, mem::size_of};
 
 use dmgez_core::source::{CapturedFile, SourceError};
+#[cfg(all(feature = "finder-write", target_os = "macos"))]
+use dmgez_macho::bundle::SIGNING_ATTRIBUTE_NAMES;
 use rustix::{fs, io::Errno};
 use thiserror::Error;
 
@@ -12,13 +14,6 @@ use crate::manifest::{self, SourceSnapshot};
 const ATTRIBUTE_SEPARATOR: u8 = 0;
 const FINDER_INFO_NAME: &[u8] = b"com.apple.FinderInfo";
 const RESOURCE_FORK_NAME: &[u8] = b"com.apple.ResourceFork";
-#[cfg(all(feature = "volume-icon", target_os = "macos"))]
-const SIGNING_ATTRIBUTE_NAMES: [&[u8]; 4] = [
-	b"com.apple.cs.CodeDirectory",
-	b"com.apple.cs.CodeRequirements",
-	b"com.apple.cs.CodeRequirements-1",
-	b"com.apple.cs.CodeSignature",
-];
 
 /// A source or its metadata could not be captured within the requested limits.
 #[derive(Debug, Error)]
@@ -89,16 +84,36 @@ pub fn probe_item_icon_conflict(
 
 #[cfg(all(feature = "volume-icon", target_os = "macos"))]
 fn native_item_icon_conflict(file: &File) -> Result<Option<ItemIconSourceConflict>, Error> {
-	for name in SIGNING_ATTRIBUTE_NAMES {
-		if native_attribute_present(file, name)? {
-			return Ok(Some(ItemIconSourceConflict::SigningMetadata));
-		}
+	if signing_attributes_present(file)? {
+		return Ok(Some(ItemIconSourceConflict::SigningMetadata));
 	}
 	Ok(native_attribute_present(file, RESOURCE_FORK_NAME)?
 		.then_some(ItemIconSourceConflict::ResourceFork))
 }
 
-#[cfg(all(feature = "volume-icon", target_os = "macos"))]
+/// Checks for native signing attributes on the admitted regular file.
+/// No attribute values are read.
+///
+/// # Errors
+/// Returns an error on identity change or unreadable native attribute status.
+#[cfg(all(feature = "finder-write", target_os = "macos"))]
+pub fn has_native_signing_attributes(snapshot: &SourceSnapshot) -> Result<bool, Error> {
+	let present = signing_attributes_present(&snapshot.open_regular()?)?;
+	snapshot.validate()?;
+	Ok(present)
+}
+
+#[cfg(all(feature = "finder-write", target_os = "macos"))]
+fn signing_attributes_present(file: &File) -> Result<bool, Error> {
+	for name in SIGNING_ATTRIBUTE_NAMES {
+		if native_attribute_present(file, name)? {
+			return Ok(true);
+		}
+	}
+	Ok(false)
+}
+
+#[cfg(all(feature = "finder-write", target_os = "macos"))]
 fn native_attribute_present(file: &File, name: &[u8]) -> Result<bool, Error> {
 	match fs::fgetxattr_query(file, name) {
 		Ok(_) => Ok(true),

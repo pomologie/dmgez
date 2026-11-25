@@ -10,11 +10,11 @@ description = "Plan and execute dmgez image builds"
 [features]
 default = ["finder-write", "parallel", "zlib"]
 badge-icons = ["volume-icon", "dmgez-finder/badge-icons"]
-finder-write = ["dep:dmgez-finder", "dep:flate2", "dep:png", "dep:tiff"]
+finder-write = ["dep:dmgez-finder", "dep:dmgez-macho", "dep:flate2", "dep:png", "dep:tiff"]
 lzfse = ["dmgez-udif/lzfse"]
 lzma = ["dmgez-udif/lzma"]
 parallel = ["dmgez-udif/parallel"]
-volume-icon = ["finder-write", "dmgez-finder/volume-icon", "dep:dmgez-macho"]
+volume-icon = ["finder-write", "dmgez-finder/volume-icon"]
 zlib = ["dmgez-udif/zlib"]
 
 [dependencies]
