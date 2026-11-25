@@ -68,3 +68,7 @@ mod host_copy;
 #[cfg(feature = "image-edit")]
 #[path = "image_edit_cli/hfsx.rs"]
 mod hfsx;
+
+#[cfg(all(feature = "image-edit", feature = "partition-write"))]
+#[path = "image_edit_cli/partitions.rs"]
+mod partitions;

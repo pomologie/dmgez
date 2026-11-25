@@ -12,7 +12,7 @@ use dmgez_config::{
 	project_edit::{EditBatchError, MAX_EDIT_BATCH_BYTES, parse_edit_batch},
 };
 use dmgez_core::output::{PublishError, StagedReader, publish_new};
-use dmgez_hfsplus::browse::{Limits, with_catalog};
+use dmgez_hfsplus::browse::{Limits, VolumeSignature, with_catalog};
 use dmgez_hfsplus::{
 	HostCopyMetadataLoss,
 	rebuild::{PrepareError, PreparedEdit, seal_prepared, verify_rebuilt_volume},
@@ -21,7 +21,7 @@ use dmgez_operations::edit::image_source::{
 	ImageSource, ImageSourceError, ImageSourceOptions, SourceEnvelope as ObservedEnvelope,
 };
 use dmgez_udif::writer::{RebuildMetadata, WriteOptions, WriteReport, write_rebuilt_image};
-use dmgez_vfs::{Disk, Filesystem, Layout, VolumeId};
+use dmgez_vfs::{Disk, Filesystem, Layout, LogicalDisk, VolumeId};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
 
@@ -39,7 +39,8 @@ const OUTPUT_DIRECTORY: &str = "the image edit destination parent is not a direc
 const MISSING_ENCODED_STAGE: &str = "the staged rebuild has no encoding report";
 const METADATA_MISMATCH: &str = "the staged image differs from its admitted container metadata";
 const LOGICAL_MISMATCH: &str = "the staged image does not contain the sealed logical bytes";
-const STAGED_LAYOUT: &str = "the rebuilt filesystem differs from the admitted whole-disk layout";
+const STAGED_LAYOUT: &str = "the rebuilt image differs from the admitted disk or filesystem layout";
+const PARTITION_CAPACITY: &str = "the rebuilt filesystem does not fit the existing partition";
 const HEX_DIGITS_PER_BYTE: usize = 2;
 const HEX_RADIX: u32 = 16;
 
@@ -183,8 +184,8 @@ pub fn edit(request: EditRequest<'_>) -> Result<EditReport, EditError> {
 					rebuild(&mut source, &prepared, Some(sink))
 				},
 				|stage, rebuilt| {
-					verify(stage, rebuilt)?;
 					let source = source.try_borrow().map_err(io::Error::other)?;
+					verify(stage, rebuilt, &source)?;
 					validate_inputs(&source, &changes, &prepared)
 				},
 			)?
@@ -238,7 +239,6 @@ fn check_destination(path: &Path) -> io::Result<()> {
 struct Rebuilt {
 	entries: usize,
 	logical_bytes: u64,
-	filesystem: Filesystem,
 	encoded: Option<Encoded>,
 }
 
@@ -254,49 +254,70 @@ fn rebuild(
 	sink: Option<&mut dyn Write>,
 ) -> io::Result<Rebuilt> {
 	let source_metadata = source.container_metadata();
-	let filesystem = source.filesystem();
+	let volume = source.volume_id();
+	let volume_range = source.volume_range();
+	let disk_bytes = source.len();
+	let partitioned = volume != VolumeId::WholeDisk;
+	let outside = (partitioned && sink.is_some())
+		.then(|| source.outside_volume_readers())
+		.transpose()
+		.map_err(invalid)?;
 	let mut disk = Disk::discover(source, dmgez_vfs::Limits::default()).map_err(invalid)?;
-	with_catalog(
-		&mut disk,
-		VolumeId::WholeDisk,
-		Limits::default(),
-		|volume, catalog| {
-			let plan = seal_prepared(volume, &catalog, prepared).map_err(invalid)?;
-			let logical_bytes = plan.logical_bytes();
-			let options = WriteOptions {
-				profile: source_metadata.source_profile(),
-				..WriteOptions::default()
-			};
-			options.max_data_runs(logical_bytes).map_err(invalid)?;
-			let encoded = if let Some(sink) = sink {
-				let mut digest = Sha256::new();
-				let reader = HashReader {
-					reader: plan.reader(),
-					digest: &mut digest,
-				};
-				let metadata = source_metadata.with_logical_bytes(logical_bytes);
-				let written =
-					write_rebuilt_image(reader, sink, &options, metadata).map_err(invalid)?;
-				Some(Encoded {
-					written,
-					metadata,
-					logical_sha256: digest.finalize().into(),
-				})
-			} else {
-				None
-			};
-			Ok(Rebuilt {
-				entries: plan.entries(),
-				logical_bytes,
-				filesystem,
-				encoded,
-			})
-		},
-	)
+	with_catalog(&mut disk, volume, Limits::default(), |volume, catalog| {
+		let plan = seal_prepared(volume, &catalog, prepared).map_err(invalid)?;
+		let logical_bytes = if partitioned {
+			if plan.logical_bytes() != volume_range.end - volume_range.start {
+				return Err(invalid(PARTITION_CAPACITY));
+			}
+			disk_bytes
+		} else {
+			plan.logical_bytes()
+		};
+		let options = WriteOptions {
+			profile: source_metadata.source_profile(),
+			..WriteOptions::default()
+		};
+		options.max_data_runs(logical_bytes).map_err(invalid)?;
+		let metadata = source_metadata.with_logical_bytes(logical_bytes);
+		let encoded = match (sink, outside) {
+			(Some(sink), Some((prefix, suffix))) => Some(encode(
+				prefix.chain(plan.reader()).chain(suffix),
+				sink,
+				&options,
+				metadata,
+			)?),
+			(Some(sink), None) => Some(encode(plan.reader(), sink, &options, metadata)?),
+			(None, _) => None,
+		};
+		Ok(Rebuilt {
+			entries: plan.entries(),
+			logical_bytes,
+			encoded,
+		})
+	})
 	.map_err(invalid)?
 }
 
-fn verify(stage: StagedReader<'_>, rebuilt: &Rebuilt) -> io::Result<()> {
+fn encode(
+	reader: impl Read,
+	sink: &mut dyn Write,
+	options: &WriteOptions,
+	metadata: RebuildMetadata,
+) -> io::Result<Encoded> {
+	let mut digest = Sha256::new();
+	let reader = HashReader {
+		reader,
+		digest: &mut digest,
+	};
+	let written = write_rebuilt_image(reader, sink, options, metadata).map_err(invalid)?;
+	Ok(Encoded {
+		written,
+		metadata,
+		logical_sha256: digest.finalize().into(),
+	})
+}
+
+fn verify(stage: StagedReader<'_>, rebuilt: &Rebuilt, source: &ImageSource) -> io::Result<()> {
 	let encoded = rebuilt
 		.encoded
 		.as_ref()
@@ -315,19 +336,30 @@ fn verify(stage: StagedReader<'_>, rebuilt: &Rebuilt) -> io::Result<()> {
 		return Err(invalid(LOGICAL_MISMATCH));
 	}
 	let mut disk = Disk::discover(image, dmgez_vfs::Limits::default()).map_err(invalid)?;
-	if !matches!(
-		disk.layout(),
-		Layout::Partitionless { filesystem, range }
-			if *filesystem == rebuilt.filesystem && *range == (0..rebuilt.logical_bytes)
-	) {
+	let expected = source.filesystem();
+	let volume = source.volume_id();
+	let layout_matches = if volume == VolumeId::WholeDisk {
+		matches!(
+			disk.layout(),
+			Layout::Partitionless { filesystem, range }
+				if *filesystem == expected && *range == (0..rebuilt.logical_bytes)
+		)
+	} else {
+		disk.layout() == source.layout()
+	};
+	if !layout_matches {
 		return Err(invalid(STAGED_LAYOUT));
 	}
-	with_catalog(
-		&mut disk,
-		VolumeId::WholeDisk,
-		Limits::default(),
-		|volume, catalog| verify_rebuilt_volume(volume, &catalog).map_err(invalid),
-	)
+	with_catalog(&mut disk, volume, Limits::default(), |volume, catalog| {
+		if !matches!(
+			(expected, volume.header().signature),
+			(Filesystem::HfsPlus, VolumeSignature::HfsPlus)
+				| (Filesystem::HfsX, VolumeSignature::HfsX)
+		) {
+			return Err(invalid(STAGED_LAYOUT));
+		}
+		verify_rebuilt_volume(volume, &catalog).map_err(invalid)
+	})
 	.map_err(invalid)?
 }
 

@@ -15,9 +15,11 @@ use dmgez_udif::{
 	verify_code_directory_digests,
 	writer::RebuildMetadata,
 };
-use dmgez_vfs::{Disk, Filesystem, Layout, Limits as DiskLimits, LogicalDisk};
+use dmgez_vfs::{Disk, Filesystem, Layout, Limits as DiskLimits, LogicalDisk, VolumeId};
 use sha2::{Digest, Sha256};
 use thiserror::Error;
+
+mod outside;
 
 const HASH_BUFFER_BYTES: usize = 64 << 10;
 const SHA256_BYTES: usize = 32;
@@ -88,6 +90,10 @@ pub enum ImageSourceError {
 	Layout(#[from] dmgez_vfs::Error),
 	#[error("image editing requires one HFS+ or HFSX volume covering the whole logical disk")]
 	NotWholeHfsPlus,
+	#[error(
+		"the selected partition data extent is not entirely occupied by one HFS+ or HFSX volume"
+	)]
+	PartitionVolumeGeometry,
 	#[error("input image is missing one or more required CRC32 checksums")]
 	MissingChecksums,
 }
@@ -107,14 +113,18 @@ pub struct ImageSource {
 	revision: ImageRevision,
 	envelope: SourceEnvelope,
 	filesystem: Filesystem,
+	volume_id: VolumeId,
+	volume_range: Range<u64>,
+	layout: Layout,
+	limits: Limits,
 	metadata: RebuildMetadata,
 	logical: Image<PinnedFile>,
 }
 
 impl ImageSource {
-	/// Admit a signed or unsigned UDRO/UDZO image whose logical disk is one
-	/// complete partitionless HFS+ or HFSX volume. When supplied, the expected
-	/// revision must match all physical input bytes.
+	/// Admit a signed or unsigned UDRO/UDZO image with one complete HFS+ or HFSX
+	/// volume filling the logical disk or its only eligible partition data extent.
+	/// When supplied, the expected revision must match all physical input bytes.
 	/// # Errors
 	/// Rejects non-regular sources, unsupported layouts or metadata, failed
 	/// checksums, source changes, cancellation and digest mismatches.
@@ -134,14 +144,24 @@ impl ImageSource {
 		let mut logical = Image::open_release(file.clone(), options.container)?;
 		let metadata = logical.rebuild_release_metadata()?;
 		let logical_bytes = logical.descriptor().logical_bytes;
-		let disk = Disk::discover(&mut logical, options.disk)?;
-		let filesystem = match disk.layout() {
+		let mut disk = Disk::discover(&mut logical, options.disk)?;
+		let (filesystem, volume_id, volume_range) = match disk.layout() {
 			Layout::Partitionless {
 				filesystem: filesystem @ (Filesystem::HfsPlus | Filesystem::HfsX),
 				range,
-			} if *range == (0..logical_bytes) => *filesystem,
+			} if *range == (0..logical_bytes) => (*filesystem, VolumeId::WholeDisk, range.clone()),
+			Layout::Partitioned { .. } => {
+				let id = disk.select_volume(None)?;
+				let range = disk.data_window(id)?.logical_range();
+				let (filesystem, _) = disk
+					.probe_hfs_geometry(id)?
+					.filter(|&(_, len)| len == range.end - range.start)
+					.ok_or(ImageSourceError::PartitionVolumeGeometry)?;
+				(filesystem, id, range)
+			}
 			_ => return Err(ImageSourceError::NotWholeHfsPlus),
 		};
+		let layout = disk.layout().clone();
 		let signature = logical.embedded_signature_range();
 		let (revision, envelope) = source_revision(&file, signature)?;
 		if expected.is_some_and(|expected| expected != revision) {
@@ -165,6 +185,10 @@ impl ImageSource {
 			revision,
 			envelope,
 			filesystem,
+			volume_id,
+			volume_range,
+			layout,
+			limits: options.container,
 			metadata,
 			logical,
 		};
@@ -183,10 +207,41 @@ impl ImageSource {
 		self.envelope
 	}
 
-	/// The filesystem signature recognized at whole-disk admission.
+	/// The filesystem signature recognized during source admission.
 	#[must_use]
 	pub const fn filesystem(&self) -> Filesystem {
 		self.filesystem
+	}
+
+	/// The sole admitted filesystem data extent's identifier.
+	#[must_use]
+	pub const fn volume_id(&self) -> VolumeId {
+		self.volume_id
+	}
+
+	/// The full filesystem data extent in logical disk bytes.
+	#[must_use]
+	pub fn volume_range(&self) -> Range<u64> {
+		self.volume_range.clone()
+	}
+
+	/// Partition or whole-disk metadata observed during admission.
+	#[must_use]
+	pub const fn layout(&self) -> &Layout {
+		&self.layout
+	}
+
+	/// Read all logical bytes before and after the admitted filesystem window.
+	/// The two readers share an independent decoder over the same pinned file.
+	///
+	/// # Errors
+	/// Fails if reopening the admitted container framing or checking the held
+	/// file identity fails. Each read also rechecks that identity.
+	pub fn outside_volume_readers(
+		&self,
+	) -> Result<(impl io::Read + use<>, impl io::Read + use<>), ImageSourceError> {
+		let image = Image::open_release(self.file.clone(), self.limits)?;
+		Ok(outside::regions(image, self.volume_range()))
 	}
 
 	/// Container metadata admitted for regeneration independently of filesystem

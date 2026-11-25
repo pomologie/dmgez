@@ -1,6 +1,6 @@
 #![cfg(feature = "image-edit")]
 
-use std::{fs, path::Path};
+use std::{fs, io::Read, num::NonZeroU32, path::Path};
 
 use dmgez_operations::edit::image_source::{
 	ImageRevision, ImageSource, ImageSourceError, ImageSourceOptions, SourceEnvelope,
@@ -9,7 +9,7 @@ use dmgez_udif::{
 	Error as UdifError, SECTOR_BYTES, TRAILER_BYTES,
 	writer::{Profile, WriteOptions, write_image},
 };
-use dmgez_vfs::{Filesystem, LogicalDisk};
+use dmgez_vfs::{Filesystem, Layout, LogicalDisk, PartitionId, Scheme, VolumeId};
 use sha2::{Digest, Sha256};
 
 const PROBE_BLOCK_BYTES: u32 = 4096;
@@ -20,6 +20,16 @@ const HFS_X_SIGNATURE_AND_VERSION: [u8; 4] = *b"HX\x00\x05";
 const BLOCK_BYTES_FIELD: usize = VOLUME_HEADER_OFFSET + 40;
 const BLOCK_COUNT_FIELD: usize = VOLUME_HEADER_OFFSET + 44;
 const XML_LENGTH_FIELD: std::ops::Range<usize> = 224..232;
+const MBR_ENTRY_OFFSET: usize = 446;
+const MBR_ENTRY_BYTES: usize = 16;
+const MBR_TYPE_FIELD: usize = 4;
+const MBR_START_FIELD: usize = 8;
+const MBR_SECTORS_FIELD: usize = 12;
+const MBR_SIGNATURE_FIELD: usize = 510;
+const MBR_SIGNATURE: [u8; 2] = [0x55, 0xaa];
+const MBR_HFS_TYPE: u8 = 0xaf;
+const PARTITION_FIRST_SECTOR: u32 = 8;
+const PARTITION_SECTORS: u32 = PROBE_BLOCK_COUNT * PROBE_BLOCK_BYTES / SECTOR_BYTES as u32;
 
 // A synthetic header and stable logical bytes. These admission tests exercise
 // geometry only. A filesystem-level rebuild must also qualify the catalog.
@@ -48,6 +58,93 @@ fn wrap(raw: &[u8], profile: Profile) -> Vec<u8> {
 
 fn open(path: &Path) -> Result<ImageSource, ImageSourceError> {
 	ImageSource::open(path, None, ImageSourceOptions::default())
+}
+
+fn mbr_entry(disk: &mut [u8], index: usize, start: u32, sectors: u32) {
+	let offset = MBR_ENTRY_OFFSET + index * MBR_ENTRY_BYTES;
+	let entry = &mut disk[offset..][..MBR_ENTRY_BYTES];
+	entry[MBR_TYPE_FIELD] = MBR_HFS_TYPE;
+	entry[MBR_START_FIELD..][..size_of::<u32>()].copy_from_slice(&start.to_le_bytes());
+	entry[MBR_SECTORS_FIELD..][..size_of::<u32>()].copy_from_slice(&sectors.to_le_bytes());
+}
+
+fn partitioned_disk() -> Vec<u8> {
+	let mut disk = vec![0; PARTITION_FIRST_SECTOR as usize * SECTOR_BYTES as usize];
+	disk[MBR_SIGNATURE_FIELD..][..MBR_SIGNATURE.len()].copy_from_slice(&MBR_SIGNATURE);
+	mbr_entry(&mut disk, 0, PARTITION_FIRST_SECTOR, PARTITION_SECTORS);
+	disk.extend(raw_disk_with_signature(HFS_X_SIGNATURE_AND_VERSION));
+	disk.extend([0x5a; SECTOR_BYTES as usize]);
+	disk
+}
+
+#[test]
+fn selects_partition_and_preserves_exact_bounded_outside_regions() {
+	let dir = tempfile::tempdir().unwrap();
+	let path = dir.path().join("partitioned.dmg");
+	let disk = partitioned_disk();
+	fs::write(&path, wrap(&disk, Profile::Udzo)).unwrap();
+	let mut source = open(&path).unwrap();
+	let start = u64::from(PARTITION_FIRST_SECTOR) * SECTOR_BYTES;
+	let end = start + u64::from(PARTITION_SECTORS) * SECTOR_BYTES;
+	assert_eq!(source.filesystem(), Filesystem::HfsX);
+	assert_eq!(
+		source.volume_id(),
+		VolumeId::Partition(PartitionId {
+			scheme: Scheme::Mbr,
+			slot: NonZeroU32::MIN,
+		}),
+	);
+	assert_eq!(source.volume_range(), start..end);
+	assert!(matches!(
+		source.layout(),
+		Layout::Partitioned {
+			scheme: Scheme::Mbr,
+			..
+		}
+	));
+	let (mut before, mut after) = source.outside_volume_readers().unwrap();
+	// These readers own their independent decoder, so a catalog reader can
+	// still borrow the source decoder when assembling the output disk.
+	source.read_exact_at(start, &mut [0; 1]).unwrap();
+	let mut prefix = vec![0; start as usize];
+	let mut suffix = Vec::new();
+	before.read_exact(&mut prefix[..1]).unwrap();
+	after.read_to_end(&mut suffix).unwrap();
+	before.read_exact(&mut prefix[1..]).unwrap();
+	assert_eq!(before.read(&mut [0; 1]).unwrap(), 0);
+	assert_eq!(prefix, disk[..start as usize]);
+	assert_eq!(suffix, disk[end as usize..]);
+	source.revalidate().unwrap();
+}
+
+#[test]
+fn refuses_mismatched_ambiguous_or_overbudget_partition_layouts() {
+	let dir = tempfile::tempdir().unwrap();
+	let path = dir.path().join("partitioned.dmg");
+	let mut disk = partitioned_disk();
+	fs::write(&path, wrap(&disk, Profile::Udro)).unwrap();
+	let mut options = ImageSourceOptions::default();
+	// Two leading sectors and the whole-disk signature probe exhaust the budget.
+	options.disk.max_probe_bytes = 2 * SECTOR_BYTES + HFS_X_SIGNATURE_AND_VERSION.len() as u64;
+	assert!(matches!(
+		ImageSource::open(&path, None, options),
+		Err(ImageSourceError::Layout(dmgez_vfs::Error::Limit(_)))
+	));
+	mbr_entry(&mut disk, 0, PARTITION_FIRST_SECTOR, PARTITION_SECTORS + 1);
+	fs::write(&path, wrap(&disk, Profile::Udro)).unwrap();
+	assert!(matches!(
+		open(&path),
+		Err(ImageSourceError::PartitionVolumeGeometry)
+	));
+	mbr_entry(&mut disk, 0, PARTITION_FIRST_SECTOR, PARTITION_SECTORS);
+	mbr_entry(&mut disk, 1, PARTITION_FIRST_SECTOR + PARTITION_SECTORS, 1);
+	fs::write(&path, wrap(&disk, Profile::Udro)).unwrap();
+	assert!(matches!(
+		open(&path),
+		Err(ImageSourceError::Layout(
+			dmgez_vfs::Error::AmbiguousVolumes { candidates: 2 }
+		))
+	));
 }
 
 #[test]
