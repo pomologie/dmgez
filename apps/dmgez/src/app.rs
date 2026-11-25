@@ -401,7 +401,7 @@ impl App {
 			self.ask_open(ctx);
 			return;
 		}
-		if ctx.egui_wants_keyboard_input() {
+		if ctx.text_edit_focused() {
 			return;
 		}
 		if let Some(Opened {

@@ -5,10 +5,11 @@ use dmgez_preview::{
 	CanvasPoint, Drag, FolderPoint, ItemVisibility, PositionSource, ProjectFolder, Viewport,
 };
 use eframe::egui::{
-	Align2, Color32, FontId, Pos2, Rect, ScrollArea, Sense, Stroke, StrokeKind, Ui, pos2, vec2,
+	Align2, Color32, FontId, Pos2, Rect, Role, ScrollArea, Sense, Stroke, StrokeKind, Ui,
+	WidgetInfo, pos2, vec2,
 };
 
-use crate::project::{Action, DragEdit};
+use crate::project::{Action, DragEdit, input};
 
 const MAX_CANVAS_POINTS: f64 = 32_768.0;
 const CANVAS_EDGE: Color32 = Color32::from_rgb(184, 199, 199);
@@ -28,7 +29,8 @@ const MAX_LABEL_POINTS: f64 = 36.0;
 const FIT_PADDING: f32 = 26.0;
 
 pub(crate) struct View<'a> {
-	pub selected: Option<&'a VirtualPath>,
+	pub selected: &'a BTreeSet<VirtualPath>,
+	pub nudge_enabled: bool,
 	pub show_hidden: bool,
 	pub snap: bool,
 	pub scale: f64,
@@ -62,6 +64,8 @@ pub(crate) fn show(
 		ui.add_space(FIT_PADDING);
 		let canvas_size = vec2(width as f32, height as f32);
 		let (rect, response) = ui.allocate_exact_size(canvas_size, Sense::click_and_drag());
+		response
+			.widget_info(|| WidgetInfo::labeled(Role::Canvas, response.enabled(), "Icon canvas"));
 		let Some(origin) = canvas_point(rect.min) else {
 			return;
 		};
@@ -78,9 +82,12 @@ pub(crate) fn show(
 				.and_then(|point| layout.hit_test(point, viewport, visibility).ok().flatten())
 		};
 		if response.clicked()
-			&& let Some(item) = response.interact_pointer_pos().and_then(hit)
+			&& let Some(point) = response.interact_pointer_pos()
 		{
-			action = Some(Action::Select(item.destination.clone()));
+			action = Some(hit(point).map_or(Action::ClearSelection, |item| {
+				input::select(ui, item.destination)
+			}));
+			response.request_focus();
 		}
 		if response.drag_started()
 			&& let Some(start) = ui.input(|input| input.pointer.press_origin())
@@ -95,7 +102,11 @@ pub(crate) fn show(
 				drag: started,
 				center: item.center,
 			});
-			action = Some(Action::Select(item.destination.clone()));
+			action = Some(Action::Select {
+				path: item.destination.clone(),
+				toggle: false,
+			});
+			response.request_focus();
 		}
 		let grid = view.snap.then(|| style.snap_grid().ok()).flatten();
 		if let Some(active) = &mut drag
@@ -112,6 +123,9 @@ pub(crate) fn show(
 				center: active.center,
 			});
 		}
+		if action.is_none() && drag.is_none() && view.nudge_enabled {
+			action = input::nudge(ui, &response);
+		}
 		let background = match style.background {
 			Some(Background::Color { value }) => parse_solid_background_color(value.as_str())
 				.map(canvas_color)
@@ -123,7 +137,11 @@ pub(crate) fn show(
 		painter.rect_stroke(
 			rect,
 			ITEM_CORNER,
-			Stroke::new(1.0, CANVAS_EDGE),
+			if response.has_focus() {
+				ui.visuals().selection.stroke
+			} else {
+				Stroke::new(1.0, CANVAS_EDGE)
+			},
 			StrokeKind::Inside,
 		);
 		for item in layout
@@ -143,7 +161,7 @@ pub(crate) fn show(
 			if !rect.intersects(icon.expand(half)) {
 				continue;
 			}
-			let highlighted = view.selected == Some(item.destination);
+			let highlighted = view.selected.contains(item.destination);
 			painter.rect_filled(
 				icon,
 				ITEM_CORNER,
@@ -252,9 +270,12 @@ fn canvas_color((red, green, blue): (f64, f64, f64)) -> Color32 {
 mod tests {
 	use dmgez_config::Project;
 	use dmgez_preview::ItemInput;
-	use eframe::egui::{Context, Event, Modifiers, PointerButton, RawInput, Shape};
+	use eframe::egui::{Context, Event, Key, Modifiers, PointerButton, RawInput, Shape};
 
 	use super::*;
+	use crate::project::arrangement::Arrangement;
+
+	const PLAN: &str = "schema_version=1\n[image]\nname='Demo'\noutput='demo.dmg'\n[[contents]]\nsource='absent.txt'\ndestination='/Demo.txt'\nposition=[70,50]\n[finder]\nwindow_size=[320,190]\n[finder.icon_view]\nicon_size=32\n";
 
 	#[test]
 	fn paints_the_shared_solid_background_color() {
@@ -276,7 +297,8 @@ background = { kind = 'color', value = 'hsl(180deg, 100%, 50%)' }
 			},
 			|ui| {
 				let view = View {
-					selected: None,
+					selected: &BTreeSet::new(),
+					nudge_enabled: false,
 					show_hidden: false,
 					snap: false,
 					scale: 1.0,
@@ -294,9 +316,8 @@ background = { kind = 'color', value = 'hsl(180deg, 100%, 50%)' }
 
 	#[test]
 	fn pointer_selects_the_icon_with_or_without_a_lint_marker() {
-		const SOURCE: &str = "schema_version=1\n[image]\nname='Demo'\noutput='demo.dmg'\n[[contents]]\nsource='absent.txt'\ndestination='/Demo.txt'\nposition=[70,50]\n[finder]\nwindow_size=[320,190]\n[finder.icon_view]\nicon_size=32\n";
 		let ctx = Context::default();
-		let project = Project::parse(SOURCE).unwrap();
+		let project = Project::parse(PLAN).unwrap();
 		let folder = "/".parse().unwrap();
 		let children = [ItemInput::from(&project.contents[0])];
 		let layout = ProjectFolder::from_project(&project, &folder, &children).unwrap();
@@ -311,7 +332,8 @@ background = { kind = 'color', value = 'hsl(180deg, 100%, 50%)' }
 				},
 				|ui| {
 					let view = View {
-						selected: None,
+						selected: &BTreeSet::new(),
+						nudge_enabled: false,
 						show_hidden: false,
 						snap: false,
 						scale: 1.0,
@@ -347,6 +369,101 @@ background = { kind = 'color', value = 'hsl(180deg, 100%, 50%)' }
 		};
 		let _ = frame(vec![Event::PointerMoved(icon), click(true)], true);
 		let _ = frame(vec![click(false)], true);
-		assert!(matches!(action, Some(Action::Select(path)) if path.as_str() == "/Demo.txt"));
+		assert!(
+			matches!(action, Some(Action::Select { path, toggle: false }) if path.as_str() == "/Demo.txt")
+		);
+	}
+
+	#[test]
+	fn focused_canvas_toggles_and_turns_arrow_events_into_one_nudge() {
+		let context = Context::default();
+		let project = Project::parse(PLAN).unwrap();
+		let folder = "/".parse().unwrap();
+		let children = [ItemInput::from(&project.contents[0])];
+		let layout = ProjectFolder::from_project(&project, &folder, &children).unwrap();
+		let mut actions = Vec::new();
+		let mut frame = |events: Vec<Event>, modifiers| {
+			let mut output = context.run_ui(
+				RawInput {
+					screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(720.0, 550.0))),
+					events: std::iter::once(Event::ModifiersChanged(modifiers))
+						.chain(events)
+						.collect(),
+					..Default::default()
+				},
+				|ui| {
+					let view = View {
+						selected: &BTreeSet::new(),
+						nudge_enabled: true,
+						show_hidden: false,
+						snap: true,
+						scale: 2.0,
+						drag: None,
+						lint_warnings: None,
+					};
+					if let (Some(action), _) = show(ui, &layout, view, |_| true) {
+						actions.push(action);
+					}
+				},
+			);
+			output.textures_delta.clear();
+			output
+		};
+		let first = frame(Vec::new(), Modifiers::NONE);
+		let icon = first
+			.shapes
+			.iter()
+			.find_map(|shape| match &shape.shape {
+				Shape::Rect(rect) if rect.fill == ITEM_SURFACE => Some(rect.rect.center()),
+				_ => None,
+			})
+			.unwrap();
+		let click = |pressed| Event::PointerButton {
+			pos: icon,
+			button: PointerButton::Primary,
+			pressed,
+			modifiers: Modifiers::SHIFT,
+		};
+		let key = |key, modifiers, pressed| Event::Key {
+			key,
+			physical_key: None,
+			pressed,
+			repeat: false,
+			modifiers,
+		};
+		let _ = frame(
+			vec![key(Key::ArrowLeft, Modifiers::NONE, true)],
+			Modifiers::NONE,
+		);
+		let _ = frame(
+			vec![Event::PointerMoved(icon), click(true)],
+			Modifiers::SHIFT,
+		);
+		let _ = frame(vec![click(false)], Modifiers::SHIFT);
+		let _ = frame(Vec::new(), Modifiers::NONE);
+		let _ = frame(
+			vec![
+				key(Key::ArrowRight, Modifiers::NONE, true),
+				key(Key::ArrowUp, Modifiers::SHIFT, true),
+			],
+			Modifiers::SHIFT,
+		);
+		let _ = frame(
+			vec![key(Key::ArrowRight, Modifiers::NONE, true)],
+			Modifiers::NONE,
+		);
+
+		let [
+			Action::Select { path, toggle: true },
+			Action::Arrange(Arrangement::Nudge([dx, dy])),
+		] = actions.as_slice()
+		else {
+			panic!(
+				"expected one toggle and one nudge, received {} actions",
+				actions.len()
+			);
+		};
+		assert_eq!(path.as_str(), "/Demo.txt");
+		assert_eq!([*dx, *dy], [1.0, -10.0]);
 	}
 }

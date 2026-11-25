@@ -1,3 +1,5 @@
+use std::collections::BTreeSet;
+
 use dmgez_config::{
 	Project, VirtualPath,
 	project_edit::{
@@ -10,6 +12,13 @@ use dmgez_preview::{
 use eframe::egui::{self, Button, DragValue, Panel, ScrollArea, TextEdit, Ui};
 
 use crate::layout_lint::LayoutLint;
+
+pub(crate) mod arrangement;
+pub(crate) mod input;
+#[cfg(test)]
+mod tests;
+
+use arrangement::Arrangement;
 
 const IMAGE_ROOT: &str = "/";
 const PATH_SEPARATOR: char = '/';
@@ -26,7 +35,7 @@ pub(crate) struct ProjectTab {
 	saved: RevisionId,
 	tree: Result<DeclaredTree, DeclaredTreeError>,
 	folder: VirtualPath,
-	selected: Option<VirtualPath>,
+	selected: BTreeSet<VirtualPath>,
 	zoom: u32,
 	show_hidden: bool,
 	snap: bool,
@@ -50,7 +59,7 @@ impl ProjectTab {
 			saved: document.revision(),
 			tree: DeclaredTree::from_project(project),
 			folder: IMAGE_ROOT.parse().expect("root is a valid virtual path"),
-			selected: None,
+			selected: BTreeSet::new(),
 			zoom: DEFAULT_ZOOM_PERCENT,
 			show_hidden: false,
 			snap: false,
@@ -91,11 +100,11 @@ impl ProjectTab {
 			Ok(true) => {
 				let project = self.document.project();
 				self.tree = DeclaredTree::from_project(project);
-				self.selected = self.selected.take().filter(|path| {
+				self.selected.retain(|path| {
 					self.tree.as_ref().is_ok_and(|tree| {
 						tree.children(&self.folder)
-							.iter()
-							.any(|entry| entry.path() == path)
+							.binary_search_by(|entry| entry.path().cmp(path))
+							.is_ok()
 					})
 				});
 				self.image_name = project.image.name.as_str().to_owned();
@@ -117,7 +126,7 @@ impl ProjectTab {
 
 	fn navigate(&mut self, folder: VirtualPath) {
 		self.folder = folder;
-		self.selected = None;
+		self.selected.clear();
 		self.position_draft = None;
 		self.drag = None;
 	}
@@ -134,11 +143,7 @@ impl ProjectTab {
 				action = self.entries(ui);
 			});
 		if let Some(action) = action {
-			match action {
-				Action::Select(path) => self.selected = Some(path),
-				Action::Navigate(path) => self.navigate(path),
-				Action::Position { .. } => {}
-			}
+			self.handle_action(action);
 		}
 		Panel::right("project_properties")
 			.default_size(DETAILS_WIDTH)
@@ -169,10 +174,18 @@ impl ProjectTab {
 			for row in rows {
 				let entry = &entries[row];
 				let name = name(entry.path());
-				let selected = self.selected.as_ref() == Some(entry.path());
+				let selected = self.selected.contains(entry.path());
 				ui.horizontal(|ui| {
-					if ui.selectable_label(selected, name).clicked() {
-						action = Some(Action::Select(entry.path().clone()));
+					let response = ui.selectable_label(selected, name).on_hover_text(
+						"Shift-click or Ctrl/Cmd-click to toggle. Arrow keys nudge selected icons.",
+					);
+					if response.clicked() {
+						action = Some(input::select(ui, entry.path()));
+					} else if action.is_none()
+						&& selected && self.drag.is_none()
+						&& let Some(keyboard) = input::nudge(ui, &response)
+					{
+						action = Some(keyboard);
 					}
 					if entry.is_directory() && ui.small_button("Open").clicked() {
 						action = Some(Action::Navigate(entry.path().clone()));
@@ -192,7 +205,11 @@ impl ProjectTab {
 			self.apply(ProjectEdit::SetImageName(name));
 		}
 		ui.separator();
-		let Some(path) = self.selected.clone() else {
+		if self.selected.len() > 1 {
+			ui.label(format!("{} entries selected", self.selected.len()));
+			return;
+		}
+		let Some(path) = self.selected.first().cloned() else {
 			return;
 		};
 		ui.strong(name(&path));
@@ -257,21 +274,36 @@ impl ProjectTab {
 	}
 
 	fn design(&mut self, ui: &mut Ui) {
-		ui.horizontal_wrapped(|ui| {
-			ui.heading("Layout");
-			ui.add(
-				egui::Slider::new(&mut self.zoom, MIN_ZOOM_PERCENT..=MAX_ZOOM_PERCENT).suffix("%"),
-			);
-			ui.checkbox(&mut self.show_hidden, "Show hidden");
-			ui.checkbox(&mut self.snap, "Snap to grid");
-			self.layout_lint.toggle(ui);
-		});
 		if let Some(error) = &self.error {
 			ui.label(error);
 		}
 		let project = self.document.project();
 		let (action, active_drag) = match folder_layout(project, &self.tree, &self.folder) {
 			Ok(layout) => {
+				let (movable, arranged) = ui
+					.horizontal_wrapped(|ui| {
+						ui.heading("Layout");
+						ui.add(
+							egui::Slider::new(&mut self.zoom, MIN_ZOOM_PERCENT..=MAX_ZOOM_PERCENT)
+								.suffix("%"),
+						);
+						ui.checkbox(&mut self.show_hidden, "Show hidden");
+						ui.checkbox(&mut self.snap, "Snap to grid");
+						self.layout_lint.toggle(ui);
+						let movable = arrangement::movable_selection(
+							&layout,
+							project,
+							&self.selected,
+							self.show_hidden,
+						)
+						.filter(|_| self.drag.is_none())
+						.map_or(0, |items| items.len());
+						(
+							movable,
+							arrangement::toolbar(ui, movable).map(Action::Arrange),
+						)
+					})
+					.inner;
 				let declared_folder = self
 					.tree
 					.as_ref()
@@ -284,14 +316,17 @@ impl ProjectTab {
 				);
 				let scale = f64::from(self.zoom) / f64::from(DEFAULT_ZOOM_PERCENT);
 				let view = crate::canvas::View {
-					selected: self.selected.as_ref(),
+					selected: &self.selected,
+					nudge_enabled: movable != 0,
 					show_hidden: self.show_hidden,
 					snap: self.snap,
 					scale,
 					drag: self.drag.as_ref(),
 					lint_warnings,
 				};
-				crate::canvas::show(ui, &layout, view, |path| editable(project, path))
+				let (action, drag) =
+					crate::canvas::show(ui, &layout, view, |path| editable(project, path));
+				(arranged.or(action), drag)
 			}
 			Err(error) => {
 				ui.label(error);
@@ -299,21 +334,35 @@ impl ProjectTab {
 			}
 		};
 		self.drag = active_drag;
+		if let Some(action) = action {
+			self.handle_action(action);
+		}
+	}
+
+	fn handle_action(&mut self, action: Action) {
 		match action {
-			Some(Action::Select(path)) => self.selected = Some(path),
-			Some(Action::Position { path, center }) => {
-				self.selected = Some(path.clone());
+			Action::Select { path, toggle } => {
+				if toggle {
+					if !self.selected.remove(&path) {
+						self.selected.insert(path);
+					}
+				} else {
+					self.selected = BTreeSet::from([path]);
+				}
+				self.position_draft = None;
+			}
+			Action::ClearSelection => self.selected.clear(),
+			Action::Position { path, center } => {
+				self.selected = BTreeSet::from([path.clone()]);
 				self.set_position(path, [center.x(), center.y()]);
 			}
-			Some(Action::Navigate(path)) => self.navigate(path),
-			None => {}
+			Action::Arrange(command) => self.arrange(command),
+			Action::Navigate(path) => self.navigate(path),
 		}
 	}
 
 	fn set_position(&mut self, target: VirtualPath, position: [f64; 2]) {
-		let mut changes = ContentChanges::default();
-		changes.position = FieldChange::Set(position);
-		self.apply(ProjectEdit::Modify { target, changes });
+		self.apply(position_edit(target, position));
 	}
 
 	fn layout(&self) -> Result<ProjectFolder<'_>, String> {
@@ -322,12 +371,23 @@ impl ProjectTab {
 }
 
 pub(crate) enum Action {
-	Select(VirtualPath),
+	Select {
+		path: VirtualPath,
+		toggle: bool,
+	},
+	ClearSelection,
 	Navigate(VirtualPath),
 	Position {
 		path: VirtualPath,
 		center: FolderPoint,
 	},
+	Arrange(Arrangement),
+}
+
+fn position_edit(target: VirtualPath, position: [f64; 2]) -> ProjectEdit {
+	let mut changes = ContentChanges::default();
+	changes.position = FieldChange::Set(position);
+	ProjectEdit::Modify { target, changes }
 }
 
 fn editable(project: &Project, path: &VirtualPath) -> bool {
@@ -360,61 +420,4 @@ fn parent(path: &str) -> &str {
 
 fn name(path: &VirtualPath) -> &str {
 	path.components().last().unwrap_or(IMAGE_ROOT)
-}
-
-#[cfg(test)]
-mod tests {
-	use super::*;
-
-	const SAMPLE: &str = "# original\nschema_version=1\n[image]\nname='Test'\noutput='test.dmg'\n[[contents]]\nsource='unopened.txt'\ndestination='/Docs/Test.txt'\nposition=[20,30]\n";
-
-	#[test]
-	fn navigates_implied_folder_and_undoes_a_saved_position() {
-		let mut tab = ProjectTab::new(ProjectDocument::open(SAMPLE).unwrap());
-		assert_eq!(
-			tab.layout().unwrap().items()[0].destination.as_str(),
-			"/Docs"
-		);
-		tab.navigate("/Docs".parse().unwrap());
-		let target = tab.layout().unwrap().items()[0].destination.clone();
-		tab.set_position(target, [98.0, 65.0]);
-		assert!(tab.is_dirty());
-		assert_eq!(tab.layout().unwrap().items()[0].center.x(), 98.0);
-		assert!(tab.document.source().starts_with("# original"));
-		tab.undo();
-		assert!(!tab.is_dirty());
-		tab.redo();
-		let revision = tab.document.revision();
-		tab.mark_saved(revision);
-		assert!(!tab.is_dirty());
-		assert_eq!(tab.layout().unwrap().items()[0].center.y(), 65.0);
-
-		let added = ProjectEdit::Add(dmgez_config::project_edit::ContentDraft::Copy {
-			source: "second.txt".to_owned(),
-			destination: Some("/Docs/second.txt".parse().unwrap()),
-		});
-		tab.apply_edits(&[added]);
-		assert_eq!(tab.layout().unwrap().items().len(), 2);
-		tab.undo();
-		assert_eq!(tab.layout().unwrap().items().len(), 1);
-		tab.redo();
-		assert_eq!(tab.layout().unwrap().items().len(), 2);
-	}
-
-	#[test]
-	fn reflects_a_renamed_destination_without_changing_the_content_count() {
-		let mut tab = ProjectTab::new(ProjectDocument::open(SAMPLE).unwrap());
-		let target = "/Docs/Test.txt".parse().unwrap();
-		let destination: VirtualPath = "/Notes/Test.txt".parse().unwrap();
-		let mut changes = ContentChanges::default();
-		changes.destination = Some(destination.clone());
-		tab.apply_edits(&[ProjectEdit::Modify { target, changes }]);
-
-		assert_eq!(
-			tab.layout().unwrap().items()[0].destination.as_str(),
-			"/Notes"
-		);
-		tab.navigate("/Notes".parse().unwrap());
-		assert_eq!(tab.layout().unwrap().items()[0].destination, &destination);
-	}
 }
