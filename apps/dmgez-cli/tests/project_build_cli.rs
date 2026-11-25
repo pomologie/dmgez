@@ -13,6 +13,13 @@ mod compression_cache;
 ))]
 #[path = "project_build/finder_flags.rs"]
 mod finder_flags;
+#[cfg(all(
+	feature = "project-build",
+	feature = "partition-write",
+	feature = "inspect"
+))]
+#[path = "project_build/partitions.rs"]
+mod partitions;
 #[cfg(feature = "project-release")]
 #[path = "project_build/release.rs"]
 mod release;

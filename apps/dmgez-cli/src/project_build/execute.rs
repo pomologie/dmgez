@@ -134,6 +134,9 @@ fn write_dry_run(
 	writeln!(output, "mode=dry-run")?;
 	writeln!(output, "format={:?}", profile.format())?;
 	writeln!(output, "filesystem={:?}", profile.filesystem())?;
+	if profile.partition() != dmgez_builder::partition::Layout::Partitionless {
+		writeln!(output, "partition={:?}", profile.partition())?;
+	}
 	writeln!(output, "finder={:?}", profile.finder())?;
 	writeln!(output, "output={:?}", prepared.output_path())?;
 	writeln!(output, "publication={:?}", profile.output())?;

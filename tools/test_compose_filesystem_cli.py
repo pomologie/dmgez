@@ -50,6 +50,20 @@ class ReleaseCompositionTests(unittest.TestCase):
                         [compose.INSTALL_FEATURE, "mount-system", "dmgez-mount/watch"],
                     )
 
+    def test_partition_writing_is_an_explicit_project_build_feature(self):
+        manifest = (compose.ROOT / compose.CLI / compose.MANIFEST).read_text(encoding="utf-8")
+        for build in (False, True):
+            with self.subTest(build=build):
+                text = compose.compose_cli_manifest(manifest, reader=False, build=build, apfs=False)
+                features = tomllib.loads(text)["features"]
+                self.assertNotIn(compose.PARTITION_WRITE_FEATURE, features["default"])
+                self.assertEqual(compose.PARTITION_WRITE_FEATURE in features, build)
+                if build:
+                    self.assertEqual(
+                        features[compose.PARTITION_WRITE_FEATURE],
+                        ["project-build", f"{compose.ADAPTER}/partition-write"],
+                    )
+
     def test_installer_test_uses_only_the_composed_filesystem_readers(self):
         manifest = (compose.ROOT / compose.CLI / compose.MANIFEST).read_text(encoding="utf-8")
         for reader in (False, True):

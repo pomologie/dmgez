@@ -19,6 +19,14 @@ The current macOS and Linux `build` command shares the HFS+ preparation, sealing
 
 With `finder-write` enabled, `hidden` and `hide_extension` apply to file, directory and symlink catalog records after host metadata capture. Set either option to `false` to clear its bit. Omit an option to preserve the captured value. Hard-link aliases share FinderInfo, so conflicting explicit values are rejected. The builder checks affected paths and sources for signing-sensitive content before applying display overrides. [Apple code-signing restrictions](https://developer.apple.com/library/archive/qa/qa1940/_index.html)
 
+### Write an APM or GPT disk layout
+
+Compose the HFS+ CLI with `--features partition-write`, then set `partition = "apm"` or `partition = "gpt"` under `[image]` in `dmg.toml`. Both profiles place one sealed HFS+ or HFSX volume within a single-table UDRO or UDZO image. The default remains `partition = "none"`.
+
+`image.size` describes the entire logical disk. The filesystem planner subtracts the map reservations from that size and applies `free_space` within the volume. The dry run reports the selected map and whole disk size. APM reserves 64 sectors before the volume. GPT reserves 40 sectors at each end and derives reproducible identifiers from the sealed volume bytes. Map generation uses the qualified APM and GPT libraries. [Partition build tests](../../apps/dmgez-cli/tests/project_build/partitions.rs)
+
+On arm64 macOS 14.7.2, Apple’s `hdiutil verify -nocache` and `hdiutil pmap` accepted freshly built APM and GPT images in both UDRO and UDZO. Apple’s UDRW export matched dmgez’s whole logical disk export. The volume bytes also matched a separate partitionless UDRW build from the same project. [Native oracle in the project test](../../apps/dmgez-cli/tests/project_build/partitions.rs)
+
 ### Import one AppleDouble sidecar
 
 On macOS and Linux, set `sidecar = "sources/._Manual.pdf"` under `[metadata]` to supplement the single included regular source `sources/Manual.pdf`. The association follows the host source name, so the file can have a different image name. When copying a directory, exclude the named sidecar from image content. The build rejects ambiguous associations, hard-linked targets, and custom icons on the same file.

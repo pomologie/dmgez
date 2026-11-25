@@ -10,11 +10,16 @@ use super::{
 
 const COMPRESSION_CACHE_CAPABILITY: &str = "compression-cache";
 const HFSPLUS_ANALYSIS_CAPABILITY: &str = "hfsplus-analysis";
+const PARTITION_WRITE_CAPABILITY: &str = "partition-write";
 
 pub(super) fn write() {
 	let report_field = |name: &str, value: &str| println!("{name} = {value}");
 	for (name, compiled) in [
 		(BUILD_PROJECT_COMMAND, cfg!(feature = "project-build")),
+		(
+			PARTITION_WRITE_CAPABILITY,
+			cfg!(feature = "partition-write"),
+		),
 		(BUILD_RELEASE_CAPABILITY, cfg!(feature = "project-release")),
 		(
 			COMPRESSION_CACHE_CAPABILITY,

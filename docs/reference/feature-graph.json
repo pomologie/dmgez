@@ -23,6 +23,10 @@
     "finder-read": [],
     "zlib": [],
     "partition-maps": [],
+    "partition-write": [
+      "hfsplus-build",
+      "udif-write"
+    ],
     "lzfse": [],
     "lzma": [],
     "inspect": [
