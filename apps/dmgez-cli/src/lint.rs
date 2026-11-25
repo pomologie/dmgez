@@ -1,23 +1,21 @@
 use std::{
-	fs::File,
-	io::{self, Read, Write},
+	io::{self, Write},
 	path::Path,
 	process::ExitCode,
 };
 
-use dmgez_config::{ConfigError, MAX_MANIFEST_BYTES, Project, VirtualPath};
+use dmgez_config::{Project, VirtualPath};
 use dmgez_lint::{
 	Diagnostic, Evidence, Limits, Report, RuleId, Severity, Suppression, lint_layout,
 };
 use dmgez_preview::DeclaredTree;
 use serde::Serialize;
 
-use crate::{CliResult, LAYOUT_PROFILE_NAME, SUPPRESSION_VALUE_NAME};
+use crate::{CliResult, LAYOUT_PROFILE_NAME, SUPPRESSION_VALUE_NAME, project_input};
 
 const ROOT_FOLDER: &str = "/";
 const SUPPRESSION_SEPARATOR: char = '=';
 const LINT_FINDINGS_EXIT_CODE: u8 = 1;
-const REGULAR_INPUT_REQUIRED: &str = "lint input must be a regular project file";
 
 #[derive(Serialize)]
 struct LayoutReport<'input> {
@@ -38,7 +36,7 @@ pub(crate) fn run(
 		.iter()
 		.map(|argument| parse_suppression(argument))
 		.collect::<CliResult<Vec<_>>>()?;
-	let project = read_project(path)?;
+	let project = Project::parse(&project_input::read(path)?)?;
 	let tree = DeclaredTree::from_project(&project)?;
 	if !tree.contains_folder(&folder) {
 		return Err(format!("no declared project folder at {:?}", folder.as_str()).into());
@@ -71,24 +69,6 @@ pub(crate) fn run(
 	} else {
 		ExitCode::SUCCESS
 	})
-}
-
-fn read_project(path: &Path) -> CliResult<Project> {
-	if !path.metadata()?.is_file() {
-		return Err(REGULAR_INPUT_REQUIRED.into());
-	}
-	let file = File::open(path)?;
-	let metadata = file.metadata()?;
-	if !metadata.is_file() {
-		return Err(REGULAR_INPUT_REQUIRED.into());
-	}
-	let limit = MAX_MANIFEST_BYTES as u64;
-	if metadata.len() > limit {
-		return Err(ConfigError::TooLarge.into());
-	}
-	let mut text = String::new();
-	file.take(limit + 1).read_to_string(&mut text)?;
-	Ok(Project::parse(&text)?)
 }
 
 fn parse_suppression(argument: &str) -> CliResult<Suppression<'_>> {

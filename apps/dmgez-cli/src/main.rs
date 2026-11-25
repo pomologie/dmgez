@@ -6,12 +6,16 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 mod convert;
 #[cfg(feature = "diff")]
 mod diff;
+#[cfg(feature = "appdmg-import")]
+mod import_appdmg;
 #[cfg(feature = "inspect")]
 mod inspect;
 #[cfg(feature = "lint")]
 mod lint;
 #[cfg(feature = "convert")]
 mod optimize;
+#[cfg(any(feature = "appdmg-import", feature = "lint"))]
+mod project_input;
 #[cfg(feature = "build")]
 mod wrap;
 
@@ -20,6 +24,9 @@ const INSPECT_COMMAND: &str = "inspect";
 const ANALYZE_COMMAND: &str = "analyze";
 const CONVERT_COMMAND: &str = "convert";
 const DIFF_COMMAND: &str = "diff";
+const IMPORT_APPDMG_COMMAND: &str = "import-appdmg";
+#[cfg(not(feature = "appdmg-import"))]
+const APPDMG_IMPORT_FEATURE: &str = "appdmg-import";
 const LINT_COMMAND: &str = "lint";
 const SUPPRESSION_VALUE_NAME: &str = "RULE=REASON";
 const LAYOUT_PROFILE_NAME: &str = "layout";
@@ -108,6 +115,17 @@ enum Command {
 		suppress: Vec<String>,
 		#[arg(long)]
 		json: bool,
+	},
+	/// Translate appdmg JSON settings into a new dmgez project.
+	#[command(name = IMPORT_APPDMG_COMMAND)]
+	ImportAppdmg {
+		settings: PathBuf,
+		/// Destination for the generated TOML manifest.
+		#[arg(short, long)]
+		output: PathBuf,
+		/// Image output to record in the manifest, relative to that manifest if not absolute.
+		#[arg(long)]
+		image_output: String,
 	},
 	/// Show UDIF metadata and optionally probe the decoded partition map.
 	#[command(name = INSPECT_COMMAND)]
@@ -287,6 +305,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 				(CONVERT_COMMAND, cfg!(feature = "convert")),
 				(OPTIMIZE_COMMAND, cfg!(feature = "convert")),
 				(DIFF_COMMAND, cfg!(feature = "diff")),
+				(IMPORT_APPDMG_COMMAND, cfg!(feature = "appdmg-import")),
 				(LINT_COMMAND, cfg!(feature = "lint")),
 				(VERIFY_CONTAINER_CAPABILITY, cfg!(feature = "inspect")),
 				(UNWRAP_RAW_COMMAND, cfg!(feature = "inspect")),
@@ -342,6 +361,16 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		} => return lint::run(&project, folder.as_deref(), &suppress, json),
 		#[cfg(not(feature = "lint"))]
 		Command::Lint { .. } => Err(format!("feature not compiled: {LINT_COMMAND}").into()),
+		#[cfg(feature = "appdmg-import")]
+		Command::ImportAppdmg {
+			settings,
+			output,
+			image_output,
+		} => import_appdmg::run(&settings, &output, &image_output),
+		#[cfg(not(feature = "appdmg-import"))]
+		Command::ImportAppdmg { .. } => {
+			Err(format!("feature not compiled: {APPDMG_IMPORT_FEATURE}").into())
+		}
 		#[cfg(feature = "inspect")]
 		Command::Inspect {
 			image,

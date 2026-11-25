@@ -35,6 +35,7 @@ jobs:
       - run: cargo check --locked -p dmgez-cli --no-default-features --features convert
       - run: cargo check --locked -p dmgez-cli --no-default-features --features diff
       - run: cargo check --locked -p dmgez-cli --no-default-features --features lint
+      - run: cargo check --locked -p dmgez-cli --no-default-features --features appdmg-import
       - run: python3 tools/check_architecture.py
 
   supply-chain-and-coverage:

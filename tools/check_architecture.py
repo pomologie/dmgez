@@ -15,6 +15,7 @@ PROFILES = {
     "parallel_conversion": (["--no-default-features", "--features", "convert,parallel"], {"dmgez-core", "dmgez-operations", "dmgez-udif", "flate2", "rayon"}),
     "comparison": (["--no-default-features", "--features", "diff"], {"dmgez-core", "dmgez-diff", "dmgez-udif", "dmgez-vfs", "flate2", "serde_json"}),
     "layout_lint": (["--no-default-features", "--features", "lint"], {"dmgez-config", "dmgez-lint", "dmgez-preview", "serde_json"}),
+    "appdmg_import": (["--no-default-features", "--features", "appdmg-import"], {"dmgez-config", "dmgez-core", "serde_json"}),
 }
 OUTSIDE_DEFAULT = {
     "apple-dmg", "apfs", "bzip2", "eframe", "egui", "fstool", "fuser", "lzfse_rust", "lzma-rust2", "notify",

@@ -46,6 +46,7 @@
       "inspect"
     ],
     "lint": [],
+    "appdmg-import": [],
     "convert": [
       "udif-read",
       "udif-write",
