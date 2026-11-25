@@ -70,6 +70,7 @@ impl<S: ReadAt> LogicalDisk for Raw<S> {
 pub struct Disk<S> {
 	source: S,
 	layout: Layout,
+	probe_bytes_remaining: u64,
 }
 
 impl<S: LogicalDisk> Disk<S> {
@@ -78,8 +79,12 @@ impl<S: LogicalDisk> Disk<S> {
 	/// # Errors
 	/// Rejects unsupported, conflicting, or malformed map metadata and failed reads.
 	pub fn discover(mut source: S, limits: Limits) -> Result<Self, Error> {
-		let layout = discovery::discover(&mut source, limits)?;
-		Ok(Self { source, layout })
+		let (layout, probe_bytes_remaining) = discovery::discover(&mut source, limits)?;
+		Ok(Self {
+			source,
+			layout,
+			probe_bytes_remaining,
+		})
 	}
 
 	/// Recognize a partitionless filesystem using a caller-owned geometry probe.
@@ -169,6 +174,24 @@ impl<S: LogicalDisk> Disk<S> {
 	pub fn data_window(&mut self, id: VolumeId) -> Result<Window<'_, S>, Error> {
 		let range = self.volume_data_range(id)?.clone();
 		Ok(Window::new(&mut self.source, range))
+	}
+
+	/// Recognize an HFS+ or HFSX signature and geometry inside an admitted data extent.
+	/// The returned byte length is relative to the start of the extent. Header reads
+	/// share the probe budget established by [`Self::discover`].
+	///
+	/// # Errors
+	/// Rejects a missing extent, exhausted probe budget, failed reads, and invalid geometry.
+	pub fn probe_hfs_geometry(&mut self, id: VolumeId) -> Result<Option<(Filesystem, u64)>, Error> {
+		let range = self.volume_data_range(id)?.clone();
+		let mut window = Window::new(&mut self.source, range);
+		discovery::hfs_geometry(window.len(), |offset, output| {
+			self.probe_bytes_remaining = self
+				.probe_bytes_remaining
+				.checked_sub(output.len() as u64)
+				.ok_or(discovery::PROBE_LIMIT)?;
+			window.read_exact_at(offset, output)
+		})
 	}
 
 	fn volume_data_range(&self, id: VolumeId) -> Result<&Range<u64>, Error> {

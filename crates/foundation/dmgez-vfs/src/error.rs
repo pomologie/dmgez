@@ -43,6 +43,6 @@ pub enum Error {
 	Cancelled,
 	#[error("raw export sink failed")]
 	Sink(#[source] std::io::Error),
-	#[error("corrupt partitionless HFS volume geometry")]
+	#[error("corrupt HFS volume geometry")]
 	VolumeGeometry,
 }

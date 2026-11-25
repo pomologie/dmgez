@@ -9,6 +9,7 @@ use crate::{
 pub(super) const SECTOR: usize = SECTOR_BYTES as usize;
 const HFS_HEADER_OFFSET: u64 = 1024;
 const HFS_HEADER_BYTES: usize = 512;
+const HFS_IDENTITY_BYTES: usize = 4;
 const HFS_PLUS_SIGNATURE: u16 = 0x482B;
 const HFS_X_SIGNATURE: u16 = 0x4858;
 const HFS_PLUS_VERSION: u16 = 4;
@@ -16,7 +17,10 @@ const HFS_X_VERSION: u16 = 5;
 const HFS_BLOCK_BYTES: usize = 40;
 const HFS_BLOCK_COUNT: usize = 44;
 
-pub(super) fn discover(source: &mut impl LogicalDisk, limits: Limits) -> Result<Layout, Error> {
+pub(super) fn discover(
+	source: &mut impl LogicalDisk,
+	limits: Limits,
+) -> Result<(Layout, u64), Error> {
 	let mut probe = Probe::new(source, limits);
 	let zero = probe.optional::<SECTOR>(0)?;
 	let one = probe.optional::<SECTOR>(SECTOR_BYTES)?;
@@ -43,14 +47,17 @@ pub(super) fn discover(source: &mut impl LogicalDisk, limits: Limits) -> Result<
 		(false, None, Some(mbr)) => Some(mbr::read(&mut probe, mbr)?),
 		(false, None, None) => None,
 	};
-	match (map, raw) {
+	let layout = match (map, raw) {
 		(Some(_), Some(_)) => Err(conflict(
 			"partition map and whole-disk filesystem both present",
 		)),
 		(Some(layout), None) | (None, Some(layout)) => Ok(layout),
 		(None, None) => Ok(Layout::Unknown),
-	}
+	}?;
+	Ok((layout, probe.remaining))
 }
+
+pub(super) const PROBE_LIMIT: Error = Error::Limit("partition probe bytes");
 
 pub(super) struct Probe<'source, S> {
 	source: &'source mut S,
@@ -104,7 +111,7 @@ impl<'source, S: LogicalDisk> Probe<'source, S> {
 
 	fn admit(&self, offset: u64, len: u64) -> Result<(), Error> {
 		if len > self.remaining {
-			return Err(Error::Limit("partition probe bytes"));
+			return Err(PROBE_LIMIT);
 		}
 		if offset.checked_add(len).is_none_or(|end| end > self.len()) {
 			return Err(Error::OutOfRange {
@@ -125,32 +132,47 @@ impl<'source, S: LogicalDisk> Probe<'source, S> {
 }
 
 fn raw_volume(probe: &mut Probe<'_, impl LogicalDisk>) -> Result<Option<Layout>, Error> {
-	let Some(signature) = probe.optional::<4>(HFS_HEADER_OFFSET)? else {
+	Ok(
+		hfs_geometry(probe.len(), |offset, output| probe.read(offset, output))?.map(
+			|(filesystem, extent)| Layout::Partitionless {
+				filesystem,
+				range: 0..extent,
+			},
+		),
+	)
+}
+
+pub(super) fn hfs_geometry(
+	available: u64,
+	mut read: impl FnMut(u64, &mut [u8]) -> Result<(), Error>,
+) -> Result<Option<(Filesystem, u64)>, Error> {
+	if available < HFS_HEADER_OFFSET + HFS_IDENTITY_BYTES as u64 {
 		return Ok(None);
-	};
+	}
+	let mut signature = [0; HFS_IDENTITY_BYTES];
+	read(HFS_HEADER_OFFSET, &mut signature)?;
 	let [s0, s1, v0, v1] = signature;
 	let filesystem = match (u16::from_be_bytes([s0, s1]), u16::from_be_bytes([v0, v1])) {
 		(HFS_PLUS_SIGNATURE, HFS_PLUS_VERSION) => Filesystem::HfsPlus,
 		(HFS_X_SIGNATURE, HFS_X_VERSION) => Filesystem::HfsX,
 		_ => return Ok(None),
 	};
-	let header = probe
-		.optional::<HFS_HEADER_BYTES>(HFS_HEADER_OFFSET)?
-		.ok_or(Error::VolumeGeometry)?;
+	if available < HFS_HEADER_OFFSET + HFS_HEADER_BYTES as u64 {
+		return Err(Error::VolumeGeometry);
+	}
+	let mut header = [0; HFS_HEADER_BYTES];
+	read(HFS_HEADER_OFFSET, &mut header)?;
 	let block_bytes = be32(&header, HFS_BLOCK_BYTES);
 	let block_count = be32(&header, HFS_BLOCK_COUNT);
 	let extent = u64::from(block_bytes) * u64::from(block_count);
 	if block_bytes < SECTOR as u32
 		|| !block_bytes.is_power_of_two()
 		|| extent < HFS_HEADER_OFFSET + HFS_HEADER_BYTES as u64
-		|| extent > probe.len()
+		|| extent > available
 	{
 		return Err(Error::VolumeGeometry);
 	}
-	Ok(Some(Layout::Partitionless {
-		filesystem,
-		range: 0..extent,
-	}))
+	Ok(Some((filesystem, extent)))
 }
 
 pub(super) fn partition_range(
