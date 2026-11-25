@@ -1155,6 +1155,18 @@
       "evidence": null
     },
     {
+      "id": "D-REL-01-T04",
+      "requirement_ids": [
+        "D-REL-01"
+      ],
+      "milestone": "0.6.0",
+      "scenario": "Build the default CLI on Linux, Windows and macOS, check the backend selected by auto, and exercise ordinary build with no signing action.",
+      "oracle": "Cargo dependency trees, host CLI smoke tests and signing and timestamp spies",
+      "expected": "Linux and Windows defaults include and select Rust signing. macOS defaults and explicit no-default builds omit it. Ordinary build uses no signing credentials or timestamp service.",
+      "status": "planned",
+      "evidence": null
+    },
+    {
       "id": "D-REL-02-T02",
       "requirement_ids": [
         "D-REL-02"

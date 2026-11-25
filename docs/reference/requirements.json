@@ -445,7 +445,7 @@
       "id": "D-REL-01",
       "milestone": "0.6.0",
       "owner": "docs/features/RELEASE.md",
-      "requirement": "Optional native/Rust signing with explicit scope and source preservation.",
+      "requirement": "Rust signing in default Linux and Windows builds, opt-in signing on macOS, and explicit actions with source preservation on all hosts.",
       "source_ids": [
         "S09",
         "S10"
@@ -453,7 +453,8 @@
       "acceptance_tests": [
         "D-REL-01-T01",
         "D-REL-01-T02",
-        "D-REL-01-T03"
+        "D-REL-01-T03",
+        "D-REL-01-T04"
       ],
       "status": "planned",
       "mandatory": true
@@ -647,7 +648,7 @@
       "id": "D-CI-01",
       "milestone": "0.2.0",
       "owner": "ARCHITECTURE.md",
-      "requirement": "Default CLI feature graph excludes unrelated engines, network, GUI, signing, mount and legacy.",
+      "requirement": "Default CLI feature graph excludes unrelated engines, GUI, mount, legacy and network dependencies outside the signing profile specified by D-REL-01.",
       "source_ids": [
         "S17",
         "S22"

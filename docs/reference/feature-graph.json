@@ -5,6 +5,10 @@
     "build",
     "parallel"
   ],
+  "target_default_additions": {
+    "linux": ["signing-rust"],
+    "windows": ["signing-rust"]
+  },
   "features": {
     "build": [
       "udif-write",
@@ -158,6 +162,7 @@
   },
   "notes": [
     "Only implement/publish features when real functionality exists.",
+    "Target default additions describe the qualified release profile. Explicit no-default builds omit them, and no default command contacts a signing or notarization service.",
     "All edges are additive; mount-watch requires an available backend at runtime.",
     "mount-write requires qualified transaction support and writable container, not merely mount.",
     "GUI and MCP separate packages, never CLI dependency.",
