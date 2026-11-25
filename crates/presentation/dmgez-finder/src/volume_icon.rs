@@ -6,6 +6,8 @@ use icns::{IconElement, IconType, OSType};
 use plist::stream::{BinaryReader, Event};
 use thiserror::Error;
 
+use crate::finder_info::{self, FINDER_INFO_BYTES, HAS_CUSTOM_ICON};
+
 #[cfg(feature = "badge-icons")]
 mod badge;
 mod encoding;
@@ -36,9 +38,6 @@ const PNG_ANIMATION_CHUNKS: [Kind; 3] = [*b"acTL", *b"fcTL", *b"fdAT"];
 const PNG_CHUNK_CRC_BYTES: usize = 4;
 const PNG_IHDR_BYTES: usize = 13;
 const MAX_PNG_CHUNKS: usize = 4096;
-const FINDER_INFO_BYTES: usize = 32;
-const ROOT_FINDER_FLAGS: std::ops::Range<usize> = 8..10;
-const HAS_CUSTOM_ICON: u16 = 0x0400;
 
 /// A structurally admitted ICNS asset retaining the original encoded bytes.
 #[derive(Clone, Copy)]
@@ -73,9 +72,7 @@ impl<'source> VolumeIcon<'source> {
 ///
 /// Apply this after validating a prebuilt icon or generating one with [encode_pngs].
 pub fn mark_root_finder_info(finder_info: &mut [u8; FINDER_INFO_BYTES]) {
-	let flags = &mut finder_info[ROOT_FINDER_FLAGS];
-	let current = u16::from_be_bytes([flags[0], flags[1]]);
-	flags.copy_from_slice(&(current | HAS_CUSTOM_ICON).to_be_bytes());
+	finder_info::add_flags(finder_info, HAS_CUSTOM_ICON);
 }
 
 /// A volume icon could not enter the supported profile.
