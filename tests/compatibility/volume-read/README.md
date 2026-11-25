@@ -23,11 +23,19 @@ The fixture bytes cover selected recorded ranges. The tests reconstruct the disk
 
 ## APFS
 
-The adapter opens the selected APFS partition, then a volume and checkpoint through the APFS reader. It uses exact stored UTF-8 names. It keeps each hard-link entry distinct from its shared inode and lends data and resource streams independently. Symbolic links expose their exact target bytes.
+The tests exercise the production `dmgez-apfs-read` adapter. It opens a bounded disk extent, selects a checkpoint and volume through the APFS reader, and matches exact stored UTF-8 names. It keeps each hard-link entry distinct from its shared inode and lends data and resource streams independently. Symbolic links expose their exact target bytes.
 
 The tests passed against dmgez `1edf143` and APFS `a210ad5`. They stream a synthetic MBR and [pinned blocks](apfs/fixtures.json) from native APFS fixtures through UDZO. They exercise directory page recovery, separate hard-link and storage identities, both forks, absent and empty streams, foreign handle refusal, and an inline symlink. The fixture source refuses reads outside the captured APFS blocks.
 
 The adapter also passed with unpacked `apfs-core`, `apfs-format`, `apfs-container`, and `apfs-reader` 0.1.0 archives from APFS `dd2e61a`. The runner verifies the pinned native blocks from the selected reader package before compiling.
+
+Run the two-volume oracle on macOS with a composed APFS CLI.
+
+```sh
+python3 -B tests/compatibility/volume-read/check_apfs_cli_multivolume.py target/apfs-cli/debug/dmgez
+```
+
+On macOS 14.7.2 (23H311, arm64), the script generated a disposable 1 GiB APFS container with two volumes without mounting either one. Apple checked the detached raw image and both volumes with `fsck_apfs -n`, which emitted a disk-name warning for the regular image path. The CLI matched Apple's volume UUIDs in both the raw image and Apple's UDZO conversion. Each UUID and object ID resolved to its selected root at XID 3, and browsing without a selector refused the ambiguous container. [Native output and image digests](apfs/native-cli-multivolume.json)
 
 ## Extraction name preflight
 

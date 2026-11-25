@@ -75,6 +75,21 @@ target/hfsplus-cli/debug/dmgez extract volume.dmg /ReadMe.txt --fork data --outp
 target/hfsplus-cli/debug/dmgez extract volume.dmg /Docs --data-only --output ./Docs --dry-run --json
 ```
 
+## Browse APFS images
+
+The optional APFS reader opens raw and UDIF disk images. Compose it on macOS or Linux from the sibling APFS checkout or unpacked 0.1.0 packages.
+
+```sh
+python3 tools/compose_filesystem_cli.py --apfs ../apfs --no-default-features
+target/apfs-cli/debug/dmgez volumes image.dmg --json
+target/apfs-cli/debug/dmgez ls image.dmg --filesystem apfs --volume 1026 --limit 32
+target/apfs-cli/debug/dmgez cat image.raw /ReadMe.txt --raw --filesystem apfs
+```
+
+`--apfs-packages PATH` selects the archives. Use `--partition` to select a disk partition and `--volume` to select an APFS volume by UUID or decimal object ID. Refer to `volumes` for those IDs. Add `--xid` to open an exact retained checkpoint. [APFS reader scope](docs/features/INSPECTION.md#browse-apfs)
+
+## Desktop app
+
 The [native desktop app](apps/dmgez/README.md) opens TOML projects for layout editing and disk images for container and partition inspection. Launch it with `cargo run --locked -p dmgez-gui`.
 
 See the [architecture](ARCHITECTURE.md), [roadmap](ROADMAP.md), and [UDIF evidence](docs/reference/UDIF_EVIDENCE.md) for the implemented profile and its verification limits.
