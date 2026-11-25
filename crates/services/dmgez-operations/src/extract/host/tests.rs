@@ -40,7 +40,7 @@ fn streams_exact_session_bound_data_resource_and_empty_bytes() {
 		)
 		.unwrap()
 		.unwrap();
-		assert_eq!(amount, expected.len().try_into().unwrap());
+		assert_eq!(amount, u64::try_from(expected.len()).unwrap());
 		assert_eq!(
 			fs::read(scratch.destination.join(NESTED).join(name)).unwrap(),
 			expected
