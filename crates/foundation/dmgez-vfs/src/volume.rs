@@ -15,10 +15,12 @@ use crate::VolumeId;
 mod backend;
 mod finder_info;
 mod fork;
+mod native_names;
 
 pub use backend::{DirectoryReader, VolumeBackend};
 pub use finder_info::{FINDER_INFO_BYTES, FinderInfo};
 pub use fork::{Fork, ForkReader};
+pub use native_names::{NativeNameKey, NativeNameProfile};
 
 /// A native name retained without Unicode replacement or path interpretation.
 #[derive(Debug, Clone, PartialEq, Eq)]

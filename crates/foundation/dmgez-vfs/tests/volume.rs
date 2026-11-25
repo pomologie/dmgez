@@ -478,6 +478,20 @@ fn finder_info_retains_admitted_states_and_rejects_foreign_handles() {
 }
 
 #[test]
+fn native_name_resolution_is_unavailable_by_default() {
+	let reads = Cell::new(0);
+	let view = VolumeView::new(
+		VolumeId::WholeDisk,
+		Backend {
+			reads: &reads,
+			position: 0,
+		},
+	);
+	assert_eq!(view.native_name_profile(), None);
+	assert_eq!(view.native_name_key(LookupName::Utf8(ALIAS)).unwrap(), None);
+}
+
+#[test]
 fn public_backend_error_keeps_typed_cause_without_using_it_as_display() {
 	let error = ViewError::Backend(EngineError);
 	assert!(!error.to_string().contains(PRIVATE_MESSAGE));

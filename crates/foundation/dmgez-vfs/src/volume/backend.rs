@@ -5,7 +5,7 @@ use std::{
 
 use super::{
 	DirectoryEntry, DirectoryPage, FinderInfo, ForkKind, ForkReader, LookupName, Metadata,
-	Quarantine, QuarantineScope, RawName,
+	NativeNameKey, NativeNameProfile, Quarantine, QuarantineScope, RawName,
 };
 
 /// Engine operator that advances one bounded directory scan.
@@ -53,6 +53,23 @@ pub trait VolumeBackend {
 		parent: Self::Id,
 		name: LookupName<'_>,
 	) -> Result<Option<DirectoryEntry<Self::Id>>, Self::Error>;
+
+	/// Returns the engine's supported native equality profile for this volume.
+	/// The default reports that native comparison is unavailable.
+	fn native_name_profile(&self) -> Option<NativeNameProfile> {
+		None
+	}
+
+	/// Computes a key from one component in its stored spelling.
+	///
+	/// Keys from volumes with the same supported profile must compare equal
+	/// exactly when their admitted stored names are equivalent under that
+	/// profile. A UTF-8 input may be the losslessly decoded stored name.
+	/// Return `None` when native comparison is unavailable and return an
+	/// error if the selected profile cannot key the supplied name.
+	fn native_name_key(&self, _name: LookupName<'_>) -> Result<Option<NativeNameKey>, Self::Error> {
+		Ok(None)
+	}
 
 	/// Gets effective metadata. Hard-link storage keys are local to this view.
 	/// Handles sharing a key have the same effective fork presence and bytes.

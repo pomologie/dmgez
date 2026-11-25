@@ -16,6 +16,8 @@ Effective stat reports object kind, mode, ownership, and any admitted hard-link 
 
 `VolumeView::finder_info` uses the same visible handle and obtains the effective 32-byte FinderInfo from filesystem metadata. An absent value, a present value, and an unavailable check are distinct states. The operation uses the backend's metadata read budget and addresses symbolic links directly.
 
+`VolumeView::native_name_profile` reports whether the backend can compare stored names under its native equality rules. For a supported profile, `native_name_key` derives an opaque comparison key from a stored component. Keys from the same profile can be compared across volumes. The engine owns the equality rules and the stored name remains available separately.
+
 ## Supported map profiles
 
 - APM uses 512-byte sectors, a driver descriptor, and up to 128 map entries. Reported entries include map metadata and free space. The map validates record counts, descriptor and partition bounds, declared data extents, and overlaps.
