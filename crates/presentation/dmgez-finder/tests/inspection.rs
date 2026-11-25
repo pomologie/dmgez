@@ -96,6 +96,7 @@ fn check_layout(report: &Report) {
 		icons.background_color,
 		Some([34.0 / 255.0, 68.0 / 255.0, 102.0 / 255.0])
 	);
+	assert_eq!(icons.background_alias, None);
 	assert_eq!(icons.scroll_position, Some([2.0, 3.0]));
 	assert_eq!(icons.show_icon_preview, Some(true));
 	assert_eq!(icons.show_item_info, Some(false));

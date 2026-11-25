@@ -3,7 +3,12 @@ use std::io::Cursor as IoCursor;
 use ds_parser::{BrowserWindowSettings, IconViewProperties};
 use plist::Value;
 
-use super::{IconView, ReadBudget, ReadError, ReadLimits, Window, WindowBounds, leaf::Cursor};
+use crate::layout::{BACKGROUND_IMAGE_ALIAS, IMAGE_BACKGROUND_TYPE};
+
+use super::{
+	BackgroundAlias, IconView, ReadBudget, ReadError, ReadLimits, Window, WindowBounds, background,
+	leaf::Cursor,
+};
 
 const PLIST_MAGIC: &[u8; 8] = b"bplist00";
 const TRAILER_BYTES: usize = 32;
@@ -76,6 +81,14 @@ pub(super) fn icons(blob: &[u8], limits: ReadLimits) -> Result<IconView, ReadErr
 	let dictionary = read_dictionary(blob, limits)?;
 	let mut settings =
 		IconViewProperties::from_property_list(dictionary).map_err(|_| ReadError::PlistProfile)?;
+	let background_alias = match settings.unknown.remove(BACKGROUND_IMAGE_ALIAS) {
+		Some(Value::Data(bytes)) => Some(background::inspect(&bytes)),
+		Some(_) => Some(BackgroundAlias::Malformed),
+		None if settings.background_type == Some(IMAGE_BACKGROUND_TYPE) => {
+			Some(BackgroundAlias::Missing)
+		}
+		None => None,
+	};
 	let scroll_position = match (
 		settings.unknown.get(SCROLL_POSITION_X).and_then(number),
 		settings.unknown.get(SCROLL_POSITION_Y).and_then(number),
@@ -99,6 +112,7 @@ pub(super) fn icons(blob: &[u8], limits: ReadLimits) -> Result<IconView, ReadErr
 		arrangement: settings.arrange_by,
 		background_type: settings.background_type,
 		background_color: finite(settings.background_color.map(|(r, g, b)| [r, g, b]))?,
+		background_alias,
 		grid_offset: finite(settings.grid_offset.map(|(x, y)| [x, y]))?,
 		grid_spacing: finite_number(settings.grid_spacing)?,
 		scroll_position,

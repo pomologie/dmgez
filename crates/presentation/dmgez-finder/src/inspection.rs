@@ -1,5 +1,6 @@
 //! Bounded, read-only inspection of single-leaf Finder stores.
 
+mod background;
 mod leaf;
 mod properties;
 
@@ -8,6 +9,9 @@ use std::collections::HashSet;
 use ds_parser::{FieldKey, FinderViewStyle, FourCC, ValueTag};
 use thiserror::Error;
 
+pub use background::{
+	BackgroundAlias, BackgroundAliasName, BackgroundAliasTarget, HfsCreationTime,
+};
 use leaf::Cursor;
 
 const MAX_STORE_BYTES: usize = 64 << 10;
@@ -166,9 +170,11 @@ pub struct Window {
 #[derive(Debug, PartialEq)]
 pub struct IconView {
 	pub arrangement: Option<String>,
-	/// The stored background type. This report does not resolve image aliases.
+	/// The stored background type.
 	pub background_type: Option<i64>,
 	pub background_color: Option<[f64; 3]>,
+	/// Stored alias information when the image background is selected or the alias key exists.
+	pub background_alias: Option<BackgroundAlias>,
 	pub grid_offset: Option<[f64; 2]>,
 	pub grid_spacing: Option<f64>,
 	pub scroll_position: Option<[f64; 2]>,
