@@ -18,6 +18,8 @@ pub(crate) enum Action {
 	ShowContainer,
 	#[cfg(feature = "hfsplus-read")]
 	ShowFiles,
+	#[cfg(feature = "actual-preview")]
+	ShowList,
 	#[cfg(feature = "hfsplus-read")]
 	Browse(crate::image::browse::Request),
 }

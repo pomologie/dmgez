@@ -4,7 +4,8 @@ use super::*;
 
 #[test]
 fn asynchronous_failure_and_cancel_leave_previous_document_available() {
-	let mut app = App::new(&Context::default(), None);
+	let ctx = Context::default();
+	let mut app = App::new(&ctx, None);
 	let scratch = tempfile::tempdir().unwrap();
 	let file = scratch.path().join("retained.toml");
 	fs::write(
@@ -12,9 +13,9 @@ fn asynchronous_failure_and_cancel_leave_previous_document_available() {
 		"schema_version=1\n[image]\nname='Original'\noutput='build.dmg'",
 	)
 	.unwrap();
-	app.finish(open_outcome(file.clone()));
-	app.finish(Completion::Cancelled);
-	app.finish(open_outcome(file.with_extension("exe")));
+	app.finish(&ctx, open_outcome(file.clone()));
+	app.finish(&ctx, Completion::Cancelled);
+	app.finish(&ctx, open_outcome(file.with_extension("exe")));
 	assert_eq!(
 		app.opened.as_ref().unwrap().path,
 		file.canonicalize().unwrap()
@@ -25,11 +26,12 @@ fn asynchronous_failure_and_cancel_leave_previous_document_available() {
 #[test]
 fn cancelled_check_discards_a_completed_result_awaiting_delivery() {
 	const UDZO: &[u8] = include_bytes!("../../../../tests/fixtures/images/tiny-UDZO.dmg");
-	let mut app = App::new(&Context::default(), None);
+	let ctx = Context::default();
+	let mut app = App::new(&ctx, None);
 	let scratch = tempfile::tempdir().unwrap();
 	let file = scratch.path().join("retained.dmg");
 	fs::write(&file, UDZO).unwrap();
-	app.finish(open_outcome(file));
+	app.finish(&ctx, open_outcome(file));
 	let Some(Opened {
 		document: Document::Image(image),
 		..
@@ -50,7 +52,7 @@ fn cancelled_check_discards_a_completed_result_awaiting_delivery() {
 		receiver,
 		cancellation: Some(cancellation),
 	});
-	app.poll();
+	app.poll(&ctx);
 	assert!(app.worker.is_none());
 	let Some(Opened {
 		document: Document::Image(image),

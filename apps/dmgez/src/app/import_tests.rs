@@ -22,13 +22,13 @@ fn project(app: &mut App) -> &mut ProjectTab {
 	project
 }
 
-fn receive(app: &mut App) {
+fn receive(app: &mut App, ctx: &Context) {
 	let receiver = app.worker.take().expect("expected one active worker");
 	let reply = receiver
 		.receiver
 		.recv_timeout(WORKER_TIMEOUT)
 		.expect("expected worker response");
-	app.finish(reply);
+	app.finish(ctx, reply);
 }
 
 #[test]
@@ -46,7 +46,7 @@ fn one_worker_selection_adds_multiple_files_with_grouped_history_and_stable_path
 
 	let ctx = Context::default();
 	let mut app = App::new(&ctx, None);
-	app.finish(open_outcome(path.clone()));
+	app.finish(&ctx, open_outcome(path.clone()));
 	let expected_dir = project_dir.clone();
 	let selected = vec![internal.clone(), external.clone()];
 	app.add_files(&ctx, move |directory| {
@@ -55,7 +55,7 @@ fn one_worker_selection_adds_multiple_files_with_grouped_history_and_stable_path
 	});
 	app.add_files(&ctx, |_| panic!("a busy worker must reject another picker"));
 	assert!(project(&mut app).document.project().contents.is_empty());
-	receive(&mut app);
+	receive(&mut app, &ctx);
 
 	let project = project(&mut app);
 	assert!(project.is_dirty());
@@ -95,14 +95,14 @@ fn cancelled_or_conflicting_selection_keeps_the_original_revision() {
 
 	let ctx = Context::default();
 	let mut app = App::new(&ctx, None);
-	app.finish(open_outcome(path));
+	app.finish(&ctx, open_outcome(path));
 	let revision = project(&mut app).document.revision();
 	app.add_files(&ctx, |_| None);
-	receive(&mut app);
+	receive(&mut app, &ctx);
 	assert_eq!(project(&mut app).document.revision(), revision);
 
 	app.add_files(&ctx, |_| Some(vec![first, second]));
-	receive(&mut app);
+	receive(&mut app, &ctx);
 	let project = project(&mut app);
 	assert_eq!(project.document.revision(), revision);
 	assert!(project.document.project().contents.is_empty());

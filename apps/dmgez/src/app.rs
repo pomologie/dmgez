@@ -101,7 +101,7 @@ impl App {
 		}
 	}
 
-	fn poll(&mut self) {
+	fn poll(&mut self, ctx: &Context) {
 		if let Some(worker) = &self.worker {
 			match worker.receiver.try_recv() {
 				Ok(result) => {
@@ -111,7 +111,7 @@ impl App {
 						.is_some_and(Cancellation::is_cancelled);
 					self.worker = None;
 					if !cancelled {
-						self.finish(result);
+						self.finish(ctx, result);
 					}
 				}
 				Err(TryRecvError::Empty) => {}
@@ -123,12 +123,12 @@ impl App {
 		}
 	}
 
-	fn finish(&mut self, completion: Completion) {
+	fn finish(&mut self, ctx: &Context, completion: Completion) {
 		match completion {
 			Completion::Opened(opened) => self.opened = Some(opened),
 			Completion::Cancelled => {}
 			Completion::Failed(error) => self.error = Some(error.to_string()),
-			Completion::Image(result) => self.finish_image(result),
+			Completion::Image(result) => self.finish_image(ctx, result),
 			Completion::Saved { path, revision } => {
 				if let Some(Opened {
 					document: Document::Project(project),
@@ -370,8 +370,8 @@ impl App {
 }
 
 impl eframe::App for App {
-	fn logic(&mut self, _ctx: &Context, _frame: &mut eframe::Frame) {
-		self.poll();
+	fn logic(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
+		self.poll(ctx);
 	}
 
 	fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {

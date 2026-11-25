@@ -25,6 +25,8 @@ Choose **Files** to open a recognized whole-disk HFS+ or HFSX volume or select a
 
 Add `--features lzfse,lzma` to enable ULFO and ULMO decoding for verification and filesystem reads. Container metadata remains visible when its decoder is unavailable.
 
+Add `--features actual-preview` to the desktop composer and choose **Preview folder** after opening a volume or folder in **Files**. The preview shows actual stored icon positions and supported artwork, with fallback status next to the image. Use **Show catalog list** to return to folder navigation and file details. [Actual-image preview profile](../../crates/presentation/dmgez-preview/README.md#render-an-actual-disk-image)
+
 Add `--test` to the composer command to run the desktop suite with the sibling reader’s fixtures. The macOS suite exercised an Apple partition map, exact decomposed HFS+ names, separate case-sensitive HFSX entries, pagination, cancellation, and a modified source. An AccessKit simulation opened the Files view and navigated the paged catalog. [Volume tests](src/image/browse/tests.rs)
 
 On arm64 macOS 14.7.2 (23H311), the composed desktop opened a UDRO image of the sibling reader’s synthetic catalog fixture through the file picker. The live Files view showed vertically aligned rows on pages 1–64 and 65–97. Opening `Nested` showed the stored decomposed name `Résumé.txt` with its mode, owner and catalog ID in **Details**. The fixture’s SHA-256 matched before and after browsing.

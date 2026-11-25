@@ -38,9 +38,17 @@ impl App {
 				});
 			}
 			#[cfg(feature = "hfsplus-read")]
-			Action::ShowContainer => image.browser.showing = false,
+			Action::ShowContainer => {
+				image.browser.showing = false;
+				#[cfg(feature = "actual-preview")]
+				{
+					image.browser.preview = None;
+				}
+			}
 			#[cfg(feature = "hfsplus-read")]
 			Action::ShowFiles => image.browser.showing = true,
+			#[cfg(feature = "actual-preview")]
+			Action::ShowList => image.browser.preview = None,
 			#[cfg(feature = "hfsplus-read")]
 			Action::Browse(request) => {
 				let cancellation = Cancellation::default();
@@ -53,7 +61,9 @@ impl App {
 		}
 	}
 
-	pub(super) fn finish_image(&mut self, completion: ImageCompletion) {
+	pub(super) fn finish_image(&mut self, ctx: &Context, completion: ImageCompletion) {
+		#[cfg(not(feature = "actual-preview"))]
+		let _ = ctx;
 		let Some(Opened {
 			document: Document::Image(image),
 			..
@@ -82,11 +92,26 @@ impl App {
 			}
 			#[cfg(feature = "hfsplus-read")]
 			ImageCompletion::Browsed(result) => match result {
-				Ok(Observation::Page(page)) => {
-					image.browser.page = Some(page);
-					image.browser.details = None;
-				}
+				Ok(Observation::Page(page)) => image.browser.show_page(page),
 				Ok(Observation::Details(details)) => image.browser.details = Some(details),
+				#[cfg(feature = "actual-preview")]
+				Ok(Observation::Preview(preview)) => {
+					if image.browser.showing
+						&& image
+							.browser
+							.page
+							.as_ref()
+							.is_some_and(|page| page.location == preview.location)
+					{
+						match preview.present(ctx) {
+							Ok(presented) => {
+								image.browser.preview = Some(presented);
+								image.browser.details = None;
+							}
+							Err(error) => self.error = Some(error.to_string()),
+						}
+					}
+				}
 				Err(error) => {
 					if matches!(error, browse::Error::Image(Error::SourceChanged)) {
 						image.verification = None;

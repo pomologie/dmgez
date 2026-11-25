@@ -227,6 +227,51 @@ fn accessible_file_controls_request_volume_pages_and_folder_navigation() {
 	}
 }
 
+#[cfg(feature = "actual-preview")]
+#[test]
+fn folder_preview_uses_the_admitted_location_and_a_bounded_texture() {
+	use dmgez_preview::actual::StoreStatus;
+
+	let mut tab = wrap(&fixture(CATALOG));
+	let root = Location::root(VolumeId::WholeDisk);
+	let nested = RawName::Utf16("Nested".encode_utf16().collect());
+	let location = root.child(&nested).unwrap();
+	tab.browser.showing = true;
+	let selected = page(&tab, location.clone(), 0);
+	tab.browser.show_page(selected);
+
+	let Action::Browse(request @ Request::Preview { .. }) = activate(&tab, "Preview folder") else {
+		panic!("expected a preview request from the current folder");
+	};
+	let Observation::Preview(prepared) = tab
+		.snapshot
+		.browse(request, &Cancellation::default())
+		.unwrap()
+	else {
+		panic!("expected an actual folder preview");
+	};
+	assert_eq!(prepared.location, location);
+	let presented = prepared.present(&egui::Context::default()).unwrap();
+	assert_eq!(presented.coverage.store, StoreStatus::Absent);
+	assert_eq!(presented.coverage.fallback_positions, 1);
+	assert!(presented.texture.size().iter().all(|&side| side > 1));
+	tab.browser.preview = Some(presented);
+	let root_page = page(&tab, root, 0);
+	tab.browser.show_page(root_page);
+	assert!(tab.browser.preview.is_none());
+
+	assert!(matches!(
+		tab.snapshot.browse(
+			Request::Preview {
+				location,
+				max_side: 1
+			},
+			&Cancellation::default()
+		),
+		Err(Error::PreviewTextureLimit),
+	));
+}
+
 #[test]
 fn catalog_details_controls_share_a_column_on_separate_rows() {
 	let mut tab = wrap(&fixture(CATALOG));

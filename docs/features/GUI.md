@@ -16,6 +16,8 @@ Open an actual DMG via read-only VFS. Default workspace recreates Finder-style d
 
 The composed HFS+ desktop app provides a **Files** workspace with paged catalog listings, folder navigation, and entry details on the opened image handle. It checks the selected data window through the sibling reader. This covers the folder-browsing portion of D-GUI-02. [Desktop composition and tests](../../apps/dmgez/README.md#browse-hfs-and-hfsx-files)
 
+The optional `actual-preview` feature reads the observed Finder icon layout, catalog entries and qualified in-volume background artwork from the chosen HFS+ or HFSX folder. The CLI exports a PNG with an observation report. The desktop displays the same renderer’s output with visible fallback states. [Actual-image preview profile](../../crates/presentation/dmgez-preview/README.md#render-an-actual-disk-image)
+
 ## Inspector workspace
 
 Split image tree (container -> partitions -> volumes -> folders/internal structures) and typed property/detail panels. Search/sort tables for UDIF runs, offsets, compression, extents, checksums, node counts, raw record hex view with pagination; select file to highlight covering UDIF blocks. Separate actual status vs requested verification. Export JSON, report and selected safe raw bytes. Diff view side-by-side tree and changes (file bytes, metadata, presentation, format); click to drill. Integrate layout lint preview overlay. No data recovery controls. Large image still usable via lazy reads/cancellation and capped previews. Build analyzer only displays historical timing if report provided, no inferred times.

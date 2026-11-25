@@ -7,6 +7,9 @@ use crate::image::browse::{Browser, Details, Location, PAGE_ENTRIES, Page, Reque
 
 use super::{Action, field};
 
+#[cfg(feature = "actual-preview")]
+mod preview;
+
 const VOLUME_MENU_HEIGHT: f32 = 280.0;
 const DETAILS_WIDTH: f32 = 220.0;
 const FOLDER_CELL: &str = "folder";
@@ -36,19 +39,30 @@ pub(super) fn show(
 	disk: Option<&DiskReport>,
 	idle: bool,
 ) -> Option<Action> {
-	let request = ui
-		.add_enabled_ui(idle, |ui| {
-			let variants = volume_choices(disk);
-			let selected = browser.page.as_ref().map(|page| page.location.volume);
-			ui.horizontal_wrapped(|ui| {
-				ui.heading("Files");
-				choose_volume(ui, &variants, selected)
-			})
-			.inner
-			.or_else(|| browser.page.as_ref().and_then(|page| show_folder(ui, page)))
+	ui.add_enabled_ui(idle, |ui| {
+		let variants = volume_choices(disk);
+		let selected = browser.page.as_ref().map(|page| page.location.volume);
+		ui.horizontal_wrapped(|ui| {
+			ui.heading("Files");
+			choose_volume(ui, &variants, selected)
 		})
-		.inner;
-	request.map(Action::Browse)
+		.inner
+		.map(Action::Browse)
+		.or_else(|| {
+			let page = browser.page.as_ref()?;
+			let navigation = folder_navigation(ui, page).map(Action::Browse);
+			#[cfg(feature = "actual-preview")]
+			let navigation = {
+				let action = preview::show(ui, &page.location, browser.preview.as_ref());
+				if browser.preview.is_some() {
+					return navigation.or(action);
+				}
+				navigation.or(action)
+			};
+			navigation.or_else(|| show_folder_entries(ui, page).map(Action::Browse))
+		})
+	})
+	.inner
 }
 
 fn choose_volume(
@@ -138,39 +152,41 @@ fn volume_label(id: VolumeId) -> String {
 	}
 }
 
-fn show_folder(ui: &mut Ui, page: &Page) -> Option<Request> {
+fn folder_navigation(ui: &mut Ui, page: &Page) -> Option<Request> {
 	let at_root = page.location.path.is_empty();
-	let folder = ui
-		.horizontal_wrapped(|ui| {
-			ui.label(match page.filesystem {
-				VolumeSignature::HfsPlus => "HFS+",
-				VolumeSignature::HfsX => "HFSX",
-			});
-			let mut request = None;
-			if ui.add_enabled(!at_root, egui::Button::new("Up")).clicked() {
-				request = Some(Request::first(
-					page.location.ancestor(page.location.path.len() - 1),
-				));
+	ui.horizontal_wrapped(|ui| {
+		ui.label(match page.filesystem {
+			VolumeSignature::HfsPlus => "HFS+",
+			VolumeSignature::HfsX => "HFSX",
+		});
+		let mut request = None;
+		if ui.add_enabled(!at_root, egui::Button::new("Up")).clicked() {
+			request = Some(Request::first(
+				page.location.ancestor(page.location.path.len() - 1),
+			));
+		}
+		if ui
+			.add_enabled(!at_root, egui::Button::new("Root"))
+			.clicked()
+		{
+			request = Some(Request::first(page.location.ancestor(0)));
+		}
+		for (index, name) in page.location.path.iter().enumerate() {
+			let depth = index + 1;
+			ui.label("/");
+			let title = label(name);
+			if depth == page.location.path.len() {
+				ui.strong(title);
+			} else if ui.button(title).clicked() {
+				request = Some(Request::first(page.location.ancestor(depth)));
 			}
-			if ui
-				.add_enabled(!at_root, egui::Button::new("Root"))
-				.clicked()
-			{
-				request = Some(Request::first(page.location.ancestor(0)));
-			}
-			for (index, name) in page.location.path.iter().enumerate() {
-				let depth = index + 1;
-				ui.label("/");
-				let title = label(name);
-				if depth == page.location.path.len() {
-					ui.strong(title);
-				} else if ui.button(title).clicked() {
-					request = Some(Request::first(page.location.ancestor(depth)));
-				}
-			}
-			request
-		})
-		.inner;
+		}
+		request
+	})
+	.inner
+}
+
+fn show_folder_entries(ui: &mut Ui, page: &Page) -> Option<Request> {
 	let paging = ui
 		.horizontal(|ui| {
 			let previous = ui.add_enabled(page.offset != 0, egui::Button::new("Previous files"));
@@ -234,7 +250,7 @@ fn show_folder(ui: &mut Ui, page: &Page) -> Option<Request> {
 			request
 		})
 		.inner;
-	folder.or(paging).or(entry)
+	paging.or(entry)
 }
 
 pub(super) fn details_panel(ui: &mut Ui, details: &Details) {

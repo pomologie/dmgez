@@ -18,6 +18,9 @@ use thiserror::Error;
 
 use super::{ImageSnapshot, ImageSource};
 
+#[cfg(feature = "actual-preview")]
+pub(crate) mod preview;
+
 pub(crate) const PAGE_ENTRIES: u64 = 64;
 const SCAN_BATCH_ENTRIES: u16 = 128;
 const MAX_DEPTH: usize = 128;
@@ -29,12 +32,27 @@ pub(crate) struct Browser {
 	pub showing: bool,
 	pub page: Option<Page>,
 	pub details: Option<Details>,
+	#[cfg(feature = "actual-preview")]
+	pub preview: Option<preview::Presented>,
 }
 
 impl Browser {
 	pub(crate) fn invalidate(&mut self) {
 		self.page = None;
 		self.details = None;
+		#[cfg(feature = "actual-preview")]
+		{
+			self.preview = None;
+		}
+	}
+
+	pub(crate) fn show_page(&mut self, page: Page) {
+		self.page = Some(page);
+		self.details = None;
+		#[cfg(feature = "actual-preview")]
+		{
+			self.preview = None;
+		}
 	}
 }
 
@@ -71,8 +89,19 @@ impl Location {
 
 #[derive(Debug)]
 pub(crate) enum Request {
-	Page { location: Location, offset: u64 },
-	Details { folder: Location, name: RawName },
+	Page {
+		location: Location,
+		offset: u64,
+	},
+	Details {
+		folder: Location,
+		name: RawName,
+	},
+	#[cfg(feature = "actual-preview")]
+	Preview {
+		location: Location,
+		max_side: usize,
+	},
 }
 
 impl Request {
@@ -88,6 +117,8 @@ impl Request {
 pub(crate) enum Observation {
 	Page(Page),
 	Details(Details),
+	#[cfg(feature = "actual-preview")]
+	Preview(preview::Prepared),
 }
 
 #[derive(Debug)]
@@ -134,6 +165,21 @@ pub(crate) enum Error {
 	NotDirectory,
 	#[error("catalog returned an empty incomplete page")]
 	StalledDirectory,
+	#[cfg(feature = "actual-preview")]
+	#[error(transparent)]
+	PreviewCapture(#[from] dmgez_hfsplus_read::preview::CaptureError),
+	#[cfg(feature = "actual-preview")]
+	#[error(transparent)]
+	PreviewRaster(#[from] dmgez_preview::raster::Error),
+	#[cfg(feature = "actual-preview")]
+	#[error("the folder name encoding cannot be used for this preview")]
+	PreviewNameEncoding,
+	#[cfg(feature = "actual-preview")]
+	#[error("the folder preview exceeds the desktop texture limit")]
+	PreviewTextureLimit,
+	#[cfg(feature = "actual-preview")]
+	#[error("the folder preview has inconsistent RGB data")]
+	PreviewTextureData,
 }
 
 impl ImageSnapshot {
@@ -160,6 +206,8 @@ fn browse_image(source: impl ReadAt, request: Request) -> Result<Observation, Er
 	let location = match &request {
 		Request::Page { location, .. } => location,
 		Request::Details { folder, .. } => folder,
+		#[cfg(feature = "actual-preview")]
+		Request::Preview { location, .. } => location,
 	};
 	let image = Image::open_release(source, Limits::default())?;
 	let mut disk = Disk::discover(image, DiskLimits::default())?;
@@ -169,15 +217,22 @@ fn browse_image(source: impl ReadAt, request: Request) -> Result<Observation, Er
 		max_read_bytes: MAX_FS_READ_BYTES,
 		..browse::Limits::default()
 	};
-	browse::with_view_signature(
-		&mut disk,
-		selected,
-		limits,
-		|view, filesystem| match request {
-			Request::Page { location, offset } => folder_page(view, location, filesystem, offset),
-			Request::Details { folder, name } => entry_details(view, &folder, name),
-		},
-	)?
+	match request {
+		Request::Page { location, offset } => {
+			browse::with_view_signature(&mut disk, selected, limits, |view, filesystem| {
+				folder_page(view, location, filesystem, offset)
+			})?
+		}
+		Request::Details { folder, name } => {
+			browse::with_view(&mut disk, selected, limits, |view| {
+				entry_details(view, &folder, name)
+			})?
+		}
+		#[cfg(feature = "actual-preview")]
+		Request::Preview { location, max_side } => {
+			preview::render(&mut disk, selected, limits, location, max_side)
+		}
+	}
 }
 
 fn folder<B: VolumeBackend<Error = browse::Error>>(
