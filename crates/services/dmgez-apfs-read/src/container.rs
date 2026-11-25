@@ -1,4 +1,7 @@
+use std::error::Error as StdError;
+
 use apfs_container::{Container, Error as ContainerError, LookupOptions, OpenOptions, Volume};
+use apfs_core::ReadAt;
 use apfs_reader::{Error as ReaderError, TreeLimits, VolumeView};
 use dmgez_vfs::{LogicalDisk, Window};
 use thiserror::Error;
@@ -40,11 +43,11 @@ impl From<&Volume> for VolumeInfo {
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
-pub enum OpenError {
+pub enum OpenError<E: StdError + 'static = SourceError> {
 	#[error(transparent)]
-	Container(#[from] ContainerError<SourceError>),
+	Container(#[from] ContainerError<E>),
 	#[error(transparent)]
-	Reader(#[from] ReaderError<SourceError>),
+	Reader(#[from] ReaderError<E>),
 	#[error("APFS checkpoint has no volumes")]
 	NoVolumes,
 	#[error("APFS checkpoint has {0} volumes; select one by UUID or object ID")]
@@ -67,13 +70,9 @@ impl<'disk, S: LogicalDisk> ApfsContainer<'disk, S> {
 	/// Fails on an absent requested XID, unsupported container profile, damaged
 	/// metadata, bounds or budget violations, or a failed source read.
 	pub fn open(window: Window<'disk, S>, xid: Option<TransactionId>) -> Result<Self, OpenError> {
-		let source = WindowSource::new(window);
-		let options = OpenOptions::default();
-		let container = match xid {
-			Some(xid) => Container::open_at(source, options, xid)?,
-			None => Container::open(source, options)?,
-		};
-		Ok(Self { container })
+		Ok(Self {
+			container: open_container(WindowSource::new(window), xid)?,
+		})
 	}
 
 	/// Transaction ID used for all volume lookups on this container.
@@ -113,26 +112,46 @@ impl<'disk, S: LogicalDisk> ApfsContainer<'disk, S> {
 		&self,
 		requested: Option<VolumeSelector>,
 	) -> Result<ApfsBackend<'_, WindowSource<'disk, S>>, OpenError> {
-		let options = LookupOptions::default();
-		let id = match requested {
-			Some(VolumeSelector::ObjectId(id)) => id,
-			Some(selector @ VolumeSelector::Uuid(uuid)) => {
-				self.container
-					.volumes(options)?
-					.into_iter()
-					.find(|volume| volume.superblock.uuid == uuid)
-					.ok_or(OpenError::UnknownVolume(selector))?
-					.mapping
-					.id
-			}
-			None => match self.container.volumes(options)?.as_slice() {
-				[only] => only.mapping.id,
-				[] => return Err(OpenError::NoVolumes),
-				volumes => return Err(OpenError::AmbiguousVolumes(volumes.len())),
-			},
-		};
-		let view = VolumeView::open(&self.container, id, options, TreeLimits::default())?
-			.ok_or(OpenError::UnknownVolume(VolumeSelector::ObjectId(id)))?;
-		Ok(ApfsBackend::new(view))
+		Ok(ApfsBackend::new(open_volume(&self.container, requested)?))
 	}
+}
+
+pub(super) fn open_container<S: ReadAt>(
+	source: S,
+	xid: Option<TransactionId>,
+) -> Result<Container<S>, ContainerError<S::Error>> {
+	let options = OpenOptions::default();
+	match xid {
+		Some(xid) => Container::open_at(source, options, xid),
+		None => Container::open(source, options),
+	}
+}
+
+pub(super) fn open_volume<S: ReadAt>(
+	container: &Container<S>,
+	requested: Option<VolumeSelector>,
+) -> Result<VolumeView<'_, S>, OpenError<S::Error>>
+where
+	S::Error: StdError + 'static,
+{
+	let options = LookupOptions::default();
+	let id = match requested {
+		Some(VolumeSelector::ObjectId(id)) => id,
+		Some(selector @ VolumeSelector::Uuid(uuid)) => {
+			container
+				.volumes(options)?
+				.into_iter()
+				.find(|volume| volume.superblock.uuid == uuid)
+				.ok_or(OpenError::UnknownVolume(selector))?
+				.mapping
+				.id
+		}
+		None => match container.volumes(options)?.as_slice() {
+			[only] => only.mapping.id,
+			[] => return Err(OpenError::NoVolumes),
+			volumes => return Err(OpenError::AmbiguousVolumes(volumes.len())),
+		},
+	};
+	VolumeView::open(container, id, options, TreeLimits::default())?
+		.ok_or(OpenError::UnknownVolume(VolumeSelector::ObjectId(id)))
 }
