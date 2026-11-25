@@ -10,7 +10,9 @@ The manual cross-platform workflow builds and signs both formats on each host, v
 
 The optimized CLI passed this project smoke for UDRO and UDZO on arm64 macOS 14.7.2 (23H311). Both signed volumes passed the read-only filesystem check and returned the expected payload and `/Applications` link when mounted. The same CLI passed deterministic archive creation, installation, and build, signing, and verification from the extracted archive. [Repeat the project smoke](../../tests/compatibility/project-build/README.md) · [Offline archive test](../../tools/test_package_cli.py)
 
-An optimized `x86_64-unknown-linux-gnu` CLI built from dmgez `ea181d7` and HFS+ `ecef68f` with Rust 1.99.1 and Zig passed the same project smoke, all five installer tests, and the archive test on Debian 12.15 under Docker Desktop x86-64 emulation with networking disabled. Debian's 7-Zip 26.02 independently verified the payload. Each of the four Linux fixture DMGs matched the corresponding fresh macOS artifact byte for byte. The on-runner Linux build, the Windows build and runtime, and the three-host comparison remain open.
+An optimized `x86_64-unknown-linux-gnu` CLI built from dmgez `ea181d7` and HFS+ `ecef68f` with Rust 1.99.1 and Zig passed the same project smoke, all five installer tests, and the archive test on Debian 12.15 under Docker Desktop x86-64 emulation with networking disabled. Debian's 7-Zip 26.02 independently verified the payload. Each of the four Linux fixture DMGs matched the corresponding fresh macOS artifact byte for byte.
+
+The optimized `aarch64-unknown-linux-gnu` CLI built and ran inside an ARM64 Ubuntu 22.04.5 LTS container using Rust 1.99.1 and GCC 11.4.0, with dmgez `4e044ea` and the same HFS+ revision. After staging the toolchain and dependencies, the build and tests ran with networking disabled. Ubuntu's 7-Zip 21.07 verified the payload. The installer and archive tests passed, and all four image SHA-256 digests matched the previous macOS and Linux x86-64 results. The GitHub-hosted workflow, Windows build and runtime, and three-OS comparison remain open.
 
 ## Pipeline
 
