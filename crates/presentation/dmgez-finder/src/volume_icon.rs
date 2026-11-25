@@ -6,8 +6,12 @@ use icns::{IconElement, IconType, OSType};
 use plist::stream::{BinaryReader, Event};
 use thiserror::Error;
 
+#[cfg(feature = "badge-icons")]
+mod badge;
 mod encoding;
 
+#[cfg(feature = "badge-icons")]
+pub use badge::{MAX_BADGE_BYTES, badge_memory, encode_badge};
 pub use encoding::{encode_pngs, png_encoding_memory, validation_memory};
 
 /// The reserved asset filename in the root catalog.
@@ -82,6 +86,28 @@ pub enum Error {
 	Size,
 	#[error("generated ICNS does not fit the output byte budget")]
 	OutputBudget,
+	#[cfg(feature = "badge-icons")]
+	#[error("volume icon badge source exceeds the {MAX_BADGE_BYTES}-byte limit")]
+	BadgeSize,
+	#[cfg(feature = "badge-icons")]
+	#[error(
+		"volume icon badge must be a supported modern ICNS or a PNG with valid framing and chunk checksums"
+	)]
+	BadgePng,
+	#[cfg(feature = "badge-icons")]
+	#[error("volume icon badge must contain one non-animated image")]
+	BadgeAnimation,
+	#[cfg(feature = "badge-icons")]
+	#[error("volume icon badge exceeds the {limit}-pixel dimension limit", limit = badge::MAX_BADGE_DIMENSION)]
+	BadgeDimensions,
+	#[cfg(feature = "badge-icons")]
+	#[error(
+		"volume icon badge requires sRGB-compatible samples of at most eight bits without orientation metadata"
+	)]
+	BadgeColor,
+	#[cfg(feature = "badge-icons")]
+	#[error("could not decode volume icon badge PNG")]
+	BadgeDecode(#[source] png::DecodingError),
 	#[error("cannot reserve ICNS assembly memory")]
 	Reserve(#[from] std::collections::TryReserveError),
 	#[error("unsupported volume icon PNG slot {slot:?}")]
@@ -228,41 +254,61 @@ fn validate_image(kind: Kind, bytes: &[u8]) -> Result<(), Error> {
 		.map_err(|source| Error::Decode { kind, source })
 }
 
-fn validate_png(kind: Kind, icon_type: IconType, mut chunks: &[u8]) -> Result<(), Error> {
-	for index in 0..MAX_PNG_CHUNKS {
-		let chunk = png_chunk(chunks).ok_or(Error::PngFraming { kind })?;
-		if index == 0 {
-			if chunk.tag != PNG_IHDR || chunk.payload.len() != PNG_IHDR_BYTES {
-				return Err(Error::PngFraming { kind });
-			}
-			let (width, rest) = chunk
-				.payload
-				.split_first_chunk()
-				.ok_or(Error::PngFraming { kind })?;
-			let (height, _) = rest.split_first_chunk().ok_or(Error::PngFraming { kind })?;
-			if u32::from_be_bytes(*width) != icon_type.pixel_width()
-				|| u32::from_be_bytes(*height) != icon_type.pixel_height()
-			{
-				return Err(Error::PngDimensions { kind });
-			}
-		}
+fn validate_png(kind: Kind, icon_type: IconType, chunks: &[u8]) -> Result<(), Error> {
+	validate_png_chunks(chunks, |width, height| {
+		width == icon_type.pixel_width() && height == icon_type.pixel_height()
+	})
+	.map_err(|error| match error {
+		PngError::Framing => Error::PngFraming { kind },
+		PngError::Dimensions => Error::PngDimensions { kind },
+		PngError::Animation => Error::UnsupportedEncoding { kind },
+		PngError::Checksum => Error::PngChecksum { kind },
+	})
+}
+
+enum PngError {
+	Framing,
+	Dimensions,
+	Animation,
+	Checksum,
+}
+
+fn validate_png_chunks(
+	mut chunks: &[u8],
+	dimensions_allowed: impl FnOnce(u32, u32) -> bool,
+) -> Result<(), PngError> {
+	let header = png_chunk(chunks).ok_or(PngError::Framing)?;
+	if header.tag != PNG_IHDR || header.payload.len() != PNG_IHDR_BYTES {
+		return Err(PngError::Framing);
+	}
+	let (width, rest) = header
+		.payload
+		.split_first_chunk()
+		.ok_or(PngError::Framing)?;
+	let (height, _) = rest.split_first_chunk().ok_or(PngError::Framing)?;
+	if !dimensions_allowed(u32::from_be_bytes(*width), u32::from_be_bytes(*height)) {
+		return Err(PngError::Dimensions);
+	}
+
+	for _ in 0..MAX_PNG_CHUNKS {
+		let chunk = png_chunk(chunks).ok_or(PngError::Framing)?;
 		if PNG_ANIMATION_CHUNKS.contains(&chunk.tag) {
-			return Err(Error::UnsupportedEncoding { kind });
+			return Err(PngError::Animation);
 		}
 		let crc_end = HEADER_BYTES + chunk.payload.len();
 		if crc32fast::hash(&chunks[LENGTH_BYTES..crc_end]) != chunk.expected_crc {
-			return Err(Error::PngChecksum { kind });
+			return Err(PngError::Checksum);
 		}
 		if chunk.tag == PNG_IEND {
 			return if chunk.payload.is_empty() && chunk.remainder.is_empty() {
 				Ok(())
 			} else {
-				Err(Error::PngFraming { kind })
+				Err(PngError::Framing)
 			};
 		}
 		chunks = chunk.remainder;
 	}
-	Err(Error::PngFraming { kind })
+	Err(PngError::Framing)
 }
 
 struct PngChunk<'source> {

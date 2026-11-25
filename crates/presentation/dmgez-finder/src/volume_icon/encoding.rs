@@ -28,7 +28,7 @@ const PNG_UNREPRESENTABLE_ARGB_METADATA: [Kind; 5] =
 // Apple ImageIO distinguishes ic04 and ic05 from ic11 even though the latter
 // two are both 32 × 32 pixels. In Apple's iconset, ic05 is the 32-point
 // standard icon and ic11 is the 16-point Retina icon.
-const SLOTS: [(IconSlot, IconType); 10] = [
+pub(super) const SLOTS: [(IconSlot, IconType); 10] = [
 	(IconSlot::Small, IconType::RGBA32_16x16_ARGB),
 	(IconSlot::SmallRetina, IconType::RGBA32_16x16_2x),
 	(IconSlot::Medium, IconType::RGBA32_16x16_2x_ARGB),
@@ -140,7 +140,9 @@ fn encode_small_argb(
 	chunks: &[u8],
 ) -> Result<Vec<u8>, Error> {
 	validate_png(kind, icon_type, chunks)?;
-	validate_argb_metadata(kind, chunks)?;
+	if !has_supported_srgb_metadata(chunks) {
+		return Err(Error::SmallIconPng { kind });
+	}
 	let image =
 		Image::read_png(Cursor::new(png)).map_err(|source| Error::Decode { kind, source })?;
 	let element = IconElement::encode_image_with_type(&image, icon_type)
@@ -148,7 +150,7 @@ fn encode_small_argb(
 	Ok(element.data)
 }
 
-fn validate_argb_metadata(kind: Kind, mut chunks: &[u8]) -> Result<(), Error> {
+pub(super) fn has_supported_srgb_metadata(mut chunks: &[u8]) -> bool {
 	let mut srgb = false;
 	let mut custom_gamma_or_chromaticity = false;
 	while let Some(chunk) = png_chunk(chunks) {
@@ -159,24 +161,21 @@ fn validate_argb_metadata(kind: Kind, mut chunks: &[u8]) -> Result<(), Error> {
 					.get(PNG_IHDR_DEPTH_INDEX)
 					.is_none_or(|&depth| depth > MAX_ARGB_BITS_PER_SAMPLE))
 		{
-			return Err(Error::SmallIconPng { kind });
+			return false;
 		}
 		if chunk.tag == PNG_SRGB {
-			if !matches!(chunk.payload, [intent] if *intent <= MAX_SRGB_RENDERING_INTENT) {
-				return Err(Error::SmallIconPng { kind });
+			if srgb || !matches!(chunk.payload, [intent] if *intent <= MAX_SRGB_RENDERING_INTENT) {
+				return false;
 			}
 			srgb = true;
 		}
 		custom_gamma_or_chromaticity |= matches!(chunk.tag, PNG_GAMMA | PNG_CHROMATICITY);
 		chunks = chunk.remainder;
 	}
-	if custom_gamma_or_chromaticity && !srgb {
-		return Err(Error::SmallIconPng { kind });
-	}
-	Ok(())
+	srgb || !custom_gamma_or_chromaticity
 }
 
-fn write_header(output: &mut Vec<u8>, kind: Kind, size: usize) -> Result<(), Error> {
+pub(super) fn write_header(output: &mut Vec<u8>, kind: Kind, size: usize) -> Result<(), Error> {
 	let size = u32::try_from(size).map_err(|_| Error::Size)?;
 	output.extend_from_slice(&kind);
 	output.extend_from_slice(&size.to_be_bytes());
