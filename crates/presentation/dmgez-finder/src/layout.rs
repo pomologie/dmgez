@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use dmgez_config::{
-	Arrangement, AutoFlag, Background, Column, Coordinate, FinderOptions, LabelPosition, View,
-	parse_solid_background_color,
+	Arrangement, AutoFlag, Background, BackgroundTemplate, Column, Coordinate, FinderOptions,
+	LabelPosition, View, parse_solid_background_color,
 };
 use ds_parser::{
 	BrowserWindowSettings, FinderViewStyle, IconViewProperties, PropertyList, WindowBounds,
@@ -247,13 +247,22 @@ fn resolve_background(
 			SOLID_BACKGROUND_TYPE,
 			parse_solid_background_color(value.as_str()).map_err(|_| Error::BackgroundColor)?,
 		)),
-		Some(Background::Image { .. }) => match image {
-			ImageBackground::Unavailable => Err(Error::ImageBackground),
-			ImageBackground::Preflight | ImageBackground::Alias(_) => {
-				Ok((IMAGE_BACKGROUND_TYPE, DEFAULT_BACKGROUND_RGB))
-			}
-		},
-		Some(Background::Template { .. }) => Err(Error::TemplateBackground),
+		Some(Background::Image { .. }) => resolve_image_background(image),
+		Some(Background::Template { name }) => {
+			name.as_str()
+				.parse::<BackgroundTemplate>()
+				.map_err(|_| Error::TemplateBackground)?;
+			resolve_image_background(image)
+		}
 		Some(_) => Err(Error::Background),
+	}
+}
+
+fn resolve_image_background(image: &ImageBackground) -> Result<(i64, (f64, f64, f64)), Error> {
+	match image {
+		ImageBackground::Unavailable => Err(Error::ImageBackground),
+		ImageBackground::Preflight | ImageBackground::Alias(_) => {
+			Ok((IMAGE_BACKGROUND_TYPE, DEFAULT_BACKGROUND_RGB))
+		}
 	}
 }

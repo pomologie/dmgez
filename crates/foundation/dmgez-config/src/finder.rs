@@ -6,8 +6,10 @@ use thiserror::Error;
 use crate::{AutoFlag, Coordinate, Dimension, LocalPath, Text, VirtualPath};
 
 mod color;
+mod template;
 
 pub use color::{BackgroundColorError, parse_solid_background_color};
+pub use template::{BackgroundTemplate, BackgroundTemplateError};
 
 const MINIMUM_SIZE: u8 = 1;
 const MINIMUM_WIDTH: u8 = 0;

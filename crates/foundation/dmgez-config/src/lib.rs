@@ -16,9 +16,9 @@ mod value;
 pub use appdmg::{AppDmgDiagnostic, AppDmgImport, AppDmgImportError, import_appdmg};
 pub use content::{Content, ContentError, CopySource, Payload};
 pub use finder::{
-	Arrangement, Background, BackgroundColorError, Column, Direction, Finder, FinderOptions,
-	Folder, IconSlot, IconView, LabelPosition, ListView, View, VolumeIcon, VolumeIconError,
-	parse_solid_background_color,
+	Arrangement, Background, BackgroundColorError, BackgroundTemplate, BackgroundTemplateError,
+	Column, Direction, Finder, FinderOptions, Folder, IconSlot, IconView, LabelPosition, ListView,
+	View, VolumeIcon, VolumeIconError, parse_solid_background_color,
 };
 pub use model::{
 	Build, Capacity, Compression, CompressionError, Filesystem, Image, ImageError, ImageFormat,

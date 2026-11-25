@@ -62,8 +62,8 @@ pub enum Error {
 	/// The generated background alias could not represent the supplied identity.
 	#[error(transparent)]
 	ImageBackgroundIdentity(#[from] BackgroundAliasError),
-	/// Built-in template backgrounds are outside the initial profile.
-	#[error("Finder template backgrounds are unavailable")]
+	/// The background does not name a supported built-in template.
+	#[error("unsupported Finder background template name")]
 	TemplateBackground,
 	/// A newer configuration selected a background outside this profile.
 	#[error("Finder background option is unavailable")]
@@ -113,15 +113,15 @@ pub fn validate_options(options: Option<&FinderOptions>) -> Result<(), Error> {
 	Layout::resolve(options, ImageBackground::Unavailable).map(|_| ())
 }
 
-/// Checks a layout whose image background will be bound after assigning catalog IDs.
+/// Checks a layout whose image or template will be bound after assigning catalog IDs.
 ///
 /// This check neither opens the configured image nor constructs an alias. Use
 /// [`write_store_with_background_alias`] when the final file identity is known.
 ///
 /// # Errors
 ///
-/// Returns an error if options select a different background or the remaining
-/// layout options fall outside the writer's supported profile.
+/// Returns an error if options do not select an image or a supported template,
+/// or if the remaining layout options fall outside the writer's supported profile.
 pub fn validate_options_for_image_background(options: &FinderOptions) -> Result<(), Error> {
 	validate_image_background(options)?;
 	Layout::resolve(Some(options), ImageBackground::Preflight).map(|_| ())
@@ -171,7 +171,10 @@ pub fn write_store_with_background_alias(
 }
 
 fn validate_image_background(options: &FinderOptions) -> Result<(), Error> {
-	if matches!(options.background, Some(Background::Image { .. })) {
+	if matches!(
+		options.background,
+		Some(Background::Image { .. } | Background::Template { .. })
+	) {
 		Ok(())
 	} else {
 		Err(Error::ImageBackgroundNotSelected)
