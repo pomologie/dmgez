@@ -11,7 +11,7 @@ description = "Compose the versioned HFS+ builder with dmgez image planning"
 default = ["finder-write", "parallel"]
 badge-icons = ["volume-icon", "dmgez-builder/badge-icons"]
 finder-write = ["dmgez-builder/finder-write"]
-image-edit = ["dmgez-config/project-edit", "dep:hfsplus-reader"]
+image-edit = ["dmgez-config/project-edit", "dep:dmgez-finder", "dep:hfsplus-reader"]
 lzfse = ["dmgez-builder/lzfse"]
 lzma = ["dmgez-builder/lzma"]
 parallel = ["dmgez-builder/parallel"]
@@ -22,6 +22,7 @@ volume-icon = ["finder-write", "dmgez-builder/volume-icon"]
 dmgez-builder = { version = "=0.1.0", path = "../dmgez-builder", default-features = false, features = ["zlib"] }
 dmgez-config = { version = "=0.1.0", path = "../../foundation/dmgez-config" }
 dmgez-core = { version = "=0.1.0", path = "../../foundation/dmgez-core", default-features = false, features = ["source"] }
+dmgez-finder = { version = "=0.1.0", path = "../../presentation/dmgez-finder", optional = true }
 dmgez-udif = { version = "=0.1.0", path = "../../formats/dmgez-udif", default-features = false, features = ["write"] }
 
 # HFS+ libraries

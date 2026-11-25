@@ -1,7 +1,16 @@
+use super::super::{File, Payload, capture::MAX_DEPTH};
 use super::*;
 use dmgez_config::project_edit::ContentChanges;
+use dmgez_finder::{
+	edit::{EditableStore, IconLocationRecord},
+	inspection::ReadLimits,
+	write_store,
+};
+use hfsplus_core::ByteOffset;
+use std::rc::Rc;
 
 type TestSnapshot = Snapshot<'static, &'static [u8]>;
+type TestFile = File<'static, &'static [u8]>;
 
 fn path(value: &str) -> VirtualPath {
 	value.parse().unwrap()
@@ -63,6 +72,64 @@ fn add_directory(destination: &str) -> ProjectEdit {
 	ProjectEdit::Add(ContentDraft::Directory {
 		destination: path(destination),
 	})
+}
+
+fn position(target: &str, position: FieldChange<[f64; 2]>) -> ProjectEdit {
+	let mut changes = ContentChanges::default();
+	changes.position = position;
+	ProjectEdit::Modify {
+		target: path(target),
+		changes,
+	}
+}
+
+fn add_store(image: &mut TestSnapshot, name: &str, owner: u32, positions: &[(&str, u32, u32)]) {
+	let default = write_store(None, &[]).unwrap();
+	let layout = EditableStore::open(&default, ReadLimits::default()).unwrap();
+	let positions = positions
+		.iter()
+		.map(|&(name, x, y)| (name.to_owned(), IconLocationRecord::new(x, y)))
+		.collect();
+	let bytes = layout.encode(&positions).unwrap().unwrap_or(default);
+	let layout = EditableStore::open(&bytes, ReadLimits::default()).unwrap();
+	let mut metadata = EntryMetadata::new(0o644);
+	metadata.uid = owner;
+	image.entries.insert(
+		path(name),
+		Node {
+			metadata,
+			kind: Kind::FinderStore {
+				file: Rc::new(File {
+					data: Payload::bytes(bytes),
+					resource: None,
+				}),
+				layout,
+			},
+			attributes: Default::default(),
+		},
+	);
+}
+
+fn store<'a>(image: &'a TestSnapshot, name: &str) -> (&'a Rc<TestFile>, &'a EditableStore) {
+	match &image.entries[&path(name)].kind {
+		Kind::FinderStore { file, layout } => (file, layout),
+		_ => panic!("expected an admitted Finder store at {name}"),
+	}
+}
+
+fn store_bytes(image: &TestSnapshot, name: &str) -> Vec<u8> {
+	let (file, _) = store(image, name);
+	let mut bytes = vec![0; usize::try_from(file.data.len().0).unwrap()];
+	file.data.read_exact_at(ByteOffset(0), &mut bytes).unwrap();
+	bytes
+}
+
+fn locations<'a>(image: &'a TestSnapshot, name: &str) -> Vec<(&'a str, u32, u32)> {
+	store(image, name)
+		.1
+		.positions()
+		.map(|(name, record)| (name, record.x, record.y))
+		.collect()
 }
 
 fn target<'a>(snapshot: &'a TestSnapshot, value: &str) -> &'a [u8] {
@@ -195,4 +262,109 @@ fn a_directory_move_cannot_push_descendants_past_the_depth_budget() {
 		Err(OverlayError::Budget)
 	));
 	assert_eq!(target(&image, "/Left/E\u{301}"), b"hard\xfftarget");
+}
+
+#[test]
+fn retains_the_exact_default_store_when_catalog_names_change() {
+	let mut image = snapshot();
+	add_store(&mut image, "/.DS_Store", 41, &[]);
+	let before = Rc::clone(store(&image, "/.DS_Store").0);
+	let bytes = store_bytes(&image, "/.DS_Store");
+	apply(&mut image, &[rename("/Left", "/Renamed")], Path::new(".")).unwrap();
+	assert!(Rc::ptr_eq(&before, store(&image, "/.DS_Store").0));
+	assert_eq!(store_bytes(&image, "/.DS_Store"), bytes);
+	assert_eq!(image.entries[&path("/.DS_Store")].metadata.uid, 41);
+}
+
+#[test]
+fn retains_folder_layout_identity_while_remapping_icons_across_swapped_folders() {
+	let mut image = snapshot();
+	apply(
+		&mut image,
+		&[
+			add_directory("/Left/Book"),
+			add_directory("/Right/DiscardMe"),
+		],
+		Path::new("."),
+	)
+	.unwrap();
+	add_store(&mut image, "/Left/.ds_store", 41, &[("Book", 9, 23)]);
+	add_store(
+		&mut image,
+		"/Right/.DS_Store",
+		42,
+		&[("DiscardMe", 5, 7), ("shortcut", 11, 13)],
+	);
+	apply(
+		&mut image,
+		&[
+			rename("/Left", "/Right"),
+			rename("/Right", "/Left"),
+			rename("/left/book", "/LEFT/Binder"),
+			remove("/right/DiscardMe"),
+			position("/right/SHORTCUT", FieldChange::Set([17.0, 19.0])),
+		],
+		Path::new("."),
+	)
+	.unwrap();
+	assert_eq!(image.entries[&path("/Right/.ds_store")].metadata.uid, 41);
+	assert_eq!(image.entries[&path("/Left/.DS_Store")].metadata.uid, 42);
+	assert!(locations(&image, "/Right/.ds_store").is_empty());
+	assert_eq!(
+		locations(&image, "/Left/.DS_Store"),
+		[("Binder", 9, 23), ("shortcut", 17, 19)]
+	);
+	assert!(!image.entries.contains_key(&path("/Left/DiscardMe")));
+}
+
+#[test]
+fn creates_a_destination_store_and_clears_an_existing_location() {
+	let mut image = snapshot();
+	add_store(&mut image, "/Right/.DS_Store", 31, &[("Shortcut", 1, 2)]);
+	apply(
+		&mut image,
+		&[rename("/Right/Shortcut", "/Left/Relocated")],
+		Path::new("."),
+	)
+	.unwrap();
+	assert!(locations(&image, "/Right/.DS_Store").is_empty());
+	assert_eq!(locations(&image, "/Left/.DS_Store"), [("Relocated", 1, 2)]);
+	apply(
+		&mut image,
+		&[position("/Left/Relocated", FieldChange::Clear)],
+		Path::new("."),
+	)
+	.unwrap();
+	assert!(locations(&image, "/Left/.DS_Store").is_empty());
+	apply(
+		&mut image,
+		&[position("/Left/Relocated", FieldChange::Set([3.0, 4.0]))],
+		Path::new("."),
+	)
+	.unwrap();
+	assert_eq!(locations(&image, "/Left/.DS_Store"), [("Relocated", 3, 4)]);
+}
+
+#[test]
+fn rejects_unresolved_locations_invalid_coordinates_and_explicit_store_edits() {
+	let mut image = snapshot();
+	add_store(&mut image, "/Left/.DS_Store", 41, &[("Missing", 9, 23)]);
+	let bytes = store_bytes(&image, "/Left/.DS_Store");
+	assert!(matches!(
+		apply(&mut image, &[], Path::new(".")),
+		Err(OverlayError::FinderRecordTarget { .. })
+	));
+	assert!(matches!(
+		apply(&mut image, &[remove("/Left/.ds_store")], Path::new(".")),
+		Err(OverlayError::FinderStore { .. })
+	));
+	assert!(matches!(
+		apply(
+			&mut image,
+			&[position("/Left", FieldChange::Set([1.5, 2.0]))],
+			Path::new(".")
+		),
+		Err(OverlayError::FinderPosition { index: 0 })
+	));
+	assert_eq!(store_bytes(&image, "/Left/.DS_Store"), bytes);
 }

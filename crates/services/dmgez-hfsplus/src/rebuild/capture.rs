@@ -6,6 +6,7 @@ use std::{
 };
 
 use dmgez_config::{VirtualPath, VirtualPathError};
+use dmgez_finder::{STORE_NAME, edit::StoreEditError};
 use hfsplus_builder::volume::{EntryMetadata, MAX_SYMLINK_TARGET_BYTES, VolumeError};
 use hfsplus_core::{
 	ByteOffset, ReadAt,
@@ -27,6 +28,7 @@ use thiserror::Error;
 use super::{Attributes, File, Kind, Node, Payload, Snapshot};
 
 mod attributes;
+mod finder;
 mod metadata;
 
 use attributes::AttributeInventory;
@@ -40,7 +42,6 @@ pub(super) const MAX_PATH_BYTES: usize =
 	MAX_DEPTH * (MAX_NAME_UNITS * MAX_UTF8_BYTES_PER_UTF16_UNIT + PATH_SEPARATOR.len_utf8());
 pub(super) const MAX_CAPTURE_BYTES: usize = 64 << 20;
 const PAGE_ENTRIES: NonZeroUsize = NonZeroUsize::MIN;
-const FINDER_STORE_NAME: &str = ".DS_Store";
 
 /// Failure to capture all supported metadata from a selected HFS+ volume.
 #[derive(Debug, Error)]
@@ -74,6 +75,14 @@ pub enum CaptureError<E: Error + 'static> {
 	EntryKind(CatalogId),
 	#[error("HFS+ entry {} contains a Finder alias or layout requiring reference updates", .0.0)]
 	FinderReferences(CatalogId),
+	#[error("HFS+ entry {} contains a Finder alias or layout requiring reference updates", .id.0)]
+	FinderLayout {
+		id: CatalogId,
+		#[source]
+		error: StoreEditError,
+	},
+	#[error("HFS+ entry {} contains a Finder alias or layout exceeding the store byte budget", .0.0)]
+	FinderStoreBudget(CatalogId),
 	#[error("HFS+ catalog record {} has unsupported path syntax or spelling", .0.0)]
 	CatalogName(CatalogId),
 	#[error("an HFS+ name could not be normalized")]
@@ -141,7 +150,7 @@ where
 		linked: BTreeMap::new(),
 		visible_dirs: 0,
 		root_created: root_metadata.dates[0],
-		finder_store_name: normalize(FINDER_STORE_NAME)?,
+		finder_store_name: normalize(STORE_NAME)?,
 	};
 	capture.walk(root.metadata.id, "", 0)?;
 	capture.check_inventory(&report)?;
@@ -214,14 +223,6 @@ where
 	}
 
 	fn path(&mut self, parent: &str, entry: &Entry) -> Result<VirtualPath, CaptureError<S::Error>> {
-		if self
-			.catalog
-			.collation()
-			.compare(&entry.name, self.finder_store_name.as_units())
-			.is_eq()
-		{
-			return Err(CaptureError::FinderReferences(entry.metadata.id));
-		}
 		let name = stored_name(entry)?;
 		if name.contains(PATH_SEPARATOR) {
 			return Err(CaptureError::CatalogName(entry.metadata.id));
@@ -244,11 +245,19 @@ where
 
 	fn node(&mut self, entry: &Entry) -> Result<Node<'volume, S>, CaptureError<S::Error>> {
 		let raw = &entry.metadata;
+		let finder_store = self
+			.catalog
+			.collation()
+			.compare(&entry.name, self.finder_store_name.as_units())
+			.is_eq();
 		let (metadata, kind) = match (entry.kind, raw.permissions.mode & BSD_TYPE_MASK) {
+			(EntryKind::File { .. }, BSD_REGULAR_FILE) => {
+				return self.regular_file(raw, finder_store);
+			}
+			_ if finder_store => return Err(CaptureError::FinderReferences(raw.id)),
 			(EntryKind::Directory { .. }, BSD_DIRECTORY) => {
 				(metadata::directory(entry)?, Kind::Directory)
 			}
-			(EntryKind::File { .. }, BSD_REGULAR_FILE) => return self.regular_file(raw),
 			(EntryKind::File { data, resource }, BSD_SYMLINK) => {
 				let metadata = metadata::symlink(raw, &resource)?;
 				let target = self.link(raw.id, &data)?;
@@ -283,12 +292,19 @@ where
 		Ok(target)
 	}
 
-	fn regular_file(&mut self, raw: &Metadata) -> Result<Node<'volume, S>, CaptureError<S::Error>> {
+	fn regular_file(
+		&mut self,
+		raw: &Metadata,
+		finder_store: bool,
+	) -> Result<Node<'volume, S>, CaptureError<S::Error>> {
 		let file = self
 			.catalog
 			.regular_file(raw.id, self.limits.hard_links)?
 			.ok_or(CaptureError::EntryKind(raw.id))?;
 		let link = file.hard_link();
+		if finder_store && link.is_some() {
+			return Err(CaptureError::FinderReferences(raw.id));
+		}
 		let metadata = metadata::regular_file(file.metadata(), link)?;
 		let inode = if let Some(link) = link {
 			metadata::check_link_stub(raw, link, self.root_created)?;
@@ -317,6 +333,9 @@ where
 		let overflow = self.limits.allocation.overflow;
 		let data = file.open_stored_fork(ForkKind::Data, overflow)?;
 		let resource = file.open_stored_fork(ForkKind::Resource, overflow)?;
+		let layout = finder_store
+			.then(|| finder::read_store(raw.id, &data, &mut self.remaining))
+			.transpose()?;
 		let file = Rc::new(File {
 			data: Payload::image(data),
 			resource: (!resource.is_empty()).then(|| Payload::image(resource)),
@@ -331,9 +350,13 @@ where
 				},
 			);
 		}
+		let kind = match layout {
+			Some(layout) => Kind::FinderStore { file, layout },
+			None => Kind::File { file, inode },
+		};
 		Ok(Node {
 			metadata,
-			kind: Kind::File { file, inode },
+			kind,
 			attributes,
 		})
 	}

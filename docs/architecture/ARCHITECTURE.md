@@ -72,7 +72,7 @@ Read arrows as `consumer -> dependency`.
 | `dmgez-macho` | none |
 | `dmgez-finder` | core, config; external Finder libraries; no concrete builder |
 | `dmgez-builder` | core, config, udif writer, finder writer; Mach-O inspection for optional volume icons |
-| `dmgez-hfsplus` | dmgez-builder, core, config, udif writer, independent versioned HFS+ libraries |
+| `dmgez-hfsplus` | dmgez-builder, core, config, udif writer, independent versioned HFS+ libraries, Finder store editing for existing images |
 | `dmgez-hfsplus-read` | independent versioned HFS+ reader and format libraries, vfs for browsing |
 | `dmgez-apfs-read` | independent versioned APFS container, reader and format libraries, vfs for browsing and verification |
 | `dmgez-vfs` | core, udif reader, independent filesystem readers, partition adapters; no write service |

@@ -81,6 +81,7 @@
     "image-edit": [
       "hfsplus-build",
       "hfsplus-read",
+      "finder-read",
       "udif-read",
       "udif-write",
       "partition-maps",

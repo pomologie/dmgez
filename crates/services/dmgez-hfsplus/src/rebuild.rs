@@ -9,6 +9,7 @@ use std::{
 };
 
 use dmgez_config::{VirtualPath, project_edit::ProjectEdit};
+use dmgez_finder::edit::EditableStore;
 use hfsplus_builder::{
 	SealedPlan,
 	volume::{
@@ -57,6 +58,10 @@ enum Kind<'volume, S> {
 		// Only effective regular-file hard links carry a shared inode key.
 		inode: Option<CatalogId>,
 	},
+	FinderStore {
+		file: Rc<File<'volume, S>>,
+		layout: EditableStore,
+	},
 	Symlink(Vec<u8>),
 }
 
@@ -71,17 +76,27 @@ struct LinkedPaths<'path, 'volume, S> {
 	file: &'path File<'volume, S>,
 }
 
-struct Payload<'volume, S>(Rc<ResolvedFork<'volume, S>>);
+enum Payload<'volume, S> {
+	Image(Rc<ResolvedFork<'volume, S>>),
+	Bytes(Rc<[u8]>),
+}
 
 impl<'volume, S> Payload<'volume, S> {
 	fn image(fork: ResolvedFork<'volume, S>) -> Self {
-		Self(Rc::new(fork))
+		Self::Image(Rc::new(fork))
+	}
+
+	fn bytes(bytes: Vec<u8>) -> Self {
+		Self::Bytes(bytes.into())
 	}
 }
 
 impl<S> Clone for Payload<'_, S> {
 	fn clone(&self) -> Self {
-		Self(Rc::clone(&self.0))
+		match self {
+			Self::Image(fork) => Self::Image(Rc::clone(fork)),
+			Self::Bytes(bytes) => Self::Bytes(Rc::clone(bytes)),
+		}
 	}
 }
 
@@ -89,11 +104,20 @@ impl<S: ReadAt> ReadAt for Payload<'_, S> {
 	type Error = hfsplus_reader::Error<S::Error>;
 
 	fn len(&self) -> ByteLen {
-		self.0.len()
+		match self {
+			Self::Image(fork) => fork.len(),
+			Self::Bytes(bytes) => ReadAt::len(bytes.as_ref()),
+		}
 	}
 
 	fn read_exact_at(&self, offset: ByteOffset, output: &mut [u8]) -> Result<(), Self::Error> {
-		self.0.read_exact_at(offset, output)
+		match self {
+			Self::Image(fork) => fork.read_exact_at(offset, output),
+			Self::Bytes(bytes) => bytes
+				.as_ref()
+				.read_exact_at(offset, output)
+				.map_err(hfsplus_reader::Error::Bounds),
+		}
 	}
 }
 
@@ -239,7 +263,7 @@ fn manifest_entry<'path, 'volume, S: ReadAt>(
 ) -> ManifestEntry<'path, Payload<'volume, S>> {
 	let kind = match &node.kind {
 		Kind::Directory => EntryKind::Folder,
-		Kind::File { file, .. } => EntryKind::File {
+		Kind::File { file, .. } | Kind::FinderStore { file, .. } => EntryKind::File {
 			data: ForkSource::whole(file.data.clone()),
 			resource: file.resource.clone().map(ForkSource::whole),
 		},

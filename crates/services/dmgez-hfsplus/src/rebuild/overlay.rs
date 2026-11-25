@@ -4,29 +4,28 @@ use dmgez_config::{
 	VirtualPath,
 	project_edit::{ContentDraft, FieldChange, ProjectEdit},
 };
+use dmgez_finder::edit::StoreEditError;
 use hfsplus_builder::volume::{EntryMetadata, MAX_SYMLINK_TARGET_BYTES};
 use hfsplus_core::{
 	ReadAt,
-	names::{NameCollation, NameError, normalize},
+	names::{NameError, normalize},
 };
 use thiserror::Error;
 
-use super::{
-	Kind, Node, Snapshot,
-	capture::{MAX_CAPTURE_BYTES, MAX_DEPTH, MAX_ENTRIES, MAX_PATH_BYTES},
-};
+use super::{Kind, Node, Snapshot, capture::MAX_ENTRIES};
 
+mod finder;
+mod paths;
 #[cfg(test)]
 mod tests;
 
-const PATH_SEPARATOR: char = '/';
-// Case-folded collation keys contain no zero weights.
-const COMPONENT_BOUNDARY: u16 = 0;
-const DOT_WEIGHT: u16 = '.' as u16;
-const COLLATION: NameCollation = NameCollation::CaseFolded;
+use paths::{
+	COLLATION, PATH_SEPARATOR, PathIndex, Route, TreeKind, charge, check_path_bounds,
+	route_entries, validate_tree,
+};
+
 const DIRECTORY_MODE: u16 = 0o755;
 const SYMLINK_MODE: u16 = 0o777;
-const FINDER_STORE_NAME: &str = ".DS_Store";
 
 #[derive(Debug, Error)]
 #[non_exhaustive]
@@ -37,8 +36,12 @@ pub enum OverlayError {
 	ConflictingEdit { index: usize },
 	#[error("image edit {index} selects the volume root as an entry destination")]
 	RootDestination { index: usize },
-	#[error("Finder position and flag changes are unsupported for existing images (edit {index})")]
+	#[error("Finder flag changes are unsupported for existing images (edit {index})")]
 	FinderChange { index: usize },
+	#[error(
+		"Finder position in image edit {index} requires nonnegative whole points in the u32 range"
+	)]
+	FinderPosition { index: usize },
 	#[error("image edit {index} would copy host content without a qualified metadata capture")]
 	HostCopy { index: usize },
 	#[error("image edit {index} uses an operation unsupported for existing images")]
@@ -68,8 +71,22 @@ pub enum OverlayError {
 		first: VirtualPath,
 		second: VirtualPath,
 	},
-	#[error("image rebuild cannot preserve the opaque Finder layout at {path:?}")]
+	#[error("Finder layout path is reserved: {path:?}")]
 	FinderStore { path: VirtualPath },
+	#[error("Finder store {path:?} cannot resolve an unambiguous catalog child for {name:?}")]
+	FinderRecordTarget { path: VirtualPath, name: String },
+	#[error("Finder store {path:?} cannot represent the edited layout")]
+	FinderLayout {
+		path: VirtualPath,
+		#[source]
+		source: StoreEditError,
+	},
+	#[error("could not create default Finder settings for {path:?}")]
+	FinderDefaults {
+		path: VirtualPath,
+		#[source]
+		source: dmgez_finder::Error,
+	},
 }
 
 enum Change<'edit> {
@@ -78,22 +95,6 @@ enum Change<'edit> {
 		destination: &'edit VirtualPath,
 	},
 	Remove,
-}
-
-enum Route {
-	Keep,
-	Move(VirtualPath),
-	Remove,
-}
-
-impl Route {
-	fn path<'route>(&'route self, original: &'route VirtualPath) -> Option<&'route VirtualPath> {
-		match self {
-			Self::Keep => Some(original),
-			Self::Move(path) => Some(path),
-			Self::Remove => None,
-		}
-	}
 }
 
 /// Apply atomically with respect to the source snapshot. Edits select the original
@@ -105,15 +106,23 @@ pub(super) fn apply<S: ReadAt>(
 	edits: &[ProjectEdit],
 	_changes_dir: &Path,
 ) -> Result<(), OverlayError> {
-	if edits.is_empty() {
+	if edits.is_empty()
+		&& !snapshot
+			.entries
+			.values()
+			.any(|entry| matches!(entry.kind, Kind::FinderStore { .. }))
+	{
 		return Ok(());
 	}
-	let plan = plan(&snapshot.entries, edits)?;
+	let mut plan = plan(&snapshot.entries, edits)?;
 	let mut entries = BTreeMap::new();
-	for ((original, entry), route) in std::mem::take(&mut snapshot.entries)
+	for ((original, mut entry), route) in std::mem::take(&mut snapshot.entries)
 		.into_iter()
 		.zip(plan.routes)
 	{
+		if let Some(kind) = plan.replacements.remove(&original) {
+			entry.kind = kind;
+		}
 		match route {
 			Route::Keep => entries.insert(original, entry),
 			Route::Move(destination) => entries.insert(destination, entry),
@@ -131,6 +140,7 @@ pub(super) fn apply<S: ReadAt>(
 struct Plan<'edit, 'v, S> {
 	routes: Vec<Route>,
 	additions: Vec<(VirtualPath, Node<'v, S>)>,
+	replacements: BTreeMap<VirtualPath, Kind<'v, S>>,
 	label: Option<&'edit str>,
 }
 
@@ -141,12 +151,13 @@ fn plan<'edit, 'v, S>(
 	let mut additions = Vec::new();
 	let mut added_path_bytes = 0;
 	let mut changes = BTreeMap::new();
+	let mut positions = BTreeMap::new();
 	let mut label = None;
+	let mut index = PathIndex::default();
+	for (path, entry) in entries {
+		index.insert(path, TreeKind::from_kind(&entry.kind))?;
+	}
 	{
-		let mut index = PathIndex::default();
-		for path in entries.keys() {
-			index.insert(path, ())?;
-		}
 		for (edit_index, edit) in edits.iter().enumerate() {
 			match edit {
 				ProjectEdit::Add(draft) => {
@@ -161,15 +172,17 @@ fn plan<'edit, 'v, S>(
 					target,
 					changes: fields,
 				} => {
-					let target = index.source(edit_index, target)?;
-					if fields.position != FieldChange::Keep
-						|| fields.hidden != FieldChange::Keep
+					let target = ordinary_target(&index, edit_index, target)?;
+					if fields.hidden != FieldChange::Keep
 						|| fields.hide_extension != FieldChange::Keep
 					{
 						return Err(OverlayError::FinderChange { index: edit_index });
 					}
 					if matches!(changes.get(target), Some(Change::Remove)) {
 						return Err(OverlayError::ConflictingEdit { index: edit_index });
+					}
+					if let Some(change) = finder::PositionEdit::read(edit_index, fields.position)? {
+						positions.insert(target, change);
 					}
 					if let Some(destination) = &fields.destination {
 						check_destination(edit_index, destination)?;
@@ -183,8 +196,10 @@ fn plan<'edit, 'v, S>(
 					}
 				}
 				ProjectEdit::Remove { target } => {
-					let target = index.source(edit_index, target)?;
-					if changes.insert(target, Change::Remove).is_some() {
+					let target = ordinary_target(&index, edit_index, target)?;
+					if positions.contains_key(target)
+						|| changes.insert(target, Change::Remove).is_some()
+					{
 						return Err(OverlayError::ConflictingEdit { index: edit_index });
 					}
 				}
@@ -197,24 +212,49 @@ fn plan<'edit, 'v, S>(
 		}
 	}
 	let routes = route_entries(entries, &changes, added_path_bytes)?;
-	validate_tree(
-		entries
-			.iter()
-			.zip(&routes)
-			.filter_map(|((original, entry), route)| {
-				route.path(original).map(|path| (path, is_directory(entry)))
-			})
-			.chain(
-				additions
-					.iter()
-					.map(|(path, entry)| (path, is_directory(entry))),
-			),
-	)?;
+	let layout = {
+		let final_paths = validate_tree(
+			entries
+				.iter()
+				.zip(&routes)
+				.filter_map(|((original, entry), route)| {
+					route
+						.path(original)
+						.map(|path| (path, TreeKind::from_kind(&entry.kind)))
+				})
+				.chain(
+					additions
+						.iter()
+						.map(|(path, entry)| (path, TreeKind::from_kind(&entry.kind))),
+				),
+		)?;
+		finder::plan(entries, &routes, &index, &final_paths, positions)?
+	};
+	additions.try_reserve(layout.additions.len())?;
+	additions.extend(layout.additions);
 	Ok(Plan {
 		routes,
 		additions,
+		replacements: layout.replacements,
 		label,
 	})
+}
+
+fn ordinary_target<'path>(
+	index: &PathIndex<'path, TreeKind>,
+	edit: usize,
+	target: &VirtualPath,
+) -> Result<&'path VirtualPath, OverlayError> {
+	match index.find(target)? {
+		Some((path, TreeKind::FinderStore)) => {
+			Err(OverlayError::FinderStore { path: path.clone() })
+		}
+		Some((path, _)) => Ok(path),
+		None => Err(OverlayError::UnknownTarget {
+			index: edit,
+			path: target.clone(),
+		}),
+	}
 }
 
 fn add<'v, S>(
@@ -265,169 +305,4 @@ fn check_label(label: &str) -> Result<(), OverlayError> {
 		return Err(OverlayError::VolumeName);
 	}
 	Ok(())
-}
-
-fn route_entries<S>(
-	entries: &BTreeMap<VirtualPath, Node<'_, S>>,
-	changes: &BTreeMap<&VirtualPath, Change<'_>>,
-	mut path_bytes: usize,
-) -> Result<Vec<Route>, OverlayError> {
-	let mut routes = Vec::<Route>::new();
-	routes.try_reserve_exact(entries.len())?;
-	let mut directories = BTreeMap::<&str, (&VirtualPath, usize)>::new();
-	for (path, entry) in entries {
-		let (parent, leaf) = path
-			.as_str()
-			.rsplit_once(PATH_SEPARATOR)
-			.ok_or_else(|| OverlayError::SourceHierarchy { path: path.clone() })?;
-		let final_parent = if parent.is_empty() {
-			Some(parent)
-		} else {
-			let &(original, route_index) = directories
-				.get(parent)
-				.ok_or_else(|| OverlayError::SourceHierarchy { path: path.clone() })?;
-			let previous = routes
-				.get(route_index)
-				.ok_or_else(|| OverlayError::SourceHierarchy { path: path.clone() })?;
-			previous.path(original).map(VirtualPath::as_str)
-		};
-		let route = match (changes.get(path), final_parent) {
-			(Some(Change::Move { index, .. }), None) => {
-				return Err(OverlayError::ConflictingEdit { index: *index });
-			}
-			(Some(Change::Remove) | None, None) | (Some(Change::Remove), Some(_)) => Route::Remove,
-			(Some(Change::Move { destination, .. }), Some(_)) => {
-				Route::Move((*destination).clone())
-			}
-			(None, Some(destination)) if destination == parent => Route::Keep,
-			(None, Some(destination)) => {
-				if destination
-					.len()
-					.saturating_add(1)
-					.saturating_add(leaf.len())
-					> MAX_PATH_BYTES
-				{
-					return Err(OverlayError::Budget);
-				}
-				let joined = format!("{destination}{PATH_SEPARATOR}{leaf}")
-					.parse()
-					.map_err(|_| OverlayError::PathProfile { path: path.clone() })?;
-				Route::Move(joined)
-			}
-		};
-		if let Some(path) = route.path(path) {
-			check_path_bounds(path)?;
-			charge(&mut path_bytes, path.as_str().len())?;
-		}
-		if is_directory(entry) {
-			directories.insert(path.as_str(), (path, routes.len()));
-		}
-		routes.push(route);
-	}
-	Ok(routes)
-}
-
-fn is_directory<S>(entry: &Node<'_, S>) -> bool {
-	matches!(entry.kind, Kind::Directory)
-}
-
-fn validate_tree<'a>(
-	entries: impl Iterator<Item = (&'a VirtualPath, bool)>,
-) -> Result<(), OverlayError> {
-	let mut index = PathIndex::default();
-	for (path, directory) in entries {
-		index.insert(path, directory)?;
-	}
-	let store_name = component_key(FINDER_STORE_NAME).map_err(|_| OverlayError::VolumeName)?;
-	for (key, &(path, _)) in &index.paths {
-		if key.rsplit(|unit| *unit == COMPONENT_BOUNDARY).next() == Some(store_name.as_slice()) {
-			return Err(OverlayError::FinderStore { path: path.clone() });
-		}
-		if let Some(boundary) = key.iter().rposition(|unit| *unit == COMPONENT_BOUNDARY)
-			&& !index
-				.paths
-				.get(&key[..boundary])
-				.is_some_and(|(_, directory)| *directory)
-		{
-			return Err(OverlayError::Parent { path: path.clone() });
-		}
-	}
-	Ok(())
-}
-
-#[derive(Default)]
-struct PathIndex<'a, T> {
-	paths: BTreeMap<Vec<u16>, (&'a VirtualPath, T)>,
-	key_bytes: usize,
-}
-
-impl<'a, T> PathIndex<'a, T> {
-	fn insert(&mut self, path: &'a VirtualPath, value: T) -> Result<(), OverlayError> {
-		if self.paths.len() == MAX_ENTRIES {
-			return Err(OverlayError::Budget);
-		}
-		let key = path_key(path)?;
-		charge(&mut self.key_bytes, std::mem::size_of_val(key.as_slice()))?;
-		if let Some((first, _)) = self.paths.insert(key, (path, value)) {
-			return Err(OverlayError::Collision {
-				first: first.clone(),
-				second: path.clone(),
-			});
-		}
-		Ok(())
-	}
-
-	fn source(&self, index: usize, target: &VirtualPath) -> Result<&'a VirtualPath, OverlayError> {
-		let key = path_key(target)?;
-		self.paths
-			.get(&key)
-			.map(|(path, _)| *path)
-			.ok_or_else(|| OverlayError::UnknownTarget {
-				index,
-				path: target.clone(),
-			})
-	}
-}
-
-fn path_key(path: &VirtualPath) -> Result<Vec<u16>, OverlayError> {
-	check_path_bounds(path)?;
-	let mut key = Vec::new();
-	for component in path.components() {
-		let name = component_key(component).map_err(|source| OverlayError::PathName {
-			path: path.clone(),
-			source,
-		})?;
-		if matches!(
-			name.as_slice(),
-			[] | [DOT_WEIGHT] | [DOT_WEIGHT, DOT_WEIGHT]
-		) {
-			return Err(OverlayError::PathProfile { path: path.clone() });
-		}
-		let separated = !key.is_empty();
-		key.try_reserve(name.len() + usize::from(separated))?;
-		if separated {
-			key.push(COMPONENT_BOUNDARY);
-		}
-		key.extend_from_slice(&name);
-	}
-	Ok(key)
-}
-
-fn check_path_bounds(path: &VirtualPath) -> Result<(), OverlayError> {
-	if path.as_str().len() > MAX_PATH_BYTES || path.components().count() > MAX_DEPTH {
-		return Err(OverlayError::Budget);
-	}
-	Ok(())
-}
-
-fn charge(total: &mut usize, bytes: usize) -> Result<(), OverlayError> {
-	*total = total
-		.checked_add(bytes)
-		.filter(|count| *count <= MAX_CAPTURE_BYTES)
-		.ok_or(OverlayError::Budget)?;
-	Ok(())
-}
-
-fn component_key(component: &str) -> Result<Vec<u16>, NameError> {
-	COLLATION.key(normalize(component)?.as_units())
 }
