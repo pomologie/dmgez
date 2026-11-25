@@ -64,6 +64,15 @@ python3 -B tests/compatibility/volume-read/check_xattr_diff.py --cli target/apfs
 
 [Native extended-attribute results](native-xattr-diff.json)
 
+The native per-object FinderInfo check uses `diff` and both readers. Use APFS sources with the dedicated `VolumeView::finder_info` API, or unpack the four APFS 0.1.0 archives built from `52768a7`. The HFS+ 0.1.0 archives from `11740d3` provide the required catalog API.
+
+```sh
+python3 tools/compose_filesystem_cli.py --apfs ../apfs --hfsplus ../hfsplus --no-default-features --features diff,hfsplus-read
+python3 -B tests/compatibility/volume-read/check_finder_info_diff.py --cli target/apfs-cli/debug/dmgez
+```
+
+The oracle compares the CLI's findings with exact FinderInfo read through native `xattr` on read-only APFS and HFS+ mounts. It checks same-inode aliases, symbolic links, attribute presence, content and resource fork preservation, and unchanged image digests. Run the script with `--native-only` to exercise the fixture and independent checks. [Native FinderInfo results](native-finder-info-diff.json)
+
 The native Finder layout oracle uses `finder-diff` and the APFS reader. Install `ds_store==1.3.4` and `mac_alias==2.2.3` in the Python environment used for the oracle.
 
 ```sh

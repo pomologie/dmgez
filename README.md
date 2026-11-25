@@ -43,6 +43,8 @@ target/apfs-cli/debug/dmgez diff left.dmg right.dmg --mode semantic --filesystem
 
 Add `--xattrs` in semantic mode to compare supported stored extended attributes. The report identifies changed names without exposing their values.
 
+Add `--finder-info` to compare per-object FinderInfo on common paths. It uses the selected filesystem reader and can run alongside `--xattrs` and `--finder-layout`.
+
 Build with `finder-diff` and add `--finder-layout` in semantic mode to compare decoded layout records in matching `.DS_Store` files. Reports identify the affected records. Combine it with `--xattrs` to compare both policies in one run.
 
 ```sh
