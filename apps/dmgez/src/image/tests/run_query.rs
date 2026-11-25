@@ -11,12 +11,13 @@ use dmgez_udif::{
 const RUNS_PER_CODEC: usize = RUN_PAGE_SIZE + 2;
 const TOTAL_RUNS: usize = RUNS_PER_CODEC * 2;
 const PAYLOAD_BYTE: u8 = b'R';
+const SECTOR_SIZE: usize = SECTOR_BYTES as usize;
 
 fn mixed_runs() -> ImageTab {
 	let mut stored = tempfile::tempfile().unwrap();
-	let mut logical = vec![0; TOTAL_RUNS * SECTOR_BYTES as usize];
-	for pair in logical.chunks_exact_mut((2 * SECTOR_BYTES) as usize) {
-		pair[SECTOR_BYTES as usize..].fill(PAYLOAD_BYTE);
+	let mut logical = vec![0; TOTAL_RUNS * SECTOR_SIZE];
+	for pair in logical.as_chunks_mut::<{ 2 * SECTOR_SIZE }>().0 {
+		pair[SECTOR_SIZE..].fill(PAYLOAD_BYTE);
 	}
 	write_image(
 		logical.as_slice(),
@@ -24,7 +25,7 @@ fn mixed_runs() -> ImageTab {
 		&mut stored,
 		&WriteOptions {
 			profile: Profile::Udzo,
-			chunk_bytes: SECTOR_BYTES as usize,
+			chunk_bytes: SECTOR_SIZE,
 			..WriteOptions::default()
 		},
 	)
@@ -100,7 +101,7 @@ fn accessible_query_controls_keep_filtered_ordinals_exportable_and_reset_to_logi
 	export.execute(&destination, &cancel).unwrap();
 	assert_eq!(
 		std::fs::read(destination).unwrap(),
-		vec![PAYLOAD_BYTE; SECTOR_BYTES as usize]
+		vec![PAYLOAD_BYTE; SECTOR_SIZE]
 	);
 	assert!(tab.export(Kind::Run(0)).is_none());
 	assert!(matches!(
