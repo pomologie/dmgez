@@ -322,6 +322,7 @@ dependencies = [
  "dmgez-udif",
  "fs_at",
  "globset",
+ "png",
  "rustix",
  "thiserror",
  "windows-namespace-request-sys",

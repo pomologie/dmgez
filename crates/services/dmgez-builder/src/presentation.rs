@@ -4,9 +4,10 @@ use std::{
 	borrow::Cow,
 	collections::{BTreeMap, BTreeSet},
 	mem::size_of,
+	path::{Path, PathBuf},
 };
 
-use dmgez_config::{FinderOptions, Project, VirtualPath, VirtualPathError};
+use dmgez_config::{Background, FinderOptions, LocalPath, Project, VirtualPath, VirtualPathError};
 use dmgez_finder::{LayoutItem, STORE_NAME, write_store};
 use thiserror::Error;
 
@@ -15,10 +16,14 @@ use crate::{
 	preflight::{ExecutionProfile, FinderPlan},
 };
 
+mod background;
 pub(crate) mod settings;
 #[cfg(feature = "volume-icon")]
 pub(crate) mod volume_icon;
 
+pub use background::DeferredFinderStore;
+use background::{BackgroundSource, DIRECTORY_NAME, DIRECTORY_PATH};
+pub use dmgez_finder::ImageBackgroundIdentity;
 use settings::{resolve_options, without_positions};
 
 const IMAGE_ROOT: &str = "/";
@@ -65,6 +70,22 @@ pub enum Error {
 	},
 	#[error("Finder metadata generation was cancelled")]
 	Cancelled,
+	#[error("content conflicts with the reserved Finder background directory: {path:?}")]
+	BackgroundCollision { path: VirtualPath },
+	#[error("Finder PNG background must contain 1 to {max} encoded bytes", max = background::MAX_FILE_BYTES)]
+	BackgroundFileSize,
+	#[error("Finder background PNG exceeds the admitted decoding memory or dimensions")]
+	BackgroundMemory,
+	#[error("animated PNG images are unsupported as Finder backgrounds")]
+	BackgroundAnimated,
+	#[error("Finder background source failed its identity checks")]
+	BackgroundSource(#[source] crate::manifest::Error),
+	#[error("could not read the captured Finder background")]
+	BackgroundRead(#[source] dmgez_core::source::SourceError),
+	#[error("Finder background must be a valid PNG")]
+	BackgroundPng(#[source] png::DecodingError),
+	#[error("Finder background alias names a different path than the captured image")]
+	BackgroundTargetMismatch,
 	#[cfg(feature = "volume-icon")]
 	#[error("content conflicts with the reserved volume icon: {path:?}")]
 	VolumeIconCollision { path: VirtualPath },
@@ -92,6 +113,7 @@ pub enum Error {
 ///
 /// Fails when a folder, position, or generated path is invalid or ambiguous,
 /// budgets cannot accommodate the generated metadata, or the plan is cancelled.
+/// Image backgrounds require filesystem identity binding through build preparation.
 /// Supply the manifest and execution profile for the same project.
 pub fn generate(
 	project: &Project,
@@ -102,17 +124,78 @@ pub fn generate(
 		return Ok(Vec::new());
 	}
 	let mut budget = AssetBudget::new(manifest, profile)?;
-	generate_stores(project, manifest, profile, &mut budget)
+	Ok(plan_stores(project, manifest, profile, &mut budget, false)?
+		.assets
+		.ready)
 }
 
-pub(crate) fn generate_stores(
+#[derive(Debug, Default)]
+pub(crate) struct PreparedAssets {
+	pub(crate) ready: Vec<GeneratedAsset>,
+	pub(crate) directories: Vec<VirtualPath>,
+	pub(crate) deferred: Vec<DeferredFinderStore>,
+	pub(crate) deferred_metadata_bytes: usize,
+	#[cfg(feature = "volume-icon")]
+	pub(crate) root_finder_info: volume_icon::RootFinderInfo,
+}
+
+#[derive(Default)]
+struct PlannedStores {
+	assets: PreparedAssets,
+	backgrounds: Vec<BackgroundSource>,
+}
+
+pub(crate) fn prepare(
+	project: &Project,
+	manifest: &mut Manifest,
+	profile: &ExecutionProfile,
+	config_dir: &Path,
+	output: Option<&LocalPath>,
+	#[cfg(feature = "volume-icon")] volume_icon: Option<usize>,
+) -> Result<PreparedAssets, Error> {
+	let mut budget = AssetBudget::new(manifest, profile)?;
+	let PlannedStores {
+		mut assets,
+		backgrounds,
+	} = plan_stores(project, manifest, profile, &mut budget, true)?;
+	let sort_files = !backgrounds.is_empty();
+	#[cfg(feature = "volume-icon")]
+	let sort_files = sort_files || volume_icon.is_some();
+	assets.ready.try_reserve_exact(backgrounds.len())?;
+	for background in backgrounds {
+		assets.ready.push(background.capture(
+			manifest,
+			profile,
+			config_dir,
+			output,
+			&mut budget,
+		)?);
+	}
+	#[cfg(feature = "volume-icon")]
+	if let Some(index) = volume_icon {
+		let icon = manifest.auxiliary_source(index);
+		let (asset, flags) = volume_icon::prepare_asset(icon, manifest, profile, &mut budget)?;
+		assets.ready.try_reserve_exact(1)?;
+		assets.ready.push(asset);
+		assets.root_finder_info = flags;
+	}
+	if sort_files {
+		assets
+			.ready
+			.sort_unstable_by(|left, right| left.path.cmp(&right.path));
+	}
+	Ok(assets)
+}
+
+fn plan_stores(
 	project: &Project,
 	manifest: &Manifest,
 	profile: &ExecutionProfile,
 	budget: &mut AssetBudget,
-) -> Result<Vec<GeneratedAsset>, Error> {
+	allow_deferred: bool,
+) -> Result<PlannedStores, Error> {
 	if profile.finder() == FinderPlan::NoStore {
-		return Ok(Vec::new());
+		return Ok(PlannedStores::default());
 	}
 	check_cancelled(profile)?;
 
@@ -123,26 +206,95 @@ pub(crate) fn generate_stores(
 	let inherited = root_options
 		.filter(|_| folders.len() > 1)
 		.map(without_positions);
-	let mut generated = Vec::new();
-	generated.try_reserve_exact(folders.len())?;
+	let mut plan = PlannedStores::default();
+	let mut backgrounds_by_path = BTreeMap::new();
+	plan.assets.ready.try_reserve_exact(folders.len())?;
 	for (path, folder) in folders {
 		check_cancelled(profile)?;
 		let store = store_path(path)?;
-		budget.charge(store.as_str().len())?;
 		let options = if path == IMAGE_ROOT {
 			root_options.map(Cow::Borrowed)
 		} else {
 			resolve_options(inherited.as_ref(), folder.options)
 		};
+		if allow_deferred
+			&& let Some(settings) = options.as_deref()
+			&& let Some(Background::Image { source, .. }) = &settings.background
+		{
+			let background_path =
+				plan.add_background(source, manifest, &mut backgrounds_by_path, budget)?;
+			let (deferred, retained) = DeferredFinderStore::plan(
+				store,
+				background_path,
+				options.expect("an image was selected"),
+				&folder.children,
+				budget,
+			)?;
+			plan.assets.deferred_metadata_bytes = plan
+				.assets
+				.deferred_metadata_bytes
+				.checked_add(retained)
+				.ok_or(Error::MetadataBudget)?;
+			plan.assets.deferred.try_reserve_exact(1)?;
+			plan.assets.deferred.push(deferred);
+			continue;
+		}
+		budget.charge(store.as_str().len())?;
 		let bytes =
 			write_store(options.as_deref(), &folder.children).map_err(|source| Error::Layout {
 				folder: path.to_owned(),
 				source,
 			})?;
 		budget.charge(bytes.capacity())?;
-		generated.push(GeneratedAsset { path: store, bytes });
+		plan.assets
+			.ready
+			.push(GeneratedAsset { path: store, bytes });
 	}
-	Ok(generated)
+	Ok(plan)
+}
+
+impl PlannedStores {
+	fn add_background(
+		&mut self,
+		source: &LocalPath,
+		manifest: &Manifest,
+		by_path: &mut BTreeMap<PathBuf, usize>,
+		budget: &mut AssetBudget,
+	) -> Result<&VirtualPath, Error> {
+		if let Some(index) = by_path.get(source.as_path()) {
+			return Ok(&self.backgrounds[*index].path);
+		}
+		if self.backgrounds.is_empty() {
+			if let Some(entry) = manifest.entries().iter().find(|entry| {
+				entry
+					.destination
+					.components()
+					.next()
+					.is_some_and(|name| name.eq_ignore_ascii_case(DIRECTORY_NAME))
+			}) {
+				return Err(Error::BackgroundCollision {
+					path: entry.destination.clone(),
+				});
+			}
+			budget.reserve_assets(1)?;
+			budget.charge(DIRECTORY_PATH.len())?;
+			self.assets.directories.try_reserve_exact(1)?;
+			self.assets.directories.push(
+				DIRECTORY_PATH
+					.parse()
+					.expect("the reserved background directory is a valid path"),
+			);
+		}
+		let index = self.backgrounds.len();
+		let pending = BackgroundSource::reserve(source, index, budget)?;
+		budget.charge(size_of::<BackgroundSource>())?;
+		budget.charge(size_of::<(PathBuf, usize)>())?;
+		budget.charge(source.as_path().as_os_str().len())?;
+		self.backgrounds.try_reserve_exact(1)?;
+		self.backgrounds.push(pending);
+		by_path.insert(source.as_path().to_owned(), index);
+		Ok(&self.backgrounds[index].path)
+	}
 }
 
 pub(crate) struct AssetBudget {

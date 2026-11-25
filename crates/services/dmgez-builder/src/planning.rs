@@ -6,6 +6,8 @@ use std::{
 };
 
 use dmgez_config::Project;
+#[cfg(feature = "finder-write")]
+use dmgez_config::VirtualPath;
 use dmgez_udif::writer::Cancellation;
 use thiserror::Error;
 
@@ -16,10 +18,10 @@ use crate::{
 };
 
 #[cfg(feature = "finder-write")]
-use crate::presentation::{self, GeneratedAsset};
+use crate::presentation::{self, DeferredFinderStore, GeneratedAsset, PreparedAssets};
 
 #[cfg(feature = "volume-icon")]
-use presentation::volume_icon::{FINDER_INFO_BYTES, RootFinderInfo, prepare_asset};
+use presentation::volume_icon::FINDER_INFO_BYTES;
 
 /// Source manifest and generated assets ready for the selected filesystem engine.
 /// Capacity remains subject to the filesystem's layout and allocation checks.
@@ -29,9 +31,7 @@ pub struct PreparedBuild {
 	manifest: Manifest,
 	output_path: Option<PathBuf>,
 	#[cfg(feature = "finder-write")]
-	finder_assets: Vec<GeneratedAsset>,
-	#[cfg(feature = "volume-icon")]
-	root_finder_info: RootFinderInfo,
+	finder_assets: PreparedAssets,
 }
 
 impl PreparedBuild {
@@ -54,13 +54,41 @@ impl PreparedBuild {
 	#[cfg(feature = "finder-write")]
 	#[must_use]
 	pub fn finder_assets(&self) -> &[GeneratedAsset] {
-		&self.finder_assets
+		&self.finder_assets.ready
+	}
+
+	/// Generated Finder directories to reserve with the catalog manifest.
+	#[cfg(feature = "finder-write")]
+	#[must_use]
+	pub fn finder_directories(&self) -> &[VirtualPath] {
+		&self.finder_assets.directories
+	}
+
+	/// Finder stores whose contents require the frozen catalog identities.
+	#[cfg(feature = "finder-write")]
+	#[must_use]
+	pub fn deferred_finder_stores(&self) -> &[DeferredFinderStore] {
+		&self.finder_assets.deferred
+	}
+
+	/// Accounted metadata for pending layouts, excluding final store bytes and directories.
+	#[cfg(feature = "finder-write")]
+	#[must_use]
+	pub const fn deferred_finder_metadata_bytes(&self) -> usize {
+		self.finder_assets.deferred_metadata_bytes
+	}
+
+	/// Count of ready and deferred Finder files.
+	#[cfg(feature = "finder-write")]
+	#[must_use]
+	pub fn finder_asset_count(&self) -> usize {
+		self.finder_assets.ready.len() + self.finder_assets.deferred.len()
 	}
 
 	/// Merges the admitted volume icon's flag into the root catalog folder metadata.
 	#[cfg(feature = "volume-icon")]
 	pub fn apply_root_finder_info(&self, finder_info: &mut [u8; FINDER_INFO_BYTES]) {
-		self.root_finder_info.apply(finder_info);
+		self.finder_assets.root_finder_info.apply(finder_info);
 	}
 }
 
@@ -152,10 +180,11 @@ pub fn prepare_with_progress(
 	if profile.write_options().cancellation.is_cancelled() {
 		return Err(Error::Cancelled);
 	}
-	#[cfg(feature = "volume-icon")]
-	let (manifest, volume_icon) = {
+	#[cfg(feature = "finder-write")]
+	let (manifest, finder_assets) = {
 		let mut manifest = manifest;
-		let source = profile
+		#[cfg(feature = "volume-icon")]
+		let volume_icon = profile
 			.volume_icon_source()
 			.map(|input| {
 				manifest.capture_auxiliary_regular(
@@ -166,31 +195,21 @@ pub fn prepare_with_progress(
 				)
 			})
 			.transpose()?;
-		(manifest, source)
-	};
-	#[cfg(all(feature = "finder-write", not(feature = "volume-icon")))]
-	let finder_assets = presentation::generate(project, &manifest, &profile)?;
-	#[cfg(feature = "volume-icon")]
-	let (finder_assets, root_finder_info) = {
-		let mut budget = presentation::AssetBudget::new(&manifest, &profile)?;
-		let mut assets = presentation::generate_stores(project, &manifest, &profile, &mut budget)?;
-		let mut root_finder_info = RootFinderInfo::default();
-		if let Some(index) = volume_icon {
-			let source = manifest.auxiliary_source(index);
-			let (asset, flags) = prepare_asset(source, &manifest, &profile, &mut budget)?;
-			assets
-				.try_reserve_exact(1)
-				.map_err(presentation::Error::from)?;
-			assets.push(asset);
-			assets.sort_unstable_by(|left, right| left.path.cmp(&right.path));
-			root_finder_info = flags;
-		}
-		(assets, root_finder_info)
+		let assets = presentation::prepare(
+			project,
+			&mut manifest,
+			&profile,
+			&config_dir,
+			path,
+			#[cfg(feature = "volume-icon")]
+			volume_icon,
+		)?;
+		(manifest, assets)
 	};
 	#[cfg(feature = "finder-write")]
-	if !finder_assets.is_empty() {
+	if !finder_assets.ready.is_empty() || !finder_assets.deferred.is_empty() {
 		progress(BuildProgress::FinderAssetsPrepared {
-			assets: finder_assets.len(),
+			assets: finder_assets.ready.len() + finder_assets.deferred.len(),
 		});
 		if profile.write_options().cancellation.is_cancelled() {
 			return Err(Error::Cancelled);
@@ -202,8 +221,6 @@ pub fn prepare_with_progress(
 		output_path: path.map(|path| path.resolve(&config_dir)),
 		#[cfg(feature = "finder-write")]
 		finder_assets,
-		#[cfg(feature = "volume-icon")]
-		root_finder_info,
 	})
 }
 

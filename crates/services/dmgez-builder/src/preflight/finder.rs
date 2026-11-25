@@ -40,7 +40,7 @@ pub(super) fn finder_plan(
 	capabilities
 		.finder_layout
 		.require(BuildFeature::FinderLayout)?;
-	admit_layout(project)
+	admit_layout(project, capabilities.finder_image_background)
 }
 
 pub(super) fn volume_icon_source(
@@ -65,14 +65,20 @@ pub(super) fn volume_icon_source(
 }
 
 #[cfg(not(feature = "finder-write"))]
-fn admit_layout(_project: &Project) -> Result<FinderPlan, PreflightError> {
+fn admit_layout(
+	_project: &Project,
+	_image_background: Availability,
+) -> Result<FinderPlan, PreflightError> {
 	Err(PreflightError::FeatureNotCompiled(
 		BuildFeature::FinderLayout,
 	))
 }
 
 #[cfg(feature = "finder-write")]
-fn admit_layout(project: &Project) -> Result<FinderPlan, PreflightError> {
+fn admit_layout(
+	project: &Project,
+	image_background: Availability,
+) -> Result<FinderPlan, PreflightError> {
 	use std::collections::BTreeSet;
 
 	use dmgez_config::View;
@@ -80,7 +86,7 @@ fn admit_layout(project: &Project) -> Result<FinderPlan, PreflightError> {
 	let Some(finder) = &project.finder else {
 		return Ok(FinderPlan::IconView);
 	};
-	dmgez_finder::validate_options(Some(&finder.options))?;
+	admit_options(Some(&finder.options), image_background)?;
 	let inherited = (!finder.folders.is_empty()).then(|| without_positions(&finder.options));
 	let mut folders = BTreeSet::new();
 	for (index, folder) in finder.folders.iter().enumerate() {
@@ -91,7 +97,7 @@ fn admit_layout(project: &Project) -> Result<FinderPlan, PreflightError> {
 			return Err(PreflightError::DuplicateFinderFolder { index });
 		}
 		let options = resolve_options(inherited.as_ref(), Some(&folder.options));
-		dmgez_finder::validate_options(options.as_deref())?;
+		admit_options(options.as_deref(), image_background)?;
 	}
 	check_duplicate_positions(project, finder)?;
 	match finder.options.default_view {
@@ -99,6 +105,27 @@ fn admit_layout(project: &Project) -> Result<FinderPlan, PreflightError> {
 		Some(View::ListView) => Ok(FinderPlan::ListView),
 		Some(view) => Err(dmgez_finder::Error::View(view).into()),
 	}
+}
+
+#[cfg(feature = "finder-write")]
+fn admit_options(
+	options: Option<&dmgez_config::FinderOptions>,
+	image_background: Availability,
+) -> Result<(), PreflightError> {
+	if let Some(options) = options
+		&& let Some(dmgez_config::Background::Image { retina, .. }) = &options.background
+	{
+		if retina.is_some() {
+			return Err(PreflightError::UnsupportedFinder(
+				FinderSetting::BackgroundRetina,
+			));
+		}
+		image_background.require(BuildFeature::FinderImageBackground)?;
+		dmgez_finder::validate_options_for_image_background(options)?;
+	} else {
+		dmgez_finder::validate_options(options)?;
+	}
+	Ok(())
 }
 
 #[cfg(feature = "finder-write")]

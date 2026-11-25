@@ -44,6 +44,8 @@ pub struct BuildCapabilities {
 	pub hfsplus_unicode: Availability,
 	/// Finder metadata store writing for icon and list layouts.
 	pub finder_layout: Availability,
+	/// Binding a captured Finder background to frozen filesystem catalog identities.
+	pub finder_image_background: Availability,
 	/// Preservation of a prebuilt ICNS and its root catalog custom-icon flag.
 	pub finder_volume_icon: Availability,
 	/// Application of explicit hidden and hide-extension filesystem flags.
@@ -72,6 +74,8 @@ pub enum BuildFeature {
 	Parallel,
 	#[error("Finder layout")]
 	FinderLayout,
+	#[error("Finder image background binding")]
+	FinderImageBackground,
 	#[error("prebuilt Finder volume icon")]
 	FinderVolumeIcon,
 	#[error("Finder entry flags")]
@@ -187,6 +191,8 @@ pub enum FinderSetting {
 	VolumeIcon,
 	#[error("custom item icon")]
 	CustomIcon,
+	#[error("separate Retina background asset")]
+	BackgroundRetina,
 }
 
 /// A reason configuration cannot enter the source and build stages.
