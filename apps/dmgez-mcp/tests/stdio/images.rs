@@ -1,4 +1,4 @@
-use std::{fs, os::unix::fs::symlink};
+use std::fs;
 
 use dmgez_udif::TRAILER_BYTES;
 use serde_json::json;
@@ -95,7 +95,8 @@ fn rejects_unconfined_or_overbudget_images_and_keeps_the_authorized_directory_he
 	fs::write(root.join(IMAGE_FILE), UDZO).unwrap();
 	fs::write(root.join("bad.dmg"), b"private image fixture sentinel").unwrap();
 	fs::create_dir(root.join("dir.dmg")).unwrap();
-	symlink(&outside, root.join("alias.dmg")).unwrap();
+	#[cfg(unix)]
+	std::os::unix::fs::symlink(&outside, root.join("alias.dmg")).unwrap();
 	fs::hard_link(&outside, root.join("linked.dmg")).unwrap();
 	let mut client = Client::start_with_images(&base, Some(&root));
 	let capabilities = client.tool(CAPABILITIES, json!({}));

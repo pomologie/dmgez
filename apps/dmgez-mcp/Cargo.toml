@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 description = "Local MCP tools for dmgez projects"
 
-[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+[target.'cfg(any(target_os = "linux", target_os = "macos", windows))'.dependencies]
 # Workspace formats
 dmgez-udif = { workspace = true, features = ["read"] }
 
@@ -24,9 +24,6 @@ sha2.workspace = true
 # Serialization and configuration
 serde.workspace = true
 
-# Filesystem access and staging
-rustix.workspace = true
-
 # Async runtime
 tokio = { version = "1.54.1", default-features = false, features = ["io-std", "rt"] }
 
@@ -35,6 +32,18 @@ clap.workspace = true
 
 # MCP protocol
 rmcp = { version = "=3.11.0", default-features = false, features = ["macros", "server"] }
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+# Filesystem access
+rustix.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# Filesystem access
+fs_at = "=0.2.1"
+
+# Windows filesystem APIs
+windows-namespace-request-sys = "=0.5.1"
+windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
 # Serialization and configuration

@@ -1,13 +1,15 @@
-#![cfg(any(target_os = "linux", target_os = "macos"))]
+#![cfg(any(target_os = "linux", target_os = "macos", windows))]
 
 #[path = "stdio/images.rs"]
 mod images;
+#[cfg(windows)]
+#[path = "stdio/windows.rs"]
+mod windows;
 
 use std::{
 	collections::BTreeSet,
 	fs::{self, File},
 	io::{BufRead, BufReader, Write},
-	os::unix::fs::symlink,
 	path::Path,
 	process::{Child, ChildStdin, Command, Stdio},
 	sync::mpsc::{self, Receiver, SyncSender},
@@ -128,18 +130,22 @@ fn rejects_unconfined_files_and_arguments_before_reading() {
 	fs::create_dir(&root).unwrap();
 	let outside = base.join("outside.toml");
 	fs::write(&outside, VALID_PROJECT).unwrap();
-	symlink(&outside, root.join("alias.toml")).unwrap();
+	#[cfg(unix)]
+	std::os::unix::fs::symlink(&outside, root.join("alias.toml")).unwrap();
 	fs::hard_link(&outside, root.join("hardlink.toml")).unwrap();
 	fs::create_dir(root.join("folder.toml")).unwrap();
-	let root_alias = base.join("root-alias");
-	symlink(&root, &root_alias).unwrap();
-	let admission = Command::new(env!("CARGO_BIN_EXE_dmgez-mcp"))
-		.arg("--project-root")
-		.arg(root_alias)
-		.output()
-		.unwrap();
-	assert!(!admission.status.success());
-	assert!(admission.stdout.is_empty());
+	#[cfg(unix)]
+	{
+		let root_alias = base.join("root-alias");
+		std::os::unix::fs::symlink(&root, &root_alias).unwrap();
+		let admission = Command::new(env!("CARGO_BIN_EXE_dmgez-mcp"))
+			.arg("--project-root")
+			.arg(root_alias)
+			.output()
+			.unwrap();
+		assert!(!admission.status.success());
+		assert!(admission.stdout.is_empty());
+	}
 	let mut client = Client::start(&root);
 	for file_name in [
 		"../outside.toml",
@@ -241,6 +247,7 @@ fn lists_candidate_names_in_bounded_pages() {
 		"first.toml",
 		"second.toml",
 		"ignored.txt",
+		#[cfg(unix)]
 		"x\n.toml",
 	] {
 		fs::write(root.join(name), "malformed candidate [=").unwrap();
@@ -287,7 +294,8 @@ fn bounds_listing_reply_bytes_and_total_directory_work() {
 	let max_page = limits["max_project_page_size"].as_u64().unwrap();
 	let max_frame = limits["max_request_bytes"].as_u64().unwrap() as usize;
 	for index in 0..=max_page {
-		let name = format!("{index:02}{}.toml", "\"".repeat(248));
+		let character = if cfg!(windows) { "x" } else { "\"" };
+		let name = format!("{index:02}{}.toml", character.repeat(248));
 		fs::write(root.join(name), VALID_PROJECT).unwrap();
 	}
 	let page = client.call(TOOLS_CALL, json!({"name": PROJECT_LIST, "arguments": {}}));

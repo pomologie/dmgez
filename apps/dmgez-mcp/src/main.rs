@@ -1,17 +1,17 @@
 use std::process::ExitCode;
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 mod image;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 mod local;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 mod project;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 mod server;
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 mod transport;
 
-#[cfg(any(target_os = "linux", target_os = "macos"))]
+#[cfg(any(target_os = "linux", target_os = "macos", windows))]
 fn main() -> ExitCode {
 	use clap::Parser;
 
@@ -25,8 +25,8 @@ fn main() -> ExitCode {
 	}
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "macos")))]
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
 fn main() -> ExitCode {
-	eprintln!("dmgez-mcp requires macOS or Linux for descriptor-based project confinement");
+	eprintln!("dmgez-mcp requires macOS, Linux, or Windows for handle-based file confinement");
 	ExitCode::FAILURE
 }

@@ -1263,6 +1263,7 @@ dependencies = [
  "dmgez-core",
  "dmgez-inspector",
  "dmgez-udif",
+ "fs_at",
  "rmcp",
  "rustix 1.1.6",
  "serde",
@@ -1270,6 +1271,8 @@ dependencies = [
  "sha2",
  "tempfile",
  "tokio",
+ "windows-namespace-request-sys",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
