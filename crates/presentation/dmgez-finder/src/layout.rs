@@ -3,9 +3,13 @@ use std::collections::BTreeMap;
 use dmgez_config::{
 	Arrangement, AutoFlag, Background, Column, Coordinate, FinderOptions, LabelPosition, View,
 };
-use ds_parser::{BrowserWindowSettings, IconViewProperties, PropertyList, WindowBounds};
+use ds_parser::{
+	BrowserWindowSettings, FinderViewStyle, IconViewProperties, PropertyList, WindowBounds,
+};
 
 use crate::Error;
+
+pub(super) mod list;
 
 const DEFAULT_WINDOW_POSITION: (f64, f64) = (100.0, 100.0);
 const DEFAULT_WINDOW_SIZE: (f64, f64) = (640.0, 280.0);
@@ -37,87 +41,105 @@ const NIBBLE_CHANNEL_SCALE: u8 = 17;
 
 pub(super) struct Layout<'a> {
 	pub window: BrowserWindowSettings,
-	pub icons: IconViewProperties,
+	pub view: FinderViewStyle,
+	pub icons: Option<IconViewProperties>,
+	pub list: Option<list::ListRecords>,
 	pub positions: Option<&'a BTreeMap<String, [Coordinate; 2]>>,
 }
 
 impl<'a> Layout<'a> {
 	pub fn resolve(options: Option<&'a FinderOptions>) -> Result<Self, Error> {
-		if let Some(view) = options.and_then(|options| options.default_view)
-			&& view != View::IconView
-		{
-			return Err(Error::View(view));
-		}
-		if options.and_then(|options| options.include_icon_view_settings)
-			== Some(AutoFlag::Disabled)
-		{
+		let view = match options.and_then(|options| options.default_view) {
+			None | Some(View::IconView) => FinderViewStyle::Icon,
+			Some(View::ListView) => FinderViewStyle::List,
+			Some(view) => return Err(Error::View(view)),
+		};
+		let icon_switch = options.and_then(|options| options.include_icon_view_settings);
+		let icon_requested = view == FinderViewStyle::Icon
+			|| options.is_some_and(|options| {
+				options.icon_view.is_some()
+					|| options.background.is_some()
+					|| options.show_item_info.is_some()
+			});
+		if icon_requested && icon_switch == Some(AutoFlag::Disabled) {
 			return Err(Error::IconViewExcluded);
 		}
-		if options.is_some_and(|options| {
-			options.list_view.is_some()
-				|| options.include_list_view_settings == Some(AutoFlag::Enabled)
-		}) {
-			return Err(Error::ListViewSettings);
+		let list_switch = options.and_then(|options| options.include_list_view_settings);
+		let list_requested = view == FinderViewStyle::List
+			|| options.is_some_and(|options| options.list_view.is_some());
+		if list_requested && list_switch == Some(AutoFlag::Disabled) {
+			return Err(Error::ListViewExcluded);
 		}
-
-		let window = browser_window(options);
-		let (background_type, background_color) =
-			resolve_background(options.and_then(|settings| settings.background.as_ref()))?;
-		let icon_view = options.and_then(|settings| settings.icon_view.as_ref());
-		let arrange_by = resolve_arrangement(icon_view.and_then(|view| view.arrange_by))?;
-		let (scroll_x, scroll_y) = icon_view
-			.and_then(|view| view.scroll_position)
-			.map_or(DEFAULT_SCROLL_POSITION, point);
-		let icons = IconViewProperties {
-			arrange_by: Some(arrange_by.to_owned()),
-			background_type: Some(background_type),
-			background_color: Some(background_color),
-			grid_offset: Some(
-				icon_view
-					.and_then(|view| view.grid_offset)
-					.map_or(DEFAULT_GRID_OFFSET, point),
-			),
-			grid_spacing: Some(
-				icon_view
-					.and_then(|view| view.grid_spacing)
-					.map_or(DEFAULT_GRID_SPACING, |size| size.get()),
-			),
-			icon_size: Some(
-				icon_view
-					.and_then(|view| view.icon_size)
-					.map_or(DEFAULT_ICON_SIZE, |size| size.get()),
-			),
-			text_size: Some(
-				icon_view
-					.and_then(|view| view.text_size)
-					.map_or(DEFAULT_TEXT_SIZE, |size| size.get()),
-			),
-			label_on_bottom: Some(
-				icon_view.and_then(|view| view.label_position) != Some(LabelPosition::Right),
-			),
-			show_icon_preview: Some(
-				options
-					.and_then(|settings| settings.show_icon_preview)
-					.unwrap_or_default(),
-			),
-			show_item_info: Some(
-				options
-					.and_then(|settings| settings.show_item_info)
-					.unwrap_or_default(),
-			),
-			view_options_version: Some(VIEW_OPTIONS_VERSION),
-			unknown: BTreeMap::from([
-				(SCROLL_POSITION_X.to_owned(), PropertyList::Real(scroll_x)),
-				(SCROLL_POSITION_Y.to_owned(), PropertyList::Real(scroll_y)),
-			]),
-			..IconViewProperties::default()
-		};
+		let icons = (icon_requested || icon_switch == Some(AutoFlag::Enabled))
+			.then(|| resolve_icons(options))
+			.transpose()?;
+		let list = (list_requested || list_switch == Some(AutoFlag::Enabled))
+			.then(|| list::resolve(options))
+			.transpose()?;
 		Ok(Self {
-			window,
+			window: browser_window(options),
+			view,
 			icons,
-			positions: icon_view.map(|view| &view.positions),
+			list,
+			positions: options
+				.and_then(|settings| settings.icon_view.as_ref())
+				.map(|view| &view.positions),
 		})
 	}
+}
+
+fn resolve_icons(options: Option<&FinderOptions>) -> Result<IconViewProperties, Error> {
+	let (background_type, background_color) =
+		resolve_background(options.and_then(|settings| settings.background.as_ref()))?;
+	let icon_view = options.and_then(|settings| settings.icon_view.as_ref());
+	let arrange_by = resolve_arrangement(icon_view.and_then(|view| view.arrange_by))?;
+	let (scroll_x, scroll_y) = icon_view
+		.and_then(|view| view.scroll_position)
+		.map_or(DEFAULT_SCROLL_POSITION, point);
+	Ok(IconViewProperties {
+		arrange_by: Some(arrange_by.to_owned()),
+		background_type: Some(background_type),
+		background_color: Some(background_color),
+		grid_offset: Some(
+			icon_view
+				.and_then(|view| view.grid_offset)
+				.map_or(DEFAULT_GRID_OFFSET, point),
+		),
+		grid_spacing: Some(
+			icon_view
+				.and_then(|view| view.grid_spacing)
+				.map_or(DEFAULT_GRID_SPACING, |size| size.get()),
+		),
+		icon_size: Some(
+			icon_view
+				.and_then(|view| view.icon_size)
+				.map_or(DEFAULT_ICON_SIZE, |size| size.get()),
+		),
+		text_size: Some(
+			icon_view
+				.and_then(|view| view.text_size)
+				.map_or(DEFAULT_TEXT_SIZE, |size| size.get()),
+		),
+		label_on_bottom: Some(
+			icon_view.and_then(|view| view.label_position) != Some(LabelPosition::Right),
+		),
+		show_icon_preview: Some(
+			options
+				.and_then(|settings| settings.show_icon_preview)
+				.unwrap_or_default(),
+		),
+		show_item_info: Some(
+			options
+				.and_then(|settings| settings.show_item_info)
+				.unwrap_or_default(),
+		),
+		view_options_version: Some(VIEW_OPTIONS_VERSION),
+		unknown: BTreeMap::from([
+			(SCROLL_POSITION_X.to_owned(), PropertyList::Real(scroll_x)),
+			(SCROLL_POSITION_Y.to_owned(), PropertyList::Real(scroll_y)),
+		]),
+		..IconViewProperties::default()
+	})
 }
 
 fn browser_window(options: Option<&FinderOptions>) -> BrowserWindowSettings {

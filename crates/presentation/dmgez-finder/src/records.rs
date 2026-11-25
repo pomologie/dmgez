@@ -4,12 +4,9 @@ use std::{
 };
 
 use dmgez_config::Coordinate;
-use ds_parser::{
-	BrowserWindowSettings, DSStore, FieldKey, FinderViewStyle, IconLocation, IconViewProperties,
-	PropertyList, Record, layout::BTreeMaster,
-};
+use ds_parser::{DSStore, FieldKey, IconLocation, PropertyList, Record, layout::BTreeMaster};
 
-use crate::{Error, LayoutItem};
+use crate::{Error, LayoutItem, layout::Layout};
 
 const CURRENT_FOLDER: &str = ".";
 const PARENT_FOLDER: &str = "..";
@@ -32,24 +29,29 @@ pub(super) struct Store {
 }
 
 impl Store {
-	pub fn for_layout(
-		window: BrowserWindowSettings,
-		icons: IconViewProperties,
-	) -> Result<Self, Error> {
+	pub fn for_layout(layout: Layout<'_>) -> Result<Self, Error> {
 		let mut store = Self {
 			records: Vec::new(),
 			used_bytes: LEAF_HEADER_BYTES,
 		};
-		let window_bytes = plist_payload_size(&window.to_property_list())?;
-		let icon_bytes = plist_payload_size(&icons.to_property_list())?;
-		store.push(CURRENT_FOLDER, FieldKey::bwsp, window, window_bytes)?;
+		let window_bytes = plist_payload_size(&layout.window.to_property_list())?;
+		store.push(CURRENT_FOLDER, FieldKey::bwsp, layout.window, window_bytes)?;
 		store.push(
 			CURRENT_FOLDER,
 			FieldKey::icvl,
-			FinderViewStyle::Icon.fourcc(),
+			layout.view.fourcc(),
 			FOUR_CC_BYTES,
 		)?;
-		store.push(CURRENT_FOLDER, FieldKey::icvp, icons, icon_bytes)?;
+		if let Some(icons) = layout.icons {
+			let bytes = plist_payload_size(&icons.to_property_list())?;
+			store.push(CURRENT_FOLDER, FieldKey::icvp, icons, bytes)?;
+		}
+		if let Some(list) = layout.list {
+			let keyed_bytes = plist_payload_size(&list.keyed)?;
+			store.push(CURRENT_FOLDER, FieldKey::lsvp, list.keyed, keyed_bytes)?;
+			let ordered_bytes = plist_payload_size(&list.ordered)?;
+			store.push(CURRENT_FOLDER, FieldKey::lsvC, list.ordered, ordered_bytes)?;
+		}
 		store.push(CURRENT_FOLDER, FieldKey::vSrn, STORE_VERSION, SCALAR_BYTES)?;
 		Ok(store)
 	}

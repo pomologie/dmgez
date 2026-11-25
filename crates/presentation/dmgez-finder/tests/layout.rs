@@ -168,7 +168,7 @@ fn defaults_are_present_without_user_finder_settings() {
 #[test]
 fn refuses_settings_that_cannot_be_preserved() {
 	assert!(matches!(
-		validate_options(Some(&options("default_view = 'list-view'"))),
+		validate_options(Some(&options("default_view = 'column-view'"))),
 		Err(Error::View(_))
 	));
 	assert!(matches!(
@@ -176,8 +176,10 @@ fn refuses_settings_that_cannot_be_preserved() {
 		Err(Error::IconViewExcluded)
 	));
 	assert!(matches!(
-		validate_options(Some(&options("include_list_view_settings = true"))),
-		Err(Error::ListViewSettings)
+		validate_options(Some(&options(
+			"default_view = 'list-view'\ninclude_list_view_settings = false"
+		))),
+		Err(Error::ListViewExcluded)
 	));
 	assert!(matches!(
 		validate_options(Some(&options(

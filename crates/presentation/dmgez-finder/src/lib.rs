@@ -1,6 +1,6 @@
 //! Generate and inspect Finder presentation stores for image folders.
 //!
-//! The initial profile writes icon-view settings and integer item positions.
+//! The writer supports icon and list layouts and integer icon positions.
 //! Each store uses one B-tree leaf and contains no host filesystem references.
 
 pub mod inspection;
@@ -9,7 +9,7 @@ mod records;
 #[cfg(feature = "volume-icon")]
 pub mod volume_icon;
 
-use dmgez_config::{Arrangement, Coordinate, FinderOptions, View};
+use dmgez_config::{Arrangement, Column, Coordinate, FinderOptions, View};
 use thiserror::Error;
 
 use layout::Layout;
@@ -31,15 +31,29 @@ pub struct LayoutItem<'a> {
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum Error {
-	/// The selected default view is outside the initial icon-view profile.
+	/// The selected default view is outside the supported writing profile.
 	#[error("Finder default view {0:?} is unavailable")]
 	View(View),
-	/// Required icon-view options cannot be excluded.
-	#[error("the Finder icon view requires its view settings")]
+	/// Required or explicitly requested icon-view options cannot be excluded.
+	#[error("the requested Finder layout requires icon-view settings")]
 	IconViewExcluded,
-	/// The requested list-view settings are outside the initial profile.
-	#[error("Finder list-view settings are unavailable")]
-	ListViewSettings,
+	/// Required or explicitly requested list-view options cannot be excluded.
+	#[error("the requested Finder layout requires list-view settings")]
+	ListViewExcluded,
+	/// Finder has no qualified wire identifier for the configured column.
+	#[error("Finder list column {0:?} is unavailable")]
+	ListColumn(Column),
+	/// The visible list column order must be nonempty and unique.
+	#[error("Finder list columns must be nonempty and distinct")]
+	ListColumnOrder,
+	/// Finder stores column widths in positive whole points.
+	#[error(
+		"Finder list column {0:?} requires a positive whole-point width within the signed 32-bit range"
+	)]
+	ListColumnWidth(Column),
+	/// Finder has no qualified encoding for the configured sort direction.
+	#[error("Finder list column {0:?} has an unsupported sort direction")]
+	ListSortDirection(Column),
 	/// Image backgrounds need a generated alias targeting sealed volume identities.
 	#[error("Finder image background aliases are unavailable")]
 	ImageBackground,
@@ -86,7 +100,7 @@ pub enum Error {
 /// # Errors
 ///
 /// Returns an error for a view, background, arrangement, or record switch
-/// outside the qualified icon-view profile. Use [`write_store`] to check
+/// outside the qualified icon and list profile. Use [`write_store`] to check
 /// item positions against the resolved folder children.
 pub fn validate_options(options: Option<&FinderOptions>) -> Result<(), Error> {
 	Layout::resolve(options).map(|_| ())
@@ -107,7 +121,8 @@ pub fn write_store(
 	items: &[LayoutItem<'_>],
 ) -> Result<Vec<u8>, Error> {
 	let layout = Layout::resolve(options)?;
-	let mut store = Store::for_layout(layout.window, layout.icons)?;
-	store.position_items(items, layout.positions)?;
+	let positions = layout.positions;
+	let mut store = Store::for_layout(layout)?;
+	store.position_items(items, positions)?;
 	store.finish()
 }
