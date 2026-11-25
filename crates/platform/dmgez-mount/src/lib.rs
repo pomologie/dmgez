@@ -4,3 +4,5 @@
 pub mod session;
 #[cfg(feature = "system")]
 pub mod system;
+#[cfg(feature = "watch")]
+pub mod watch;

@@ -23,6 +23,9 @@ system = [
 	"dep:thiserror",
 ]
 
+# Verified external copy monitoring
+watch = []
+
 [dependencies]
 # Serialization and configuration
 serde = { workspace = true, optional = true }
