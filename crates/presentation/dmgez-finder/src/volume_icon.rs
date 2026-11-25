@@ -1,10 +1,14 @@
-//! Admission for a prebuilt ICNS asset and its root catalog Finder flag.
+//! ICNS assets and the root catalog Finder flag.
 
 use std::{collections::BTreeSet, io::Cursor};
 
 use icns::{IconElement, IconType, OSType};
 use plist::stream::{BinaryReader, Event};
 use thiserror::Error;
+
+mod encoding;
+
+pub use encoding::{encode_pngs, png_encoding_memory, validation_memory};
 
 /// The reserved asset filename in the root catalog.
 pub const NAME: &str = ".VolumeIcon.icns";
@@ -57,18 +61,39 @@ impl<'source> VolumeIcon<'source> {
 	/// The HFS+ volume header carries a separate field for blessed folder IDs
 	/// and the volume identifier.
 	pub fn mark_root_finder_info(self, finder_info: &mut [u8; FINDER_INFO_BYTES]) {
-		let flags = &mut finder_info[ROOT_FINDER_FLAGS];
-		let current = u16::from_be_bytes([flags[0], flags[1]]);
-		flags.copy_from_slice(&(current | HAS_CUSTOM_ICON).to_be_bytes());
+		mark_root_finder_info(finder_info);
 	}
 }
 
-/// A volume icon could not enter the prebuilt profile.
+/// Sets the custom-icon flag in the root folder's catalog Finder information.
+///
+/// Apply this after validating a prebuilt icon or generating one with [encode_pngs].
+pub fn mark_root_finder_info(finder_info: &mut [u8; FINDER_INFO_BYTES]) {
+	let flags = &mut finder_info[ROOT_FINDER_FLAGS];
+	let current = u16::from_be_bytes([flags[0], flags[1]]);
+	flags.copy_from_slice(&(current | HAS_CUSTOM_ICON).to_be_bytes());
+}
+
+/// A volume icon could not enter the supported profile.
 #[derive(Debug, Error)]
 #[non_exhaustive]
 pub enum Error {
 	#[error("ICNS source exceeds the {MAX_BYTES}-byte limit")]
 	Size,
+	#[error("generated ICNS does not fit the output byte budget")]
+	OutputBudget,
+	#[error("cannot reserve ICNS assembly memory")]
+	Reserve(#[from] std::collections::TryReserveError),
+	#[error("unsupported volume icon PNG slot {slot:?}")]
+	UnsupportedSlot { slot: dmgez_config::IconSlot },
+	#[error("PNG color, bit depth or orientation cannot be preserved in ICNS element {kind:02x?}")]
+	SmallIconPng { kind: Kind },
+	#[error("could not encode ICNS element {kind:02x?}")]
+	Encode {
+		kind: Kind,
+		#[source]
+		source: std::io::Error,
+	},
 	#[error("invalid ICNS file header")]
 	FileHeader,
 	#[error("ICNS declared length differs from source length")]
