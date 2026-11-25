@@ -37,8 +37,8 @@ pub mod writer;
 pub use error::Error;
 pub use geometry::SECTOR_BYTES;
 pub use signature_append::{
-	signed_signature_range, validate_signature_append, validate_staple_layout,
-	validate_unsigned_signature_fields,
+	portable_signing_limit, signed_signature_range, trailer_for_signature_digest,
+	validate_signature_append, validate_staple_layout, validate_unsigned_signature_fields,
 };
 pub use signature_ticket::{has_stapled_ticket, validate_ticket_addition};
 pub use trailer_header::{TRAILER_BYTES, check_trailer_header};

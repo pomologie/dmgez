@@ -26,6 +26,43 @@ pub fn validate_unsigned_signature_fields(trailer: &[u8; TRAILER_BYTES]) -> Resu
 	Ok(())
 }
 
+/// Returns the signed-body length admissible to the portable UDIF writer.
+///
+/// The apple-codesign 0.29 DMG writer appends its signature immediately after
+/// the XML plist and encodes the signed body length in a 32-bit CodeDirectory
+/// field. The plist must therefore end at the original trailer so the writer
+/// preserves all body bytes. Supply the complete unsigned file length.
+///
+/// # Errors
+///
+/// Returns an error for an invalid header, a preexisting signature, a range
+/// outside the unsigned body, a plist that does not end at the trailer, or a
+/// body larger than the writer's CodeDirectory field can represent.
+pub fn portable_signing_limit(trailer: &[u8; TRAILER_BYTES], length: u64) -> Result<u32, Error> {
+	validate_unsigned_signature_fields(trailer)?;
+	let body_limit = unsigned_body_length(length)?;
+	validate_body_ranges(trailer, body_limit)?;
+	let plist_offset = trailer_word(trailer, XML_OFFSET)?;
+	let plist_length = trailer_word(trailer, XML_LENGTH_OFFSET)?;
+	if plist_length == 0 || plist_offset.checked_add(plist_length) != Some(body_limit) {
+		return Err(Error::Unsupported(
+			"portable signing requires the UDIF plist to end at the trailer",
+		));
+	}
+	u32::try_from(body_limit)
+		.map_err(|_| Error::Unsupported("portable signing body exceeds the CodeDirectory limit"))
+}
+
+/// Returns the precise UDIF trailer bytes signed by the CodeDirectory.
+///
+/// Native signers bind the complete trailer, with the signature length field
+/// zeroed. The actual signature offset and all other bytes remain bound.
+pub fn trailer_for_signature_digest(trailer: &[u8; TRAILER_BYTES]) -> [u8; TRAILER_BYTES] {
+	let mut normalized = *trailer;
+	normalized[SIGNATURE_LENGTH_FIELD..SIGNATURE_FIELDS_END].fill(0);
+	normalized
+}
+
 /// Checks a UDIF v4 signature append and returns the physical signature range.
 ///
 /// Both lengths include their trailing `koly` blocks. The original trailer must
@@ -58,10 +95,7 @@ pub fn validate_signature_append(
 		));
 	}
 
-	let original_trailer_offset = unsigned_length
-		.checked_sub(TRAILER_BYTES as u64)
-		.filter(|&offset| offset != 0)
-		.ok_or(Error::Corrupt("unsigned UDIF body is missing"))?;
+	let original_trailer_offset = unsigned_body_length(unsigned_length)?;
 	if range.start != original_trailer_offset {
 		return Err(Error::Corrupt(
 			"UDIF signature range does not span the append",
@@ -99,6 +133,11 @@ pub fn signed_signature_range(
 			"UDIF signature range does not precede the trailer",
 		));
 	}
+	validate_body_ranges(trailer, signature_offset)?;
+	Ok(signature_offset..signature_end)
+}
+
+fn validate_body_ranges(trailer: &[u8; TRAILER_BYTES], limit: u64) -> Result<(), Error> {
 	for (offset_field, length_field) in [
 		(DATA_FORK_OFFSET, DATA_FORK_LENGTH_OFFSET),
 		(RESOURCE_FORK_OFFSET, RESOURCE_FORK_LENGTH_OFFSET),
@@ -106,16 +145,13 @@ pub fn signed_signature_range(
 	] {
 		let offset = trailer_word(trailer, offset_field)?;
 		let length = trailer_word(trailer, length_field)?;
-		if offset
-			.checked_add(length)
-			.is_none_or(|end| end > signature_offset)
-		{
+		if offset.checked_add(length).is_none_or(|end| end > limit) {
 			return Err(Error::Corrupt(
 				"UDIF trailer range crosses into the signature",
 			));
 		}
 	}
-	Ok(signature_offset..signature_end)
+	Ok(())
 }
 
 /// Checks that stapling changed only the embedded signature length in the UDIF
@@ -136,15 +172,20 @@ pub fn validate_staple_layout(
 ) -> Result<(), Error> {
 	let before_range = signed_signature_range(before, before_length)?;
 	let after_range = signed_signature_range(after, after_length)?;
-	if before[..SIGNATURE_LENGTH_FIELD] != after[..SIGNATURE_LENGTH_FIELD]
-		|| before[SIGNATURE_FIELDS_END..] != after[SIGNATURE_FIELDS_END..]
-	{
+	if trailer_for_signature_digest(before) != trailer_for_signature_digest(after) {
 		return Err(Error::Corrupt("stapling changed other UDIF trailer fields"));
 	}
 	if after_range.end <= before_range.end {
 		return Err(Error::Corrupt("stapled UDIF signature did not grow"));
 	}
 	Ok(())
+}
+
+fn unsigned_body_length(length: u64) -> Result<u64, Error> {
+	length
+		.checked_sub(TRAILER_BYTES as u64)
+		.filter(|&offset| offset != 0)
+		.ok_or(Error::Corrupt("unsigned UDIF body is missing"))
 }
 
 fn trailer_word(trailer: &[u8; TRAILER_BYTES], offset: usize) -> Result<u64, Error> {

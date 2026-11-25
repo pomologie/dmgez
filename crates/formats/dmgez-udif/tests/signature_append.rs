@@ -1,5 +1,6 @@
 use dmgez_udif::{
-	Error, TRAILER_BYTES, validate_signature_append, validate_unsigned_signature_fields,
+	Error, TRAILER_BYTES, portable_signing_limit, trailer_for_signature_digest,
+	validate_signature_append, validate_unsigned_signature_fields,
 };
 
 const UDRO: &[u8] = include_bytes!("../../../../tests/fixtures/images/tiny-UDRO.dmg");
@@ -8,6 +9,68 @@ const SIGNATURE_OFFSET_FIELD: usize = 296;
 const SIGNATURE_LENGTH_FIELD: usize = 304;
 const SIGNATURE_FIELDS_END: usize = 312;
 const SIGNATURE_LENGTH: u64 = 346;
+const XML_OFFSET_FIELD: usize = 216;
+const XML_LENGTH_FIELD: usize = 224;
+
+#[test]
+fn admits_portable_signing_of_contiguous_native_fixtures() {
+	for image in [UDRO, UDZO] {
+		let unsigned = trailer(image);
+		assert_eq!(
+			portable_signing_limit(unsigned, image.len() as u64).unwrap() as usize,
+			image.len() - TRAILER_BYTES
+		);
+		assert!(matches!(
+			portable_signing_limit(unsigned, image.len() as u64 + 1),
+			Err(Error::Unsupported(_))
+		));
+	}
+}
+
+#[test]
+fn refuses_body_lengths_the_portable_writer_would_truncate() {
+	let mut unsigned = *trailer(UDZO);
+	let length_field = size_of::<u64>();
+	unsigned[XML_LENGTH_FIELD..][..length_field].copy_from_slice(&1_u64.to_be_bytes());
+	for (limit, supported) in [
+		(u64::from(u32::MAX), true),
+		(u64::from(u32::MAX) + 1, false),
+	] {
+		unsigned[XML_OFFSET_FIELD..][..length_field].copy_from_slice(&(limit - 1).to_be_bytes());
+		let result = portable_signing_limit(&unsigned, limit + TRAILER_BYTES as u64);
+		if supported {
+			assert_eq!(result.unwrap(), u32::MAX);
+		} else {
+			assert!(matches!(result, Err(Error::Unsupported(_))));
+		}
+	}
+	unsigned[XML_OFFSET_FIELD..][..length_field].copy_from_slice(&u64::MAX.to_be_bytes());
+	assert!(matches!(
+		portable_signing_limit(&unsigned, UDZO.len() as u64),
+		Err(Error::Corrupt(_))
+	));
+}
+
+#[test]
+fn signature_digest_retains_offset_and_full_trailer_tail() {
+	let source = trailer(UDZO);
+	let body_length = (UDZO.len() - TRAILER_BYTES) as u64;
+	let mut signed = signature_fields(*source, body_length, SIGNATURE_LENGTH);
+	signed[TRAILER_BYTES - 1] = 0x80;
+	let normalized = trailer_for_signature_digest(&signed);
+	assert_eq!(
+		&normalized[..SIGNATURE_LENGTH_FIELD],
+		&signed[..SIGNATURE_LENGTH_FIELD]
+	);
+	assert_eq!(
+		&normalized[SIGNATURE_FIELDS_END..],
+		&signed[SIGNATURE_FIELDS_END..]
+	);
+	assert_eq!(
+		normalized[SIGNATURE_LENGTH_FIELD..SIGNATURE_FIELDS_END],
+		0_u64.to_be_bytes()
+	);
+}
 
 #[test]
 fn accepts_a_contiguous_append_to_each_qualified_trailer() {
