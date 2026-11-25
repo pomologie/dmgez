@@ -1,0 +1,3 @@
+# dmgez architecture handoff
+
+Revision 3. Merge this documentation tree into the existing `dmgez` Git repository after reviewing its current files and preserving existing source, README, license, Git history and user changes. Read [development guidance](../../AGENTS.md), [architecture](ARCHITECTURE.md), [roadmap](ROADMAP.md), [testing](TESTING.md), [verification](VERIFICATION.md), and the [engineering standard](ECOSYSTEM_ENGINEERING.md). Coordinate all three sibling repositories. All requirements, acceptance tests and proofs are planned, not implementation evidence. Shared policies are included locally. The master archive includes the validator and abstract reference models.

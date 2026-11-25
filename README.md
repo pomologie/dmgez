@@ -152,4 +152,4 @@ The [native desktop app](apps/dmgez/README.md) opens TOML projects for layout ed
 
 The [local stdio MCP server](apps/dmgez-mcp/README.md) exposes capabilities and validates TOML manifests inside an explicitly authorized project directory on macOS and Linux.
 
-See the [architecture](ARCHITECTURE.md), [roadmap](ROADMAP.md), and [UDIF evidence](docs/reference/UDIF_EVIDENCE.md) for the implemented profile and its verification limits.
+See the [architecture](docs/architecture/ARCHITECTURE.md), [roadmap](docs/architecture/ROADMAP.md), and [UDIF evidence](docs/reference/UDIF_EVIDENCE.md) for the implemented profile and its verification limits.

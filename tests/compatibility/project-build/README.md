@@ -65,7 +65,7 @@ source = "artwork/Example.icns"
 "512" = "artwork/icon_512x512.png"
 ```
 
-The adapter writes the ICNS to the root `.VolumeIcon.icns` file and sets the custom-icon bit on the root catalog record. Dry-run checks the asset and includes it in the planned capacity without staging an output. Each source uses the same identity and output-alias checks as copied content. The retained ICNS counts toward the metadata budget, and the validation and assembly workspace counts toward the build working budget. The [volume icon profile](../../../crates/presentation/dmgez-finder/VOLUME_ICON.md) describes the encodings and limitations.
+The adapter writes the ICNS to the root `.VolumeIcon.icns` file and sets the custom-icon bit on the root catalog record. Dry-run checks the asset and includes it in the planned capacity without staging an output. Each source uses the same identity and output-alias checks as copied content. The retained ICNS counts toward the metadata budget, and the validation and assembly workspace counts toward the build working budget. The [volume icon profile](../../../docs/reference/VOLUME_ICON.md) describes the encodings and limitations.
 
 The native PNG-set check uses Apple's Swift compiler and `iconutil`. It publishes a disposable project image, verifies and mounts it read-only, checks the root flag with `GetFileInfo`, and checks dimensions and pixels for all ten input slots.
 
@@ -123,7 +123,7 @@ target\hfsplus-cli\debug\dmgez.exe build dmg.toml --dry-run
 target\hfsplus-cli\debug\dmgez.exe build dmg.toml
 ```
 
-Windows copies regular file data from the [NTFS source adapter](../../../crates/services/dmgez-builder/WINDOWS_SOURCES.md). Requested attributes that the host cannot observe fail in strict metadata mode. `[metadata] policy = "report"` permits the build and reports omissions. The Windows builder publishes to a new output and refuses `--overwrite`. Finder custom item icons require host metadata conflict checks and are unavailable on this path. APFS and filesystem reader composition continue to require macOS or Linux.
+Windows copies regular file data from the [NTFS source adapter](../../../docs/reference/WINDOWS_SOURCES.md). Requested attributes that the host cannot observe fail in strict metadata mode. `[metadata] policy = "report"` permits the build and reports omissions. The Windows builder publishes to a new output and refuses `--overwrite`. Finder custom item icons require host metadata conflict checks and are unavailable on this path. APFS and filesystem reader composition continue to require macOS or Linux.
 
 Cross-target Clippy with warnings denied passed on Rust 1.99.1 for `x86_64-pc-windows-msvc`, composed with HFS+ revision `fb11b35`. The Windows-specific fixture covers dry-run, a copied Unicode-named source, strict metadata refusal, report-mode publication, and no-clobber behavior. Native Windows runtime evidence is pending.
 
