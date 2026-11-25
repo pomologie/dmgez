@@ -1,0 +1,17 @@
+[package]
+name = "dmgez-hfsplus-verify"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.98"
+license = "Apache-2.0"
+repository = "https://github.com/pomologie/dmgez"
+description = "Read-only HFS+ and HFSX structural verification for dmgez"
+
+[dependencies]
+hfsplus-core = { package = "hfsplus-pomologie-core", version = "=0.1.0" }
+hfsplus-format = "=0.1.0"
+hfsplus-reader = "=0.1.0"
+thiserror = "=2.0.21"
+
+[lints.rust]
+unsafe_code = "forbid"
