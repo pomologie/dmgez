@@ -1155,6 +1155,7 @@ dependencies = [
  "dmgez-signing",
  "dmgez-udif",
  "dmgez-vfs",
+ "png",
  "serde",
  "serde_json",
  "tempfile",

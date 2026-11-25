@@ -25,9 +25,15 @@ mod native_assessment;
 mod notarize;
 #[cfg(feature = "convert")]
 mod optimize;
+mod preview;
 mod project_build;
 mod project_edit;
-#[cfg(any(feature = "appdmg-import", feature = "lint", feature = "project-build"))]
+#[cfg(any(
+	feature = "appdmg-import",
+	feature = "lint",
+	feature = "preview",
+	feature = "project-build"
+))]
 mod project_input;
 #[cfg(any(
 	feature = "hfsplus-read",
@@ -101,6 +107,8 @@ enum Command {
 	/// Plan or build an HFS+ disk image from a TOML project.
 	#[command(name = BUILD_PROJECT_COMMAND)]
 	Build(project_build::Arguments),
+	/// Render a project design as a PNG without building or mounting an image.
+	Preview(preview::Arguments),
 	/// Apply a typed edit batch to a project and rebuild to a new image.
 	Edit(project_edit::Arguments),
 	/// Apply a typed edit batch to an existing HFS+ image and publish a fresh image.
@@ -326,6 +334,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 		Command::Build(arguments) => project_build::build(arguments, &std::env::current_dir()?),
 		#[cfg(not(feature = "project-build"))]
 		Command::Build(_) => Err("project building requires an HFS+ composed CLI".into()),
+		Command::Preview(arguments) => preview::run(&arguments),
 		Command::Edit(arguments) => project_edit::run(&arguments),
 		Command::EditImage(arguments) => image_edit::run(&arguments),
 		#[cfg(feature = "build")]

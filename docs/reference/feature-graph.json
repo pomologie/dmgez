@@ -46,7 +46,7 @@
       "inspect"
     ],
     "preview": [
-      "inspect"
+      "image-processing"
     ],
     "diff": [
       "inspect"
@@ -202,6 +202,7 @@
     "All edges are additive; mount-watch requires an available backend at runtime.",
     "mount-write requires qualified transaction support and writable container, not merely mount.",
     "GUI and MCP separate packages, never CLI dependency.",
+    "The CLI project preview uses CPU rendering and does not require an image reader or windowing backend.",
     "Project layout lint does not need an image reader. Image and release checks require their own inspection or trust integrations.",
     "Codec and profile negotiation requires relevant reader/writer plus codec feature; `legacy` alone does not imply inspection.",
     "APFS read/build flags forward filesystem package features; actual operation requires relevant orchestration."

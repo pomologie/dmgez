@@ -4,8 +4,8 @@ use super::{
 	INSTALLER_LINT_FEATURE, LINT_COMMAND, LZFSE_FEATURE, LZMA_FEATURE, NOT_COMPILED,
 	OPTIMIZE_COMMAND, PARALLEL_FEATURE, UNWRAP_RAW_COMMAND, VERIFY_APFS_CAPABILITY,
 	VERIFY_CONTAINER_CAPABILITY, VERIFY_HFSPLUS_CAPABILITY, WRAP_RAW_COMMAND, diff, extract,
-	image_edit, inspect_command, install, installer_test, mount_command, notarize, project_edit,
-	signing, volume_commands,
+	image_edit, inspect_command, install, installer_test, mount_command, notarize, preview,
+	project_edit, signing, volume_commands,
 };
 
 const COMPRESSION_CACHE_CAPABILITY: &str = "compression-cache";
@@ -29,6 +29,7 @@ pub(super) fn write() {
 			)),
 		),
 		(project_edit::FEATURE, cfg!(feature = "project-edit")),
+		(preview::FEATURE, cfg!(feature = "preview")),
 		(image_edit::FEATURE, cfg!(feature = "image-edit")),
 		(WRAP_RAW_COMMAND, cfg!(feature = "build")),
 		(

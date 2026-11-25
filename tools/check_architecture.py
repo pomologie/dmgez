@@ -25,6 +25,7 @@ PROFILES = {
     "hash_comparison": (["--no-default-features", "--features", "diff-hash"], {"blake3", "dmgez-core", "dmgez-diff", "dmgez-udif", "dmgez-vfs", "flate2", "serde_json"}),
     "finder_comparison": (["--no-default-features", "--features", "finder-diff"], {"dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "serde_json"}),
     "layout_lint": (["--no-default-features", "--features", "lint"], {"dmgez-config", "dmgez-lint", "dmgez-preview", "serde_json"}),
+    "design_preview": (["--no-default-features", "--features", "preview"], {"dmgez-config", "dmgez-core", "dmgez-preview", "epaint", "flate2", "png"}),
     "installer_lint": (["--no-default-features", "--features", "installer-lint"], {"dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-lint", "dmgez-preview", "dmgez-udif", "serde_json"}),
     "appdmg_import": (["--no-default-features", "--features", "appdmg-import"], {"dmgez-config", "dmgez-core", "serde_json"}),
     "rust_signing": (["--no-default-features", "--features", "signing-rust"], RUST_SIGNING_DEPS),
@@ -37,7 +38,7 @@ OUTSIDE_DEFAULT = {
     "hfsplus-reader", "lzfse_rust", "lzma-rust2", "notify",
     "reqwest", "rmcp", "tokio", "udif", "winfsp",
 }
-PROFILE_DEPS = {"apple-codesign", "blake3", "dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-inspector", "dmgez-lint", "dmgez-macho", "dmgez-operations", "dmgez-preview", "dmgez-signing", "dmgez-udif", "dmgez-vfs", "ds_parser", "flate2", "rayon", "rustls", "serde_json", "sha2", "ureq"}
+PROFILE_DEPS = {"apple-codesign", "blake3", "dmgez-builder", "dmgez-config", "dmgez-core", "dmgez-diff", "dmgez-finder", "dmgez-inspector", "dmgez-lint", "dmgez-macho", "dmgez-operations", "dmgez-preview", "dmgez-signing", "dmgez-udif", "dmgez-vfs", "ds_parser", "epaint", "flate2", "png", "rayon", "rustls", "serde_json", "sha2", "ureq"}
 
 
 def main():
