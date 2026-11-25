@@ -40,6 +40,7 @@ jobs:
       - run: cargo check --locked -p dmgez-cli --no-default-features --features lint
       - run: cargo check --locked -p dmgez-cli --no-default-features --features appdmg-import
       - run: cargo check --locked -p dmgez-cli --no-default-features --features signing-native
+      - run: cargo check --locked -p dmgez-cli --no-default-features --features notarization-native
       - run: python3 tools/check_architecture.py
 
   supply-chain-and-coverage:

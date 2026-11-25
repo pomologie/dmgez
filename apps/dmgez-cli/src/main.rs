@@ -12,6 +12,7 @@ mod import_appdmg;
 mod inspect;
 #[cfg(feature = "lint")]
 mod lint;
+mod notarize;
 #[cfg(feature = "convert")]
 mod optimize;
 mod project_build;
@@ -133,6 +134,8 @@ enum Command {
 		#[command(subcommand)]
 		action: signing::Action,
 	},
+	/// Submit a signed disk image for notarization or check a submission's status.
+	Notarize(notarize::Arguments),
 	/// Translate appdmg JSON settings into a new dmgez project.
 	#[command(name = IMPORT_APPDMG_COMMAND)]
 	ImportAppdmg {
@@ -262,7 +265,7 @@ fn main() -> ExitCode {
 	let command = Cli::parse().command;
 	let error_status = if matches!(
 		command,
-		Command::Diff(_) | Command::Lint { .. } | Command::Sign { .. }
+		Command::Diff(_) | Command::Lint { .. } | Command::Sign { .. } | Command::Notarize(_)
 	) {
 		ExitCode::from(REPORT_ERROR_EXIT_CODE)
 	} else {
@@ -350,6 +353,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 				report_field(name, if compiled { COMPILED } else { NOT_COMPILED });
 			}
 			report_field(signing::NATIVE_FEATURE, signing::NATIVE_CAPABILITY);
+			report_field(notarize::NATIVE_FEATURE, notarize::NATIVE_CAPABILITY);
 			Ok(())
 		}
 		#[cfg(feature = "project-build")]
@@ -416,6 +420,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 			..
 		} => Err(format!("feature not compiled: {LINT_COMMAND}").into()),
 		Command::Sign { action } => return signing::run(&action),
+		Command::Notarize(arguments) => return notarize::run(&arguments),
 		#[cfg(feature = "appdmg-import")]
 		Command::ImportAppdmg {
 			settings,

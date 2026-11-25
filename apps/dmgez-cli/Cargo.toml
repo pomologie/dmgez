@@ -23,6 +23,7 @@ appdmg-import = ["dep:dmgez-config", "dmgez-config/appdmg-import", "dep:dmgez-co
 lint = ["dep:dmgez-config", "dep:dmgez-lint", "dep:dmgez-preview", "dep:serde", "dep:serde_json"]
 installer-lint = ["lint", "dmgez-lint/installer"]
 signing-native = ["dep:dmgez-signing", "dmgez-signing/native", "dep:serde", "dep:serde_json"]
+notarization-native = ["signing-native", "dmgez-signing/notarization-native"]
 parallel = ["dmgez-udif?/parallel", "dmgez-operations?/parallel"]
 lzfse = ["dmgez-udif?/lzfse"]
 lzma = ["dmgez-udif?/lzma"]

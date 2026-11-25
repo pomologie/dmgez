@@ -21,6 +21,8 @@ PROFILES = {
     "appdmg_import": (["--no-default-features", "--features", "appdmg-import"], {"dmgez-config", "dmgez-core", "serde_json"}),
     "native_signing": (["--no-default-features", "--features", "signing-native"],
                        {"dmgez-signing", "serde_json"} | ({"dmgez-macho", "dmgez-udif", "sha2"} if sys.platform == "darwin" else set())),
+    "native_notarization": (["--no-default-features", "--features", "notarization-native"],
+                            {"dmgez-signing", "serde_json"} | ({"dmgez-core", "dmgez-macho", "dmgez-udif", "sha2"} if sys.platform == "darwin" else set())),
 }
 OUTSIDE_DEFAULT = {
     "apple-codesign", "apple-dmg", "apfs", "apfs-container", "apfs-core", "apfs-format", "apfs-reader",
@@ -57,7 +59,7 @@ def main():
                     "read": profile in ("inspection", "conversion", "parallel_conversion", "comparison", "hash_comparison", "finder_comparison"),
                     "write": profile in ("serial", "default", "conversion", "parallel_conversion", "installer_lint"),
                     "parallel": profile in ("default", "parallel_conversion"),
-                    "zlib": profile not in ("installer_lint", "native_signing"), "lzfse": False, "lzma": False,
+                    "zlib": profile not in ("installer_lint", "native_signing", "native_notarization"), "lzfse": False, "lzma": False,
                 }[feature]
                 if active != expected_active:
                     errors.append(f"{profile} profile: unexpected activation state for {feature}")
