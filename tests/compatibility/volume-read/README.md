@@ -47,6 +47,14 @@ python3 -B tests/compatibility/volume-read/check_apfs_extraction.py --cli target
 
 The macOS oracle populates and detaches a disposable APFS image, then checks raw structure with `fsck_apfs -n` and Apple's UDZO conversion with `hdiutil verify`. A read-only mount checks the two hard-link aliases, fork bytes, mode, and markers. dmgez exports the selected clean paths, refuses marked provenance, and leaves the image bytes intact. [Native extraction results](apfs/native-cli-extraction.json)
 
+Run the native semantic comparison oracle with a CLI composed with `diff` and `apfs-read`.
+
+```sh
+python3 -B tests/compatibility/volume-read/check_semantic_diff.py --cli target/apfs-cli/debug/dmgez
+```
+
+The oracle creates one filesystem and compares its raw, UDRO, and UDZO representations. It then edits the disposable source and confirms the test changes on read-only mounts. dmgez identifies separate fork, mode, symlink, hard-link, and path changes. [Native comparison results](apfs/native-semantic-diff.json)
+
 ## Extraction name preflight
 
 Both recipes call `dmgez_operations::extract::preflight_names` on the real filesystem adapter. The HFS+ fixture constructed with a non-UTF-8 relative symlink target yields a portable name plan containing the link object and its source handle. The native APFS hard-link fixture preserves `Écho.bin` in the exact UTF-8 plan. The portable profile rejects that name with a typed encoding error. The APFS payload fixture provides targeted symlink lookup evidence. A full name scan of that fixture reaches uncaptured catalog block 408.

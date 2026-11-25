@@ -1,7 +1,7 @@
 [package]
 name = "dmgez-diff"
 version = "0.1.0"
-description = "Bounded exact-byte comparison of admitted dmgez sources"
+description = "Bounded byte and filesystem comparison of admitted dmgez sources"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true

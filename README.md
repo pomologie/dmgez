@@ -32,6 +32,15 @@ The same feature enables `optimize`. It samples aligned windows within `--max-sa
 
 The optional `diff` command compares decoded logical disk bytes by default. Use `--mode physical` to compare stored files or `--max-bytes` to change the comparison budget. Exit codes are 0 for equality, 1 for a difference, and 2 for an error or an exhausted budget. Reports identify the address space and length of the equal prefix. Filesystem semantics and integrity verification are separate checks.
 
+Compose `diff` with `hfsplus-read` or `apfs-read` to compare filesystem contents and supported metadata under an explicit policy.
+
+```sh
+python3 tools/compose_filesystem_cli.py --apfs ../apfs --no-default-features --features diff
+target/apfs-cli/debug/dmgez diff left.dmg right.dmg --mode semantic --filesystem apfs --json
+```
+
+[Semantic diff policy and selectors](docs/features/RELEASE.md#compare-filesystem-contents)
+
 The optional `lint` command checks configured Finder icon geometry in one declared project folder, starting at `/` unless `--folder` selects another. It reads the TOML manifest only. Use `--suppress RULE=REASON` to keep a finding in the report without failing on it. Exit codes are 0 when there are no unsuppressed warnings, 1 when warnings remain, and 2 when the requested layout cannot be evaluated.
 
 `import-appdmg` translates documented appdmg JSON settings into a new version-one TOML manifest. Relative asset paths keep their original settings directory. A relative `--image-output` is interpreted from the new manifest's directory. The command reports unmapped behavior and refuses to replace an existing manifest.
