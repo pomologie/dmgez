@@ -6,7 +6,7 @@ use dmgez_apfs_read::{
 	WindowSource, probe_partitionless,
 };
 #[cfg(feature = "hfsplus-read")]
-use dmgez_hfsplus_read::browse::{self, HfsView};
+use dmgez_hfsplus_read::browse::{self, HfsView, VolumeSignature};
 use dmgez_udif::reader::{FileSource, Image, Limits as ImageLimits, ReadAt};
 use dmgez_vfs::{Disk, Layout, Limits as DiskLimits, LogicalDisk, PartitionId, Raw, VolumeId};
 #[cfg(feature = "apfs-read")]
@@ -37,6 +37,26 @@ pub(super) fn with_hfs_view<T>(
 	partition: Option<NonZeroU32>,
 	read: impl FnOnce(&mut HfsView<'_, '_, &mut dyn LogicalDisk>) -> CliResult<T>,
 ) -> CliResult<T> {
+	with_hfs_source(image, raw, partition, |view, _| read(view))
+}
+
+#[cfg(all(feature = "diff", feature = "hfsplus-read"))]
+pub(super) fn with_hfs_view_with_signature<T>(
+	image: &Path,
+	raw: bool,
+	partition: Option<NonZeroU32>,
+	read: impl FnOnce(&mut HfsView<'_, '_, &mut dyn LogicalDisk>, VolumeSignature) -> CliResult<T>,
+) -> CliResult<T> {
+	with_hfs_source(image, raw, partition, read)
+}
+
+#[cfg(feature = "hfsplus-read")]
+fn with_hfs_source<T>(
+	image: &Path,
+	raw: bool,
+	partition: Option<NonZeroU32>,
+	read: impl FnOnce(&mut HfsView<'_, '_, &mut dyn LogicalDisk>, VolumeSignature) -> CliResult<T>,
+) -> CliResult<T> {
 	let source = open_source(image)?;
 	let result = with_source(&source, raw, partition, read)?;
 	source.check_unchanged()?;
@@ -57,7 +77,7 @@ pub(super) fn with_hfs_view_verified<T>(
 	) -> CliResult<T>,
 ) -> CliResult<T> {
 	with_verified_source(image, |source, verify_source| {
-		with_source(source, raw, partition, |view| read(view, verify_source))
+		with_source(source, raw, partition, |view, _| read(view, verify_source))
 	})
 }
 
@@ -66,12 +86,12 @@ fn with_source<T>(
 	source: &FileSource,
 	raw: bool,
 	partition: Option<NonZeroU32>,
-	read: impl FnOnce(&mut HfsView<'_, '_, &mut dyn LogicalDisk>) -> CliResult<T>,
+	read: impl FnOnce(&mut HfsView<'_, '_, &mut dyn LogicalDisk>, VolumeSignature) -> CliResult<T>,
 ) -> CliResult<T> {
 	with_logical_disk(source, raw, |logical| {
 		let mut disk = Disk::discover(logical, DiskLimits::default())?;
 		let selected = select(&disk, partition)?;
-		browse::with_view(&mut disk, selected, browse::Limits::default(), read)?
+		browse::with_view_signature(&mut disk, selected, browse::Limits::default(), read)?
 	})
 }
 
@@ -102,6 +122,23 @@ pub(super) fn with_apfs_view<T>(
 	})
 }
 
+#[cfg(all(feature = "diff", feature = "apfs-read"))]
+pub(super) fn with_apfs_view_for_comparison<T>(
+	image: &Path,
+	raw: bool,
+	partition: Option<NonZeroU32>,
+	selector: Option<VolumeSelector>,
+	xid: Option<TransactionId>,
+	read: impl FnOnce(&mut ApfsView<'_, '_, '_>, &VolumeInfo) -> CliResult<T>,
+) -> CliResult<T> {
+	with_apfs_container(image, raw, partition, xid, |selected, container| {
+		require_apfs_checkpoint(xid, container.diagnostics())?;
+		let backend = container.open_volume(selector)?;
+		let info = backend.info();
+		read(&mut VolumeView::new(selected, backend), &info)
+	})
+}
+
 #[cfg(all(
 	feature = "apfs-extract",
 	any(target_os = "linux", target_os = "macos")
@@ -120,14 +157,7 @@ pub(super) fn with_apfs_view_verified<T>(
 ) -> CliResult<T> {
 	with_verified_source(image, |source, verify_source| {
 		with_apfs_container_source(source, raw, partition, xid, |selected, container| {
-			// Rejected descriptors can hide a newer checkpoint and its provenance.
-			if xid.is_none() && !container.diagnostics().is_empty() {
-				return Err(io::Error::new(
-					io::ErrorKind::PermissionDenied,
-					"extraction cannot establish the latest APFS checkpoint; inspect checkpoints and explicitly select a retained XID",
-				)
-				.into());
-			}
+			require_apfs_checkpoint(xid, container.diagnostics())?;
 			let backend = container.open_volume(selector)?;
 			let info = backend.info();
 			read(
@@ -137,6 +167,27 @@ pub(super) fn with_apfs_view_verified<T>(
 			)
 		})
 	})
+}
+
+#[cfg(any(
+	all(feature = "diff", feature = "apfs-read"),
+	all(
+		feature = "apfs-extract",
+		any(target_os = "linux", target_os = "macos")
+	)
+))]
+fn require_apfs_checkpoint(
+	requested: Option<TransactionId>,
+	diagnostics: &[CheckpointDiagnostic],
+) -> io::Result<()> {
+	// Rejected descriptors can hide a newer checkpoint and its metadata.
+	if requested.is_none() && !diagnostics.is_empty() {
+		return Err(io::Error::new(
+			io::ErrorKind::PermissionDenied,
+			"cannot establish the latest APFS checkpoint; inspect checkpoints and explicitly select a retained XID",
+		));
+	}
+	Ok(())
 }
 
 #[cfg(feature = "apfs-read")]

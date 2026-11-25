@@ -1,114 +1,199 @@
 use std::{
-	error::Error as StdError,
-	fmt,
-	fs::File,
-	io::{self, Write},
-	path::Path,
+	num::{NonZeroU32, NonZeroU64},
+	path::PathBuf,
 	process::ExitCode,
 };
 
-use dmgez_diff::{DEFAULT_COMPARE_BYTES, Outcome, Report, Side, compare};
-use dmgez_udif::{
-	Error as UdifError,
-	reader::{FileSource, Image, Limits},
+use clap::{Args, ValueEnum};
+
+#[cfg(feature = "diff")]
+use dmgez_diff::Side;
+#[cfg(feature = "diff")]
+use std::{error::Error as StdError, fmt};
+
+use crate::{
+	CliResult,
+	volume_commands::{
+		FILESYSTEM_OPTION, Filesystem, PARTITION_SLOT_VALUE_NAME, VOLUME_VALUE_NAME,
+	},
 };
-use dmgez_vfs::Raw;
-use serde::Serialize;
 
-use crate::{CliResult, DiffMode};
+#[cfg(feature = "diff")]
+mod bytes;
+#[cfg(all(feature = "diff", any(feature = "hfsplus-read", feature = "apfs-read")))]
+mod semantic;
 
+pub(super) const COMMAND: &str = "diff";
+pub(super) const HFSPLUS_CAPABILITY: &str = "diff-hfsplus";
+pub(super) const APFS_CAPABILITY: &str = "diff-apfs";
+pub(super) const HFSPLUS_COMPILED: bool = cfg!(all(feature = "diff", feature = "hfsplus-read"));
+pub(super) const APFS_COMPILED: bool = cfg!(all(feature = "diff", feature = "apfs-read"));
+
+#[cfg(feature = "diff")]
 const DIFFERENT_EXIT_CODE: u8 = 1;
-const LOGICAL_SPACE: &str = "logical_disk";
-const PHYSICAL_SPACE: &str = "physical_file";
+const XID_VALUE_NAME: &str = "XID";
+const LEFT_VOLUME_OPTION: &str = "left-volume";
+const RIGHT_VOLUME_OPTION: &str = "right-volume";
 
-#[derive(Serialize)]
-struct DiffReport {
-	address_space: &'static str,
-	#[serde(flatten)]
-	comparison: Report,
-}
-
-pub(crate) fn run(
-	left: &Path,
-	right: &Path,
-	mode: DiffMode,
+#[derive(Args)]
+pub(super) struct Arguments {
+	left: PathBuf,
+	right: PathBuf,
+	#[arg(long, value_enum, default_value_t)]
+	mode: Mode,
+	/// Maximum paired bytes compared from each input.
+	#[arg(long)]
 	max_bytes: Option<u64>,
+	/// Write a versioned JSON report.
+	#[arg(long)]
 	json: bool,
-) -> CliResult<ExitCode> {
-	let left = with_side(open_file(left), Side::Left)?;
-	let right = with_side(open_file(right), Side::Right)?;
-	let max_bytes = max_bytes.unwrap_or(DEFAULT_COMPARE_BYTES);
-	let (address_space, comparison) = match mode {
-		DiffMode::Logical => {
-			let limits = Limits::default();
-			let mut left = with_side(Image::open(left, limits), Side::Left)?;
-			let mut right = with_side(Image::open(right, limits), Side::Right)?;
-			(
-				LOGICAL_SPACE,
-				compare(&mut left, &mut right, max_bytes, || false)?,
-			)
+	#[command(flatten)]
+	options: SemanticOptions,
+}
+
+#[derive(Clone, Copy, Default, ValueEnum)]
+enum Mode {
+	#[default]
+	Logical,
+	Physical,
+	Semantic,
+}
+
+#[derive(Args)]
+struct SemanticOptions {
+	/// Select a filesystem for both inputs in semantic mode. HFS+ includes HFSX.
+	#[arg(long = FILESYSTEM_OPTION, value_enum)]
+	filesystem: Option<Filesystem>,
+	/// Interpret the left input as a raw disk image in semantic mode.
+	#[arg(long)]
+	left_raw: bool,
+	/// Interpret the right input as a raw disk image in semantic mode.
+	#[arg(long)]
+	right_raw: bool,
+	/// Select a one-based partition slot in the left disk image.
+	#[arg(long, value_name = PARTITION_SLOT_VALUE_NAME)]
+	left_partition: Option<NonZeroU32>,
+	/// Select a one-based partition slot in the right disk image.
+	#[arg(long, value_name = PARTITION_SLOT_VALUE_NAME)]
+	right_partition: Option<NonZeroU32>,
+	/// Select the left APFS volume by UUID or decimal object ID.
+	#[arg(long = LEFT_VOLUME_OPTION, value_name = VOLUME_VALUE_NAME)]
+	left_volume: Option<String>,
+	/// Select the right APFS volume by UUID or decimal object ID.
+	#[arg(long = RIGHT_VOLUME_OPTION, value_name = VOLUME_VALUE_NAME)]
+	right_volume: Option<String>,
+	/// Select an exact retained APFS checkpoint in the left image.
+	#[arg(long, value_name = XID_VALUE_NAME)]
+	left_xid: Option<NonZeroU64>,
+	/// Select an exact retained APFS checkpoint in the right image.
+	#[arg(long, value_name = XID_VALUE_NAME)]
+	right_xid: Option<NonZeroU64>,
+}
+
+#[cfg(feature = "diff")]
+impl SemanticOptions {
+	fn has_any(&self) -> bool {
+		self.filesystem.is_some()
+			|| self.left_raw
+			|| self.right_raw
+			|| self.left_partition.is_some()
+			|| self.right_partition.is_some()
+			|| self.has_apfs_selectors()
+	}
+
+	fn has_apfs_selectors(&self) -> bool {
+		self.left_volume.is_some()
+			|| self.right_volume.is_some()
+			|| self.left_xid.is_some()
+			|| self.right_xid.is_some()
+	}
+}
+
+#[cfg(not(feature = "diff"))]
+pub(super) fn run(_arguments: &Arguments) -> CliResult<ExitCode> {
+	Err(format!("feature not compiled: {COMMAND}").into())
+}
+
+#[cfg(feature = "diff")]
+pub(super) fn run(arguments: &Arguments) -> CliResult<ExitCode> {
+	match arguments.mode {
+		Mode::Semantic => run_semantic(arguments),
+		_ if arguments.options.has_any() => Err(invalid(
+			"filesystem, raw input, partition, volume and checkpoint selectors require --mode semantic",
+		)
+		.into()),
+		mode => bytes::run(arguments, matches!(mode, Mode::Logical)),
+	}
+}
+
+#[cfg(feature = "diff")]
+fn run_semantic(arguments: &Arguments) -> CliResult<ExitCode> {
+	let filesystem = arguments
+		.options
+		.filesystem
+		.ok_or_else(|| invalid("semantic comparison requires --filesystem hfsplus or apfs"))?;
+	match filesystem {
+		Filesystem::Hfsplus => {
+			if arguments.options.has_apfs_selectors() {
+				return Err(
+					invalid("volume and checkpoint selectors require --filesystem apfs").into(),
+				);
+			}
+			#[cfg(feature = "hfsplus-read")]
+			return semantic::hfsplus(arguments);
+			#[cfg(not(feature = "hfsplus-read"))]
+			missing_backend(crate::volume_commands::HFSPLUS_READ_FEATURE)
 		}
-		DiffMode::Physical => (
-			PHYSICAL_SPACE,
-			compare(&mut Raw(left), &mut Raw(right), max_bytes, || false)?,
-		),
-	};
-	let mut stdout = io::stdout().lock();
-	if json {
-		serde_json::to_writer(
-			&mut stdout,
-			&DiffReport {
-				address_space,
-				comparison,
-			},
-		)?;
-		writeln!(stdout)?;
-	} else {
-		writeln!(stdout, "address_space = {address_space}")?;
-		writeln!(stdout, "outcome = {}", comparison.outcome.as_str())?;
-		writeln!(stdout, "left_bytes = {}", comparison.left_bytes)?;
-		writeln!(stdout, "right_bytes = {}", comparison.right_bytes)?;
-		writeln!(
-			stdout,
-			"common_prefix_bytes = {}",
-			comparison.common_prefix_bytes
-		)?;
+		Filesystem::Apfs => {
+			#[cfg(feature = "apfs-read")]
+			return semantic::apfs(arguments);
+			#[cfg(not(feature = "apfs-read"))]
+			missing_backend(crate::volume_commands::APFS_READ_FEATURE)
+		}
 	}
-	let code = if comparison.outcome == Outcome::Equal {
-		ExitCode::SUCCESS
-	} else {
-		ExitCode::from(DIFFERENT_EXIT_CODE)
-	};
-	Ok(code)
 }
 
-fn open_file(path: &Path) -> Result<FileSource, UdifError> {
-	if !path.metadata()?.is_file() {
-		return Err(UdifError::InvalidFormat(
-			"comparison input is not a regular file",
-		));
-	}
-	FileSource::new(File::open(path)?)
+#[cfg(all(
+	feature = "diff",
+	any(not(feature = "hfsplus-read"), not(feature = "apfs-read"))
+))]
+fn missing_backend(feature: &str) -> CliResult<ExitCode> {
+	Err(format!("semantic comparison requires the composed {feature} profile").into())
 }
 
-fn with_side<T>(result: Result<T, UdifError>, side: Side) -> Result<T, InputError> {
-	result.map_err(|error| InputError { side, error })
+#[cfg(feature = "diff")]
+fn invalid(message: &'static str) -> std::io::Error {
+	std::io::Error::new(std::io::ErrorKind::InvalidInput, message)
 }
 
+#[cfg(feature = "diff")]
+fn with_side<T, E: Into<Box<dyn StdError>>>(
+	result: Result<T, E>,
+	side: Side,
+) -> Result<T, InputError> {
+	result.map_err(|error| InputError {
+		side,
+		error: error.into(),
+	})
+}
+
+#[cfg(feature = "diff")]
 #[derive(Debug)]
 struct InputError {
 	side: Side,
-	error: UdifError,
+	error: Box<dyn StdError>,
 }
 
+#[cfg(feature = "diff")]
 impl fmt::Display for InputError {
 	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(formatter, "could not admit the {} input", self.side)
 	}
 }
 
+#[cfg(feature = "diff")]
 impl StdError for InputError {
 	fn source(&self) -> Option<&(dyn StdError + 'static)> {
-		Some(&self.error)
+		Some(self.error.as_ref())
 	}
 }

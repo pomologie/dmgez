@@ -31,7 +31,7 @@ const APFS_VOLUME_UUID_KEY: &str = "apfs_volume_uuid";
 const APFS_VOLUME_OBJECT_ID_KEY: &str = "apfs_volume_object_id";
 const CHECKPOINT_XID_KEY: &str = "checkpoint_xid";
 
-pub(super) fn volume_selector(value: &str) -> io::Result<VolumeSelector> {
+pub(crate) fn volume_selector(value: &str) -> io::Result<VolumeSelector> {
 	if value.bytes().all(|byte| byte.is_ascii_digit())
 		&& let Ok(id) = value.parse::<NonZeroU64>()
 	{
@@ -47,35 +47,46 @@ pub(super) fn volume_selector(value: &str) -> io::Result<VolumeSelector> {
 }
 
 pub(crate) fn with_selector_guidance(error: Box<dyn Error>) -> Box<dyn Error> {
+	with_named_selector_guidance(error, VOLUME_OPTION)
+}
+
+pub(crate) fn with_named_selector_guidance(
+	error: Box<dyn Error>,
+	option: &'static str,
+) -> Box<dyn Error> {
 	if matches!(
 		error.downcast_ref::<OpenError>(),
 		Some(OpenError::AmbiguousVolumes(_))
 	) {
-		Box::new(SelectionRequired(error))
+		Box::new(SelectionRequired { error, option })
 	} else {
 		error
 	}
 }
 
 #[derive(Debug)]
-struct SelectionRequired(Box<dyn Error>);
+struct SelectionRequired {
+	error: Box<dyn Error>,
+	option: &'static str,
+}
 
 impl fmt::Display for SelectionRequired {
 	fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(
 			formatter,
-			"select an APFS volume with --{VOLUME_OPTION} {VOLUME_VALUE_NAME}"
+			"select an APFS volume with --{} {VOLUME_VALUE_NAME}",
+			self.option,
 		)
 	}
 }
 
 impl Error for SelectionRequired {
 	fn source(&self) -> Option<&(dyn Error + 'static)> {
-		Some(self.0.as_ref())
+		Some(self.error.as_ref())
 	}
 }
 
-pub(super) fn checkpoint(xid: Option<NonZeroU64>) -> Option<TransactionId> {
+pub(crate) fn checkpoint(xid: Option<NonZeroU64>) -> Option<TransactionId> {
 	xid.map(|id| TransactionId(id.get()))
 }
 

@@ -10,11 +10,21 @@ use crate::CliResult;
 
 #[cfg(feature = "apfs-read")]
 mod apfs;
+#[cfg(any(
+	all(feature = "diff", feature = "apfs-read"),
+	all(
+		feature = "apfs-extract",
+		any(target_os = "linux", target_os = "macos")
+	)
+))]
+pub(super) use apfs::VolumeIdentity;
 #[cfg(all(
 	feature = "apfs-extract",
 	any(target_os = "linux", target_os = "macos")
 ))]
-pub(super) use apfs::{VolumeIdentity, with_selector_guidance};
+pub(super) use apfs::with_selector_guidance;
+#[cfg(all(feature = "diff", feature = "apfs-read"))]
+pub(super) use apfs::{checkpoint, volume_selector, with_named_selector_guidance};
 #[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
 mod execute;
 #[cfg(any(feature = "hfsplus-read", feature = "apfs-read"))]
@@ -27,6 +37,7 @@ pub(super) const VOLUMES_COMMAND: &str = "volumes";
 const ROOT_PATH: &str = "/";
 pub(super) const PARTITION_SLOT_VALUE_NAME: &str = "SLOT";
 pub(super) const FILESYSTEM_OPTION: &str = "filesystem";
+pub(super) const HFSPLUS_FILESYSTEM_VALUE: &str = "hfsplus";
 pub(super) const APFS_FILESYSTEM_VALUE: &str = "apfs";
 pub(super) const VOLUME_VALUE_NAME: &str = "UUID|OID";
 const CHECKPOINT_VALUE_NAME: &str = "XID";
@@ -61,9 +72,20 @@ pub(super) struct Selection {
 #[derive(Clone, Copy, Default, ValueEnum)]
 pub(super) enum Filesystem {
 	#[default]
+	#[value(name = HFSPLUS_FILESYSTEM_VALUE)]
 	Hfsplus,
 	#[value(name = APFS_FILESYSTEM_VALUE)]
 	Apfs,
+}
+
+#[cfg(all(feature = "diff", any(feature = "hfsplus-read", feature = "apfs-read")))]
+impl Filesystem {
+	pub(super) const fn as_str(self) -> &'static str {
+		match self {
+			Self::Hfsplus => HFSPLUS_FILESYSTEM_VALUE,
+			Self::Apfs => APFS_FILESYSTEM_VALUE,
+		}
+	}
 }
 
 impl Selection {

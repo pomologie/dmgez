@@ -4,7 +4,6 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 
 #[cfg(feature = "convert")]
 mod convert;
-#[cfg(feature = "diff")]
 mod diff;
 mod extract;
 #[cfg(feature = "appdmg-import")]
@@ -32,7 +31,6 @@ const BUILD_PROJECT_COMMAND: &str = "build";
 const INSPECT_COMMAND: &str = "inspect";
 const ANALYZE_COMMAND: &str = "analyze";
 const CONVERT_COMMAND: &str = "convert";
-const DIFF_COMMAND: &str = "diff";
 const IMPORT_APPDMG_COMMAND: &str = "import-appdmg";
 #[cfg(not(feature = "appdmg-import"))]
 const APPDMG_IMPORT_FEATURE: &str = "appdmg-import";
@@ -103,19 +101,9 @@ enum Command {
 		#[command(flatten)]
 		encoding: EncodingFlags,
 	},
-	/// Compare decoded disk bytes or stored container bytes.
-	#[command(name = DIFF_COMMAND)]
-	Diff {
-		left: PathBuf,
-		right: PathBuf,
-		#[arg(long, value_enum, default_value_t)]
-		mode: DiffMode,
-		/// Maximum paired bytes compared from each input.
-		#[arg(long)]
-		max_bytes: Option<u64>,
-		#[arg(long)]
-		json: bool,
-	},
+	/// Compare decoded disk bytes, stored container bytes, or filesystem contents.
+	#[command(name = diff::COMMAND)]
+	Diff(diff::Arguments),
 	/// Check configured Finder icon geometry in a project folder.
 	#[command(name = LINT_COMMAND)]
 	Lint {
@@ -207,13 +195,6 @@ enum ConversionFormat {
 	Udzo,
 }
 
-#[derive(Debug, Default, Clone, Copy, ValueEnum)]
-enum DiffMode {
-	#[default]
-	Logical,
-	Physical,
-}
-
 #[derive(Debug, Clone, Copy, ValueEnum)]
 enum LintProfile {
 	#[value(name = LAYOUT_PROFILE_NAME)]
@@ -263,7 +244,7 @@ type CliResult<T = ()> = Result<T, Box<dyn Error>>;
 
 fn main() -> ExitCode {
 	let command = Cli::parse().command;
-	let error_status = if matches!(command, Command::Diff { .. } | Command::Lint { .. }) {
+	let error_status = if matches!(command, Command::Diff(_) | Command::Lint { .. }) {
 		ExitCode::from(REPORT_ERROR_EXIT_CODE)
 	} else {
 		ExitCode::FAILURE
@@ -329,7 +310,9 @@ fn run(command: Command) -> CliResult<ExitCode> {
 				(ANALYZE_COMMAND, cfg!(feature = "inspect")),
 				(CONVERT_COMMAND, cfg!(feature = "convert")),
 				(OPTIMIZE_COMMAND, cfg!(feature = "convert")),
-				(DIFF_COMMAND, cfg!(feature = "diff")),
+				(diff::COMMAND, cfg!(feature = "diff")),
+				(diff::HFSPLUS_CAPABILITY, diff::HFSPLUS_COMPILED),
+				(diff::APFS_CAPABILITY, diff::APFS_COMPILED),
 				(IMPORT_APPDMG_COMMAND, cfg!(feature = "appdmg-import")),
 				(LINT_COMMAND, cfg!(feature = "lint")),
 				(VERIFY_CONTAINER_CAPABILITY, cfg!(feature = "inspect")),
@@ -370,16 +353,7 @@ fn run(command: Command) -> CliResult<ExitCode> {
 			sampling,
 			encoding,
 		} => optimize::run(&image, &output, sampling, &encoding),
-		#[cfg(feature = "diff")]
-		Command::Diff {
-			left,
-			right,
-			mode,
-			max_bytes,
-			json,
-		} => return diff::run(&left, &right, mode, max_bytes, json),
-		#[cfg(not(feature = "diff"))]
-		Command::Diff { .. } => Err(format!("feature not compiled: {DIFF_COMMAND}").into()),
+		Command::Diff(arguments) => return diff::run(&arguments),
 		#[cfg(feature = "lint")]
 		Command::Lint {
 			project,

@@ -15,16 +15,20 @@ pub(super) fn write_report(
 ) -> CliResult {
 	let mut output = io::stdout().lock();
 	if json {
-		report.serialize(&mut Serializer::with_formatter(
-			&mut output,
-			TerminalSafeJson,
-		))?;
+		write_json(&mut output, report)?;
 		writeln!(output)?;
 	} else {
 		text(&mut output)?;
 	}
 	output.flush()?;
 	Ok(())
+}
+
+pub(super) fn write_json(
+	output: &mut impl Write,
+	value: &impl Serialize,
+) -> serde_json::Result<()> {
+	value.serialize(&mut Serializer::with_formatter(output, TerminalSafeJson))
 }
 
 pub(super) struct EscapedText<'a>(pub &'a str);
