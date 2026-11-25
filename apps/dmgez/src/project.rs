@@ -1,20 +1,17 @@
-use std::collections::BTreeMap;
-
 use dmgez_config::{
-	Payload, Project, VirtualPath,
+	VirtualPath,
 	project_edit::{
 		ContentChanges, FieldChange, ProjectDocument, ProjectEdit, ProjectEditError, RevisionId,
 	},
 };
-use dmgez_preview::{Drag, FolderPoint, ItemInput, PositionSource, ProjectFolder};
+use dmgez_preview::{
+	DeclaredTree, DeclaredTreeError, Drag, FolderPoint, PositionSource, ProjectFolder,
+};
 use eframe::egui::{self, Button, DragValue, Panel, ScrollArea, TextEdit, Ui};
-use thiserror::Error;
 
 const IMAGE_ROOT: &str = "/";
 const PATH_SEPARATOR: char = '/';
-const MAX_DISPLAY_ENTRIES: usize = 16_384;
 const MAX_CANVAS_ENTRIES: usize = 512;
-const MAX_LAYOUT_PATH_BYTES: usize = 4096;
 const MIN_ZOOM_PERCENT: u32 = 25;
 const MAX_ZOOM_PERCENT: u32 = 200;
 const DEFAULT_ZOOM_PERCENT: u32 = 100;
@@ -22,72 +19,10 @@ const POSITION_SPEED: f64 = 0.25;
 const LIST_WIDTH: f32 = 216.0;
 const DETAILS_WIDTH: f32 = 226.0;
 
-#[derive(Debug, Error)]
-enum IndexError {
-	#[error("the declared project tree exceeds the interactive preview entry or path limit")]
-	Limit,
-	#[error("the project contains an invalid preview path")]
-	Path,
-}
-
-struct Node {
-	path: VirtualPath,
-	content: Option<usize>,
-	directory: bool,
-}
-
-struct Index {
-	folders: BTreeMap<String, Vec<Node>>,
-}
-
-impl Index {
-	fn build(project: &Project) -> Result<Self, IndexError> {
-		let mut nodes: BTreeMap<String, (Option<usize>, bool)> = BTreeMap::new();
-		for (item, content) in project.contents.iter().enumerate() {
-			let path = content.destination.as_str();
-			if path.len() > MAX_LAYOUT_PATH_BYTES {
-				return Err(IndexError::Limit);
-			}
-			nodes.insert(
-				path.to_owned(),
-				(Some(item), matches!(content.payload, Payload::Directory)),
-			);
-			let mut folder = parent(path);
-			while folder != IMAGE_ROOT {
-				nodes.entry(folder.to_owned()).or_insert((None, true));
-				if nodes.len() > MAX_DISPLAY_ENTRIES {
-					return Err(IndexError::Limit);
-				}
-				folder = parent(folder);
-			}
-		}
-		if nodes.len() > MAX_DISPLAY_ENTRIES {
-			return Err(IndexError::Limit);
-		}
-		let mut folders = BTreeMap::<String, Vec<Node>>::new();
-		for (path, (content, directory)) in nodes {
-			let destination = path.parse().map_err(|_| IndexError::Path)?;
-			folders
-				.entry(parent(&path).to_owned())
-				.or_default()
-				.push(Node {
-					path: destination,
-					content,
-					directory,
-				});
-		}
-		Ok(Self { folders })
-	}
-
-	fn children(&self, folder: &VirtualPath) -> &[Node] {
-		self.folders.get(folder.as_str()).map_or(&[], Vec::as_slice)
-	}
-}
-
 pub(crate) struct ProjectTab {
 	pub document: ProjectDocument,
 	saved: RevisionId,
-	index: Result<Index, IndexError>,
+	tree: Result<DeclaredTree, DeclaredTreeError>,
 	folder: VirtualPath,
 	selected: Option<VirtualPath>,
 	zoom: u32,
@@ -110,7 +45,7 @@ impl ProjectTab {
 		let project = document.project();
 		Self {
 			saved: document.revision(),
-			index: Index::build(project),
+			tree: DeclaredTree::from_project(project),
 			folder: IMAGE_ROOT.parse().expect("root is a valid virtual path"),
 			selected: None,
 			zoom: DEFAULT_ZOOM_PERCENT,
@@ -148,21 +83,17 @@ impl ProjectTab {
 		&mut self,
 		edit: impl FnOnce(&mut ProjectDocument) -> Result<bool, ProjectEditError>,
 	) {
-		let content_count = self.document.project().contents.len();
 		match edit(&mut self.document) {
 			Ok(true) => {
 				let project = self.document.project();
-				if project.contents.len() != content_count {
-					self.index = Index::build(project);
-					self.selected = self.selected.take().filter(|path| {
-						self.index.as_ref().is_ok_and(|index| {
-							index
-								.children(&self.folder)
-								.iter()
-								.any(|node| node.path == *path)
-						})
-					});
-				}
+				self.tree = DeclaredTree::from_project(project);
+				self.selected = self.selected.take().filter(|path| {
+					self.tree.as_ref().is_ok_and(|tree| {
+						tree.children(&self.folder)
+							.iter()
+							.any(|entry| entry.path() == path)
+					})
+				});
 				self.image_name = project.image.name.as_str().to_owned();
 				self.position_draft = None;
 				self.error = None;
@@ -188,7 +119,7 @@ impl ProjectTab {
 	}
 
 	pub(crate) fn ui(&mut self, ui: &mut Ui) {
-		if let Err(error) = &self.index {
+		if let Err(error) = &self.tree {
 			ui.label(error.to_string());
 			return;
 		}
@@ -216,7 +147,7 @@ impl ProjectTab {
 	}
 
 	fn entries(&self, ui: &mut Ui) -> Option<Action> {
-		let index = self.index.as_ref().ok()?;
+		let tree = self.tree.as_ref().ok()?;
 		ui.heading("Contents");
 		let mut action = None;
 		ui.horizontal(|ui| {
@@ -228,19 +159,19 @@ impl ProjectTab {
 			}
 			ui.label(self.folder.as_str());
 		});
-		let nodes = index.children(&self.folder);
+		let entries = tree.children(&self.folder);
 		let row_height = ui.spacing().interact_size.y;
-		ScrollArea::vertical().show_rows(ui, row_height, nodes.len(), |ui, rows| {
+		ScrollArea::vertical().show_rows(ui, row_height, entries.len(), |ui, rows| {
 			for row in rows {
-				let node = &nodes[row];
-				let name = name(&node.path);
-				let selected = self.selected.as_ref() == Some(&node.path);
+				let entry = &entries[row];
+				let name = name(entry.path());
+				let selected = self.selected.as_ref() == Some(entry.path());
 				ui.horizontal(|ui| {
 					if ui.selectable_label(selected, name).clicked() {
-						action = Some(Action::Select(node.path.clone()));
+						action = Some(Action::Select(entry.path().clone()));
 					}
-					if node.directory && ui.small_button("Open").clicked() {
-						action = Some(Action::Navigate(node.path.clone()));
+					if entry.is_directory() && ui.small_button("Open").clicked() {
+						action = Some(Action::Navigate(entry.path().clone()));
 					}
 				});
 			}
@@ -377,29 +308,14 @@ impl ProjectTab {
 	}
 
 	fn layout(&self) -> Result<ProjectFolder<'_>, String> {
-		let index = self.index.as_ref().map_err(ToString::to_string)?;
-		let children = index.children(&self.folder);
+		let tree = self.tree.as_ref().map_err(ToString::to_string)?;
+		let children = tree.children(&self.folder);
 		if children.len() > MAX_CANVAS_ENTRIES {
 			return Err(format!(
 				"The folder contains too many entries for the canvas ({MAX_CANVAS_ENTRIES} maximum)."
 			));
 		}
-		let project = self.document.project();
-		let inputs: Vec<_> = children
-			.iter()
-			.map(|node| {
-				node.content.map_or(
-					ItemInput {
-						destination: &node.path,
-						position: None,
-						hidden: false,
-						hide_extension: false,
-					},
-					|item| ItemInput::from(&project.contents[item]),
-				)
-			})
-			.collect();
-		ProjectFolder::from_project(project, &self.folder, &inputs)
+		tree.layout(self.document.project(), &self.folder)
 			.map_err(|error| error.to_string())
 	}
 }
@@ -460,5 +376,22 @@ mod tests {
 		assert_eq!(tab.layout().unwrap().items().len(), 1);
 		tab.redo();
 		assert_eq!(tab.layout().unwrap().items().len(), 2);
+	}
+
+	#[test]
+	fn reflects_a_renamed_destination_without_changing_the_content_count() {
+		let mut tab = ProjectTab::new(ProjectDocument::open(SAMPLE).unwrap());
+		let target = "/Docs/Test.txt".parse().unwrap();
+		let destination: VirtualPath = "/Notes/Test.txt".parse().unwrap();
+		let mut changes = ContentChanges::default();
+		changes.destination = Some(destination.clone());
+		tab.apply_edits(&[ProjectEdit::Modify { target, changes }]);
+
+		assert_eq!(
+			tab.layout().unwrap().items()[0].destination.as_str(),
+			"/Notes"
+		);
+		tab.navigate("/Notes".parse().unwrap());
+		assert_eq!(tab.layout().unwrap().items()[0].destination, &destination);
 	}
 }
