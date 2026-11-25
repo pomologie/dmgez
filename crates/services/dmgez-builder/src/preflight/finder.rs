@@ -115,7 +115,9 @@ fn admit_options(
 	if let Some(options) = options
 		&& matches!(
 			options.background,
-			Some(dmgez_config::Background::Image { .. })
+			Some(
+				dmgez_config::Background::Image { .. } | dmgez_config::Background::Template { .. }
+			)
 		) {
 		image_background.require(BuildFeature::FinderImageBackground)?;
 		dmgez_finder::validate_options_for_image_background(options)?;

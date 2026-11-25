@@ -7,7 +7,7 @@ use std::{
 	path::Path,
 };
 
-use dmgez_config::{Background, FinderOptions, LocalPath, Project, VirtualPath, VirtualPathError};
+use dmgez_config::{FinderOptions, LocalPath, Project, VirtualPath, VirtualPathError};
 use dmgez_finder::{LayoutItem, STORE_NAME, write_store};
 use thiserror::Error;
 
@@ -230,7 +230,7 @@ fn plan_stores(
 		.filter(|_| folders.len() > 1)
 		.map(without_positions);
 	let mut plan = PlannedStores::default();
-	let mut backgrounds_by_path = BTreeMap::new();
+	let mut backgrounds_by_source = BTreeMap::new();
 	plan.assets.ready.try_reserve_exact(folders.len())?;
 	for (path, folder) in folders {
 		check_cancelled(profile)?;
@@ -241,16 +241,16 @@ fn plan_stores(
 			resolve_options(inherited.as_ref(), folder.options)
 		};
 		if allow_deferred
-			&& let Some(settings) = options.as_deref()
-			&& let Some(Background::Image { source, retina }) = &settings.background
-		{
-			let image = plan.add_background(
-				source,
-				retina.as_ref(),
+			&& let Some(background) = options
+				.as_deref()
+				.and_then(|settings| settings.background.as_ref())
+			&& let Some(image) = plan.add_background(
+				background,
+				path,
 				manifest,
-				&mut backgrounds_by_path,
+				&mut backgrounds_by_source,
 				budget,
-			)?;
+			)? {
 			let deferred = PendingFinderStore::plan(
 				store,
 				options.expect("an image was selected"),

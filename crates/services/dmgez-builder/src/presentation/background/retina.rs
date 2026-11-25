@@ -1,31 +1,32 @@
 use std::{
-	io::{self, Cursor, Seek, SeekFrom, Write},
+	io::{Cursor, Seek, Write},
 	mem::size_of,
 };
 
 use png::{BitDepth, ColorType, OutputInfo};
 use tiff::{
-	Directory, TiffError,
+	Directory,
 	encoder::{
-		ImageEncoder, Rational, TiffEncoder, TiffKindStandard,
+		ImageEncoder, TiffEncoder, TiffKindStandard,
 		colortype::{ColorType as TiffColor, Gray8, Gray16, RGB8, RGB16},
 	},
-	tags::{ExtraSamples, ResolutionUnit, Tag, Type},
+	tags::{ExtraSamples, Tag, Type},
 };
 
 use crate::{preflight::ExecutionProfile, presentation::check_cancelled};
 
 use super::{
 	Error, MAX_IMAGE_DIMENSION, MAX_PNG_DECODER_BYTES, MAX_RASTER_BYTES,
-	PNG_DECODER_BUDGET_DIVISOR, RETINA_SCALE, TIFF_TOP_LEFT, icc,
+	PNG_DECODER_BUDGET_DIVISOR, RETINA_SCALE, icc,
+	output::{
+		BASE_DPI, CappedOutput, RETINA_DPI, tiff_encode_error as encode_error,
+		write_tiff_resolution,
+	},
 };
 
 #[cfg(test)]
 mod tests;
 
-const BASE_DPI: u32 = 72;
-const RETINA_DPI: u32 = BASE_DPI * RETINA_SCALE;
-const EXACT_RESOLUTION_DENOMINATOR: u32 = 1;
 const TIFF_STRIP_BYTES: usize = 64 << 10;
 // This covers the IFD, encoder strip-offset/size tables and their temporary
 // tag buffers. The 64 MiB raster limit keeps the strip count below 2,048.
@@ -48,10 +49,7 @@ pub(super) fn encode(
 	let decode_bytes = max_buffer_bytes
 		.checked_sub(TIFF_TAG_WORKSPACE_BYTES + TIFF_STRIP_BYTES)
 		.ok_or(Error::BackgroundMemory)?;
-	let mut output = CappedOutput {
-		buffer: Cursor::new(Vec::new()),
-		limit: max_encoded_bytes,
-	};
+	let mut output = CappedOutput::new(max_encoded_bytes);
 	{
 		let mut encoder = TiffEncoder::new(&mut output).map_err(encode_error)?;
 		let (width, height) = write_page(
@@ -80,7 +78,7 @@ pub(super) fn encode(
 		)?;
 	}
 	check_cancelled(profile)?;
-	Ok(output.buffer.into_inner())
+	Ok(output.into_bytes())
 }
 
 fn write_page(
@@ -184,18 +182,7 @@ fn start_image<'a, W: Write + Seek, C: TiffColor>(
 	image.rows_per_strip(rows).map_err(encode_error)?;
 
 	let tags = image.encoder();
-	let resolution = Rational {
-		n: page.dpi,
-		d: EXACT_RESOLUTION_DENOMINATOR,
-	};
-	tags.write_tag(Tag::ResolutionUnit, ResolutionUnit::Inch)
-		.map_err(encode_error)?;
-	tags.write_tag(Tag::XResolution, resolution.clone())
-		.map_err(encode_error)?;
-	tags.write_tag(Tag::YResolution, resolution)
-		.map_err(encode_error)?;
-	tags.write_tag(Tag::Orientation, TIFF_TOP_LEFT)
-		.map_err(encode_error)?;
+	write_tiff_resolution(tags, page.dpi).map_err(encode_error)?;
 	if let Some(icc) = page.icc {
 		let entry = tags
 			.write_entry_bytes(Type::UNDEFINED, icc)
@@ -325,49 +312,5 @@ fn decode_error(error: png::DecodingError) -> Error {
 	match error {
 		png::DecodingError::LimitsExceeded => Error::BackgroundMemory,
 		other => Error::BackgroundPng(other),
-	}
-}
-
-fn encode_error(error: TiffError) -> Error {
-	match error {
-		TiffError::IoError(source) if source.kind() == io::ErrorKind::FileTooLarge => {
-			Error::MetadataBudget
-		}
-		other => Error::BackgroundTiff(other),
-	}
-}
-
-struct CappedOutput {
-	buffer: Cursor<Vec<u8>>,
-	limit: usize,
-}
-
-impl Write for CappedOutput {
-	fn write(&mut self, bytes: &[u8]) -> io::Result<usize> {
-		let end = usize::try_from(self.buffer.position())
-			.ok()
-			.and_then(|position| position.checked_add(bytes.len()))
-			.filter(|&end| end <= self.limit)
-			.ok_or(io::ErrorKind::FileTooLarge)?;
-		let data = self.buffer.get_mut();
-		if end > data.capacity() {
-			let target = end.max(data.capacity().saturating_mul(2)).min(self.limit);
-			data.try_reserve_exact(target - data.len())
-				.map_err(io::Error::other)?;
-			if data.capacity() > self.limit {
-				return Err(io::ErrorKind::FileTooLarge.into());
-			}
-		}
-		self.buffer.write(bytes)
-	}
-
-	fn flush(&mut self) -> io::Result<()> {
-		Ok(())
-	}
-}
-
-impl Seek for CappedOutput {
-	fn seek(&mut self, position: SeekFrom) -> io::Result<u64> {
-		self.buffer.seek(position)
 	}
 }

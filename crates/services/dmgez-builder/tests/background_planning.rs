@@ -20,6 +20,8 @@ const PROJECT: &str = "schema_version = 1\n[image]\nname = 'Background test'\nfo
 const ROOT_IMAGE: &str = "\n[finder]\nbackground = { kind = 'image', source = 'root.png' }\n";
 const RETINA_IMAGE: &str =
 	"\n[finder]\nbackground = { kind = 'image', source = 'root.png', retina = 'root-2x.png' }\n";
+const ARROW_TEMPLATE: &str =
+	"\n[finder]\nbackground = { kind = 'template', name = 'builtin-arrow' }\n";
 const CONTENTS: &str = r#"
 [[contents]]
 type = "directory"
@@ -142,8 +144,8 @@ fn reserves_one_inherited_asset_and_distinct_override_before_store_binding() {
 }
 
 #[test]
-fn preflights_both_background_forms_before_source_access() {
-	for background in [ROOT_IMAGE, RETINA_IMAGE] {
+fn preflights_files_and_templates_before_source_access() {
+	for background in [ROOT_IMAGE, RETINA_IMAGE, ARROW_TEMPLATE] {
 		let project =
 			Project::parse(&format!("{PROJECT}output = 'output.dmg'\n{background}")).unwrap();
 		let missing = Path::new("missing relative working directory");
@@ -166,6 +168,24 @@ fn preflights_both_background_forms_before_source_access() {
 			FinderPlan::IconView,
 		);
 	}
+}
+
+#[test]
+fn rejects_unknown_template_before_source_access() {
+	let unknown = ARROW_TEMPLATE.replace("builtin-arrow", "unknown-template");
+	let project = Project::parse(&format!("{PROJECT}output = 'output.dmg'\n{unknown}")).unwrap();
+	let result = planning::prepare(
+		&project,
+		Path::new("missing relative working directory"),
+		options(Availability::Available),
+		Cancellation::default(),
+	);
+	assert!(matches!(
+		result,
+		Err(planning::Error::Preflight(PreflightError::Finder(
+			dmgez_finder::Error::TemplateBackground
+		)))
+	));
 }
 
 #[test]

@@ -7,7 +7,8 @@ use std::{
 };
 
 use dmgez_config::{
-	Background, Column, Coordinate, Dimension, Direction, FinderOptions, LocalPath, VirtualPath,
+	Background, BackgroundTemplate, Column, Coordinate, Dimension, Direction, FinderOptions,
+	LocalPath, VirtualPath,
 };
 use dmgez_core::source::CapturedFile;
 use dmgez_finder::{ImageBackgroundIdentity, LayoutItem, write_store_with_background_identity};
@@ -23,8 +24,10 @@ use super::{
 };
 
 mod icc;
+mod output;
 mod prebuilt;
 mod retina;
+mod template;
 
 const DIRECTORY_NAME: &str = ".background";
 const DIRECTORY_PATH: &str = "/.background";
@@ -167,8 +170,12 @@ fn deferred_metadata_bytes(
 	children: &[LayoutItem<'_>],
 ) -> Option<usize> {
 	let mut bytes = size_of::<DeferredFinderStore>().checked_add(path.as_str().len())?;
-	if let Some(Background::Image { source, retina }) = &options.background {
-		bytes = bytes.checked_add(source_path_bytes(source, retina.as_ref())?)?;
+	match &options.background {
+		Some(Background::Image { source, retina }) => {
+			bytes = bytes.checked_add(source_path_bytes(source, retina.as_ref())?)?;
+		}
+		Some(Background::Template { name }) => bytes = bytes.checked_add(name.as_str().len())?,
+		_ => {}
 	}
 	if let Some(icons) = &options.icon_view {
 		for name in icons.positions.keys() {
@@ -197,27 +204,73 @@ fn deferred_metadata_bytes(
 	Some(bytes)
 }
 
-type BackgroundKey = (PathBuf, Option<PathBuf>);
+#[derive(Eq, Ord, PartialEq, PartialOrd)]
+pub(super) enum BackgroundKey {
+	Image(PathBuf, Option<PathBuf>),
+	Template(BackgroundTemplate),
+}
 
-pub(super) struct BackgroundSource {
-	source: LocalPath,
-	retina: Option<LocalPath>,
+pub(super) enum BackgroundSource {
+	Image {
+		source: LocalPath,
+		retina: Option<LocalPath>,
+	},
+	Template(BackgroundTemplate),
 }
 
 impl PlannedStores {
 	pub(super) fn add_background(
 		&mut self,
-		source: &LocalPath,
-		retina: Option<&LocalPath>,
+		background: &Background,
+		folder: &str,
 		manifest: &Manifest,
-		by_path: &mut BTreeMap<BackgroundKey, usize>,
+		by_source: &mut BTreeMap<BackgroundKey, usize>,
 		budget: &mut AssetBudget,
+	) -> Result<Option<usize>, Error> {
+		let index = match background {
+			Background::Image { source, retina } => {
+				let key = BackgroundKey::Image(
+					source.as_path().to_owned(),
+					retina.as_ref().map(|path| path.as_path().to_owned()),
+				);
+				let path_bytes =
+					source_path_bytes(source, retina.as_ref()).ok_or(Error::MetadataBudget)?;
+				self.reserve_background(key, path_bytes, manifest, by_source, budget, || {
+					BackgroundSource::Image {
+						source: source.clone(),
+						retina: retina.clone(),
+					}
+				})?
+			}
+			Background::Template { name } => {
+				let template = name.as_str().parse().map_err(|_| Error::Layout {
+					folder: folder.to_owned(),
+					source: dmgez_finder::Error::TemplateBackground,
+				})?;
+				self.reserve_background(
+					BackgroundKey::Template(template),
+					0,
+					manifest,
+					by_source,
+					budget,
+					|| BackgroundSource::Template(template),
+				)?
+			}
+			_ => return Ok(None),
+		};
+		Ok(Some(index))
+	}
+
+	fn reserve_background(
+		&mut self,
+		key: BackgroundKey,
+		path_bytes: usize,
+		manifest: &Manifest,
+		by_source: &mut BTreeMap<BackgroundKey, usize>,
+		budget: &mut AssetBudget,
+		source: impl FnOnce() -> BackgroundSource,
 	) -> Result<usize, Error> {
-		let key = (
-			source.as_path().to_owned(),
-			retina.map(|path| path.as_path().to_owned()),
-		);
-		if let Some(&index) = by_path.get(&key) {
+		if let Some(&index) = by_source.get(&key) {
 			return Ok(index);
 		}
 		if self.backgrounds.is_empty() {
@@ -226,15 +279,11 @@ impl PlannedStores {
 		let index = self.backgrounds.len();
 		budget.reserve_assets(1)?;
 		budget.charge(size_of::<BackgroundSource>() + size_of::<(BackgroundKey, usize)>())?;
-		let path_bytes = source_path_bytes(source, retina).ok_or(Error::MetadataBudget)?;
 		// The deduplication key and the capture plan each own the configured paths.
 		budget.charge(path_bytes.checked_mul(2).ok_or(Error::MetadataBudget)?)?;
 		self.backgrounds.try_reserve_exact(1)?;
-		self.backgrounds.push(BackgroundSource {
-			source: source.clone(),
-			retina: retina.cloned(),
-		});
-		by_path.insert(key, index);
+		self.backgrounds.push(source());
+		by_source.insert(key, index);
 		Ok(index)
 	}
 }
@@ -284,43 +333,24 @@ impl BackgroundSource {
 		output: Option<&LocalPath>,
 		budget: &mut AssetBudget,
 	) -> Result<GeneratedAsset, Error> {
-		let base = capture_source(&self.source, manifest, profile, config_dir, output, budget)?;
-		let retina = self
-			.retina
-			.as_ref()
-			.map(|path| capture_source(path, manifest, profile, config_dir, output, budget))
-			.transpose()?;
-		let base = manifest.auxiliary_source(base);
-		let available = profile.write_options().max_buffer_bytes;
-		let bytes = read_source(base, profile, available)?;
-		let available = available - bytes.capacity();
-		let (bytes, extension) = if let Some(retina) = retina {
-			let retina = manifest.auxiliary_source(retina);
-			let retina_bytes = read_source(retina, profile, available)?;
-			let available = available - retina_bytes.capacity();
-			let encoded = retina::encode(
-				&bytes,
-				&retina_bytes,
-				available,
-				budget.metadata_bytes,
+		check_cancelled(profile)?;
+		let (bytes, extension) = match self {
+			Self::Image { source, retina } => capture_files(
+				source,
+				retina.as_ref(),
+				manifest,
 				profile,
-			)?;
-			budget.charge(encoded.capacity())?;
-			retina.validate().map_err(Error::BackgroundSource)?;
-			(encoded, TIFF_EXTENSION)
-		} else {
-			budget.charge(bytes.capacity())?;
-			let extension = if prebuilt::is_tiff(&bytes) {
-				prebuilt::validate(&bytes, available, profile)?;
-				TIFF_EXTENSION
-			} else {
-				validate_png(&bytes, available)?;
-				PNG_EXTENSION
-			};
-			(bytes, extension)
+				config_dir,
+				output,
+				budget,
+			)?,
+			Self::Template(BackgroundTemplate::BuiltinArrow) => {
+				let bytes = template::render(profile, budget.metadata_bytes)?;
+				budget.charge(bytes.capacity())?;
+				(bytes, TIFF_EXTENSION)
+			}
 		};
 		check_cancelled(profile)?;
-		base.validate().map_err(Error::BackgroundSource)?;
 		let path = format!("{DIRECTORY_PATH}{PATH_SEPARATOR}{FILE_PREFIX}{index}{extension}");
 		budget.charge(path.len())?;
 		Ok(GeneratedAsset {
@@ -330,6 +360,53 @@ impl BackgroundSource {
 			bytes,
 		})
 	}
+}
+
+fn capture_files(
+	source: &LocalPath,
+	retina: Option<&LocalPath>,
+	manifest: &mut Manifest,
+	profile: &ExecutionProfile,
+	config_dir: &Path,
+	output: Option<&LocalPath>,
+	budget: &mut AssetBudget,
+) -> Result<(Vec<u8>, &'static str), Error> {
+	let base = capture_source(source, manifest, profile, config_dir, output, budget)?;
+	let retina = retina
+		.map(|path| capture_source(path, manifest, profile, config_dir, output, budget))
+		.transpose()?;
+	let base = manifest.auxiliary_source(base);
+	let available = profile.write_options().max_buffer_bytes;
+	let bytes = read_source(base, profile, available)?;
+	let available = available - bytes.capacity();
+	let result = if let Some(retina) = retina {
+		let retina = manifest.auxiliary_source(retina);
+		let retina_bytes = read_source(retina, profile, available)?;
+		let available = available - retina_bytes.capacity();
+		let encoded = retina::encode(
+			&bytes,
+			&retina_bytes,
+			available,
+			budget.metadata_bytes,
+			profile,
+		)?;
+		budget.charge(encoded.capacity())?;
+		retina.validate().map_err(Error::BackgroundSource)?;
+		(encoded, TIFF_EXTENSION)
+	} else {
+		budget.charge(bytes.capacity())?;
+		let extension = if prebuilt::is_tiff(&bytes) {
+			prebuilt::validate(&bytes, available, profile)?;
+			TIFF_EXTENSION
+		} else {
+			validate_png(&bytes, available)?;
+			PNG_EXTENSION
+		};
+		(bytes, extension)
+	};
+	check_cancelled(profile)?;
+	base.validate().map_err(Error::BackgroundSource)?;
+	Ok(result)
 }
 
 fn capture_source(
