@@ -1,6 +1,10 @@
 //! Read-only attachment through the native macOS disk-image service.
 
-use std::path::{Path, PathBuf};
+use std::{
+	fs::File,
+	io,
+	path::{Path, PathBuf},
+};
 
 #[cfg(target_os = "macos")]
 mod macos;
@@ -52,6 +56,15 @@ pub enum Observation {
 	IdentityMismatch,
 }
 
+/// The independently observed result of asking to detach an attachment.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DetachOutcome {
+	/// The original attachment was absent after a native detach attempt.
+	Detached,
+	/// The attachment was already absent. No detach was attempted.
+	AlreadyDetached,
+}
+
 /// Refusal or failure to establish the requested mount state.
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -91,6 +104,11 @@ pub enum Error {
 	},
 	#[error("the original disk image is busy and is still mounted")]
 	DetachBusy,
+	#[error("the final detach precondition was refused")]
+	DetachPrecondition {
+		#[source]
+		source: io::Error,
+	},
 	#[error(
 		"native disk-image service declined to detach a still-mounted image with status {status}"
 	)]
@@ -145,6 +163,40 @@ pub fn observe(attachment: &Attachment) -> Result<Observation, Error> {
 	}
 }
 
+/// Opens the recorded image read-only after checking its file stamp and canonical name.
+///
+/// Use [`observe`] to check the current OS attachment independently. Keep the returned
+/// file open while using it as an image source, then call [`check_attachment_source`]
+/// before relying on evidence read from the file.
+///
+/// # Errors
+/// Refuses a changed file, unsafe path, or failed filesystem observation. Other
+/// platforms return [`Error::Unavailable`].
+pub fn open_attachment_source(attachment: &Attachment) -> Result<File, Error> {
+	#[cfg(target_os = "macos")]
+	return macos::open_attachment_source(attachment);
+	#[cfg(not(target_os = "macos"))]
+	{
+		let _ = attachment;
+		Err(Error::Unavailable)
+	}
+}
+
+/// Checks that the held image and its exact canonical name still match the recorded file stamp.
+///
+/// # Errors
+/// Refuses a changed file, unsafe path, or failed filesystem observation. Other
+/// platforms return [`Error::Unavailable`].
+pub fn check_attachment_source(attachment: &Attachment, file: &File) -> Result<(), Error> {
+	#[cfg(target_os = "macos")]
+	return macos::check_attachment_source(attachment, file);
+	#[cfg(not(target_os = "macos"))]
+	{
+		let _ = (attachment, file);
+		Err(Error::Unavailable)
+	}
+}
+
 /// Asks the native service to detach the observed image without force.
 ///
 /// Revalidation and the native request are separate operations. External
@@ -155,11 +207,29 @@ pub fn observe(attachment: &Attachment) -> Result<Observation, Error> {
 /// If the native request fails, the result reports whether detachment could be
 /// confirmed. Other platforms return [`Error::Unavailable`].
 pub fn detach(attachment: &Attachment) -> Result<(), Error> {
+	detach_after(attachment, || Ok(())).map(|_| ())
+}
+
+/// Asks the native service to detach a still-mounted image after a final caller check.
+///
+/// The callback runs only after confirming the original attachment is still mounted
+/// and immediately before attempting the non-forced native detach. If observation
+/// confirms the attachment is already absent, the callback is skipped and this
+/// returns [`DetachOutcome::AlreadyDetached`]. Keep the callback brief and coordinate
+/// changes to disk-image attachments with external software.
+///
+/// # Errors
+/// Returns [`Error::DetachPrecondition`] without attempting a detach if the callback
+/// fails. Observation and detach errors have the same meaning as for [`detach`].
+pub fn detach_after(
+	attachment: &Attachment,
+	before_request: impl FnOnce() -> io::Result<()>,
+) -> Result<DetachOutcome, Error> {
 	#[cfg(target_os = "macos")]
-	return macos::detach(attachment);
+	return macos::detach_after(attachment, before_request);
 	#[cfg(not(target_os = "macos"))]
 	{
-		let _ = attachment;
+		let _ = (attachment, before_request);
 		Err(Error::Unavailable)
 	}
 }

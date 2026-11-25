@@ -38,6 +38,13 @@ pub(super) struct HeldImage {
 }
 
 impl HeldImage {
+	pub(super) fn open_matching(path: &Path, stamp: FileStamp) -> Result<File, Error> {
+		exact_path(path)?;
+		let source = Self::open(path)?;
+		check_image_stamp(&source.file, path, stamp)?;
+		Ok(source.file)
+	}
+
 	pub(super) fn open(path: &Path) -> Result<Self, Error> {
 		let (parent, name) = open_parent(path)?;
 		// Observe the type before opening any file that could be a device or FIFO.
@@ -62,12 +69,7 @@ impl HeldImage {
 	}
 
 	pub(super) fn verify(&self, path: &Path) -> Result<(), Error> {
-		let held = fstat(&self.file).map_err(|error| io(path, error))?;
-		let named = named_state(path)?;
-		if file_stamp(&held) != self.stamp || file_stamp(&named) != self.stamp {
-			return Err(Error::IdentityMismatch);
-		}
-		Ok(())
+		check_image_stamp(&self.file, path, self.stamp)
 	}
 
 	pub(super) fn admit_format(&self, path: &Path) -> Result<(), Error> {
@@ -171,6 +173,21 @@ pub(super) fn named_image_matches(path: &Path, expected: FileStamp) -> Result<bo
 		FileType::from_raw_mode(named.st_mode) == FileType::RegularFile
 			&& file_stamp(&named) == expected,
 	)
+}
+
+pub(super) fn check_image_stamp(
+	file: &File,
+	path: &Path,
+	expected: FileStamp,
+) -> Result<(), Error> {
+	let held = fstat(file).map_err(|error| io(path, error))?;
+	if FileType::from_raw_mode(held.st_mode) != FileType::RegularFile
+		|| file_stamp(&held) != expected
+		|| !named_image_matches(path, expected)?
+	{
+		return Err(Error::IdentityMismatch);
+	}
+	Ok(())
 }
 
 pub(super) fn image_alias(path: &Path, expected: Identity) -> bool {

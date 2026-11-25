@@ -1,14 +1,16 @@
-use std::path::Path;
+use std::{fs::File, io, path::Path};
 
 use dmgez_core::process;
 
 use super::{
-	Attachment, Error, Observation, Request,
+	Attachment, DetachOutcome, Error, Observation, Request,
 	record::{CanonicalPath, Device, MountedIdentity},
 };
 
 mod files;
 mod protocol;
+#[cfg(test)]
+mod tests;
 
 use files::{HeldDirectory, HeldImage};
 use protocol::{Inventory, Relation};
@@ -133,16 +135,41 @@ pub(super) fn observe(attachment: &Attachment) -> Result<Observation, Error> {
 	}
 }
 
-pub(super) fn detach(attachment: &Attachment) -> Result<(), Error> {
-	match observe(attachment)? {
-		Observation::Detached => return Ok(()),
+pub(super) fn open_attachment_source(attachment: &Attachment) -> Result<File, Error> {
+	HeldImage::open_matching(attachment.image(), attachment.source)
+}
+
+pub(super) fn check_attachment_source(attachment: &Attachment, file: &File) -> Result<(), Error> {
+	files::exact_path(attachment.image())?;
+	files::check_image_stamp(file, attachment.image(), attachment.source)
+}
+
+pub(super) fn detach_after(
+	attachment: &Attachment,
+	before_request: impl FnOnce() -> io::Result<()>,
+) -> Result<DetachOutcome, Error> {
+	detach_with(
+		|| observe(attachment),
+		before_request,
+		|| protocol::detach(&attachment.device),
+	)
+}
+
+fn detach_with(
+	mut observe: impl FnMut() -> Result<Observation, Error>,
+	before_request: impl FnOnce() -> io::Result<()>,
+	request: impl FnOnce() -> Result<process::Output, process::Error>,
+) -> Result<DetachOutcome, Error> {
+	match observe()? {
+		Observation::Detached => return Ok(DetachOutcome::AlreadyDetached),
 		Observation::IdentityMismatch => return Err(Error::IdentityMismatch),
 		Observation::Mounted => (),
 	}
 
-	let outcome = protocol::detach(&attachment.device);
-	match (observe(attachment), outcome) {
-		(Ok(Observation::Detached), _) => Ok(()),
+	before_request().map_err(|source| Error::DetachPrecondition { source })?;
+	let outcome = request();
+	match (observe(), outcome) {
+		(Ok(Observation::Detached), _) => Ok(DetachOutcome::Detached),
 		(Ok(Observation::Mounted), Ok(output)) if !output.status.success() => {
 			if protocol::detach_busy(&output) {
 				return Err(Error::DetachBusy);
