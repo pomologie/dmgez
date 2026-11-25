@@ -8,7 +8,8 @@ use serde::Serialize;
 
 use crate::{
 	CAPABILITIES, Capabilities, CheckStatus, ContainerSummary, Coverage, Diagnostic, ErrorCategory,
-	ReportOperation, SCHEMA_VERSION, Stage,
+	FilesystemCheckError, FilesystemCheckReport, FilesystemEvidence, FilesystemOptions,
+	FilesystemSource, ReportOperation, SCHEMA_VERSION, Stage, filesystem::verify_window,
 };
 
 /// Work requested by the caller.
@@ -20,8 +21,8 @@ pub enum VerificationMode {
 	Quick,
 	/// Decode stored runs and verify all declared container checksum domains.
 	Container,
-	/// Verify the container and filesystem. Filesystem coverage is unavailable
-	/// in this service profile and produces a partial result after container checks.
+	/// Verify the container and filesystem. Without an explicit filesystem
+	/// checker, successful container checks produce a partial result.
 	Full,
 }
 
@@ -108,6 +109,8 @@ pub struct VerificationReport {
 	#[serde(skip_serializing_if = "Option::is_none")]
 	pub checksums: Option<ChecksumChecks>,
 	#[serde(skip_serializing_if = "Option::is_none")]
+	pub filesystem_check: Option<FilesystemCheckReport>,
+	#[serde(skip_serializing_if = "Option::is_none")]
 	pub diagnostic: Option<Diagnostic>,
 	#[serde(skip)]
 	cause: Option<Error>,
@@ -127,8 +130,12 @@ impl VerificationReport {
 
 	fn fail(&mut self, stage: Stage, error: Error) {
 		let diagnostic = Diagnostic::from_udif(stage, &error);
+		self.fail_with(diagnostic, Some(error));
+	}
+
+	fn fail_with(&mut self, diagnostic: Diagnostic, cause: Option<Error>) {
 		let status = diagnostic.category.status();
-		match stage {
+		match diagnostic.stage {
 			Stage::Structure => self.coverage.structure = status,
 			Stage::Payload => self.coverage.payload = status,
 			Stage::Filesystem => self.coverage.filesystem = status,
@@ -140,7 +147,7 @@ impl VerificationReport {
 			_ => VerificationOutcome::Unavailable,
 		};
 		self.diagnostic = Some(diagnostic);
-		self.cause = Some(error);
+		self.cause = cause;
 	}
 }
 
@@ -151,6 +158,60 @@ impl VerificationReport {
 /// A full request requires filesystem checks and remains partial without them.
 #[must_use]
 pub fn verify(source: impl ReadAt, limits: Limits, mode: VerificationMode) -> VerificationReport {
+	let (mut report, next) = verify_container(source, limits, mode);
+	if next.is_some() && mode == VerificationMode::Full {
+		report.fail_with(
+			Diagnostic {
+				stage: Stage::Filesystem,
+				category: ErrorCategory::FeatureNotCompiled,
+				detail: None,
+			},
+			None,
+		);
+	}
+	report
+}
+
+/// Runs full verification with a filesystem checker for one admitted data window.
+/// The checker is called once, after the container checks and window selection
+/// pass. Reachable or structural checks, checks of one native subvolume, and
+/// checks of one among multiple data windows leave whole-image coverage partial.
+/// Security checks remain independent of this operation.
+#[must_use]
+pub fn verify_filesystem(
+	source: impl ReadAt,
+	limits: Limits,
+	filesystem: FilesystemOptions,
+	checker: impl FnOnce(&mut dyn FilesystemSource) -> Result<FilesystemEvidence, FilesystemCheckError>,
+) -> VerificationReport {
+	let (mut report, next) = verify_container(source, limits, VerificationMode::Full);
+	report.capabilities.filesystem = true;
+	let Some(mut image) = next else {
+		return report;
+	};
+	match verify_window(&mut image, filesystem, checker) {
+		Ok(attempt) => {
+			report.filesystem_check = Some(attempt.report);
+			if let Some(failure) = attempt.failure {
+				report.fail_with(failure.diagnostic, failure.cause);
+			} else if attempt.report.all_filesystems_checked {
+				report.coverage.filesystem = CheckStatus::Passed;
+				report.outcome = VerificationOutcome::Passed;
+			} else {
+				report.coverage.filesystem = CheckStatus::Partial;
+				report.outcome = VerificationOutcome::Partial;
+			}
+		}
+		Err(failure) => report.fail_with(failure.diagnostic, failure.cause),
+	}
+	report
+}
+
+fn verify_container<S: ReadAt>(
+	source: S,
+	limits: Limits,
+	mode: VerificationMode,
+) -> (VerificationReport, Option<Image<S>>) {
 	let mut report = VerificationReport {
 		schema_version: SCHEMA_VERSION,
 		operation: ReportOperation::Verify,
@@ -160,6 +221,7 @@ pub fn verify(source: impl ReadAt, limits: Limits, mode: VerificationMode) -> Ve
 		coverage: Coverage::default(),
 		container: None,
 		checksums: None,
+		filesystem_check: None,
 		diagnostic: None,
 		cause: None,
 	};
@@ -174,7 +236,7 @@ pub fn verify(source: impl ReadAt, limits: Limits, mode: VerificationMode) -> Ve
 		Ok(image) => image,
 		Err(error) => {
 			report.fail(Stage::Structure, error);
-			return report;
+			return (report, None);
 		}
 	};
 	report.coverage.structure = CheckStatus::Passed;
@@ -183,7 +245,7 @@ pub fn verify(source: impl ReadAt, limits: Limits, mode: VerificationMode) -> Ve
 
 	if mode == VerificationMode::Quick {
 		report.outcome = VerificationOutcome::Passed;
-		return report;
+		return (report, None);
 	}
 	match image.verify().and_then(|verified| {
 		image.read_exact_at(0, &mut [])?;
@@ -195,20 +257,10 @@ pub fn verify(source: impl ReadAt, limits: Limits, mode: VerificationMode) -> Ve
 		}
 		Err(error) => {
 			report.fail(Stage::Payload, error);
-			return report;
+			return (report, None);
 		}
 	}
 
-	if mode == VerificationMode::Full {
-		report.coverage.filesystem = CheckStatus::Unavailable;
-		report.outcome = VerificationOutcome::Partial;
-		report.diagnostic = Some(Diagnostic {
-			stage: Stage::Filesystem,
-			category: ErrorCategory::FeatureNotCompiled,
-			detail: None,
-		});
-	} else {
-		report.outcome = VerificationOutcome::Passed;
-	}
-	report
+	report.outcome = VerificationOutcome::Passed;
+	(report, (mode == VerificationMode::Full).then_some(image))
 }

@@ -278,7 +278,7 @@ pub fn inspect_disk<S: ReadAt>(
 	report
 }
 
-fn discovery_error(error: &DiskError) -> Diagnostic {
+pub(crate) fn discovery_error(error: &DiskError) -> Diagnostic {
 	let (category, detail) = match *error {
 		DiskError::Source(ref error) => return Diagnostic::from_udif(Stage::Payload, error),
 		DiskError::Corrupt { scheme, .. } => (
@@ -294,6 +294,12 @@ fn discovery_error(error: &DiskError) -> Diagnostic {
 			}),
 		),
 		DiskError::Conflict { .. } => (ErrorCategory::Conflict, None),
+		DiskError::AmbiguousVolumes { candidates } => (
+			ErrorCategory::Conflict,
+			Some(DiagnosticDetail::VolumeSelection { candidates }),
+		),
+		DiskError::UnknownVolume(_) | DiskError::NoDataWindow(_) => (ErrorCategory::Conflict, None),
+		DiskError::NoVolume => (ErrorCategory::UnsupportedVariant, None),
 		DiskError::Limit(_) => (ErrorCategory::ResourceLimit, None),
 		DiskError::OutOfRange {
 			offset,

@@ -19,6 +19,7 @@ dmgez-vfs.workspace = true
 serde.workspace = true
 
 [dev-dependencies]
+dmgez-udif = { workspace = true, features = ["write"] }
 plist.workspace = true
 serde_json.workspace = true
 

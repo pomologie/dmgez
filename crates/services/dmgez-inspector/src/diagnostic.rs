@@ -22,6 +22,7 @@ pub enum ErrorCategory {
 	Corrupt,
 	UnsupportedVariant,
 	FeatureNotCompiled,
+	BackendUnavailable,
 	ResourceLimit,
 	SourceChanged,
 	Conflict,
@@ -36,6 +37,7 @@ impl ErrorCategory {
 		match self {
 			Self::UnsupportedVariant => CheckStatus::Unsupported,
 			Self::FeatureNotCompiled
+			| Self::BackendUnavailable
 			| Self::ResourceLimit
 			| Self::PermissionDenied
 			| Self::Io
@@ -88,6 +90,15 @@ pub enum DiagnosticDetail {
 		requested: ByteRange,
 		#[serde(serialize_with = "crate::decimal")]
 		available_bytes: u64,
+	},
+	/// Byte request relative to the admitted filesystem data window.
+	FilesystemWindowRange {
+		requested: ByteRange,
+		#[serde(serialize_with = "crate::decimal")]
+		available_bytes: u64,
+	},
+	VolumeSelection {
+		candidates: usize,
 	},
 }
 

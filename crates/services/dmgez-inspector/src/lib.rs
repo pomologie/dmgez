@@ -7,6 +7,7 @@ mod analysis;
 mod container;
 mod diagnostic;
 mod disk;
+mod filesystem;
 mod verification;
 
 use serde::{Serialize, Serializer};
@@ -21,8 +22,14 @@ pub use disk::{
 	DiskLimits, DiskReport, DiskScheme, PartitionDetails, PartitionGuid, PartitionIdentifier,
 	PartitionReport, PartitionRole, RecognizedFilesystem, inspect_disk,
 };
+pub use filesystem::{
+	FilesystemCheckError, FilesystemCheckReport, FilesystemEvidence, FilesystemObjectId,
+	FilesystemOptions, FilesystemReadError, FilesystemScope, FilesystemSource, SelectedWindow,
+	SelectedWindowId,
+};
 pub use verification::{
 	ChecksumChecks, VerificationMode, VerificationOutcome, VerificationReport, verify,
+	verify_filesystem,
 };
 
 /// Version of the serialized report shapes.
@@ -63,6 +70,7 @@ const CAPABILITIES: Capabilities = Capabilities {
 pub enum CheckStatus {
 	NotChecked,
 	Passed,
+	Partial,
 	Failed,
 	NotPresent,
 	Unsupported,
@@ -76,6 +84,7 @@ impl CheckStatus {
 		match self {
 			Self::NotChecked => "not_checked",
 			Self::Passed => "passed",
+			Self::Partial => "partial",
 			Self::Failed => "failed",
 			Self::NotPresent => "not_present",
 			Self::Unsupported => "unsupported",
