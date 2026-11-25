@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, ops::Range};
 
 use crate::{
 	Error, MAX_EMBEDDED_SIGNATURE_BYTES, TRAILER_BYTES, embedded_code_directory,
@@ -27,6 +27,13 @@ impl<S: ReadAt> Image<S> {
 			clear_signature_fields(&mut tail);
 		}
 		Self::open_from_trailer(source, limits, &tail, body_len)
+	}
+
+	/// Returns the structurally admitted signature range, if present.
+	#[must_use]
+	pub fn embedded_signature_range(&self) -> Option<Range<u64>> {
+		let trailer = self.descriptor().physical_bytes - TRAILER_BYTES as u64;
+		(self.body_len < trailer).then_some(self.body_len..trailer)
 	}
 }
 

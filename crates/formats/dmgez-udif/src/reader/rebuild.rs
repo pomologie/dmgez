@@ -12,8 +12,24 @@ impl<S: ReadAt> Image<S> {
 	/// Run placement, compression, XML serialization and checksums are regenerated.
 	/// # Errors
 	/// Refuses opaque resources or payload gaps, unknown run types, unqualified
-	/// maps and checksum descriptors, or an unavailable source.
+	/// maps and checksum descriptors, signed inputs, or an unavailable source.
 	pub fn rebuild_metadata(&self) -> Result<RebuildMetadata, Error> {
+		if self.embedded_signature_range().is_some() {
+			return Err(Error::Unsupported(
+				"opaque container layout cannot be preserved by conversion",
+			));
+		}
+		self.rebuild_release_metadata()
+	}
+
+	/// Admit the layout for an unsigned rebuild, excluding a structurally admitted
+	/// input signature from the regenerated output. The input signature conveys
+	/// no trust to the rebuild. Check its integrity and authenticity separately
+	/// if either result matters to the caller.
+	/// # Errors
+	/// Refuses opaque resources or payload gaps in the image body, unknown run
+	/// types, unqualified maps and checksum descriptors, or an unavailable source.
+	pub fn rebuild_release_metadata(&self) -> Result<RebuildMetadata, Error> {
 		let desc = self.descriptor();
 		let (map, include_partition_list) = resource::rebuild_table(&desc.resources)?;
 		let [table] = desc.tables.as_slice() else {
@@ -24,7 +40,7 @@ impl<S: ReadAt> Image<S> {
 		let trailer_start = desc.physical_bytes - trailer::BYTES as u64;
 		if desc.data_fork.start != 0
 			|| desc.data_fork.end != desc.resource_xml.start
-			|| desc.resource_xml.end != trailer_start
+			|| desc.resource_xml.end != self.body_len
 			|| table.logical != (0..desc.logical_bytes)
 			|| table.records != self.runs().len() + 1
 			|| !blkx::has_rebuild_layout(map, desc.data_fork.end)?

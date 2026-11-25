@@ -57,6 +57,28 @@ fn refuses_an_invalid_signed_frame_and_detects_changed_payload_bytes() {
 	));
 }
 
+#[cfg(feature = "write")]
+#[test]
+fn admits_signed_layout_only_for_explicit_release_rebuild() {
+	let unsigned = Image::open(UNSIGNED, Limits::default()).unwrap();
+	let signed = Image::open_release(SIGNED, Limits::default()).unwrap();
+	assert_eq!(unsigned.embedded_signature_range(), None);
+	assert_eq!(
+		signed.embedded_signature_range(),
+		Some(signed_signature_range(SIGNED.last_chunk().unwrap(), SIGNED.len() as u64).unwrap())
+	);
+	assert!(
+		signed
+			.rebuild_release_metadata()
+			.unwrap()
+			.matches_preserved_fields(&unsigned.rebuild_metadata().unwrap())
+	);
+	assert!(matches!(
+		signed.rebuild_metadata(),
+		Err(Error::Unsupported(_))
+	));
+}
+
 #[test]
 fn bounds_the_signature_frame_before_attempting_a_read() {
 	let mut trailer = *SIGNED.last_chunk::<TRAILER_BYTES>().unwrap();

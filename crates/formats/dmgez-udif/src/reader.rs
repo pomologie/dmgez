@@ -179,6 +179,7 @@ pub struct Verification {
 #[derive(Debug)]
 pub struct Image<S> {
 	source: S,
+	body_len: u64,
 	descriptor: Descriptor,
 	runs: Vec<Run>,
 	logical_order: Vec<usize>,
@@ -274,6 +275,7 @@ impl<S: ReadAt> Image<S> {
 		};
 		Ok(Self {
 			source,
+			body_len,
 			descriptor,
 			runs,
 			logical_order,
