@@ -1,11 +1,11 @@
-use std::ops::Range;
+use std::{num::NonZeroU64, ops::Range};
 
 use dmgez_udif::{
 	Error as SourceError,
 	reader::{Image, ReadAt},
 };
 
-use crate::{Error, Layout, Limits, Partition, PartitionId, Window, discovery};
+use crate::{Error, Filesystem, Layout, Limits, Partition, PartitionId, Window, discovery};
 
 /// Explicit selection of an admitted whole-disk volume or a partition slot.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -80,6 +80,44 @@ impl<S: LogicalDisk> Disk<S> {
 	pub fn discover(mut source: S, limits: Limits) -> Result<Self, Error> {
 		let layout = discovery::discover(&mut source, limits)?;
 		Ok(Self { source, layout })
+	}
+
+	/// Recognize a partitionless filesystem using a caller-owned geometry probe.
+	///
+	/// The probe runs only when discovery found an unknown layout. It receives a
+	/// read-only window over the logical source and supplies the byte length of
+	/// the validated extent starting at zero, or `None` for unrecognized data.
+	/// The caller is responsible for the probe's resource limits.
+	///
+	/// # Errors
+	/// Propagates probe failures and rejects extents outside the logical source.
+	/// The layout stays unchanged on error.
+	pub fn recognize_partitionless<E: From<Error>>(
+		&mut self,
+		filesystem: Filesystem,
+		probe: impl FnOnce(Window<'_, S>) -> Result<Option<NonZeroU64>, E>,
+	) -> Result<(), E> {
+		if !matches!(self.layout, Layout::Unknown) {
+			return Ok(());
+		}
+		let available = self.source.len();
+		let Some(len) = probe(Window::new(&mut self.source, 0..available))? else {
+			return Ok(());
+		};
+		let len = len.get();
+		if len > available {
+			return Err(Error::OutOfRange {
+				offset: 0,
+				len,
+				available,
+			}
+			.into());
+		}
+		self.layout = Layout::Partitionless {
+			filesystem,
+			range: 0..len,
+		};
+		Ok(())
 	}
 
 	#[must_use]

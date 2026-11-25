@@ -8,6 +8,7 @@ use crate::{Partition, Scheme};
 pub enum Filesystem {
 	HfsPlus,
 	HfsX,
+	Apfs,
 }
 
 /// Discovered partition geometry. Filesystem contents require separate checks.

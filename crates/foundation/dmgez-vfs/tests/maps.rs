@@ -7,6 +7,8 @@ use dmgez_vfs::{Disk, Error, Layout, Limits, PartitionId, PartitionRole, Raw, Sc
 
 #[path = "maps/access.rs"]
 mod access;
+#[path = "maps/probe.rs"]
+mod probe;
 
 const SECTOR: usize = SECTOR_BYTES as usize;
 const EMPTY: [u8; SECTOR] = [0; SECTOR];
