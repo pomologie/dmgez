@@ -11,7 +11,8 @@ use serde_json::json;
 #[cfg(feature = "project-build")]
 use super::BINARY;
 use super::{
-	DIFFERENT, EQUAL, FINDER_INFO_BYTES, FINDER_INFO_FIELD, FINDER_INFO_OPTION, XATTR_OPTION,
+	DIFFERENT, EQUAL, FINDER_INFO_BYTES, FINDER_INFO_FIELD, FINDER_INFO_OPTION, NATIVE_PATHS,
+	PATHS_OPTION, XATTR_OPTION, assert_error,
 	native_hfsplus::{hfsplus_fixture, materialize_sparse, overlay_sparse},
 	report, semantic_diff,
 };
@@ -19,8 +20,10 @@ use super::{
 pub(super) const HFSPLUS: &str = "hfsplus";
 pub(super) const BOTH_RAW: &[&str] = &["--left-raw", "--right-raw"];
 const RAW_WITH_XATTRS: &[&str] = &["--left-raw", "--right-raw", XATTR_OPTION];
+const RAW_WITH_NATIVE_PATHS: &[&str] = &["--left-raw", "--right-raw", PATHS_OPTION, NATIVE_PATHS];
 const HFSX_FIXTURE: &str = "native-hfsx.bin";
 const HFSX_VOLUME_BYTES: usize = 24 * (1 << 20);
+const HFSX_BINARY: &str = "hfsx_binary";
 const UPPERCASE_FILE_DATA: &[u8] = b"capital\0\x01\xff\n";
 const UPPERCASE_FILE_OFFSET: usize = 4_530_176;
 const CATALOG_FINDER_INFO_OFFSET: usize = 48;
@@ -44,6 +47,17 @@ fn native_hfsx_distinguishes_the_two_case_sensitive_file_names() {
 	assert_eq!(equal["right"]["hfs_signature"], "hfsx");
 	assert!(equal["policy"]["xattrs"].is_object());
 
+	// This catalog contains both Case.txt and case.txt under Cases. Binary
+	// native pairing must preserve both names without a fold-key conflict.
+	let binary = report(
+		&semantic_diff(&left, &left, HFSPLUS, RAW_WITH_NATIVE_PATHS),
+		EQUAL,
+	);
+	assert_eq!(binary["policy"]["paths"], NATIVE_PATHS);
+	assert_eq!(binary["policy"]["native_name_profile"], HFSX_BINARY);
+	assert_eq!(binary["changes"], json!([]));
+	assert!(binary.get("equivalent_path_spellings").is_none());
+
 	let fork = &mut bytes[UPPERCASE_FILE_OFFSET..][..UPPERCASE_FILE_DATA.len()];
 	assert_eq!(fork, UPPERCASE_FILE_DATA);
 	fork[0] ^= 1;
@@ -55,6 +69,53 @@ fn native_hfsx_distinguishes_the_two_case_sensitive_file_names() {
 		json!([{"path": ["Cases", "Case.txt"], "kind": "changed", "fields": ["data_fork"]}]),
 		"{changed:#}"
 	);
+	let binary_changed = report(
+		&semantic_diff(&left, &right, HFSPLUS, RAW_WITH_NATIVE_PATHS),
+		DIFFERENT,
+	);
+	assert_eq!(binary_changed["changes"], changed["changes"]);
+}
+
+#[test]
+fn native_path_comparison_checks_hfs_catalog_collations() {
+	const STANDARD_CATALOG: &str = "native-catalog-volume.bin";
+	const CASE_FOLDED_LEDGER: &str = "native-hfsx-case-folded.json";
+	const HFS_UNICODE_FOLDED: &str = "hfs_unicode_folded";
+
+	let root = tempfile::tempdir().unwrap();
+	let standard = root.path().join("hfsplus.raw");
+	let case_folded = root.path().join("folded-hfsx.raw");
+	let binary = root.path().join("binary-hfsx.raw");
+	let mut bytes = hfsplus_fixture(STANDARD_CATALOG);
+	fs::write(&standard, &bytes).unwrap();
+
+	// Apply the already qualified native case-folded HFSX derivation.
+	let ledger: serde_json::Value =
+		serde_json::from_slice(&hfsplus_fixture(CASE_FOLDED_LEDGER)).unwrap();
+	assert_eq!(ledger["base_fixture"], STANDARD_CATALOG);
+	let patches = ledger["derivation"]["byte_overlays"].as_array().unwrap();
+	assert!(!patches.is_empty());
+	for patch in patches {
+		let offset = usize::try_from(patch["offset"].as_u64().unwrap()).unwrap();
+		let value = u8::try_from(patch["value"].as_u64().unwrap()).unwrap();
+		assert_ne!(bytes[offset], value);
+		bytes[offset] = value;
+	}
+	fs::write(&case_folded, bytes).unwrap();
+
+	let equal = report(
+		&semantic_diff(&standard, &case_folded, HFSPLUS, RAW_WITH_NATIVE_PATHS),
+		EQUAL,
+	);
+	assert_eq!(equal["left"]["hfs_signature"], HFSPLUS);
+	assert_eq!(equal["right"]["hfs_signature"], "hfsx");
+	assert_eq!(equal["policy"]["native_name_profile"], HFS_UNICODE_FOLDED);
+	assert_eq!(equal["changes"], json!([]));
+
+	let bytes = materialize_sparse(&hfsplus_fixture(HFSX_FIXTURE), HFSX_VOLUME_BYTES);
+	fs::write(&binary, bytes).unwrap();
+	let incompatible = semantic_diff(&case_folded, &binary, HFSPLUS, RAW_WITH_NATIVE_PATHS);
+	assert_error(&incompatible, "native filesystem path profiles differ");
 }
 
 #[test]

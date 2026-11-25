@@ -13,6 +13,10 @@ const XATTR_OPTION: &str = "--xattrs";
 const FINDER_INFO_OPTION: &str = "--finder-info";
 const CONTENTS_OPTION: &str = "--contents";
 const EXACT_CONTENTS: &str = "exact";
+const PATHS_OPTION: &str = "--paths";
+#[cfg(feature = "diff")]
+const EXACT_PATHS: &str = "exact";
+const NATIVE_PATHS: &str = "native";
 #[cfg(feature = "diff")]
 const BLAKE3_CONTENTS: &str = "blake3";
 #[cfg(feature = "diff")]
@@ -56,6 +60,9 @@ mod native_apfs_mutations;
 #[cfg(all(feature = "diff", feature = "hfsplus-read"))]
 #[path = "support/native_hfsplus.rs"]
 mod native_hfsplus;
+#[cfg(all(feature = "diff", feature = "hfsplus-read", feature = "project-build"))]
+#[path = "semantic_diff_cli/native_paths.rs"]
+mod native_paths;
 
 fn semantic_diff(left: &Path, right: &Path, filesystem: &str, options: &[&str]) -> Output {
 	semantic_command(left, right, filesystem)
@@ -126,6 +133,8 @@ fn byte_diff_rejects_semantic_options_before_opening_inputs() {
 			&[CONTENTS_OPTION, BLAKE3_CONTENTS][..],
 			&[CONTENTS_OPTION, BLAKE3_EXACT_CONTENTS][..],
 			&[INFER_RENAMES_OPTION][..],
+			&[PATHS_OPTION, EXACT_PATHS][..],
+			&[PATHS_OPTION, NATIVE_PATHS][..],
 		] {
 			let output = Command::new(BINARY)
 				.arg("diff")
@@ -198,6 +207,7 @@ fn unavailable_semantic_backend_refuses_before_opening_inputs() {
 			&[XATTR_OPTION][..],
 			&[FINDER_INFO_OPTION][..],
 			&[CONTENTS_OPTION, EXACT_CONTENTS][..],
+			&[PATHS_OPTION, NATIVE_PATHS][..],
 		] {
 			let output = semantic_diff(&left, &right, filesystem, options);
 			assert_error(&output, &expected);
