@@ -143,3 +143,71 @@ require_native_assessment = true
 	);
 	assert!(directory.path().join(OUTPUT_NAME).is_file());
 }
+
+#[cfg(all(feature = "project-build", target_os = "macos"))]
+#[test]
+fn prepares_a_native_valid_hfsplus_release_image_in_a_temporary_stage() {
+	use std::{
+		io::{self, Read, Seek, SeekFrom},
+		num::NonZeroUsize,
+	};
+
+	use dmgez_builder::preflight::{Availability, OutputIntent, PreflightOptions, ReleaseIntent};
+	use dmgez_config::Project;
+	use dmgez_udif::{TRAILER_BYTES, check_trailer_header};
+
+	const DESTINATION: &str = "installer.dmg";
+	const SETTINGS: &str = r#"
+schema_version = 1
+[image]
+name = "Release Stage"
+output = "installer.dmg"
+format = "udro"
+[[contents]]
+type = "directory"
+destination = "/Data"
+"#;
+
+	let directory = tempfile::tempdir().unwrap();
+	let parent = directory.path().canonicalize().unwrap();
+	let project = Project::parse(SETTINGS).unwrap();
+	let mut capabilities = dmgez_hfsplus::capabilities();
+	capabilities.release = Availability::Available;
+	let prepared = dmgez_hfsplus::prepare(
+		&project,
+		&parent,
+		PreflightOptions {
+			capabilities,
+			output: OutputIntent::Path,
+			release: ReleaseIntent::Release,
+			host_threads: NonZeroUsize::MIN,
+		},
+		Default::default(),
+	)
+	.unwrap();
+	let image = prepared.seal().unwrap();
+	let stage = image
+		.stage_release(
+			&|mut reader, _| {
+				let mut trailer = [0; TRAILER_BYTES];
+				reader.seek(SeekFrom::End(-(TRAILER_BYTES as i64)))?;
+				reader.read_exact(&mut trailer)?;
+				check_trailer_header(&trailer).map_err(io::Error::other)
+			},
+			|_| {},
+		)
+		.unwrap();
+	let result = Command::new("/usr/bin/hdiutil")
+		.args(["verify", "-quiet"])
+		.arg(stage.path())
+		.output()
+		.unwrap();
+	assert!(
+		result.status.success(),
+		"{}",
+		String::from_utf8_lossy(&result.stderr)
+	);
+	assert!(!parent.join(DESTINATION).exists());
+	drop(stage);
+	assert_eq!(std::fs::read_dir(parent).unwrap().count(), 0);
+}

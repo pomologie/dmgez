@@ -27,6 +27,7 @@ mod hard_links;
 #[cfg(feature = "volume-icon")]
 mod item_icons;
 mod metadata;
+mod release_stage;
 mod source;
 
 use metadata::{Capture, DEFAULT_FOLDER_MODE, MISSING_HFS_DATE, epoch_seconds, generated_metadata};
