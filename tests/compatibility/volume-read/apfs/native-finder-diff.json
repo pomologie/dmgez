@@ -1,0 +1,503 @@
+{
+  "dmgez_revision": "a67820ff1883f33822fae79cf30c15136b85e6f5",
+  "apfs_revision": "a8a0348cde041c875d20981c65a96a47fc38df78",
+  "macos_version": "14.7.2",
+  "macos_build": "23H311",
+  "architecture": "arm64",
+  "independent_packages": {
+    "ds_store": "1.3.4",
+    "mac_alias": "2.2.3"
+  },
+  "image_digests": {
+    "original": "6c777d8591d0cdd5f1de408072432b6ec6483cadba605fbce55ee6dfd518f032",
+    "padded": "0e4900ea9cd67664dfb5d6e07a69588d07c353d0e33d03d8f2fdb8607a82cb3a",
+    "revised": "83deb51a8f801986ee3275e26d87f0e25f9c58f3acd663fcb8513f136f40936e"
+  },
+  "input_images_unchanged": true,
+  "native_udzo_verification": {
+    "original": [
+      "Checksumming whole disk (Apple_APFS : 0)…",
+      "         whole disk (Apple_APFS : 0): verified   CRC32 $E6110C7A",
+      "verified   CRC32 $D3D1DF91"
+    ],
+    "padded": [
+      "Checksumming whole disk (Apple_APFS : 0)…",
+      "         whole disk (Apple_APFS : 0): verified   CRC32 $96EFDC50",
+      "verified   CRC32 $5D372D1E"
+    ],
+    "revised": [
+      "Checksumming whole disk (Apple_APFS : 0)…",
+      "         whole disk (Apple_APFS : 0): verified   CRC32 $E724BB02",
+      "verified   CRC32 $BC975EFE"
+    ]
+  },
+  "independent_facts": {
+    "original": {
+      "window": {
+        "PreviewPaneVisibility": false,
+        "ShowStatusBar": true,
+        "ShowToolbar": false,
+        "WindowBounds": "{{75, -50}, {620, 270}}"
+      },
+      "position": [
+        150,
+        175
+      ],
+      "list_keyed": {
+        "calculateAllSizes": true,
+        "columns": {
+          "name": {
+            "ascending": true,
+            "index": 0,
+            "visible": true,
+            "width": 245
+          },
+          "size": {
+            "ascending": false,
+            "index": 1,
+            "visible": true,
+            "width": 97
+          }
+        },
+        "iconSize": 32.0,
+        "scrollPositionX": 2.5,
+        "scrollPositionY": 3.5,
+        "showIconPreview": true,
+        "sortColumn": "size",
+        "textSize": 13.0,
+        "useRelativeDates": false,
+        "viewOptionsVersion": 1
+      },
+      "list_ordered": {
+        "calculateAllSizes": true,
+        "columns": [
+          {
+            "ascending": true,
+            "identifier": "name",
+            "visible": true,
+            "width": 245
+          },
+          {
+            "ascending": false,
+            "identifier": "size",
+            "visible": true,
+            "width": 97
+          }
+        ],
+        "iconSize": 32.0,
+        "scrollPositionX": 2.5,
+        "scrollPositionY": 3.5,
+        "showIconPreview": true,
+        "sortColumn": "size",
+        "textSize": 13.0,
+        "useRelativeDates": false,
+        "viewOptionsVersion": 1
+      }
+    },
+    "padded": {
+      "window": {
+        "PreviewPaneVisibility": false,
+        "ShowStatusBar": true,
+        "ShowToolbar": false,
+        "WindowBounds": "{{75, -50}, {620, 270}}"
+      },
+      "position": [
+        150,
+        175
+      ],
+      "list_keyed": {
+        "calculateAllSizes": true,
+        "columns": {
+          "name": {
+            "ascending": true,
+            "index": 0,
+            "visible": true,
+            "width": 245
+          },
+          "size": {
+            "ascending": false,
+            "index": 1,
+            "visible": true,
+            "width": 97
+          }
+        },
+        "iconSize": 32.0,
+        "scrollPositionX": 2.5,
+        "scrollPositionY": 3.5,
+        "showIconPreview": true,
+        "sortColumn": "size",
+        "textSize": 13.0,
+        "useRelativeDates": false,
+        "viewOptionsVersion": 1
+      },
+      "list_ordered": {
+        "calculateAllSizes": true,
+        "columns": [
+          {
+            "ascending": true,
+            "identifier": "name",
+            "visible": true,
+            "width": 245
+          },
+          {
+            "ascending": false,
+            "identifier": "size",
+            "visible": true,
+            "width": 97
+          }
+        ],
+        "iconSize": 32.0,
+        "scrollPositionX": 2.5,
+        "scrollPositionY": 3.5,
+        "showIconPreview": true,
+        "sortColumn": "size",
+        "textSize": 13.0,
+        "useRelativeDates": false,
+        "viewOptionsVersion": 1
+      }
+    },
+    "revised": {
+      "window": {
+        "PreviewPaneVisibility": false,
+        "ShowStatusBar": true,
+        "ShowToolbar": false,
+        "WindowBounds": "{{75, -50}, {620, 270}}"
+      },
+      "position": [
+        200,
+        175
+      ],
+      "list_keyed": {
+        "calculateAllSizes": true,
+        "columns": {
+          "name": {
+            "ascending": true,
+            "index": 0,
+            "visible": true,
+            "width": 285
+          },
+          "size": {
+            "ascending": false,
+            "index": 1,
+            "visible": true,
+            "width": 97
+          }
+        },
+        "iconSize": 32.0,
+        "scrollPositionX": 2.5,
+        "scrollPositionY": 3.5,
+        "showIconPreview": true,
+        "sortColumn": "size",
+        "textSize": 13.0,
+        "useRelativeDates": false,
+        "viewOptionsVersion": 1
+      },
+      "list_ordered": {
+        "calculateAllSizes": true,
+        "columns": [
+          {
+            "ascending": true,
+            "identifier": "name",
+            "visible": true,
+            "width": 285
+          },
+          {
+            "ascending": false,
+            "identifier": "size",
+            "visible": true,
+            "width": 97
+          }
+        ],
+        "iconSize": 32.0,
+        "scrollPositionX": 2.5,
+        "scrollPositionY": 3.5,
+        "showIconPreview": true,
+        "sortColumn": "size",
+        "textSize": 13.0,
+        "useRelativeDates": false,
+        "viewOptionsVersion": 1
+      }
+    }
+  },
+  "default_semantic_delta": {
+    "address_space": "filesystem",
+    "filesystem": "apfs",
+    "left": {
+      "input": "udif",
+      "window": {
+        "kind": "whole_disk"
+      },
+      "apfs_volume": {
+        "uuid": "cb9e9ee2-449f-4a04-a5e9-5297769fe174",
+        "object_id": "1026",
+        "checkpoint_xid": "4"
+      }
+    },
+    "right": {
+      "input": "udif",
+      "window": {
+        "kind": "whole_disk"
+      },
+      "apfs_volume": {
+        "uuid": "cb9e9ee2-449f-4a04-a5e9-5297769fe174",
+        "object_id": "1026",
+        "checkpoint_xid": "6"
+      }
+    },
+    "schema_version": 1,
+    "outcome": "different",
+    "policy": {
+      "paths": "exact_stored_text",
+      "contents": "exact_bytes",
+      "compared": [
+        "kind",
+        "mode",
+        "uid",
+        "gid",
+        "hard_link_topology",
+        "data_fork",
+        "resource_fork",
+        "symlink_target"
+      ],
+      "excluded": [
+        "timestamps",
+        "extended_attributes_except_resource_fork",
+        "access_control_lists",
+        "filesystem_flags",
+        "quarantine",
+        "finder_metadata",
+        "native_object_ids",
+        "filesystem_allocation",
+        "physical_container_layout",
+        "signatures",
+        "rename_inference"
+      ]
+    },
+    "limits": {
+      "max_entries": 16384,
+      "max_depth": 128,
+      "max_path_bytes": 4194304,
+      "max_bytes": "34359738368"
+    },
+    "left_entries": 4,
+    "right_entries": 4,
+    "compared_bytes": "24",
+    "changes": [
+      {
+        "path": [
+          "Payload",
+          ".DS_Store"
+        ],
+        "kind": "changed",
+        "fields": [
+          "data_fork"
+        ]
+      }
+    ]
+  },
+  "finder_equal": {
+    "address_space": "filesystem",
+    "filesystem": "apfs",
+    "left": {
+      "input": "udif",
+      "window": {
+        "kind": "whole_disk"
+      },
+      "apfs_volume": {
+        "uuid": "cb9e9ee2-449f-4a04-a5e9-5297769fe174",
+        "object_id": "1026",
+        "checkpoint_xid": "4"
+      }
+    },
+    "right": {
+      "input": "udif",
+      "window": {
+        "kind": "whole_disk"
+      },
+      "apfs_volume": {
+        "uuid": "cb9e9ee2-449f-4a04-a5e9-5297769fe174",
+        "object_id": "1026",
+        "checkpoint_xid": "6"
+      }
+    },
+    "schema_version": 1,
+    "outcome": "equal",
+    "policy": {
+      "paths": "exact_stored_text",
+      "contents": "exact_bytes_with_finder_layout",
+      "compared": [
+        "kind",
+        "mode",
+        "uid",
+        "gid",
+        "hard_link_topology",
+        "data_fork",
+        "resource_fork",
+        "symlink_target",
+        "finder_layout"
+      ],
+      "excluded": [
+        "timestamps",
+        "extended_attributes_except_resource_fork",
+        "access_control_lists",
+        "filesystem_flags",
+        "quarantine",
+        "per_object_finder_info",
+        "native_object_ids",
+        "filesystem_allocation",
+        "physical_container_layout",
+        "signatures",
+        "rename_inference"
+      ],
+      "finder_layout": {
+        "store_name": ".DS_Store",
+        "max_store_bytes": 65536,
+        "max_records": 512,
+        "max_name_units": 255,
+        "max_plist_objects": 128,
+        "max_plist_entries": 64,
+        "excluded": [
+          "opaque_record_values",
+          "unreported_setting_values",
+          "unreported_alias_fields",
+          "allocator_layout",
+          "alias_resolution"
+        ]
+      }
+    },
+    "limits": {
+      "max_entries": 16384,
+      "max_depth": 128,
+      "max_path_bytes": 4194304,
+      "max_bytes": "34359738368"
+    },
+    "left_entries": 4,
+    "right_entries": 4,
+    "compared_bytes": "16435",
+    "changes": []
+  },
+  "finder_different": {
+    "address_space": "filesystem",
+    "filesystem": "apfs",
+    "left": {
+      "input": "udif",
+      "window": {
+        "kind": "whole_disk"
+      },
+      "apfs_volume": {
+        "uuid": "cb9e9ee2-449f-4a04-a5e9-5297769fe174",
+        "object_id": "1026",
+        "checkpoint_xid": "4"
+      }
+    },
+    "right": {
+      "input": "udif",
+      "window": {
+        "kind": "whole_disk"
+      },
+      "apfs_volume": {
+        "uuid": "cb9e9ee2-449f-4a04-a5e9-5297769fe174",
+        "object_id": "1026",
+        "checkpoint_xid": "8"
+      }
+    },
+    "schema_version": 1,
+    "outcome": "different",
+    "policy": {
+      "paths": "exact_stored_text",
+      "contents": "exact_bytes_with_finder_layout",
+      "compared": [
+        "kind",
+        "mode",
+        "uid",
+        "gid",
+        "hard_link_topology",
+        "data_fork",
+        "resource_fork",
+        "symlink_target",
+        "finder_layout"
+      ],
+      "excluded": [
+        "timestamps",
+        "extended_attributes_except_resource_fork",
+        "access_control_lists",
+        "filesystem_flags",
+        "quarantine",
+        "per_object_finder_info",
+        "native_object_ids",
+        "filesystem_allocation",
+        "physical_container_layout",
+        "signatures",
+        "rename_inference"
+      ],
+      "finder_layout": {
+        "store_name": ".DS_Store",
+        "max_store_bytes": 65536,
+        "max_records": 512,
+        "max_name_units": 255,
+        "max_plist_objects": 128,
+        "max_plist_entries": 64,
+        "excluded": [
+          "opaque_record_values",
+          "unreported_setting_values",
+          "unreported_alias_fields",
+          "allocator_layout",
+          "alias_resolution"
+        ]
+      }
+    },
+    "limits": {
+      "max_entries": 16384,
+      "max_depth": 128,
+      "max_path_bytes": 4194304,
+      "max_bytes": "34359738368"
+    },
+    "left_entries": 4,
+    "right_entries": 4,
+    "compared_bytes": "16412",
+    "changes": [
+      {
+        "path": [
+          "Payload",
+          ".DS_Store"
+        ],
+        "kind": "changed",
+        "fields": [
+          "finder_layout"
+        ],
+        "finder_layout": [
+          {
+            "name": ".",
+            "field": [
+              108,
+              115,
+              118,
+              67
+            ],
+            "kind": "changed"
+          },
+          {
+            "name": ".",
+            "field": [
+              108,
+              115,
+              118,
+              112
+            ],
+            "kind": "changed"
+          },
+          {
+            "name": "Example",
+            "field": [
+              73,
+              108,
+              111,
+              99
+            ],
+            "kind": "changed"
+          }
+        ]
+      }
+    ]
+  }
+}
