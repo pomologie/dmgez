@@ -6,7 +6,9 @@ Read the shared ecosystem verification standard [EVS-1](ECOSYSTEM_VERIFICATION.m
 
 ## v0.1.0 release evidence
 
-The current standalone CLI candidate is `c667b9c`. All six mandatory v0.1.0 requirements and their 18 linked acceptance cases have recorded passing results for this profile. Earlier entries below preserve the results from their named revisions. [Current candidate audit](#d-ver-01-audit-for-c667b9c)
+The current standalone CLI and Cargo candidate is `31a280c`. All 18 v0.1.0 acceptance cases have recorded passing results. The revision-bound export also passed all 18 invocation records, with 16 Kani harnesses, the UDIF suite, Loom, a 20,000-input AddressSanitizer replay, four comparisons against both independent reference decoders, and native read-only HFS+ attachment and filesystem checking. The `bundle.json` SHA-256 is `327ffd5e0ccfda18c45c061de4584dc49fd2819cc2c5c5437d823fa53410918d`. The bundle and transcripts are in `target/verification-evidence/v0.1.0-verification/31a280c-registry-replay/`. [Candidate release set](../features/RELEASE.md#v010-release-profile)
+
+For `31a280c`, hosted workspace coverage and MSRV, parser fuzzing, the range proof, all three host Rust jobs, and native UDIF checks passed. The full workspace supply-chain job reported unmaintained dependencies in the desktop and MCP dependency trees. The three-target standalone CLI dependency audit passed. D-VER-01 remains open for the workspace and the critical-file coverage review. [Workspace run](https://github.com/pomologie/dmgez/actions/runs/45900551506) · [Standalone CLI audit](https://github.com/pomologie/dmgez/actions/runs/45900551544/job/140189939442)
 
 ```sh
 cargo run --locked -p xtask -- release-evidence \
