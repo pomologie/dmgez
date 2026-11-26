@@ -33,6 +33,10 @@ rustix = { workspace = true, optional = true }
 # Filesystem identity
 same-file = { workspace = true, optional = true }
 
+[dev-dependencies]
+# Temporary file fixtures
+tempfile.workspace = true
+
 [lints.rust]
 unsafe_code = "deny"
 unexpected_cfgs = "warn"
