@@ -19,7 +19,7 @@
         "D-UDIF-01-T03",
         "D-UDIF-01-T04"
       ],
-      "status": "planned",
+      "status": "pass",
       "mandatory": true
     },
     {
@@ -39,7 +39,7 @@
         "D-UDIF-02-T03",
         "D-UDIF-02-T04"
       ],
-      "status": "planned",
+      "status": "pass",
       "mandatory": true
     },
     {
@@ -59,7 +59,7 @@
         "D-UDIF-03-T03",
         "D-UDIF-03-T04"
       ],
-      "status": "planned",
+      "status": "pass",
       "mandatory": true
     },
     {
@@ -78,7 +78,7 @@
         "D-UDIF-04-T03",
         "D-UDIF-04-T04"
       ],
-      "status": "planned",
+      "status": "pass",
       "mandatory": true
     },
     {

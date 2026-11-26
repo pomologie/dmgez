@@ -11,8 +11,8 @@
       "scenario": "Native unsigned tiny image; compare fields and 512-byte trailer; mutate plist offset, header length and count. Accept known layout and reject out-of-bounds before allocation.",
       "oracle": "native fixture; apple-dmg; unit",
       "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/verification/README.md"
     },
     {
       "id": "D-UDIF-02-T01",
@@ -23,8 +23,8 @@
       "scenario": "Build fixture ledger with zero-only, leading/trailing gaps, mixed raw/zlib and checksum corruption; compare native declared digests and independently computed values; distinguish absent/unsupported/mismatch.",
       "oracle": "native verify; independent CRC ledger",
       "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/verification/README.md"
     },
     {
       "id": "D-UDIF-03-T01",
@@ -35,8 +35,8 @@
       "scenario": "Wrap generated raw sectors in UDRO/UDZO, nonseekable writer recording offsets; compare fully decoded bytes with native and independent readers; inject short reads/writes; no valid artifact on failure.",
       "oracle": "hdiutil/diskutil; apple-dmg; udif",
       "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/verification/README.md"
     },
     {
       "id": "D-UDIF-04-T01",
@@ -47,8 +47,8 @@
       "scenario": "Use valid mixed blocks, random requests crossing run edges/EOF, mutated overlapping run, unknown type, truncated zlib and declared huge decoded size. Assert exact bytes, bounded buffers and typed failures.",
       "oracle": "generated raw expected bytes; fuzz",
       "expected": "All stated checks in scenario pass; unsupported or unavailable is not a pass for an advertised capability.",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/verification/README.md"
     },
     {
       "id": "D-UDIF-05-T01",
@@ -527,8 +527,8 @@
       "scenario": "Trailer shorter than 512 bytes; magic correct only in payload",
       "oracle": "fuzz; bounded I/O spy",
       "expected": "InvalidFormat/Corrupt, no seek below zero or fallback to raw",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/verification/README.md"
     },
     {
       "id": "D-UDIF-01-T03",
@@ -539,8 +539,8 @@
       "scenario": "XML range end wraps u64 or intersects trailer illegally",
       "oracle": "Kani; read counters",
       "expected": "Reject before XML allocation",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/verification/README.md"
     },
     {
       "id": "D-UDIF-01-T04",
@@ -563,8 +563,8 @@
       "scenario": "Native explicit zero run and ignore run pair",
       "oracle": "native hdiutil/diskutil",
       "expected": "Separate checksum inputs validated against native ledger; no assumed equivalence",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/verification/README.md"
     },
     {
       "id": "D-UDIF-02-T03",
@@ -575,8 +575,8 @@
       "scenario": "One bit flipped in table checksum, physical data, or master digest independently",
       "oracle": "independent CRC ledger",
       "expected": "Each failed declared domain identified; not verified",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/verification/README.md"
     },
     {
       "id": "D-UDIF-02-T04",
@@ -587,8 +587,8 @@
       "scenario": "Comment record carrying nonzero count or missing terminator",
       "oracle": "native profile ledger",
       "expected": "Reject invalid qualified profile; no data emitted for control record",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/verification/README.md"
     },
     {
       "id": "D-UDIF-03-T02",
@@ -599,8 +599,8 @@
       "scenario": "Known length, nonseekable sink; source one sector short/long",
       "oracle": "raw byte oracle",
       "expected": "Correct input exact; mismatched source errors, failed sink not published",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/verification/README.md"
     },
     {
       "id": "D-UDIF-03-T03",
@@ -611,8 +611,8 @@
       "scenario": "Raw fallback when zlib output is >= raw input",
       "oracle": "native and udif reader",
       "expected": "Same logical bytes; deterministic chosen run kind per policy",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/verification/README.md"
     },
     {
       "id": "D-UDIF-03-T04",
@@ -635,8 +635,8 @@
       "scenario": "Read across compressed/raw/zero runs with unaligned start and partial end",
       "oracle": "raw byte oracle",
       "expected": "Exact requested bytes equal raw slice",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/verification/README.md"
     },
     {
       "id": "D-UDIF-04-T03",
@@ -647,8 +647,8 @@
       "scenario": "Decoded output shorter/longer than advertised; compressed bomb",
       "oracle": "instrumented decoder",
       "expected": "Reject length/budget violation; no full-image allocation",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/verification/README.md"
     },
     {
       "id": "D-UDIF-04-T04",

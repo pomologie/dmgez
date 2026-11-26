@@ -1,5 +1,32 @@
 # UDIF verification
 
+## v0.1.0 acceptance
+
+The locally exercised UDIF acceptance cases below bind to dmgez `1ace11a477123d40be39f2c062d67dec72fc3bfc` on macOS 14.7.2 (23H311) arm64 with Rust 1.99.1. Verification of the Windows runtime and the hosted cross-platform project workflow is tracked in the [release profile](../../../../docs/features/RELEASE.md#v010-release-profile).
+
+| Cases | Evidence |
+| --- | --- |
+| D-UDIF-01-T01 to T03 | The native tiny UDRO descriptor matches the recorded field ledger. The reader fetches the 512-byte trailer and exact XML range. Invalid header and count fields, payload-only magic, wrapping XML, and XML intersecting the trailer refuse after at most one trailer read. All 512 sub-trailer lengths refuse without a read. The exact native trailer bytes also round-trip through apple-dmg 0.5.0. The earlier Kani run covers arbitrary full-width trailer ranges. |
+| D-UDIF-02-T01 to T04 | Apple verifies generated zero-only, mixed, and control-run images against independent CRC expectations. The native zero and ignore pair shares a physical CRC of `cd44d198` and has distinct table CRCs of `2f96947b` and `cd44d198`. The checksum tests distinguish absent, unsupported and mismatched declarations, flip one bit in each declared domain independently, and reject invalid comment counts and missing terminators before payload reads. |
+| D-UDIF-03-T01 to T03 | Fragmented sources and a nonseekable sink preserve exact bytes and contiguous write offsets. A short or long source yields a typed length error and the staged builder leaves no destination or temporary image. A short sink that stops progressing leaves an unfinished prefix. A separate two-chunk fixture exercises raw fallback and decodes to the original bytes with Apple, apple-dmg 0.5.0, and udif 0.4.0 for each output profile. |
+| D-UDIF-04-T01 to T03 | Generated raw, zlib and zero runs match independent raw slices through unaligned, random and EOF reads. The reader refuses logical overlap, physical reuse, unknown runs, invalid zlib length or framing, and oversized declared runs. The instrumented production inflater requests one 513-byte output buffer for a 512-byte run and refuses a 64 KiB expansion. A positioned read of the final sparse byte also succeeds on a logical disk larger than a byte buffer. |
+
+The all-feature UDIF suite passed 98 tests with 4,096 property cases and seed `20261126`. The read-only trailer suite passed five tests, the read/write reader limit suite passed four, and the write-only streaming suite passed four. The builder passed 13 execution tests. AddressSanitizer replayed 20,000 inputs from eight checked-in images with a 64 KiB input limit and produced no crash artifacts. The fresh composed CLI using HFS+ `a1b870f` reproduced all four signed and unsigned project digests with Apple and p7zip 17.05 checks. The replay used Apple verification and raw exports. The earlier native attachment and read-only filesystem evidence remains in the release profile.
+
+To build the standalone reference adapter, copy [reference_readers.rs](reference_readers.rs) to `src/main.rs` in a disposable Cargo package outside this workspace. Pin `apple-dmg = "=0.5.0"` and `udif = "=0.4.0"`, then build it and pass its executable to [verify_udif.py](../../../../tests/compatibility/verify_udif.py) with `--reference-readers`. The two Rust reference readers exercise one-table raw and zlib cases. Apple tools check the explicit zero, ignore, and comment fixtures. 7-Zip independently checks the tiny, mixed, and zero-only images. The adapter has no production dependency role.
+
+The normalized logs and the standalone oracle lockfile are retained locally under `target/verification-evidence/udif-v0.1.0/`.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Rust checks | `ff27761511257c965dbb38fc8907a70a2a9c019ad3efcc089fb77d2bb6aea766` |
+| Apple, p7zip and named reference-reader replay | `83489e657a7a1b0d59094cd93e39e51e17081cc2864695e657b6067a764e8b06` |
+| AddressSanitizer run | `016cd9efd859bd989982e96166b80e9e0eda7bc7a0f1d77f91ca9447b1599e45` |
+| Standalone oracle build | `a6ff571bb2fdfd6566898bd66cdeb94cb6e2f7ba7f165c06113e16732cc5a464` |
+| Standalone oracle lockfile | `3552064d46dc17c2cff9a740be6356c2ae3a95507c00655c08adbebb842f3a3d` |
+
+## Binary geometry and checksums
+
 For D-V01, the [checked-range harness](kani/checked_range.rs) checks arbitrary `u64` offsets, lengths, and limits against a `u128` oracle. The [binary reader harnesses](kani/binary_geometry.rs) check the production field readers on arbitrary 0–64 byte windows, the full-width block-map size calculation, and admission of up to eight records from an exact block-map header. The block-map harness varies the declared `u32` count, available bytes, and budget. It checks the length and location of the record slice before the decoder allocates its record vector. The trailer harness varies full-width fork offsets, fork lengths, sector count, and body limit in a native 512-byte UDRO trailer. The other trailer fields retain their fixture values.
 
 The [binary writer harnesses](kani/write_geometry.rs) check that the fixed-width writers change exactly the admitted field on 0–64 byte windows and that the production trailer encoder writes the header and geometry at their exact wire offsets. The field-writer harness assumes the caller provides enough bytes. The trailer harness checks that precondition for the fixed output layout by exercising the real encoder with arbitrary field values. The proof sources record the loop unwind bounds. The earlier symbolic experiment that included allocation and parsing of the full eight-record table was stopped. The admitted record slice is covered by Kani, and the full decoder is exercised by property tests and fuzzing.
