@@ -85,10 +85,15 @@ jobs:
       - run: cargo install --locked cargo-fuzz --version '=0.13.2'
       - run: cargo fetch --locked --manifest-path fuzz/Cargo.toml
       - run: |
-          corpus=$(mktemp -d)
-          cp tests/fixtures/images/*.dmg "$corpus/"
-          cp crates/formats/dmgez-udif/tests/fixtures/apple-ulfo.dmg "$corpus/"
-          CARGO_NET_OFFLINE=true cargo +nightly-2026-11-04 fuzz run udif "$corpus" -- -max_total_time=20 -max_len=65536 -timeout=5 -rss_limit_mb=1024
+          scratch=$(mktemp -d)
+          trap 'rm -rf -- "$scratch"' EXIT
+          mkdir "$scratch/udif" "$scratch/project-manifest"
+          cp tests/fixtures/images/*.dmg crates/formats/dmgez-udif/tests/fixtures/apple-ulfo.dmg "$scratch/udif/"
+          cp examples/offline-cli/dmg.toml "$scratch/project-manifest/offline.toml"
+          cp tests/compatibility/project-build/ci/dmg.toml "$scratch/project-manifest/ci.toml"
+          export CARGO_NET_OFFLINE=true
+          cargo +nightly-2026-11-04 fuzz run udif "$scratch/udif" -- -max_total_time=20 -max_len=65536 -timeout=5 -rss_limit_mb=1024
+          cargo +nightly-2026-11-04 fuzz run project_manifest "$scratch/project-manifest" -- -max_total_time=20 -max_len=65536 -timeout=5 -rss_limit_mb=1024
           git diff --exit-code -- fuzz/Cargo.lock
 
   range-proof:

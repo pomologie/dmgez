@@ -11,12 +11,22 @@ cargo-fuzz = true
 # Workspace formats
 dmgez-udif = { path = "../crates/formats/dmgez-udif", default-features = false, features = ["read", "zlib", "lzfse", "lzma"] }
 
+# Workspace foundation
+dmgez-config = { path = "../crates/foundation/dmgez-config", default-features = false }
+
 # Fuzzing
 libfuzzer-sys = "=0.4.13"
 
 [[bin]]
 name = "udif"
 path = "fuzz_targets/udif.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "project_manifest"
+path = "fuzz_targets/project_manifest.rs"
 test = false
 doc = false
 bench = false
