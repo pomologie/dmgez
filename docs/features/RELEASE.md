@@ -32,6 +32,10 @@ GitHub Actions qualified dmgez `f5e2fb4` with HFS+ `a1b870f` on Ubuntu 24.04, ma
 
 The trimmed signer at dmgez `148faa6` reproduced the same four digests locally on arm64 macOS using HFS+ `a1b870f` and Rust 1.99.1. Both signed images passed strict Apple signature verification, read-only HFS+ checking and native mount checks. The offline archive smoke passed with fixture notices. The default CLI graph retains `apple-codesign` and excludes `chrono`, `rasn` and `bcder` for the macOS, Linux and Windows release targets. [Signer source profile](../../third_party/apple-codesign/README.md)
 
+The hosted rerun at dmgez `57eecd7` and HFS+ `a1b870f` passed all three project jobs and produced the same four byte-identical DMGs. The Windows handoff matched its artifact, executable, and signer-source digests. The notice review covered 149 packages, verified 133 registry archive checksums, and checked 43 canonical fallback entries against the earlier Windows handoff and pinned sources. The reviewed notice has SHA-256 `59ee70be81cde12d538c7bfc3da884ef02ccdac301c7a593c344dcfbb45eb4f7`. The native archive smoke used fixture notices. [Hosted rerun](https://github.com/pomologie/dmgez/actions/runs/45788456797) · [Windows handoff](https://github.com/pomologie/dmgez/actions/runs/45788456797/artifacts/15102152165)
+
+The Windows handoff recorded the signer-source digest for its CRLF checkout. A local reproduction confirmed that Git converted four vendored support files. At `fdeb288` both Git checkout modes produce identical signer members and the shared source digest `96e401551b717bc9d1dae4523f72fc8a9061f800350358269ef9af27bf946cb1`. Generate fresh notices for a new archive so its source digest describes the files it actually ships.
+
 | Project artifact | SHA-256 on all three hosted runners |
 |---|---|
 | UDRO unsigned | `a3c96d2ea10974c06dab3819a78e84d0b17d16aed87663ad9eb0b9ce0b83685d` |
