@@ -5,6 +5,7 @@ use clap::{Args, Parser, Subcommand};
 
 mod dependencies;
 mod evidence;
+mod registry_source;
 mod source;
 
 const MANIFEST: &str = "Cargo.toml";
@@ -21,6 +22,8 @@ enum Command {
 	Architecture(Architecture),
 	/// Check the supplied release evidence against the clean candidate checkout.
 	ReleaseEvidence(evidence::Arguments),
+	/// Prepare a Rust source file for the standalone registry package.
+	BundleSource(registry_source::Arguments),
 }
 
 #[derive(Args)]
@@ -37,6 +40,7 @@ fn main() -> ExitCode {
 	let result = match Cli::parse().command {
 		Command::Architecture(arguments) => check(arguments),
 		Command::ReleaseEvidence(arguments) => evidence::check(arguments),
+		Command::BundleSource(arguments) => registry_source::rewrite(arguments),
 	};
 	match result {
 		Ok(()) => ExitCode::SUCCESS,
