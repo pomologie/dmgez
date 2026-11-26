@@ -22,6 +22,8 @@ use dmgez_core::output::PublishError;
 
 #[path = "execution/raw.rs"]
 mod raw;
+#[path = "execution/release_faults.rs"]
+mod release_faults;
 #[path = "execution/udif_length.rs"]
 mod udif_length;
 
