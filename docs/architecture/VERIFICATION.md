@@ -43,6 +43,8 @@ Three targeted mutation checks ran on macOS arm64 against `f5e2fb4` with Rust 1.
 
 The hosted Linux coverage and minimum-Rust job passed at `ffb76e4`. The all-feature workspace report covered 27,741 of 32,755 instrumented lines (84.69%) and 41,574 of 50,363 regions (82.55%). This job did not instrument branches. Rust 1.98.0 compiled the locked all-feature workspace on the same host. [Hosted coverage and minimum-Rust job](https://github.com/pomologie/dmgez/actions/runs/45790210058/job/139807027014)
 
+The detailed UDIF replay at `9b68c63` reproduced the per-file totals above. The exported source counters showed no rejected outcome at the empty-table check and the reversed-fragment comparison. The block-map decoder rejects an empty table before normalization, and the positioned-window Kani harness tests arbitrary fragment ordering. The LLVM summary also reports one uncovered cache branch even though the merged source-location counters show both outcomes for every exported cache condition. The per-file summaries and condition counters are in `target/verification-evidence/v0.1.0-verification/9b68c63-branch-conditions.json` with SHA-256 `56fc87dfa490f2b3fe9510012353185ac7931469685311e8dca68b28415ee85d`.
+
 ## Proof obligations
 
 | ID | Activation | Scope | Required evidence |
