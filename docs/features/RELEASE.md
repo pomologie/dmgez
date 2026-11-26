@@ -53,6 +53,8 @@ The arm64 macOS archive at `ffb76e4` uses the canonical signer-source digest. It
 
 The exact Windows x86-64 MSVC executable from `57eecd7` was also packaged with its reviewed notices using Python 3.13.17 under Wine 10.0. The test compared two archives byte for byte, verified the extracted files, and built, signed, and verified the example with the extracted CLI. The archive contains the signer source bytes from that Windows checkout. The local ZIP has SHA-256 `97a9eb7b8156a3e2b1d57aff3db299db328ff98a9d825216e16bffab4259e94b`. The Windows Server 2025 archive smoke for that executable used fixture notices.
 
+The `ffb76e4` Windows handoff records the canonical signer-source digest shared by the arm64 macOS archive. The notice body matches all 149 entries in the previously reviewed Windows draft. Its local ZIP has SHA-256 `404f9e608ddc254ab3fb14a926c3e85e8b4b7a144e51e90d52d3259fdcfd33fe`. Repeatable packaging, checksums for all 21 listed archive members, and build, signing, and verification from the extracted ZIP passed under Wine 10.0. The same executable passed native Windows MSVC and NTFS qualification with fixture notices, and CI reproduced the four DMG digests across all three hosts. [Hosted qualification](https://github.com/pomologie/dmgez/actions/runs/45790209921) · [Windows handoff](https://github.com/pomologie/dmgez/actions/runs/45790209921/artifacts/15102099487)
+
 | Local macOS candidate artifact | SHA-256 |
 |---|---|
 | `dmgez-0.1.0-aarch64-apple-darwin.tar.gz` | `dfc262861c2c2d74410a424882307e97e5ec4a770a0d3a1536bfe0dc2fdc2128` |
