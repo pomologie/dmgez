@@ -161,6 +161,24 @@ The publication regression distinguishes three failures through the composed run
 
 The `project_manifest` fuzz target exercises `Project::parse` with seeds from the offline example and the cross-platform CI project. For accepted input it checks fixed capacity, sector alignment, the free-space bound, and unique non-root destinations. The manifest and UDIF targets each completed 20,000 inputs with seed `20261126` under AddressSanitizer on arm64 macOS. These were bounded smoke runs with a 64 KiB input cap. The log digests are `cac44fa7119d7207c0c67cb9726d84f4d48243288ac3944c81dba6267398af20` for `project_manifest.log` and `38a79708a2408d735f2d1b5573390c807069ec46295518eb632cfe7554f3c153` for `udif.log` under `target/verification-evidence/v0.1.0-verification/c4655a8-project-manifest-fuzz/`. [Manifest fuzz target](../../fuzz/fuzz_targets/project_manifest.rs) · [Hosted fuzz job](../../.github/workflows/ci.yml)
 
+The composition at dmgez `26ba0d1` and HFS+ `a1b870f` ran 360 unit and integration tests and both native project fixtures on arm64 macOS. One nightly `2026-11-04` debug build instrumented the composed CLI defaults plus `inspect`, using 4,096 property cases with seed `20261126`. The merged map combines 211 test and 20 smoke profiles. The two native fixture runs reproduced all four expected DMG hashes and passed signed dry-run, occupied-destination, Apple, and 7-Zip checks. The architecture and CLI dependency profile checks also passed. [Project fixture](../../tests/compatibility/project-build/README.md)
+
+The table excludes 13 standalone `tests.rs` files from the source inventory. Inline tests in mixed source files remain mapped. The two HFS+ rows reflect their use by the composed CLI only. The HFS+ crate tests have separate evidence.
+
+| Source scope | Lines covered | Branch outcomes covered |
+| --- | ---: | ---: |
+| `dmgez-cli` | 799 / 1,092 | 70 / 132 |
+| `dmgez-runtime` | 926 / 1,264 | 122 / 182 |
+| `dmgez-builder` | 4,151 / 4,738 | 551 / 786 |
+| `dmgez-config` | 783 / 809 | 126 / 158 |
+| `dmgez-core` | 266 / 312 | 27 / 48 |
+| `dmgez-signing` | 726 / 882 | 99 / 148 |
+| `dmgez-udif` | 1,902 / 2,040 | 309 / 376 |
+| `dmgez-hfsplus` | 550 / 852 | 27 / 78 |
+| `hfsplus-builder` | 1,259 / 1,980 | 83 / 174 |
+
+The seven directly tested packages covered 9,553 of 11,137 lines (85.78%) in this profile. The workspace-wide audit and critical-file review remain open. The combined map still reports 23 of 26 branches for `project_release/artifact.rs`, with separate mutation evidence for the three publication guards above, and five of six for `reader/cache.rs`, with source-condition counters recorded above. The report binds 238 tracked source files by SHA-256 and excludes 210 build-time profiles. The SHA-256 of `coverage.json` is `975987498b3924ce9a2edc6c9a54b197ae64f1cf26e641ae1687dfbfad97ecf1`. The report, run logs, and `reproduce.py` are in `target/verification-evidence/v0.1.0-verification/26ba0d1-combined-release-coverage/`.
+
 ## Proof obligations
 
 | ID | Activation | Scope | Required evidence |
