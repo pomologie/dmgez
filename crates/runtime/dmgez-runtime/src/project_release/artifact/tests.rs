@@ -31,6 +31,53 @@ fn publishes_the_exact_signed_image_once() {
 }
 
 #[test]
+fn rejects_a_changed_source_length_before_staging() {
+	let directory = tempfile::tempdir().unwrap();
+	let source = directory.path().join(SOURCE_NAME);
+	let output = directory.path().join(OUTPUT_NAME);
+	fs::write(&source, SIGNED).unwrap();
+	let admitted = verify(&source).unwrap();
+	let shortened = &SIGNED[..SIGNED.len() - 1];
+	fs::write(&source, shortened).unwrap();
+
+	let error = publish(&source, &admitted, &output).unwrap_err();
+	assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+	assert_eq!(error.to_string(), IMAGE_IDENTITY_CHANGED);
+	assert_eq!(fs::read(&source).unwrap(), shortened);
+	assert_eq!(
+		fs::metadata(&output).unwrap_err().kind(),
+		io::ErrorKind::NotFound
+	);
+	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn image_identity_requires_bounded_nonempty_input_and_an_exact_read() {
+	let over_limit = Limits::default().max_physical_bytes + 1;
+	for bytes in [0, over_limit] {
+		assert_eq!(
+			hash_image(io::empty(), bytes).unwrap_err().kind(),
+			io::ErrorKind::InvalidData,
+		);
+	}
+	assert_eq!(
+		hash_image(io::empty(), 1).unwrap_err().kind(),
+		io::ErrorKind::UnexpectedEof,
+	);
+}
+
+#[cfg(unix)]
+#[test]
+fn entry_comparison_detects_a_different_inode_at_the_same_length() {
+	let first_file = tempfile::tempfile().unwrap();
+	let second_file = tempfile::tempfile().unwrap();
+	let first = first_file.metadata().unwrap();
+	let second = second_file.metadata().unwrap();
+	assert_eq!(first.len(), second.len());
+	assert!(!same_entry(&first, &second));
+}
+
+#[test]
 fn stale_identity_and_corrupt_payload_leave_no_output_or_staging_entry() {
 	let directory = tempfile::tempdir().unwrap();
 	let source = directory.path().join(SOURCE_NAME);

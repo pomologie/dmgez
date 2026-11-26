@@ -146,6 +146,23 @@ fn ad_hoc_projects_refuse_native_selection_credentials_and_distribution_policy()
 }
 
 #[test]
+fn ad_hoc_projects_require_the_portable_backend_to_be_available() {
+	let source = project(&format!("{AD_HOC_DISK}\nidentifier = '{DISK_IDENTIFIER}'"));
+	assert!(matches!(
+		ReleaseSettings::admit(
+			&source,
+			ReleaseIntent::Release,
+			None,
+			ReleaseCapabilities::default(),
+		),
+		Err(AdmissionError::BackendUnavailable {
+			stage: Stage::DiskSigning,
+			requested: Backend::Auto,
+		})
+	));
+}
+
+#[test]
 fn unsigned_release_requires_final_verification_without_credentials_or_apple_tools() {
 	let source = project("[release]\nverify = false");
 	let settings = ReleaseSettings::admit(
