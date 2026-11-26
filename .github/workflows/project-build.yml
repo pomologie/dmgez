@@ -57,6 +57,9 @@ jobs:
       - name: Verify Windows NTFS source discovery
         if: runner.os == 'Windows'
         run: cargo test --locked -p dmgez-builder --test windows_manifest
+      - name: Install the pinned Windows notice scanner
+        if: runner.os == 'Windows'
+        run: cargo install --locked --version '=0.9.3' --features cli cargo-about
       - name: Build, sign, and verify dmg.toml
         id: project
         shell: python
@@ -66,6 +69,7 @@ jobs:
           import shutil
           import subprocess
           import sys
+          import tomllib
 
           hfsplus = Path("hfsplus").resolve(strict=True)
           revision = subprocess.check_output(["git", "-C", hfsplus, "rev-parse", "HEAD"], text=True).strip()
@@ -81,12 +85,30 @@ jobs:
           if not seven_zip:
               sys.exit("7-Zip is required to verify the HFS+ payload")
 
+          with Path("rust-toolchain.toml").open("rb") as manifest:
+              toolchain = tomllib.load(manifest)["toolchain"]["channel"]
+          target = subprocess.check_output(
+              ["rustup", "run", toolchain, "rustc", "--print", "host-tuple"], text=True,
+          ).strip()
           work = Path(os.environ.get("PROJECT_CI_DIR") or os.environ["RUNNER_TEMP"]) / "dmgez-project"
           compose = [
               sys.executable, "-B", "tools/compose_hfsplus_cli.py", "--hfsplus", hfsplus,
               "--target-dir", work / "target", "--release", "--features", "inspect",
           ]
-          executable = subprocess.check_output([*compose, "--fetch"], text=True).strip()
+          environment = os.environ.copy()
+          build_options = ["--fetch"]
+          if sys.platform == "win32":
+              if target != "x86_64-pc-windows-msvc":
+                  sys.exit(f"Expected an x86-64 Windows MSVC toolchain, found {target}")
+              environment["CARGO_BUILD_TARGET"] = target
+              handoff = work / "notice-review"
+              handoff.mkdir(parents=True)
+              build_options.extend(("--notices-output", handoff / "THIRD_PARTY_NOTICES.draft.txt"))
+          built = Path(subprocess.check_output([*compose, *build_options], env=environment, text=True).strip())
+          executable = built
+          if sys.platform == "win32":
+              executable = handoff / "dmgez.exe"
+              shutil.copyfile(built, executable)
           images = work / "images"
           native = ["--native-filesystem"] if sys.platform == "darwin" else []
           for mode in ("udro", "udzo"):
@@ -95,13 +117,21 @@ jobs:
                   executable, images / mode, "--format", mode, "--seven-zip", seven_zip, *native,
               ], check=True)
           if sys.platform == "win32":
-              subprocess.run([*compose, "--test"], check=True)
+              subprocess.run([*compose, "--test"], env=environment, check=True)
+              commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+              (handoff / "source-revisions.txt").write_text(
+                  f"dmgez = {commit}\nHFS+ = {revision}\nRust target = {target}\n", encoding="utf-8",
+              )
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               print(f"images={images}", file=output)
               print(f"executable={executable}", file=output)
+              print(f"target={target}", file=output)
+              if sys.platform == "win32":
+                  print(f"notice_review={handoff}", file=output)
       - name: Verify offline CLI archive on this host
         env:
           DMGEZ_EXECUTABLE: ${{ steps.project.outputs.executable }}
+          DMGEZ_TARGET: ${{ steps.project.outputs.target }}
         shell: python
         run: |
           import os
@@ -109,20 +139,21 @@ jobs:
           import subprocess
           import sys
           import tempfile
-          import tomllib
 
-          with Path("rust-toolchain.toml").open("rb") as manifest:
-              toolchain = tomllib.load(manifest)["toolchain"]["channel"]
-          target = subprocess.check_output(
-              ["rustup", "run", toolchain, "rustc", "--print", "host-tuple"], text=True,
-          ).strip()
           with tempfile.TemporaryDirectory(prefix="dmgez-notice-fixture-") as temporary:
               notices = Path(temporary) / "test-notices.txt"
               notices.write_text("Packaging smoke test notice fixture.\n", encoding="utf-8")
               subprocess.run([
                   sys.executable, "-B", "tools/test_package_cli.py",
-                  "--binary", os.environ["DMGEZ_EXECUTABLE"], "--target", target, "--notices", notices,
+                  "--binary", os.environ["DMGEZ_EXECUTABLE"], "--target", os.environ["DMGEZ_TARGET"], "--notices", notices,
               ], check=True)
+      - name: Upload Windows notice review inputs
+        if: runner.os == 'Windows'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-msvc-notice-review
+          path: ${{ steps.project.outputs.notice_review }}
+          if-no-files-found: error
       - name: Upload the verified DMGs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
