@@ -12,6 +12,8 @@ The workflow exports a Cargo Audit inventory of the registry packages for each t
 
 At dmgez `98f4442` and HFS+ `a1b870f`, the three native build, signing, and archive smoke jobs, byte comparison, and standalone CLI dependency audit all passed. [Hosted release verification](https://github.com/pomologie/dmgez/actions/runs/45813282977)
 
+At dmgez `c76fcf1` and HFS+ `a1b870f`, the downloaded Linux x86-64 handoff matched GitHub's artifact checksum. Its notice body and 117-package Cargo Audit inventory matched the reviewed `ec0f4bd` candidate. The exact hosted executable passed repeatable packaging, archive checksum verification, installation, and example build, ad hoc signing, and verification in an offline emulated Debian 12 container. The archive SHA-256 is `e9eb7f718b379602c41c116b360d91a342d4c3aa4a6c5d31c09e5c4f90717447`. The archive and SBOM are under `target/release-candidates/v0.1.0/c76fcf1-release/`. [Linux handoff](https://github.com/pomologie/dmgez/actions/runs/45817074710/artifacts/15115178848)
+
 The D-V01 UDIF geometry checks passed within the crate's documented proof and fuzz bounds. They cover fixed-width reads and writes, exact block-map record admission before allocation, and trailer ranges and sector conversion. [Crate-local proof and fuzz evidence](../../crates/formats/dmgez-udif/verification/README.md)
 
 The D-UDIF-03 writer cursor checks passed with Kani and a byte-counting sink. A fresh macOS CLI composed from dmgez `41d3afa` and HFS+ `a1b870f` reproduced all four signed and unsigned project digests below. Apple and 7-Zip independently decoded the same HFS+ bytes, and Apple verified the ad hoc signatures. [Writer cursor evidence](../../crates/formats/dmgez-udif/verification/README.md#writer-cursor)
