@@ -88,6 +88,18 @@ At dmgez `017b843` and HFS+ `a1b870f`, the optimized composed CLI with default f
 
 All mapped file denominators matched across the two runs. The inventory is in `target/verification-evidence/v0.1.0-verification/017b843-composed-cli-only-coverage.json` with SHA-256 `e48338f980e9ede2d1b19e64d54662c01961f36757f59a0d3cbc8fcb1e939452`. The coverage review for lower-level fault and property tests remains open under D-VER-01.
 
+The lower-level replay used dmgez `1186638` and HFS+ `a1b870f` on arm64 macOS. The three builder execution and discovery suites passed 28 tests. They cover short writes, cancellation, changed sources, verifier refusal, private-stage cleanup, and rejection of mismatched raw and UDIF lengths. The staging suite passed 11 tests with Rust 1.99.1, including preservation of incumbent bytes, late destination creation, and refusal after stage or parent directory substitution.
+
+The HFS+ builder's unit and integration suites passed 42 tests. The sealed-plan suite checks every partial read in its bounded fixture against the materialized bytes and preserves source and sink faults and cancellation. Three ignored fixture and oracle tests ran separately. The canonical witness matched SHA-256 `63e2f4d50df05f59a1e6dbe63c77e5d75b10e1e2780bae068af3eec4faeadba6` in both manifest orders. 7-Zip matched its Unicode file, symlink, and link-inode payloads and read a separate constructed volume. Apple's read-only filesystem check passed after a raw-device permission warning. The HFSX emitter produced the fixture for independent checking.
+
+The builder and HFS+ exports used nightly `2026-11-04` and retained coverage by test executable. The maps have different denominators, so each row describes its own test scope. For example, builder execution reached 1,167 of 4,530 source lines and 132 of 778 branches. The HFS+ sealed-plan tests reached 172 of 987 source lines and 16 of 100 branches. The inventories are under `target/verification-evidence/v0.1.0-verification/`.
+
+| Inventory | SHA-256 |
+| --- | --- |
+| `1186638-builder-fault-suites.json` | `1af87d771e0912ce6fb928891eae79f0c467276f19e678a4be9081a71126a383` |
+| `1186638-staging-suites.json` | `63e144e1c468a7cfd69a6f54151529fa2d7cf3f720daa25f962ebd866d4fe1a5` |
+| `a1b870f-hfsplus-layout-suites.json` | `1d516e4f535b091c2164d6b344bd94e861b7c6db01041edd632ec38fa0c42ab8` |
+
 The detailed UDIF replay at `9b68c63` reproduced the per-file totals above. The exported source counters showed no rejected outcome at the empty-table check and the reversed-fragment comparison. The block-map decoder rejects an empty table before normalization, and the positioned-window Kani harness tests arbitrary fragment ordering. The LLVM summary also reports one uncovered cache branch even though the merged source-location counters show both outcomes for every exported cache condition. The per-file summaries and condition counters are in `target/verification-evidence/v0.1.0-verification/9b68c63-branch-conditions.json` with SHA-256 `56fc87dfa490f2b3fe9510012353185ac7931469685311e8dca68b28415ee85d`.
 
 The positioned read-window regression at `e89d1e0` checks a reversed fragment, a fragment starting before the request, a buffer one byte too short, and exact-fit and empty windows at the end of the address space. All 19 reader-only unit tests and strict Clippy passed. The matching nightly instrumentation passed 116 all-feature tests and measured `index.rs` at 98.48% lines and 90.38% branches (47 of 52). The cache branch discrepancy and workspace coverage review remain open.
