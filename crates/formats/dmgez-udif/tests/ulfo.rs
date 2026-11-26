@@ -102,7 +102,7 @@ fn rejects_out_of_budget_runs_and_missing_end_of_stream() {
 #[cfg(all(feature = "read", not(feature = "lzfse")))]
 #[test]
 fn recognizes_disabled_lzfse_without_decoding() {
-	let mut image = Image::open(NATIVE, Limits::default()).unwrap();
+	let image = Image::open(NATIVE, Limits::default()).unwrap();
 	let encoding = image.runs().next().unwrap().encoding;
 	assert_eq!(encoding, RunEncoding::Lzfse);
 	assert!(!encoding.can_decode());
