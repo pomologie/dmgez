@@ -376,16 +376,16 @@ def replace_manifest(directory, relative, transform):
     path.write_text(updated, encoding="utf-8")
 
 
-def prepare_workspace(directory, packages, *, desktop=False):
+def prepare_workspace(directory, packages, *, desktop=False, source_root=ROOT):
     for name in SOURCE_DIRS:
         shutil.copytree(
-            ROOT / name,
+            source_root / name,
             directory / name,
             ignore=shutil.ignore_patterns("target", ".git", "__pycache__"),
             symlinks=True,
         )
     for name in (LOCK, TOOLCHAIN, "rustfmt.toml", "LICENSE"):
-        shutil.copyfile(ROOT / name, directory / name)
+        shutil.copyfile(source_root / name, directory / name)
 
     # rustup selects Cargo, but Cargo can otherwise find an unrelated rustc on PATH.
     channel = load_toml(directory / TOOLCHAIN)["toolchain"]["channel"]
@@ -399,7 +399,7 @@ def prepare_workspace(directory, packages, *, desktop=False):
         f"[build]\nrustc = {json.dumps(compiler, ensure_ascii=False)}\n", encoding="utf-8",
     )
 
-    manifest = (ROOT / MANIFEST).read_text(encoding="utf-8")
+    manifest = (source_root / MANIFEST).read_text(encoding="utf-8")
     if "patch" in tomllib.loads(manifest):
         raise ValueError("workspace manifest already has registry patches")
     patches = "".join(

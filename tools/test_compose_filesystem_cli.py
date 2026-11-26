@@ -355,11 +355,8 @@ class WindowsCompositionTests(unittest.TestCase):
             (root / compose.RUNTIME).mkdir(parents=True)
             runtime = compose.ROOT / compose.RUNTIME / compose.MANIFEST
             (root / compose.RUNTIME / compose.MANIFEST).write_bytes(runtime.read_bytes())
-            with (
-                patch.object(compose, "ROOT", root),
-                patch.object(compose.subprocess, "check_output", return_value=f"{rustc}\r\n") as find,
-            ):
-                compose.prepare_workspace(workspace, {compose.HFSPLUS_BUILDER: package})
+            with patch.object(compose.subprocess, "check_output", return_value=f"{rustc}\r\n") as find:
+                compose.prepare_workspace(workspace, {compose.HFSPLUS_BUILDER: package}, source_root=root)
 
             find.assert_called_once_with(
                 ["rustup", "which", "--toolchain", "test-pin", "rustc"],
