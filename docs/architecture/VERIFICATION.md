@@ -10,6 +10,10 @@ The current standalone CLI and Cargo candidate is `31a280c`. All 18 v0.1.0 accep
 
 For `31a280c`, hosted workspace coverage and MSRV, parser fuzzing, the range proof, all three host Rust jobs, and native UDIF checks passed. The full workspace supply-chain job reported unmaintained dependencies in the desktop and MCP dependency trees. The three-target standalone CLI dependency audit passed. D-VER-01 remains open for the workspace and the critical-file coverage review. [Workspace run](https://github.com/pomologie/dmgez/actions/runs/45900551506) · [Standalone CLI audit](https://github.com/pomologie/dmgez/actions/runs/45900551544/job/140189939442)
 
+The Ubuntu all-feature report for `31a280c` covered 27,939 of 33,001 lines (84.66%). The 336 instrumented paths and their source digests match the committed source. LLVM reported no branch outcomes in that job, and the workspace report contains no composed HFS+ adapter rows. The checked inventory is `target/verification-evidence/v0.1.0-verification/31a280c-hosted-coverage/tracked-inventory.json` with SHA-256 `b815d0eb8d032d912abf0de6a619fb3166e6c39f20744b93493fcd27e218da01`. [Hosted coverage artifact](https://github.com/pomologie/dmgez/actions/runs/45900551506/artifacts/15156300809)
+
+A separate arm64 macOS branch-coverage run on exact source archives `31a280c` and HFS+ `ba00b16` passed 372 tests, the native UDRO and UDZO project smokes, and exact mounted readback of the supplementary-name pair. The merge used 213 test and 23 smoke profiles and excluded 234 build profiles. The source spans recorded both outcomes of the held-stage metadata recheck, all three cache conditions, and both staging admission guards. The file-level branch summaries were 26/30 for runtime publication, 5/6 for the UDIF cache, 2/4 for builder release staging, and 7/8 for portable artifact admission. The report and transcripts are in `target/verification-evidence/v0.1.0-verification/31a280c-combined-release-coverage/`. The report SHA-256 is `92082a5c86edee406942db183b59a44e5dca7dc229e972553d4e7809b08dae3a`.
+
 ```sh
 cargo run --locked -p xtask -- release-evidence \
   --root /path/to/clean/candidate \
