@@ -4,7 +4,7 @@ use std::{
 	path::PathBuf,
 };
 
-use dmgez_udif::embedded_code_directory;
+use dmgez_udif::{TRAILER_BYTES, embedded_code_directory};
 
 use super::{stage_and_sign, verify_signed};
 use crate::SignError;
@@ -17,6 +17,10 @@ const SIGNED_SHA256: &str = "5b2bd2040ed7234affd8db97f05717a7541f821470d1451d266
 const INPUT_NAME: &str = "installer.dmg";
 const OUTPUT_NAME: &str = "installer-signed.dmg";
 const INCUMBENT: &[u8] = b"existing output";
+#[cfg(target_os = "macos")]
+const QUARANTINE_ATTRIBUTE: &str = "com.apple.quarantine";
+#[cfg(target_os = "macos")]
+const QUARANTINE_VALUE: &[u8] = b"0083;00000000;dmgez-test;";
 
 struct Fixture {
 	directory: tempfile::TempDir,
@@ -79,6 +83,27 @@ fn publishes_native_append_fixture_with_verified_digests() {
 		verify_signed(&fixture.source, |_| panic!("unsigned image has no frame")),
 		Err(SignError::Unsigned)
 	));
+}
+
+#[test]
+fn refuses_an_image_shorter_than_the_trailer_before_signing_or_verifying() {
+	let bytes = &UNSIGNED[..TRAILER_BYTES - 1];
+	let fixture = Fixture::new(bytes);
+	let result = stage_and_sign(
+		&fixture.source,
+		&fixture.destination,
+		|_| panic!("a short image must not reach the signer"),
+		|_| panic!("a short image must not reach signature policy"),
+	);
+	assert!(matches!(result, Err(SignError::ImageSize)));
+	assert!(matches!(
+		verify_signed(&fixture.source, |_| {
+			panic!("a short image must not reach signature policy")
+		}),
+		Err(SignError::ImageSize)
+	));
+	assert_eq!(fs::read(&fixture.source).unwrap(), bytes);
+	assert_eq!(fixture.entry_count(), 1);
 }
 
 #[test]
@@ -263,14 +288,12 @@ fn refuses_final_symlink_inputs_and_detects_replaced_source_names() {
 #[test]
 fn preserves_the_exact_source_quarantine_attribute() {
 	use rustix::fs::{XattrFlags, fsetxattr};
-	const QUARANTINE: &str = "com.apple.quarantine";
-	const VALUE: &[u8] = b"0083;00000000;dmgez-test;";
 
 	let fixture = Fixture::new(UNSIGNED);
 	fsetxattr(
 		fs::File::open(&fixture.source).unwrap(),
-		QUARANTINE,
-		VALUE,
+		QUARANTINE_ATTRIBUTE,
+		QUARANTINE_VALUE,
 		XattrFlags::empty(),
 	)
 	.unwrap();
@@ -285,9 +308,43 @@ fn preserves_the_exact_source_quarantine_attribute() {
 		let file = fs::File::open(path).unwrap();
 		assert_eq!(
 			super::quarantine::read(&file, path).unwrap().as_deref(),
-			Some(VALUE)
+			Some(QUARANTINE_VALUE)
 		);
 	}
+}
+
+#[cfg(target_os = "macos")]
+#[test]
+fn refuses_to_publish_a_signed_stage_with_different_quarantine_metadata() {
+	use rustix::fs::{XattrFlags, fsetxattr};
+
+	let fixture = Fixture::new(UNSIGNED);
+	let result = stage_and_sign(
+		&fixture.source,
+		&fixture.destination,
+		|stage| {
+			copy_native_signature(stage)?;
+			fsetxattr(
+				stage,
+				QUARANTINE_ATTRIBUTE,
+				QUARANTINE_VALUE,
+				XattrFlags::empty(),
+			)
+			.map_err(|error| SignError::Quarantine(error.into()))
+		},
+		|frame| {
+			assert!(embedded_code_directory(frame).is_ok());
+			Ok(())
+		},
+	);
+	assert!(matches!(result, Err(SignError::ImageChanged)));
+	let source = fs::File::open(&fixture.source).unwrap();
+	assert_eq!(
+		super::quarantine::read(&source, &fixture.source).unwrap(),
+		None
+	);
+	assert_eq!(fs::read(&fixture.source).unwrap(), UNSIGNED);
+	assert_eq!(fixture.entry_count(), 1);
 }
 
 #[cfg(windows)]
