@@ -106,6 +106,7 @@ jobs:
           build_options = [
               "--fetch", "--notices-output", handoff / "THIRD_PARTY_NOTICES.draft.txt",
               "--notices-lock-output", handoff / "composed-Cargo.lock",
+              "--audit-lock-output", handoff / "cli-audit.lock",
           ]
           built = Path(subprocess.check_output([*compose, *build_options], env=environment, text=True).strip())
           executable = handoff / built.name
@@ -159,6 +160,25 @@ jobs:
           path: ${{ steps.project.outputs.images }}
           if-no-files-found: error
           compression-level: 0
+
+  release-advisories:
+    name: Audit the built CLI dependencies for all three hosts
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: '*notice-review*'
+          path: notice-review
+      - run: cargo install --locked cargo-audit --version '=0.22.2'
+      - name: Check each build inventory against RustSec
+        shell: bash
+        run: |
+          failed=0
+          for handoff in notice-review/{notice-review-aarch64-apple-darwin,notice-review-x86_64-unknown-linux-gnu,windows-msvc-notice-review}; do
+            cargo audit --file "$handoff/cli-audit.lock" --deny unmaintained --deny unsound --deny yanked || failed=1
+          done
+          exit "$failed"
 
   compare-images:
     name: Compare verified images from all three hosts

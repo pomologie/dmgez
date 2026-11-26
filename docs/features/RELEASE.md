@@ -8,6 +8,8 @@ Qualify the standalone CLI for `dmg.toml` dry runs, partitionless HFS+ builds in
 
 The cross-platform workflow runs on pushes to `main` and can also be started manually. It builds and signs both formats on each host, verifies the HFS+ payload with 7-Zip, and compares the four artifacts across hosts. macOS also verifies the containers and signatures with Apple tools, compares Apple's raw exports with the independent decoder, and checks the signed volumes with read-only `fsck_hfs` and a native mount. [Project build workflow](../../.github/workflows/project-build.yml) · [Roadmap gates](../architecture/ROADMAP.md#milestone-acceptance-procedure)
 
+The workflow exports a Cargo Audit inventory of the registry packages for each tested CLI from the compiler's built-package set and that build's composed lockfile. The hosted audit denies unmaintained, unsound, and yanked packages in those inventories. Workspace CI continues to audit the full dependency graph. [Project build workflow](../../.github/workflows/project-build.yml)
+
 The D-V01 UDIF geometry checks passed within the crate's documented proof and fuzz bounds. They cover fixed-width reads and writes, exact block-map record admission before allocation, and trailer ranges and sector conversion. [Crate-local proof and fuzz evidence](../../crates/formats/dmgez-udif/verification/README.md)
 
 The D-UDIF-03 writer cursor checks passed with Kani and a byte-counting sink. A fresh macOS CLI composed from dmgez `41d3afa` and HFS+ `a1b870f` reproduced all four signed and unsigned project digests below. Apple and 7-Zip independently decoded the same HFS+ bytes, and Apple verified the ad hoc signatures. [Writer cursor evidence](../../crates/formats/dmgez-udif/verification/README.md#writer-cursor)

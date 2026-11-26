@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 from tempfile import TemporaryDirectory
+import tomllib
 
 
 CARGO_ABOUT_VERSION = "cargo-about 0.9.3"
@@ -23,6 +24,8 @@ CONFIG = Path(__file__).with_name("release-notices.toml").resolve()
 NOTICE_SOURCES = CONFIG.with_name("release-notice-sources")
 CLI_MANIFEST = Path("apps/dmgez-cli/Cargo.toml")
 LOCKFILE = "Cargo.lock"
+CRATES_IO = "registry+https://github.com/rust-lang/crates.io-index"
+SHA256 = re.compile(r"[0-9a-f]{64}")
 SIGNER_SOURCE = Path("third_party/apple-codesign")
 SIGNER_ARCHIVE = "licenses/apple-codesign/"
 SIGNER_ROOT_FILES = (
@@ -201,7 +204,43 @@ def check_built_packages(report, built_packages):
         raise ValueError(f"license report disagrees with the build packages (missing {missing}, extra {extra})")
 
 
-def generate(cargo, workspace, binary, target, features, no_defaults, output, *, built_packages, lock_output=None):
+def audit_inventory(report, lock_bytes):
+    lock = tomllib.loads(lock_bytes.decode("utf-8"))
+    packages = {}
+    for package in lock["package"]:
+        key = (package["name"], package["version"], package.get("source"))
+        if key in packages:
+            raise ValueError(f"duplicate locked package {key}")
+        packages[key] = package
+
+    registry = {}
+    for entry in report["crates"]:
+        built = entry["package"]
+        key = (built["name"], built["version"], built["source"])
+        if key not in packages:
+            raise ValueError(f"built package absent from the composed Cargo.lock: {key}")
+        if key[2] is None:
+            continue
+        if key[2] != CRATES_IO:
+            raise ValueError(f"unrecognized built package source: {key}")
+        package = packages[key]
+        if not SHA256.fullmatch(package.get("checksum", "")):
+            raise ValueError(f"locked registry package has no SHA-256: {key}")
+        registry[key] = package
+    if not registry:
+        raise ValueError("CLI audit inventory has no registry packages")
+
+    lines = [f'version = {lock["version"]}']
+    for _, package in sorted(registry.items()):
+        lines.extend(("", "[[package]]"))
+        lines.extend(
+            f"{field} = {json.dumps(package[field])}" for field in ("name", "version", "source", "checksum")
+        )
+    return ("\n".join(lines) + "\n").encode("utf-8")
+
+
+def generate(cargo, workspace, binary, target, features, no_defaults, output, *,
+             built_packages, lock_output=None, audit_output=None):
     version = subprocess.check_output(
         [*cargo, "about", "--version"], cwd=workspace, encoding="utf-8",
     ).strip()
@@ -224,6 +263,8 @@ def generate(cargo, workspace, binary, target, features, no_defaults, output, *,
         report, target, digest(binary), hashlib.sha256(lock_bytes).hexdigest(), features, no_defaults,
         signer_hash=signer_digest(signer_checksums),
     )
+    if audit_output is not None:
+        write_new(audit_output, audit_inventory(report, lock_bytes))
     if lock_output is not None:
         write_new(lock_output, lock_bytes)
     write_new(output, text.encode("utf-8"))

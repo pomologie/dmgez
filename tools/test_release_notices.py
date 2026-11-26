@@ -2,14 +2,15 @@
 
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import tomllib
 import unittest
 from unittest.mock import patch
 
 import package_cli
 from release_notices import (
-    NOTICE_DRAFT_HEADER, NOTICE_DRAFT_STATUS, NOTICE_HEADER,
+    CRATES_IO, NOTICE_DRAFT_HEADER, NOTICE_DRAFT_STATUS, NOTICE_HEADER,
     SIGNER_ARCHIVE, SIGNER_SHA256_FIELD, SUPPLEMENTAL_NOTICES,
-    check_built_packages, digest, notice_digests, render, signer_digest,
+    audit_inventory, check_built_packages, digest, notice_digests, render, signer_digest,
 )
 
 
@@ -86,6 +87,28 @@ class ReleaseNoticeTests(unittest.TestCase):
         check_built_packages(report(), {"first-id", "second-id"})
         with self.assertRaisesRegex(ValueError, "missing other-id, extra second-id"):
             check_built_packages(report(), {"first-id", "other-id"})
+
+    def test_audit_inventory_uses_only_built_registry_packages_and_exact_locked_source(self):
+        data = report()
+        data["crates"][0]["package"]["source"] = None
+        data["crates"][1]["package"]["source"] = CRATES_IO
+        lock = (
+            'version = 4\n'
+            '[[package]]\nname = "first"\nversion = "1.0.0"\n'
+            f'source = "{CRATES_IO}"\nchecksum = "{FIXTURE_DIGEST}"\n'
+            '[[package]]\nname = "second"\nversion = "2.0.0"\n'
+            '[[package]]\nname = "workspace-only"\nversion = "1.0.0"\n'
+            f'source = "{CRATES_IO}"\nchecksum = "{FIXTURE_DIGEST}"\n'
+        ).encode()
+        inventory = tomllib.loads(audit_inventory(data, lock).decode())
+        self.assertEqual(inventory, {"version": 4, "package": [{
+            "name": "first", "version": "1.0.0", "source": CRATES_IO, "checksum": FIXTURE_DIGEST,
+        }]})
+        with self.assertRaisesRegex(ValueError, "has no SHA-256"):
+            audit_inventory(data, lock.replace(FIXTURE_DIGEST.encode(), b"short"))
+        data["crates"][1]["package"]["source"] = None
+        with self.assertRaisesRegex(ValueError, "absent from the composed Cargo.lock"):
+            audit_inventory(data, lock)
 
     def test_draft_recovers_the_upstream_binrw_attribution(self):
         data = report()
