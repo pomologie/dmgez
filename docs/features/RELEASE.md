@@ -55,6 +55,8 @@ The exact Windows x86-64 MSVC executable from `57eecd7` was also packaged with i
 
 The `ffb76e4` Windows handoff records the canonical signer-source digest shared by the arm64 macOS archive. The notice body matches all 149 entries in the previously reviewed Windows draft. Its local ZIP has SHA-256 `404f9e608ddc254ab3fb14a926c3e85e8b4b7a144e51e90d52d3259fdcfd33fe`. Repeatable packaging, checksums for all 21 listed archive members, and build, signing, and verification from the extracted ZIP passed under Wine 10.0. The same executable passed native Windows MSVC and NTFS qualification with fixture notices, and CI reproduced the four DMG digests across all three hosts. [Hosted qualification](https://github.com/pomologie/dmgez/actions/runs/45790209921) · [Windows handoff](https://github.com/pomologie/dmgez/actions/runs/45790209921/artifacts/15102099487)
 
+The scoped advisory audit passed for the `ffb76e4` Apple Silicon and Windows x86-64 archives. The checked inventories used the reviewed built-package lists and the candidate lockfile, with 117 and 133 registry packages respectively. Cargo Audit 0.22.2 used RustSec database revision `c9f6c91` with unmaintained, unsound and yanked warnings denied. The inventory and logs are in `target/verification-evidence/v0.1.0-verification/ffb76e4-release-dependency-audit/`. Workspace-wide advisory findings remain open. [RustSec database snapshot](https://github.com/RustSec/advisory-db/tree/c9f6c91a44dbad9d71742329e9df061279f9c4be)
+
 | Local macOS candidate artifact | SHA-256 |
 |---|---|
 | `dmgez-0.1.0-aarch64-apple-darwin.tar.gz` | `dfc262861c2c2d74410a424882307e97e5ec4a770a0d3a1536bfe0dc2fdc2128` |
