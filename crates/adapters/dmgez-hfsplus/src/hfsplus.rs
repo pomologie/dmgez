@@ -130,7 +130,7 @@ pub fn prepare_with_progress<'project>(
 	project: &'project Project,
 	config_dir: &Path,
 	options: PreflightOptions,
-	cancellation: Cancellation,
+	cancel: Cancellation,
 	progress: impl Fn(BuildProgress),
 ) -> Result<PreparedHfsBuild<'project>, Error> {
 	#[cfg(feature = "finder-write")]
@@ -138,7 +138,7 @@ pub fn prepare_with_progress<'project>(
 		project,
 		config_dir,
 		options,
-		cancellation,
+		cancel,
 		progress,
 		if project.image.filesystem == Filesystem::Hfsx {
 			finder::HFSX_CATALOG_NAMES
@@ -147,8 +147,7 @@ pub fn prepare_with_progress<'project>(
 		},
 	)?;
 	#[cfg(not(feature = "finder-write"))]
-	let build =
-		planning::prepare_with_progress(project, config_dir, options, cancellation, progress)?;
+	let build = planning::prepare_with_progress(project, config_dir, options, cancel, progress)?;
 	Ok(PreparedHfsBuild { project, build })
 }
 
