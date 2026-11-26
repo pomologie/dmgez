@@ -31,7 +31,7 @@ ENGINE_PACKAGES = {
         "hfsplus-reader": "crates/filesystem/hfsplus-reader",
     },
     APFS_ENGINE: {
-        "apfs-core": "crates/foundation/apfs-core",
+        "libapfs-core": "crates/foundation/apfs-core",
         "apfs-format": "crates/formats/apfs-format",
         "apfs-container": "crates/container/apfs-container",
         "apfs-reader": "crates/filesystem/apfs-reader",

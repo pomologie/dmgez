@@ -6,13 +6,9 @@ version = 4
 name = "apfs-container"
 version = "0.1.0"
 dependencies = [
- "apfs-core",
+ "libapfs-core",
  "apfs-format",
 ]
-
-[[package]]
-name = "apfs-core"
-version = "0.1.0"
 
 [[package]]
 name = "apfs-format"
@@ -23,7 +19,7 @@ name = "apfs-reader"
 version = "0.1.0"
 dependencies = [
  "apfs-container",
- "apfs-core",
+ "libapfs-core",
  "apfs-format",
 ]
 
@@ -101,7 +97,7 @@ name = "dmgez-apfs"
 version = "0.1.0"
 dependencies = [
  "apfs-container",
- "apfs-core",
+ "libapfs-core",
  "apfs-format",
  "apfs-reader",
  "dmgez-vfs",
@@ -113,7 +109,7 @@ name = "dmgez-apfs-volume-read-compatibility"
 version = "0.0.0"
 dependencies = [
  "apfs-container",
- "apfs-core",
+ "libapfs-core",
  "apfs-format",
  "apfs-reader",
  "dmgez-apfs",
@@ -274,6 +270,10 @@ dependencies = [
  "futures-util",
  "wasm-bindgen",
 ]
+
+[[package]]
+name = "libapfs-core"
+version = "0.1.0"
 
 [[package]]
 name = "libc"

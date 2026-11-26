@@ -13,7 +13,7 @@ dmgez-vfs = { path = "../../foundation/dmgez-vfs", default-features = false }
 
 # APFS libraries
 apfs-container = { version = "=0.1.0", default-features = false }
-apfs-core = { version = "=0.1.0", default-features = false }
+apfs-core = { package = "libapfs-core", version = "=0.1.0", default-features = false }
 apfs-format = { version = "=0.1.0", default-features = false }
 apfs-reader = { version = "=0.1.0", default-features = false }
 

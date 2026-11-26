@@ -62,7 +62,7 @@ FINDER_DIFF_FEATURE = "finder-diff"
 READ_PROFILES = (READ_FEATURE, ACTUAL_PREVIEW_FEATURE, HFS_ANALYSIS_FEATURE, EXTRACT_FEATURE, DECMPFS_FEATURE, INSTALL_FEATURE)
 APFS_READER = "apfs-reader"
 APFS_PACKAGES = {
-    "apfs-core": "crates/foundation/apfs-core",
+    "libapfs-core": "crates/foundation/apfs-core",
     "apfs-format": "crates/formats/apfs-format",
     "apfs-container": "crates/container/apfs-container",
     APFS_READER: "crates/filesystem/apfs-reader",

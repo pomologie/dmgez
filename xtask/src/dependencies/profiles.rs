@@ -335,6 +335,7 @@ pub(super) const FORBIDDEN_PACKAGES: &[&str] = &[
 	"fstool",
 	"fuser",
 	"hfsplus-reader",
+	"libapfs-core",
 	"lzfse_rust",
 	"lzma-rust2",
 	"notify",
