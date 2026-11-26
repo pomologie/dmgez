@@ -24,7 +24,24 @@ Run the bounded checksum tests with `cargo test --locked -p dmgez-udif --test ch
 
 The [plist admission tests](../tests/plist_admission.rs) cover D-UDIF-01-T04. They vary only the XML on the native tiny UDRO fixture. A safe unknown key survives in the descriptor and the logical bytes stay exact. Invalid base64 and a block-map count that disagrees with its decoded length fail admission.
 
-The [writer cursor tests](writer_limits.rs) add byte-counter evidence for D-UDIF-03-T04. The public writer refuses a sector past the single-table limit before reading input or writing output. The tests seed the production writer at its final admissible chunk and at full-width cursor boundaries to check exact offsets and rejection before data or metadata writes. The seeded counters avoid streaming the preceding bytes. The Kani serializer proof covers trailer fields. It does not cover the full writer cursor or its sink.
+## Writer cursor
+
+The [writer cursor tests](writer_limits.rs) cover D-UDIF-03-T04 with a byte-counting sink. The public writer refuses a sector past the single-table limit before reading input or writing output. The tests seed the production writer at its final admissible chunk and at full-width cursor boundaries to check exact offsets and rejection before data or metadata writes. The seeded counters avoid streaming the preceding bytes.
+
+The [cursor harnesses](kani/writer_cursor.rs) call the production output code. The data harness varies a full-width cursor and physical budget for one 512-byte sector. It checks the exact cursor advance and sink byte count on admission and zero sink calls on refusal. The metadata harness also varies the full-width XML length and checks the complete image endpoint before either metadata write. Both use an independent wire-size constant and reach exact-fit and overflow cases. The counting sink always accepts writes in full. The proof excludes error destructor behavior, codec internals, and short writes.
+
+At `41d3afaa50ac87413c1fb55f83b84a35179d6953`, Kani 0.68.0 and CBMC 6.11.0 on macOS 14.7.2 (23H311) arm64 passed both harnesses and reached all six covers. Moving the sink write ahead of the check in a scratch copy triggered the zero-call assertion. Earlier experiments were stopped after the verifier repeatedly unwound error destructors. The final harness borrows the result variant without running its destructor. Run the harnesses with `cargo kani --manifest-path crates/formats/dmgez-udif/Cargo.toml --no-default-features --features write --harness writer_cursor_proof --output-format terse --jobs 2`.
+
+The Git source archive covers `dmgez-udif`, `dmgez-core`, and `Cargo.lock` at that revision. Its SHA-256 is `487590da655432b8801970ab2e1b732c8e61c8286b3b118d4b4fa925b0ad373e`. Local normalized logs are under `target/verification-evidence/udif-v0.1.0/`.
+
+| Run | Log SHA-256 |
+| --- | --- |
+| Kani cursor harnesses | `2a4a0cc296d3c29618a18179e3e9a18b7b05c23852a7549bdf569f22f127fa59` |
+| Expected write-before-admission counterexample | `60c5a9dfdbd2deb0d5f48b59cef3971604b05aa800832d9316352eb940af892f` |
+| 78 UDIF tests, Clippy, formatting, and architecture | `7d490db1d8fdef2195d2b46fa2ec5a38415aaed66faa7d30c54cf95b68037b9c` |
+| UDRO and UDZO project smoke with Apple and 7-Zip oracles | `4492b414283d3f782bedccb1df572e7489885db8c65afe8c50d85539b3c2e50e` |
+
+## Indexed reads
 
 The indexed-read harnesses cover routing for D-V04 through the production cursor called by `Image::read_exact_at`. They assume a contiguous logical partition and an admitted request. There are zero to eight runs, with arbitrary strictly increasing `u64` endpoints and reverse backing order. The neighboring endpoints identify the unique starting ordinal. The step harness checks the exact half-open fragment, advancement to the following run when bytes remain, and termination on an empty request. The unwind bound is 10. Reachability checks include a later starting run, a request at the disk end, and a fragment that ends at a run boundary while the request continues.
 
@@ -34,7 +51,7 @@ The routing checks enable only `read`. The [reader limit tests](reader_limits.rs
 
 The boundary mutation witness extends the current run by one byte before clipping the fragment to the request end. In an isolated source copy, Kani rejected the mutated `ReadCursor::next` at the exact-intersection assertion.
 
-The [v0.1.0 evidence records](evidence) identify the tested revisions, methods, bounds, and log hashes. `source_hash` covers the Git tar archive of this crate, `dmgez-core` and the workspace lockfile at the recorded revision. `fixture_hash` covers the tracked repository and crate fixture trees. Local logs live under `target/verification-evidence/udif-v0.1.0/` with private paths replaced by placeholders. The 78-test run used 4,096 property cases and seed `20261126`. The AddressSanitizer run processed 20,000 inputs from nine seed fixtures and left no crash artifacts. The local Apple Silicon candidate replayed the native UDRO and UDZO checks with p7zip 17.05 and macOS 14.7.2. The concurrent cache acceptance case and a direct Kani proof of the writer cursor remain open.
+The [v0.1.0 evidence records](evidence) identify the tested revisions, methods, bounds, and log hashes. `source_hash` covers the Git tar archive of this crate, `dmgez-core` and the workspace lockfile at the recorded revision. `fixture_hash` covers the tracked repository and crate fixture trees. Local logs live under `target/verification-evidence/udif-v0.1.0/` with private paths replaced by placeholders. The 78-test run used 4,096 property cases and seed `20261126`. The AddressSanitizer run processed 20,000 inputs from nine seed fixtures and left no crash artifacts. The local Apple Silicon candidate replayed the native UDRO and UDZO checks with p7zip 17.05 and macOS 14.7.2. The concurrent cache acceptance case remains open.
 
 Install Kani 0.68.0 and run `cargo kani setup` before running `bash check.sh` from this directory. The checker also accepts an absolute path to `check.sh`.
 
