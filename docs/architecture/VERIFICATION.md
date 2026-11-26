@@ -25,6 +25,16 @@ Local logs and the bundle are under `target/verification-evidence/v0.1.0-verific
 | Validator rejections | `76cf263f674a440d90ad45acb0a68027ae11d59e1ffb2033d30c9d2972b5458e` |
 | Workspace nextest | `99bbf01c88b1f0408293e69791caeee34c0907fe5b9eb23714e512d9231c66cd` |
 
+The clean archive candidate `017b843334eb2e52eddd88347bba6571198bf12a` also passed all 18 records on macOS 14.7.2 arm64. It ran 16 Kani harnesses with Kani 0.68.0 and CBMC 6.11.0, 116 UDIF tests with 4,096 property cases, four Loom scenarios, and 20,000 AddressSanitizer inputs from the eight checked-in seeds. The crash directory was empty. Both Rust reference decoders matched all four comparison images. The exact archived CLI passed the native read-only HFS+ attachment and `fsck_hfs` check. The validator rejected missing evidence, a stale source digest, a dirty checkout, wrong features, timed-out and unsupported records, a mismatched transcript digest, and an unreached cover property.
+
+The candidate source archive has SHA-256 `b438eba3dec709c4e5a62396a0fcb1e28908b13217f88e662cdfea4a15dcf994`. The bundle and validation transcripts are in `target/verification-evidence/v0.1.0-verification/017b843-release-replay/`.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| `bundle.json` | `f77b409eb09f90eac309a66daa71bb403217129ae810a1d5f8b81f4995ecc931` |
+| `validation.log` | `c468533ba6f92b0b52da5f48328570da9ee4eade373f88980373cb8ace067cd4` |
+| `validation-rejections.log` | `10427649923907cdbd9009f6ecfc5f7b6d5cf24860078cbd0461f12ac7084dd8` |
+
 Nextest passed 874 workspace tests with localhost access and skipped eight. The negative architecture checks rejected a CLI dependency on the GUI runtime and a 501-line source file. The coverage audit at `9e04fb0` measured 86.53% lines across the four selected builder, config, core and UDIF packages, and 89.87% lines and 75.00% branches in the separate UDIF run. The local coverage driver was 0.9.1. The coverage scope and uncovered critical branches remain open under D-VER-01. Its normalized coverage records are indexed in `target/verification-evidence/v0.1.0-verification/9e04fb0-apparatus-49a997ddf1a4db762b344d84861e15604b8314e6914007a2f6c535e7030c26e2.json`.
 
 The UDIF admission and reader follow-up compared `a6d6c64` with `62a85b4` on macOS arm64. Both runs used `cargo test --locked -p dmgez-udif --all-features`, nightly `2026-11-04` branch instrumentation, its bundled LLVM 23.1.5 tools, and 4,096 property cases with seed `20261126`. The tests passed 98 and 115 cases respectively. The totals cover the 30 instrumented files under `dmgez-udif/src/`.
@@ -105,6 +115,10 @@ The detailed UDIF replay at `9b68c63` reproduced the per-file totals above. The 
 The positioned read-window regression at `e89d1e0` checks a reversed fragment, a fragment starting before the request, a buffer one byte too short, and exact-fit and empty windows at the end of the address space. All 19 reader-only unit tests and strict Clippy passed. The matching nightly instrumentation passed 116 all-feature tests and measured `index.rs` at 98.48% lines and 90.38% branches (47 of 52). The cache branch discrepancy and workspace coverage review remain open.
 
 The cache regression now exercises oversized rejection and successful recovery through one decoder call site. LLVM recorded one true and one false outcome for that concrete capacity-check instance. The file export recorded both outcomes for each of its three instrumented conditions, including entry-count eviction and retained-capacity eviction. The file summary still reports five of six covered branches. The all-feature suite passed 116 tests. The baseline instantiation annotations are in `target/verification-evidence/v0.1.0-verification/7a361b6-cache-branch-annotations.log`.
+
+The `017b843` archive candidate reproduced the UDIF branch results on macOS arm64 with nightly `2026-11-04` and 4,096 property cases. `index.rs` covered 47 of 52 branches, `reader.rs` covered 23 of 24, and `trailer.rs` covered 22 of 24. LLVM's cache summary reported five of six branches. The cache export recorded 28 true and 3,736 false outcomes for entry-count eviction, two true and 3,734 false outcomes for capacity eviction, and one true and 3,726 false outcomes for oversized decode rejection across the instrumented call sites. The branch inventory is `target/verification-evidence/v0.1.0-verification/017b843-release-replay/udif-branch-coverage.json` with SHA-256 `a2dd836e0997aecfececb3dc680cd1f9528eb1fa73f9662790206048ee61b61f`.
+
+On the same revision, hosted all-feature workspace coverage was 27,762 of 32,776 lines (84.70%) and 41,613 of 50,401 regions (82.56%). All 334 reported file rows match tracked files, and their counters sum to the job's totals. The Linux job compiled the locked all-feature workspace with Rust 1.98.0. The hosted workspace figure and the separate composed HFS+ measurements remain inputs to the open D-VER-01 coverage review. The hosted inventory is `target/verification-evidence/v0.1.0-verification/017b843-release-replay/hosted-workspace-coverage.json` with SHA-256 `b8755e57ca74b3eff3b947a9be21585d694b79067ec69b3399dd57e25fa32798`. [Hosted verification](https://github.com/pomologie/dmgez/actions/runs/45795137044)
 
 ## Proof obligations
 
