@@ -43,6 +43,20 @@ Three targeted mutation checks ran on macOS arm64 against `f5e2fb4` with Rust 1.
 
 The hosted Linux coverage and minimum-Rust job passed at `ffb76e4`. The all-feature workspace report covered 27,741 of 32,755 instrumented lines (84.69%) and 41,574 of 50,363 regions (82.55%). This job did not instrument branches. Rust 1.98.0 compiled the locked all-feature workspace on the same host. [Hosted coverage and minimum-Rust job](https://github.com/pomologie/dmgez/actions/runs/45790210058/job/139807027014)
 
+All 334 file rows in that report match tracked files from the candidate. Their counters sum to the reported totals. The full-workspace feature set includes capabilities scheduled after v0.1.0. The following totals describe the instrumented packages within that run.
+
+| Package | Lines covered | Instrumented lines | Coverage |
+| --- | ---: | ---: | ---: |
+| `dmgez-builder` | 4,409 | 5,450 | 80.90% |
+| `dmgez-config` | 1,595 | 1,644 | 97.02% |
+| `dmgez-core` | 401 | 468 | 85.68% |
+| `dmgez-udif` | 3,012 | 3,123 | 96.45% |
+| `dmgez-signing` | 788 | 998 | 78.96% |
+| `dmgez-runtime` | 561 | 1,049 | 53.48% |
+| `dmgez-cli` | 883 | 1,236 | 71.44% |
+
+The hosted workspace contains no instrumented HFS+ adapter rows. The separate composed CLI workflow exercises that adapter on each host. A precise release-profile coverage review still needs to measure the composed CLI and identify which production paths correspond to its advertised capabilities. The row-level inventory is in `target/verification-evidence/v0.1.0-verification/ffb76e4-hosted-coverage-scope.json` with SHA-256 `8a537b7e54bcd5eeaf6c90980d1e48e2eb3374980ed0aed66c33aa3d36f82b5a`.
+
 The detailed UDIF replay at `9b68c63` reproduced the per-file totals above. The exported source counters showed no rejected outcome at the empty-table check and the reversed-fragment comparison. The block-map decoder rejects an empty table before normalization, and the positioned-window Kani harness tests arbitrary fragment ordering. The LLVM summary also reports one uncovered cache branch even though the merged source-location counters show both outcomes for every exported cache condition. The per-file summaries and condition counters are in `target/verification-evidence/v0.1.0-verification/9b68c63-branch-conditions.json` with SHA-256 `56fc87dfa490f2b3fe9510012353185ac7931469685311e8dca68b28415ee85d`.
 
 The positioned read-window regression at `e89d1e0` checks a reversed fragment, a fragment starting before the request, a buffer one byte too short, and exact-fit and empty windows at the end of the address space. All 19 reader-only unit tests and strict Clippy passed. The matching nightly instrumentation passed 116 all-feature tests and measured `index.rs` at 98.48% lines and 90.38% branches (47 of 52). The cache branch discrepancy and workspace coverage review remain open.
