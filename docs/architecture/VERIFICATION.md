@@ -126,6 +126,8 @@ On the same revision, hosted all-feature workspace coverage was 27,762 of 32,776
 
 The hosted all-feature workspace job at refreshed archive revision `ec0f4bd` reproduced those line and region totals and passed the minimum-Rust check. This hosted measurement uses the generic workspace, and the artifact publication branches have a separate composed HFS+ measurement below. [Refreshed coverage and minimum-Rust job](https://github.com/pomologie/dmgez/actions/runs/45806613540/job/139863436681)
 
+The hosted coverage job uploads `workspace-coverage` with the LLVM per-file report, its text summary, the checkout revision, tool versions, and checksums. The same test execution supplies both reports. This artifact lets reviewers inspect file and source-region coverage for the exact run. The separate composed measures below cover the HFS+ release workflow. [Hosted workflow](../../.github/workflows/ci.yml)
+
 The composed runtime at dmgez `641e14e` and HFS+ `a1b870f` passed 14 release tests. With the four fault cases from `48b524a`, it passed 18 tests. Both runs used nightly `2026-11-04` branch instrumentation on arm64 macOS with `project-release,signing-rust`. The new cases reject source-length changes before staging, reject empty, oversized or short input during identity calculation, detect distinct Unix inodes at the same length, and refuse ad hoc signing when the portable backend is unavailable.
 
 | Runtime module | Baseline lines | Tested lines | Baseline branches | Tested branches |
