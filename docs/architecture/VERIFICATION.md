@@ -14,6 +14,8 @@ The Ubuntu all-feature report for `31a280c` covered 27,939 of 33,001 lines (84.6
 
 A separate arm64 macOS branch-coverage run on exact source archives `31a280c` and HFS+ `ba00b16` passed 372 tests, the native UDRO and UDZO project smokes, and exact mounted readback of the supplementary-name pair. The merge used 213 test and 23 smoke profiles and excluded 234 build profiles. The source spans recorded both outcomes of the held-stage metadata recheck, all three cache conditions, and both staging admission guards. The file-level branch summaries were 26/30 for runtime publication, 5/6 for the UDIF cache, 2/4 for builder release staging, and 7/8 for portable artifact admission. The report and transcripts are in `target/verification-evidence/v0.1.0-verification/31a280c-combined-release-coverage/`. The report SHA-256 is `92082a5c86edee406942db183b59a44e5dca7dc229e972553d4e7809b08dae3a`.
 
+The macOS signing regression at `7eb2e8e` changes the held source's quarantine attribute during signature verification. The source bytes survive, and the output and staging file are absent after refusal. An instrumented control reached the final quarantine value comparison. In the changed case the held file's change-time check rejected the source before that comparison. All 23 signing package tests and strict Clippy passed. The source-bound branch report is `target/verification-evidence/v0.1.0-verification/7eb2e8e-signing-quarantine/coverage.json` with SHA-256 `df26cc59e57fe1143e3ea9bf494154db261f21e45a42a03b3af1079ffd686838`. [Signing regression](../../crates/security/dmgez-signing/src/portable/tests.rs)
+
 ```sh
 cargo run --locked -p xtask -- release-evidence \
   --root /path/to/clean/candidate \
