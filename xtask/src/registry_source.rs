@@ -5,7 +5,8 @@ use std::{collections::BTreeMap, error::Error, fs, ops::Range, path::PathBuf};
 use clap::Args;
 use proc_macro2::{Span, TokenStream, TokenTree};
 use syn::{
-	Attribute, Ident, ItemUse, LitStr, Macro, Meta, Path, UseTree,
+	Attribute, Expr, ExprLit, Ident, ItemUse, Lit, LitStr, Macro, Meta, Path, Token, UseTree,
+	punctuated::Punctuated,
 	visit::{self, Visit},
 };
 
@@ -105,17 +106,70 @@ impl Transformer<'_> {
 		self.edits.insert(range.start, (range.end, replacement));
 	}
 
-	fn replace_root(&mut self, ident: &Ident, absolute: Option<Span>) {
+	fn private_module(&self, ident: &Ident) -> Option<&str> {
 		let name = ident.to_string();
-		let module = if name == "crate" {
+		if name == "crate" {
 			self.module
 		} else {
 			self.dependencies.get(name.as_str()).copied()
-		};
-		if let Some(module) = module {
+		}
+	}
+
+	fn replace_root(&mut self, ident: &Ident, absolute: Option<Span>) {
+		if let Some(module) = self.private_module(ident) {
 			let range = ident.span().byte_range();
 			let start = absolute.map_or(range.start, |span| span.byte_range().start);
 			self.replace(start..range.end, format!("crate::internal::{module}"));
+		}
+	}
+
+	fn rewrite_serde_paths(&mut self, attribute: &Attribute) {
+		let Ok(arguments) =
+			attribute.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+		else {
+			return;
+		};
+		for argument in arguments {
+			let Meta::NameValue(option) = argument else {
+				continue;
+			};
+			if ![
+				"serialize_with",
+				"deserialize_with",
+				"with",
+				"default",
+				"crate",
+			]
+			.iter()
+			.any(|name| option.path.is_ident(name))
+			{
+				continue;
+			}
+			let Expr::Lit(ExprLit {
+				lit: Lit::Str(value),
+				..
+			}) = option.value
+			else {
+				continue;
+			};
+			let Ok(path) = value.parse::<Path>() else {
+				continue;
+			};
+			let Some(module) = path
+				.segments
+				.first()
+				.and_then(|segment| self.private_module(&segment.ident))
+			else {
+				continue;
+			};
+			let module = Ident::new(module, Span::call_site());
+			let suffix = path.segments.iter().skip(1);
+			let replacement = quote::quote!(crate::internal::#module #(::#suffix)*);
+			let replacement = LitStr::new(&replacement.to_string(), Span::call_site());
+			self.replace(
+				value.span().byte_range(),
+				quote::quote!(#replacement).to_string(),
+			);
 		}
 	}
 
@@ -161,7 +215,8 @@ impl Transformer<'_> {
 						.filter(|&start| separators(&tokens[start..index]))
 						.map(|start| tokens[start].span());
 					if absolute.is_none()
-						|| index == 2 || !matches!(tokens[index - 3], TokenTree::Ident(_))
+						|| index == 2
+						|| !matches!(tokens[index - 3], TokenTree::Ident(_))
 					{
 						self.replace_root(ident, absolute);
 					}
@@ -199,6 +254,9 @@ impl<'ast> Visit<'ast> for Transformer<'_> {
 	}
 
 	fn visit_attribute(&mut self, attribute: &'ast Attribute) {
+		if attribute.path().is_ident("serde") {
+			self.rewrite_serde_paths(attribute);
+		}
 		if let Meta::List(list) = &attribute.meta {
 			let cfg = list.path.is_ident("cfg") || list.path.is_ident("cfg_attr");
 			self.rewrite_tokens(list.tokens.clone(), cfg);

@@ -49,6 +49,17 @@ fn preserves_the_application_crate_root() {
 }
 
 #[test]
+fn rewrites_serde_path_literals_without_rewriting_names() {
+	let original = r#"#[serde(serialize_with = "crate::schema::decimal", with = "::core_alias::codec", rename = "crate::display")]
+value!("crate::literal");
+"#;
+	let expected = r#"#[serde(serialize_with = "crate :: internal :: engine :: schema :: decimal", with = "crate :: internal :: local_core :: codec", rename = "crate::display")]
+value!("crate::literal");
+"#;
+	assert_eq!(rewrite_source(original, &arguments()).unwrap(), expected);
+}
+
+#[test]
 fn requires_explicit_approval_to_remove_no_std() {
 	let mut options = arguments();
 	options.strip_no_std = false;
