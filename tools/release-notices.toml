@@ -1,0 +1,22 @@
+# License preference for the v0.1.0 composed CLI notice draft.
+# The release retains the repository's versioned dependency policy in deny.toml.
+accepted = ["Apache-2.0", "MIT", "Unicode-3.0", "Zlib"]
+ignore-dev-dependencies = true
+
+[alias_record]
+accepted = ["BlueOak-1.0.0"]
+
+[ds_parser]
+accepted = ["BlueOak-1.0.0"]
+
+[apple-codesign]
+accepted = ["MPL-2.0"]
+
+[ring]
+accepted = ["ISC"]
+
+[untrusted]
+accepted = ["ISC"]
+
+[bcder]
+accepted = ["BSD-3-Clause"]

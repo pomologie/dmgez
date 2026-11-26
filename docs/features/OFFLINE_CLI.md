@@ -2,11 +2,22 @@
 
 Prepare an archive from a trusted native composed CLI built from this checkout. Keep the default Rust signer and enable `inspect` so the packaged CLI can build, sign, and verify the bundled project. Supply a reviewed UTF-8 dependency notice file for the actual target and capabilities. Python 3.11 or newer is required to prepare the archive. An extracted CLI runs on its target host without Python, Cargo or the filesystem source checkouts. [CLI composition](../../README.md#build-from-a-toml-project)
 
+To prepare a target-specific draft, install `cargo-about` 0.9.3 and compose the optimized CLI with the notice output option. The license tool scans the same locked temporary workspace used to build the binary. The composer checks its report against the packages Cargo built. The draft records the binary and lockfile hashes, native target, feature selection, and resolved licenses. [License tool](https://github.com/EmbarkStudios/cargo-about)
+
+```sh
+python3 -B tools/compose_hfsplus_cli.py --hfsplus ../hfsplus \
+  --release --features inspect --notices-output /path/to/THIRD_PARTY_NOTICES.draft.txt
+```
+
+Use the executable path printed by the composer. Review the draft against the dependency sources, including any canonical fallback text and source notices, and retain the recorded build identity in the reviewed file. The packager refuses a file that carries the draft heading.
+
+On macOS arm64, the composed release build and notice tool reported the same 165 Cargo package IDs. Two drafts for the same executable matched byte for byte. The offline scanner identified 39 entries using canonical SPDX text for source review.
+
 Run from the checkout on the same operating system as the supplied executable. The output directory must already exist on a filesystem that supports hard links. Use a fresh path.
 
 ```sh
 python3 -B tools/package_cli.py \
-  --binary target/hfsplus-cli/release/dmgez \
+  --binary /path/to/the/composed/dmgez \
   --target aarch64-apple-darwin \
   --notices /path/to/THIRD_PARTY_NOTICES.txt \
   --output /path/to/dmgez-0.1.0-aarch64-apple-darwin.tar.gz

@@ -17,6 +17,8 @@ import tempfile
 import tomllib
 import zipfile
 
+from release_notices import NOTICE_DRAFT_HEADER
+
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI_MANIFEST = ROOT / "apps/dmgez-cli/Cargo.toml"
@@ -162,8 +164,11 @@ def package(binary, target, notices, output):
         raise ValueError("third-party notices must be a regular file")
 
     notice = notices.read_bytes()
-    if not notice.decode("utf-8").strip():
+    notice_text = notice.decode("utf-8").strip()
+    if not notice_text:
         raise ValueError("third-party notices must be nonempty UTF-8 text")
+    if notice_text.splitlines()[0] == NOTICE_DRAFT_HEADER:
+        raise ValueError("dependency notice draft requires review before packaging")
     with CLI_MANIFEST.open("rb") as file:
         version = tomllib.load(file)["package"]["version"]
     if not re.fullmatch(r"[A-Za-z0-9.+-]+", version):

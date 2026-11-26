@@ -503,7 +503,20 @@ def run_cli(cargo, directory, options, packages):
         subprocess.run(command, cwd=directory, env=environment, check=True)
         return
 
-    run_binary(command, directory, CLI_BINARY)
+    if options.notices_output is not None:
+        import release_notices
+
+        target = release_notices.host_target(cargo, directory)
+        command.extend(("--target", target))
+        built_packages = set()
+        binary = run_binary(command, directory, CLI_BINARY, built_packages=built_packages)
+        release_notices.generate(
+            cargo, directory, binary, target, options.features,
+            options.no_default_features, options.notices_output, built_packages=built_packages,
+        )
+    else:
+        binary = run_binary(command, directory, CLI_BINARY)
+    print(binary)
 
 
 def run_desktop(cargo, directory, options, packages):
@@ -520,16 +533,20 @@ def run_desktop(cargo, directory, options, packages):
     if options.test:
         subprocess.run([*command, "--bin", DESKTOP_PACKAGE], cwd=directory, env=environment, check=True)
         return
-    run_binary(command, directory, DESKTOP_PACKAGE)
+    print(run_binary(command, directory, DESKTOP_PACKAGE))
 
 
-def run_binary(command, directory, binary):
+def run_binary(command, directory, binary, *, built_packages=None):
     command.extend(("--bin", binary, "--message-format=json-render-diagnostics"))
     artifact = None
     with subprocess.Popen(command, cwd=directory, stdout=subprocess.PIPE, encoding="utf-8") as process:
         for line in process.stdout:
             message = json.loads(line)
-            if message.get("reason") == "compiler-artifact" and message.get("executable"):
+            if message.get("reason") != "compiler-artifact":
+                continue
+            if built_packages is not None:
+                built_packages.add(message["package_id"])
+            if message.get("executable"):
                 target = message["target"]
                 if target["name"] == binary and target["kind"] == ["bin"]:
                     artifact = message["executable"]
@@ -538,7 +555,7 @@ def run_binary(command, directory, binary):
         raise subprocess.CalledProcessError(status, command)
     if artifact is None:
         raise ValueError(f"Cargo did not report a {binary} binary")
-    print(artifact)
+    return Path(artifact)
 
 
 def main():
@@ -554,6 +571,10 @@ def main():
         help="Cargo artifact directory (defaults to a target directory for the selected profile)",
     )
     parser.add_argument("--release", action="store_true", help="build the optimized binary")
+    parser.add_argument(
+        "--notices-output", type=Path,
+        help="write a dependency notice draft for this native optimized CLI build",
+    )
     parser.add_argument("--desktop", action="store_true", help="compose the desktop app with the supplied filesystem readers")
     parser.add_argument("--test", action="store_true", help="run the selected composed app tests")
     parser.add_argument(
@@ -563,6 +584,8 @@ def main():
     parser.add_argument("--no-default-features", action="store_true", help="disable default CLI features")
     parser.add_argument("--features", action="append", default=[], help="enable Cargo features, repeatable")
     options = parser.parse_args()
+    if options.notices_output is not None and (not options.release or options.desktop or options.test):
+        parser.error("--notices-output requires an optimized CLI build without --desktop or --test")
     use_hfsplus = options.hfsplus is not None or options.hfsplus_packages is not None
     use_apfs = options.apfs is not None or options.apfs_packages is not None
     if not (use_hfsplus or use_apfs):
