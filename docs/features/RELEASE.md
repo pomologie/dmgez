@@ -45,6 +45,13 @@ The local Linux x86-64 candidate at dmgez `d56c80d` and HFS+ `a1b870f` was built
 | `dmgez-0.1.0-x86_64-unknown-linux-gnu.tar.gz` | `95e00779d6564bb93eec055552e7548312ad8b38cd5bf752e9ba41805152423f` |
 | Archived `THIRD_PARTY_NOTICES.txt` | `24ac145c894a00ec370f83ab08a9419fdf32eaab5deca7ead8df19a17df0f8d6` |
 
+The local Linux ARM64 candidate at dmgez `71cca7f` and HFS+ `a1b870f` was built and tested in an ARM64 Debian 12.15 container with Rust 1.99.1 and GCC 12.2.0. Build, notice generation, and tests ran without networking after staging the dependencies. The build and scan agreed on 164 packages. All 148 registry archive hashes matched the lockfile, and each selected license text and supplemental notice matched the reviewed x86-64 set. Installation and example build, signing, and verification passed from the extracted archive. 7-Zip verified both project formats, all four fixture digests matched the table above, and Apple tools accepted the ARM64 Linux containers and ad hoc signatures.
+
+| Local Linux ARM64 candidate artifact | SHA-256 |
+|---|---|
+| `dmgez-0.1.0-aarch64-unknown-linux-gnu.tar.gz` | `c94f58c936b57b2b9a598218762d0d0c0a3d2389a4cda54521e2be6fca350c32` |
+| Archived `THIRD_PARTY_NOTICES.txt` | `24d6d1a7cd114be03fd9369d3543fa317f0e446584cb461375aa524dde5dc916` |
+
 ## Pipeline
 
 1. Plan inputs, validate credentials/capabilities without exposing secrets. Stage source apps if sign requested; default `[signing].apps="verify"` checks existing signatures and does not re-sign. `preserve` packages without claiming validity; `sign` explicit and stage only. Inspect nested Mach-O, frameworks, plugins, helpers, dylibs, bundles; per-path signing policy/entitlements, sign inside-out; no blind `codesign --deep` for signing. Preserve symlinks and resources. Validate Developer ID Application identity, secure timestamps, hardened runtime for eligible executables, and entitlement policy; signing alone does not satisfy Apple requirements.
