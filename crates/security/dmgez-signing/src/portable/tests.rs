@@ -347,6 +347,44 @@ fn refuses_to_publish_a_signed_stage_with_different_quarantine_metadata() {
 	assert_eq!(fixture.entry_count(), 1);
 }
 
+#[cfg(target_os = "macos")]
+#[test]
+fn refuses_to_publish_after_source_quarantine_changes_during_verification() {
+	use rustix::fs::{XattrFlags, fsetxattr};
+
+	let fixture = Fixture::new(UNSIGNED);
+	let source = fs::File::open(&fixture.source).unwrap();
+	let result = stage_and_sign(
+		&fixture.source,
+		&fixture.destination,
+		copy_native_signature,
+		|frame| {
+			assert!(embedded_code_directory(frame).is_ok());
+			assert_eq!(
+				super::quarantine::read(&source, &fixture.source).unwrap(),
+				None
+			);
+			fsetxattr(
+				&source,
+				QUARANTINE_ATTRIBUTE,
+				QUARANTINE_VALUE,
+				XattrFlags::empty(),
+			)
+			.map_err(|error| SignError::Quarantine(error.into()))
+		},
+	);
+	assert!(matches!(result, Err(SignError::ImageChanged)));
+	assert_eq!(
+		super::quarantine::read(&source, &fixture.source)
+			.unwrap()
+			.as_deref(),
+		Some(QUARANTINE_VALUE)
+	);
+	assert_eq!(fs::read(&fixture.source).unwrap(), UNSIGNED);
+	assert!(!fixture.destination.exists());
+	assert_eq!(fixture.entry_count(), 1);
+}
+
 #[cfg(windows)]
 #[test]
 fn preserves_the_exact_zone_identifier_or_refuses_before_signing() {
