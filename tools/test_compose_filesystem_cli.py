@@ -335,6 +335,7 @@ class WindowsCompositionTests(unittest.TestCase):
 
     def test_workspace_round_trips_drive_prefix_backslashes_spaces_and_unicode(self):
         package = PureWindowsPath(r"\\?\C:\Build assets\Uñpacked 💿\hfsplus-builder-0.1.0")
+        rustc = PureWindowsPath(r"C:\Rust toolchains\Rüst\bin\rustc.exe")
         with TemporaryDirectory() as temporary:
             base = Path(temporary)
             root = base / "source"
@@ -343,17 +344,29 @@ class WindowsCompositionTests(unittest.TestCase):
             for directory in compose.SOURCE_DIRS:
                 (root / directory).mkdir(parents=True)
             (root / compose.CLI).mkdir()
-            for file in (compose.LOCK, compose.TOOLCHAIN, "rustfmt.toml", "LICENSE"):
+            for file in (compose.LOCK, "rustfmt.toml", "LICENSE"):
                 (root / file).write_text("", encoding="utf-8")
+            (root / compose.TOOLCHAIN).write_text(
+                '[toolchain]\nchannel = "test-pin"\n', encoding="utf-8",
+            )
             (root / compose.MANIFEST).write_text("[workspace]\n", encoding="utf-8")
             original = compose.ROOT / compose.CLI / compose.MANIFEST
             (root / compose.CLI / compose.MANIFEST).write_bytes(original.read_bytes())
             (root / compose.RUNTIME).mkdir(parents=True)
             runtime = compose.ROOT / compose.RUNTIME / compose.MANIFEST
             (root / compose.RUNTIME / compose.MANIFEST).write_bytes(runtime.read_bytes())
-            with patch.object(compose, "ROOT", root):
+            with (
+                patch.object(compose, "ROOT", root),
+                patch.object(compose.subprocess, "check_output", return_value=f"{rustc}\r\n") as find,
+            ):
                 compose.prepare_workspace(workspace, {compose.HFSPLUS_BUILDER: package})
 
+            find.assert_called_once_with(
+                ["rustup", "which", "--toolchain", "test-pin", "rustc"],
+                cwd=workspace, encoding="utf-8",
+            )
+            config = compose.load_toml(workspace / ".cargo/config.toml")
+            self.assertEqual(config["build"]["rustc"], str(rustc))
             manifest = compose.load_toml(workspace / compose.MANIFEST)
             self.assertEqual(manifest["patch"]["crates-io"][compose.HFSPLUS_BUILDER]["path"], str(package))
             cli = compose.load_toml(workspace / compose.CLI / compose.MANIFEST)

@@ -386,6 +386,18 @@ def prepare_workspace(directory, packages, *, desktop=False):
     for name in (LOCK, TOOLCHAIN, "rustfmt.toml", "LICENSE"):
         shutil.copyfile(ROOT / name, directory / name)
 
+    # rustup selects Cargo, but Cargo can otherwise find an unrelated rustc on PATH.
+    channel = load_toml(directory / TOOLCHAIN)["toolchain"]["channel"]
+    compiler = subprocess.check_output(
+        ["rustup", "which", "--toolchain", channel, "rustc"],
+        cwd=directory, encoding="utf-8",
+    ).rstrip("\r\n")
+    cargo_config = directory / ".cargo"
+    cargo_config.mkdir()
+    (cargo_config / "config.toml").write_text(
+        f"[build]\nrustc = {json.dumps(compiler, ensure_ascii=False)}\n", encoding="utf-8",
+    )
+
     manifest = (ROOT / MANIFEST).read_text(encoding="utf-8")
     if "patch" in tomllib.loads(manifest):
         raise ValueError("workspace manifest already has registry patches")
