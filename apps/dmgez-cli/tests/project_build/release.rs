@@ -122,6 +122,48 @@ identifier = "com.example.release-fixture"
 	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 2);
 }
 
+#[cfg(feature = "signing-rust")]
+#[test]
+fn refuses_to_sign_a_damaged_project_image_without_leaving_a_stage() {
+	const SIGNED_OUTPUT: &str = "signed.dmg";
+	const IDENTIFIER: &str = "com.example.release-fixture";
+	const FIRST_PAYLOAD_BYTE: usize = 0;
+	const ERROR_EXIT: i32 = 2;
+	let directory = tempfile::tempdir().unwrap();
+	let root = directory.path();
+	let source = root.join(OUTPUT_NAME);
+	let destination = root.join(SIGNED_OUTPUT);
+	fs::write(root.join(MANIFEST_NAME), PROJECT).unwrap();
+	let build = run(root, &[]);
+	assert!(build.status.success(), "{build:?}");
+
+	let mut damaged = fs::read(&source).unwrap();
+	damaged[FIRST_PAYLOAD_BYTE] ^= 1;
+	fs::write(&source, &damaged).unwrap();
+	let signing = std::process::Command::new(BINARY)
+		.current_dir(root)
+		.args(["sign", "dmg", "--ad-hoc", "--identifier", IDENTIFIER])
+		.arg(&source)
+		.arg("--output")
+		.arg(&destination)
+		.arg("--json")
+		.output()
+		.unwrap();
+	assert_eq!(signing.status.code(), Some(ERROR_EXIT), "{signing:?}");
+	assert!(signing.stdout.is_empty(), "{signing:?}");
+	let diagnostic = String::from_utf8_lossy(&signing.stderr);
+	assert!(
+		diagnostic.contains("did not pass integrity checks"),
+		"{diagnostic}"
+	);
+	assert_eq!(fs::read(source).unwrap(), damaged);
+	assert_eq!(
+		fs::metadata(destination).unwrap_err().kind(),
+		ErrorKind::NotFound
+	);
+	assert_eq!(fs::read_dir(root).unwrap().count(), 2);
+}
+
 #[test]
 fn rejects_a_requested_unavailable_backend_and_an_implicit_overwrite() {
 	let directory = tempfile::tempdir().unwrap();
