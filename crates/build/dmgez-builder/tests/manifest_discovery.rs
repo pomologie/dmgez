@@ -382,6 +382,57 @@ fn checks_visit_entry_depth_memory_and_cancellation_limits() {
 }
 
 #[test]
+fn refuses_a_recursive_root_rebound_through_its_ancestor_after_open() {
+	const ORIGINAL_PARENT: &str = "tree/parent";
+	const MOVED_PARENT: &str = "tree/moved";
+	const ROOT_NAME: &str = "root";
+	const BEFORE_FIRST_ENTRY: usize = 2;
+	let (_temp, base) = fixture();
+	let original_parent = base.join(ORIGINAL_PARENT);
+	let moved_parent = base.join(MOVED_PARENT);
+	let root = original_parent.join(ROOT_NAME);
+	fs::create_dir_all(&root).unwrap();
+	let options = project(&format!(
+		"[[contents]]\nsource = '{ORIGINAL_PARENT}/{ROOT_NAME}'\n"
+	));
+	let mut checks = 0;
+	let result = discover_with_cancellation(&options, &base, Limits::default(), || {
+		checks += 1;
+		if checks == BEFORE_FIRST_ENTRY {
+			// Move only the ancestor so the already-open root keeps its metadata.
+			fs::rename(&original_parent, &moved_parent).unwrap();
+			fs::create_dir_all(&root).unwrap();
+		}
+		false
+	});
+	assert!(matches!(result, Err(Error::SourceChanged { path }) if path == root));
+	assert!(moved_parent.join(ROOT_NAME).is_dir());
+}
+
+#[test]
+fn charges_excluded_names_against_the_recursive_visit_limit() {
+	const ROOT_AND_ONE_CHILD: u64 = 2;
+	const ROOT_AND_TWO_CHILDREN: u64 = 3;
+	let (_temp, base) = fixture();
+	file(&base, "tree/first.txt", b"one");
+	file(&base, "tree/second.txt", b"two");
+	let options = project(&format!("{COPY}\nexclude = ['*.txt']"));
+	let mut limits = Limits {
+		max_visited: ROOT_AND_ONE_CHILD,
+		..Limits::default()
+	};
+	assert!(matches!(
+		discover(&options, &base, limits),
+		Err(Error::Limit(Budget::Visited))
+	));
+	limits.max_visited = ROOT_AND_TWO_CHILDREN;
+	assert_eq!(
+		paths(&discover(&options, &base, limits).unwrap()),
+		["/Package.app"]
+	);
+}
+
+#[test]
 fn rejects_invalid_globs_and_globs_on_regular_sources() {
 	let (_temp, base) = fixture();
 	file(&base, "tree/file", b"data");

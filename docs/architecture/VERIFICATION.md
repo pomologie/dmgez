@@ -179,6 +179,8 @@ The table excludes 13 standalone `tests.rs` files from the source inventory. Inl
 
 The seven directly tested packages covered 9,553 of 11,137 lines (85.78%) in this profile. The workspace-wide audit and critical-file review remain open. The combined map still reports 23 of 26 branches for `project_release/artifact.rs`, with separate mutation evidence for the three publication guards above, and five of six for `reader/cache.rs`, with source-condition counters recorded above. The report binds 238 tracked source files by SHA-256 and excludes 210 build-time profiles. The SHA-256 of `coverage.json` is `975987498b3924ce9a2edc6c9a54b197ae64f1cf26e641ae1687dfbfad97ecf1`. The report, run logs, and `reproduce.py` are in `target/verification-evidence/v0.1.0-verification/26ba0d1-combined-release-coverage/`.
 
+The POSIX source-discovery suite now checks the final named binding of a recursively opened root by moving its ancestor while the root descriptor is held and replacing the original path. It also verifies that excluded names count against the visit limit even when they contribute no image entries. All 13 manifest-discovery tests and strict Clippy passed on arm64 macOS. Each new test failed when its corresponding check was bypassed in a disposable checkout. The exact edits and test log digests are in `target/verification-evidence/v0.1.0-verification/a3f12b5-discovery-guards/summary.json` with SHA-256 `ff3382499bad9dbd96a0c8427300277070c6db3fc9f0cd8e746c14b89c37e52c`. [Manifest discovery tests](../../crates/build/dmgez-builder/tests/manifest_discovery.rs)
+
 ## Proof obligations
 
 | ID | Activation | Scope | Required evidence |
