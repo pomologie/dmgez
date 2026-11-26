@@ -14,6 +14,14 @@ A native Rust DMG toolkit with a lean default build, rich optional read/manipula
 
 Out of scope: filesystem-aware FAT32/exFAT/NTFS creation, physical disk partitioning or repair, deleted-file carving/recovery, macOS runtime emulation, automatic execution on image attach, bypass of code signing or DRM, arbitrary Python configuration execution. Raw-sector conversion may preserve unknown filesystems opaquely without reading or writing their logical contents. Encryption, writable mounts, APFS integration and old container families are nonblocking stretch features.
 
+### Public Cargo package
+
+The public Cargo package is `dmgez`. Its binary target installs the `dmgez` command with `cargo install dmgez`. Its Rust library target exposes `dmgez::dmgbuilder` for image construction and `dmgez::reader` for bounded read-only image access and verification through `cargo add dmgez`.
+
+Both targets use the same workflow implementations. The CLI owns argument parsing, routing, and display. The library owns the public Rust types and entry points for the two supported workflows. UDIF, filesystem adapters, and the shared runtime remain implementation details of that API. The desktop ships through its own packaging channel.
+
+Qualify both targets from the same packaged source. A fresh Cargo project must compile and exercise both library modules using the public interface. Installation of the packaged binary must exercise the same build, signing, and verification profile on macOS, Linux, and Windows. Any Cargo dependency in the published package needs to resolve from the registry. Private implementation source included in the package must retain its source provenance, licenses, and notices.
+
 ## 2. Target workspace
 
 ```text
@@ -91,7 +99,7 @@ Read arrows as `consumer -> dependency`.
 | `dmgez-encryption` | core, generic crypto primitives; exposed as a bounded storage adapter |
 | apps | runtime workflows and their typed inputs and reports |
 
-The runtime composes `builder -> signing -> notarization -> verification` for release workflows. The builder has no signing or credential dependencies. Lower-level modules expose typed events and reports. No dependency cycle through `core`, and no backend detection by trying arbitrary executable paths. Runtime capability reports distinguish compiled vs available. Contract revisions C1-C8 are defined in the ecosystem contracts. A library consumer can use UDIF directly to wrap a known-length raw block source without linking config, HFS+ or Finder.
+The runtime composes `builder -> signing -> notarization -> verification` for release workflows. The builder has no signing or credential dependencies. Lower-level modules expose typed events and reports. No dependency cycle through `core`, and no backend detection by trying arbitrary executable paths. Runtime capability reports distinguish compiled vs available. Contract revisions C1-C8 are defined in the ecosystem contracts. An internal workspace consumer can use UDIF directly to wrap a known-length raw block source without linking config, HFS+ or Finder.
 
 ## 4. Build profiles and feature forwarding
 
