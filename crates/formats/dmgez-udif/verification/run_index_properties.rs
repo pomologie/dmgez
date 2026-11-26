@@ -6,7 +6,7 @@ use crate::{
 	checksum::Checksum,
 };
 
-use super::{Run, normalize, order_runs};
+use super::{Run, normalize, order_runs, read_output_range};
 
 const DATA_FORK_BYTES: u64 = 8;
 const BASE: u64 = 1;
@@ -250,6 +250,38 @@ fn rejects_incomplete_logical_runs_within_and_across_tables() {
 		order_runs(&last, TWO_SECTORS),
 		Err(Error::Corrupt("block maps have a logical gap or overlap"))
 	));
+}
+
+#[test]
+fn read_output_window_rejects_reversed_and_out_of_buffer_fragments() {
+	const OUTPUT_BYTES: usize = 8;
+	let request_end = u64::MAX;
+	let request_start = request_end - OUTPUT_BYTES as u64;
+	let whole_request = request_start..request_end;
+	assert_eq!(
+		read_output_range(&whole_request, request_start, OUTPUT_BYTES),
+		Some(0..OUTPUT_BYTES)
+	);
+	let empty_at_end = request_end..request_end;
+	assert_eq!(
+		read_output_range(&empty_at_end, request_start, OUTPUT_BYTES),
+		Some(OUTPUT_BYTES..OUTPUT_BYTES)
+	);
+
+	let reversed = request_end..request_start;
+	let before_request = request_start - 1..request_end;
+	assert_eq!(
+		read_output_range(&reversed, request_start, OUTPUT_BYTES),
+		None
+	);
+	assert_eq!(
+		read_output_range(&before_request, request_start, OUTPUT_BYTES),
+		None
+	);
+	assert_eq!(
+		read_output_range(&whole_request, request_start, OUTPUT_BYTES - 1),
+		None
+	);
 }
 
 #[test]
