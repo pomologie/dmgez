@@ -152,6 +152,29 @@ fn signed_verification_checks_the_body_before_invoking_policy() {
 
 #[cfg(unix)]
 #[test]
+fn signed_verification_rechecks_held_metadata_after_policy() {
+	use std::time::Duration;
+
+	const TIMESTAMP_CHANGE: Duration = Duration::from_secs(60);
+	let fixture = Fixture::new(SIGNED);
+	let source = fs::OpenOptions::new()
+		.write(true)
+		.open(&fixture.source)
+		.unwrap();
+	let original = source.metadata().unwrap().modified().unwrap();
+	let changed = original.checked_sub(TIMESTAMP_CHANGE).unwrap();
+	let result = verify_signed(&fixture.source, |frame| {
+		assert!(embedded_code_directory(frame).is_ok());
+		source.set_modified(changed).map_err(SignError::ImageIo)
+	});
+	assert!(matches!(result, Err(SignError::ImageChanged)));
+	assert_ne!(source.metadata().unwrap().modified().unwrap(), original);
+	assert_eq!(fs::read(&fixture.source).unwrap(), SIGNED);
+	assert_eq!(fixture.entry_count(), 1);
+}
+
+#[cfg(unix)]
+#[test]
 fn signed_verification_rechecks_the_name_after_policy() {
 	const IMAGE_DIRECTORY: &str = "images";
 	const MOVED_DIRECTORY: &str = "moved";
