@@ -38,6 +38,13 @@ The local arm64 macOS candidate at dmgez `163a5f1` and HFS+ `a1b870f` used Rust 
 | `dmgez-0.1.0-aarch64-apple-darwin.tar.gz` | `dfc262861c2c2d74410a424882307e97e5ec4a770a0d3a1536bfe0dc2fdc2128` |
 | Archived `THIRD_PARTY_NOTICES.txt` | `20a8bfd54d47657615712e8d71ba253b23cdfed039b20440e630b3c219527a55` |
 
+The local Intel macOS candidate at dmgez `cccaa28` and HFS+ `a1b870f` was cross-built with Rust 1.99.1 and tested under Rosetta on Apple Silicon macOS 14.7.2 (23H311). The build and notice scan agreed on 165 packages. All 149 registry archive hashes matched the lockfile, and each selected license text and supplemental notice matched the reviewed Apple Silicon set. Installation and example build, signing, and verification passed from the extracted archive. Both signed project fixtures passed read-only `fsck_hfs` and native mount checks. All four DMGs matched the established fixture digests.
+
+| Local Intel macOS candidate artifact | SHA-256 |
+|---|---|
+| `dmgez-0.1.0-x86_64-apple-darwin.tar.gz` | `9425f2fbb5dc08bb87c692b67c558c2e01ca28c9bd4e630129eb9a486ec58308` |
+| Archived `THIRD_PARTY_NOTICES.txt` | `a19451380f6c31cd9a4254f388ee1b1cb7412b4ae88fe98c62094a27d92793b9` |
+
 The local Linux x86-64 candidate at dmgez `d56c80d` and HFS+ `a1b870f` was built and tested in emulated Debian 12.15 with Rust 1.99.1 and GCC 12.2.0. Build, notice generation, and tests ran without networking after staging the dependencies. The notice review covered 164 build packages, including checksum verification of all 148 registry archives, comparison with the macOS selections, and the separate `linux-raw-sys` copyright. The archive test used those reviewed notices. It passed installation and example build, signing, and verification from extraction. Debian's 7-Zip 26.02 verified both project formats, all four fixture digests matched the table above, and Apple tools accepted the containers and ad hoc signatures.
 
 | Local Linux candidate artifact | SHA-256 |
