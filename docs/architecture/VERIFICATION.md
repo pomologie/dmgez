@@ -139,6 +139,22 @@ The follow-up at `09400d8` added witnesses for length and timestamp changes on t
 
 The artifact opener now validates the held regular file against the named metadata sampled before and after opening. The composed runtime at `fe4f928` with this change and HFS+ `a1b870f` passed 21 filtered runtime release tests and strict Clippy on arm64 macOS. The artifact module covered 90 of 91 lines and 23 of 26 branches. The unmatched outcomes were a short successful copy, differing Unix device IDs, and a nonregular comparison operand with matching Unix identity. The bounded `CapturedFile` reader returns exact chunks before the admitted end and reports short reads as errors. The composed CLI reproduced all four signed and unsigned fixture digests, passed the Apple and 7-Zip comparisons, and passed the offline archive smoke with fixture notices. The coverage report is `target/verification-evidence/v0.1.0-verification/fe4f928-artifact-binding/runtime-identity-coverage.json` with SHA-256 `f92a77d019b9bbf4dd4103d7498b7a177d743307d8b6f206decc3b6d4ee8163a`.
 
+At archive revision `ec0f4bd`, hosted Nextest passed 892 tests on macOS, 772 on Linux and 688 on Windows, with eight, six and six skipped respectively. The clean checkout passed the architecture checker and 12 `xtask` tests, including the negative CLI dependency graph test. The source checker rejected a disposable 501-line source file. [Hosted workspace verification](https://github.com/pomologie/dmgez/actions/runs/45806613540)
+
+The optimized, instrumented CLI at the same revision and HFS+ `a1b870f` reproduced the four fixture hashes and passed the offline archive smoke. The same build passed 12 project CLI tests and 24 runtime tests. The CLI map contains 29 smoke and 21 project-test subprocess profiles. The runtime map uses its own test executable and profile. The build isolated 110 build-time profiles. The report excludes vendor code and test modules, verifies the remaining source bytes against the pinned checkouts, and retains branch counters by source location.
+
+| Source scope | CLI lines | CLI branches | Runtime test lines | Runtime test branches |
+| --- | ---: | ---: | ---: | ---: |
+| `dmgez-runtime` | 626 / 1,264 | 76 / 170 | 469 / 1,264 | 87 / 104 |
+| `project_release/artifact.rs` | 84 / 91 | 14 / 26 | 90 / 91 | 23 / 26 |
+| `dmgez-builder` | 1,532 / 4,567 | 149 / 781 | 0 / 4,567 | 0 / 775 |
+| `dmgez-hfsplus` | 541 / 852 | 27 / 78 | 0 / 852 | 0 / 78 |
+| `hfsplus-builder` | 1,258 / 1,980 | 83 / 174 | 0 / 1,980 | 0 / 174 |
+
+The coverage inventory has SHA-256 `de5bec140546eaf3ec663de8f4f0f9bf3996130fce882e746bbb1736e4a52e3f` and is stored alongside the architecture and hosted test summaries under `target/verification-evidence/v0.1.0-verification/ec0f4bd-composed-coverage/`. The builder and core sources and the lockfile match the earlier `1186638` fault-suite inputs. The HFS+ builder still uses the separately tested `a1b870f` revision. The per-executable counts and remaining critical branch outcomes are inputs to the open D-VER-01 review.
+
+The captured-source regression exercises two independent reader cursors over one held file and checks exact completion at its admitted extent. It also confirms that truncation returns `SourceError::Changed` through `io::copy` without appending another byte. Both cases passed with the source feature alone. The core all-feature suite passed 19 tests and strict Clippy. [Captured-source tests](../../crates/foundation/dmgez-core/tests/captured_source.rs)
+
 ## Proof obligations
 
 | ID | Activation | Scope | Required evidence |
