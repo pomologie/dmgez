@@ -225,8 +225,7 @@ impl Transformer<'_> {
 						.filter(|&start| separators(&tokens[start..index]))
 						.map(|start| tokens[start].span());
 					if absolute.is_none()
-						|| index == 2
-						|| !matches!(tokens[index - 3], TokenTree::Ident(_))
+						|| index == 2 || !matches!(tokens[index - 3], TokenTree::Ident(_))
 					{
 						self.replace_root(ident, absolute);
 					}
