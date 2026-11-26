@@ -95,6 +95,31 @@ jobs:
               subprocess.run([*compose, "--test"], check=True)
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               print(f"images={images}", file=output)
+              print(f"executable={executable}", file=output)
+      - name: Verify offline CLI archive on this host
+        env:
+          DMGEZ_EXECUTABLE: ${{ steps.project.outputs.executable }}
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          import tempfile
+          import tomllib
+
+          with Path("rust-toolchain.toml").open("rb") as manifest:
+              toolchain = tomllib.load(manifest)["toolchain"]["channel"]
+          target = subprocess.check_output(
+              ["rustup", "run", toolchain, "rustc", "--print", "host-tuple"], text=True,
+          ).strip()
+          with tempfile.TemporaryDirectory(prefix="dmgez-notice-fixture-") as temporary:
+              notices = Path(temporary) / "test-notices.txt"
+              notices.write_text("Packaging smoke test notice fixture.\n", encoding="utf-8")
+              subprocess.run([
+                  sys.executable, "-B", "tools/test_package_cli.py",
+                  "--binary", os.environ["DMGEZ_EXECUTABLE"], "--target", target, "--notices", notices,
+              ], check=True)
       - name: Upload the verified DMGs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
