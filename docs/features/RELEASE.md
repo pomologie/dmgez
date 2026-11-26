@@ -26,6 +26,8 @@ On arm64 macOS, Rust and Cargo 1.98.0 installed the exact `ab33cd6` Cargo archiv
 
 An independent macOS composition of dmgez `e0ac797` with the later HFS+ revision `9add11a` passed all 12 project CLI cases, the public library integration test, and 29 runtime tests.
 
+An arm64 macOS source composition at dmgez `4d56633`, HFS+ `e4a1b2e`, and APFS `fe6cf42` passed 60 hosted tests across the project CLI, public Rust API, runtime, APFS verification, and volume commands. The composed CLI reproduced all four signed and unsigned UDRO and UDZO reference hashes and verified the HFS+ payloads with 7-Zip. The record and transcripts are in `target/verification-evidence/v0.1.0-verification/4d56633-sibling-main-replay/`. The record SHA-256 is `6f095debf793cc27d7bc08ff07d9a2e39259affda631f2b72ba1203da0eb16d8`.
+
 In the earlier `e0ac797` archives, the packaged CLI's dry run reported equivalent catalog paths for U+1D15E and U+1D157 U+1D165, while native HFS+ kept the spellings distinct. The historical replay remains in `target/verification-evidence/v0.1.0-verification/e0ac797-hfs-name-compatibility/result.json`. The `31a280c` candidate accepts both names in one project. The shared Cargo archive regression checks the two payloads with 7-Zip on all three hosts and reads each spelling by its exact path on an Apple-mounted HFS+ volume. [Hosted release qualification](https://github.com/pomologie/dmgez/actions/runs/45900551544)
 
 At dmgez `98f4442` and HFS+ `a1b870f`, the three native build, signing, and archive smoke jobs, byte comparison, and standalone CLI dependency audit all passed. [Hosted release verification](https://github.com/pomologie/dmgez/actions/runs/45813282977)
