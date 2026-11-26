@@ -83,7 +83,7 @@ PROJECT_EDIT_FEATURE = "project-edit"
 PROJECT_EDIT_TEST = "project_edit_cli"
 IMAGE_EDIT_FEATURE = "image-edit"
 IMAGE_EDIT_TEST = "image_edit_cli"
-SOURCE_DIRS = ("apps", "crates", "tests", "third_party", "xtask")
+SOURCE_DIRS = ("apps", "crates", "examples", "tests", "third_party", "xtask")
 RUNTIME = Path("crates/runtime/dmgez-runtime")
 RUNTIME_PACKAGE = "dmgez-runtime"
 PROJECT_BUILD_FEATURE = "project-build"
@@ -506,6 +506,7 @@ def run_cli(cargo, directory, options, packages):
         if HFSPLUS_BUILDER in packages:
             if not options.no_default_features or has_feature(options, PROJECT_RELEASE_FEATURE):
                 command.extend(("--package", RUNTIME_PACKAGE, "--lib"))
+                command.extend(("--test", "public_api"))
             command.extend(("--test", CLI_TEST))
             if has_feature(options, PROJECT_EDIT_FEATURE):
                 command.extend(("--test", PROJECT_EDIT_TEST))

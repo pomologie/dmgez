@@ -4,6 +4,8 @@ A pure Rust library and CLI for creating, reading, and manipulating macOS disk i
 
 See [offline CLI archives](docs/features/OFFLINE_CLI.md) for packaging a composed build and installing the CLI from an unpacked release.
 
+The Rust interface has two modules. `dmgez::dmgbuilder` loads a `dmg.toml` and plans or builds an unsigned image. `dmgez::reader` opens a DMG, reads decoded bytes at a logical offset, and verifies declared container checksums. The source-tree integration test exercises both modules against the bundled example using the composed HFS+ profile with `inspect`. [Public API example](apps/dmgez-cli/tests/public_api.rs)
+
 The CLI wraps an existing sector-aligned raw image in single-segment UDRO or UDZO. Enable `lzfse` for ULFO or `lzma` for ULMO. The optional `inspect` feature enables metadata reports, run-space analysis, container verification, and raw export.
 
 ```sh

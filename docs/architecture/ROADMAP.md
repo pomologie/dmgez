@@ -21,6 +21,8 @@ These are scope and evidence gates, not dates. Every release claims only the sup
 
 The [v0.1.0 release profile](../features/RELEASE.md#v010-release-profile) records the project workflow and its current evidence.
 
+The v0.1.0 Cargo deliverable is one `dmgez` package with both a CLI and a Rust library. The registry candidate must pass installation and a fresh consumer build that exercises `dmgez::dmgbuilder` and `dmgez::reader` from the same packaged source on the release hosts. [Public package architecture](ARCHITECTURE.md#public-cargo-package)
+
 1. Open `docs/reference/requirements.json`, select all relevant requirement IDs and mandatory acceptance cases in `test-catalog.json`. Check owning spec, version, evidence IDs and prerequisites.
 2. Implement only current scope, update capability graph and ledger; test negative cases early. Run docs validator, unit/property/fuzz smoke, dependency graph and cross-target feature jobs.
 3. Execute native oracle jobs on licensed disposable environments, record OS build/tool flags and input/output digests, collect structured reports. A skipped oracle job is not a pass; restrict release profiles if evidence unavailable. Native external tools are not runtime builder dependencies.
