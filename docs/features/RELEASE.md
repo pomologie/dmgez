@@ -61,6 +61,8 @@ The three local archives assembled from that run use the same dmgez and HFS+ rev
 
 The set, `SHA256SUMS`, and `provenance.json` are under `target/release-candidates/v0.1.0/017b843-release/`. All outer archive checksums and all member checksums passed. The provenance file has SHA-256 `9a4faa8dbe37433edf5dc31293c5989d2d89b774d3b8dd9493716bca5e5f9474`.
 
+The same directory contains three `.cdx.json` build inventories and `SBOM-SHA256SUMS`. The SBOMs describe 133 built Cargo packages on macOS arm64, 149 on Windows x86-64 MSVC, and 133 on Linux x86-64 GNU. Validation checked the official CycloneDX 1.6 schema and matched each archive, executable, notice and signer-source digest against `provenance.json`. The reconstructed composed lockfile matched the SHA-256 in all three reviewed notices. The validation transcript is `target/verification-evidence/v0.1.0-verification/017b843-release-replay/sbom-validation.log`. [Pinned CycloneDX schema](https://github.com/CycloneDX/specification/blob/0bd48c88d1b1877c7a3536252e06893850763190/schema/bom-1.6.schema.json)
+
 The scoped advisory audit passed for the `ffb76e4` Apple Silicon and Windows x86-64 archives. The checked inventories used the reviewed built-package lists and the candidate lockfile, with 117 and 133 registry packages respectively. Cargo Audit 0.22.2 used RustSec database revision `c9f6c91` with unmaintained, unsound and yanked warnings denied. The inventory and logs are in `target/verification-evidence/v0.1.0-verification/ffb76e4-release-dependency-audit/`. Workspace-wide advisory findings remain open. [RustSec database snapshot](https://github.com/RustSec/advisory-db/tree/c9f6c91a44dbad9d71742329e9df061279f9c4be)
 
 | Local macOS candidate artifact | SHA-256 |
