@@ -59,8 +59,7 @@ jobs:
       - name: Verify Windows NTFS source discovery
         if: runner.os == 'Windows'
         run: cargo test --locked -p dmgez-builder --test windows_manifest
-      - name: Install the pinned Windows notice scanner
-        if: runner.os == 'Windows'
+      - name: Install the pinned notice scanner
         run: cargo install --locked --version '=0.9.3' --features cli cargo-about
       - name: Build, sign, and verify dmg.toml
         id: project
@@ -98,19 +97,16 @@ jobs:
               "--target-dir", work / "target", "--release", "--features", "inspect",
           ]
           environment = os.environ.copy()
-          build_options = ["--fetch"]
           if sys.platform == "win32":
               if target != "x86_64-pc-windows-msvc":
                   sys.exit(f"Expected an x86-64 Windows MSVC toolchain, found {target}")
               environment["CARGO_BUILD_TARGET"] = target
-              handoff = work / "notice-review"
-              handoff.mkdir(parents=True)
-              build_options.extend(("--notices-output", handoff / "THIRD_PARTY_NOTICES.draft.txt"))
+          handoff = work / "notice-review"
+          handoff.mkdir(parents=True)
+          build_options = ["--fetch", "--notices-output", handoff / "THIRD_PARTY_NOTICES.draft.txt"]
           built = Path(subprocess.check_output([*compose, *build_options], env=environment, text=True).strip())
-          executable = built
-          if sys.platform == "win32":
-              executable = handoff / "dmgez.exe"
-              shutil.copyfile(built, executable)
+          executable = handoff / built.name
+          shutil.copy2(built, executable)
           images = work / "images"
           native = ["--native-filesystem"] if sys.platform == "darwin" else []
           for mode in ("udro", "udzo"):
@@ -120,16 +116,15 @@ jobs:
               ], check=True)
           if sys.platform == "win32":
               subprocess.run([*compose, "--test"], env=environment, check=True)
-              commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
-              (handoff / "source-revisions.txt").write_text(
-                  f"dmgez = {commit}\nHFS+ = {revision}\nRust target = {target}\n", encoding="utf-8",
-              )
+          commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+          (handoff / "source-revisions.txt").write_text(
+              f"dmgez = {commit}\nHFS+ = {revision}\nRust target = {target}\n", encoding="utf-8",
+          )
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               print(f"images={images}", file=output)
               print(f"executable={executable}", file=output)
               print(f"target={target}", file=output)
-              if sys.platform == "win32":
-                  print(f"notice_review={handoff}", file=output)
+              print(f"notice_review={handoff}", file=output)
       - name: Verify offline CLI archive on this host
         env:
           DMGEZ_EXECUTABLE: ${{ steps.project.outputs.executable }}
@@ -149,11 +144,10 @@ jobs:
                   sys.executable, "-B", "tools/test_package_cli.py",
                   "--binary", os.environ["DMGEZ_EXECUTABLE"], "--target", os.environ["DMGEZ_TARGET"], "--notices", notices,
               ], check=True)
-      - name: Upload Windows notice review inputs
-        if: runner.os == 'Windows'
+      - name: Upload the tested executable and notice review inputs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: windows-msvc-notice-review
+          name: ${{ runner.os == 'Windows' && 'windows-msvc-notice-review' || format('notice-review-{0}', steps.project.outputs.target) }}
           path: ${{ steps.project.outputs.notice_review }}
           if-no-files-found: error
       - name: Upload the verified DMGs
