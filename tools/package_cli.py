@@ -17,13 +17,12 @@ import tempfile
 import tomllib
 import zipfile
 
-from release_notices import digest as file_digest, notice_binary_digest
+from release_notices import digest as file_digest, notice_digests, signer_digest, signer_members
 
 
 ROOT = Path(__file__).resolve().parents[1]
 CLI_MANIFEST = ROOT / "apps/dmgez-cli/Cargo.toml"
 EXAMPLE = ROOT / "examples/offline-cli"
-SIGNER = ROOT / "third_party/apple-codesign"
 REQUIRED_CAPABILITIES = {"build", "project-release", "signing-rust", "verify-container"}
 TARGET_SUFFIXES = {"apple-darwin": "darwin", "unknown-linux-gnu": "linux", "pc-windows-msvc": "win32"}
 ARCHITECTURES = {"aarch64", "x86_64"}
@@ -93,14 +92,7 @@ def release_members(binary_name, binary, notices):
     }
     if binary_name == "dmgez":
         files["install.sh"] = (ROOT / "tools/install.sh", EXECUTABLE_MODE)
-    covered = (
-        ".cargo_vcs_info.json", ".gitattributes", "Cargo.toml", "LICENSE", "README.md",
-        "dmgez-profile.patch", "rustfmt.toml", "verify-source.py",
-    )
-    sources = (SIGNER / "src").glob("**/*.rs")
-    for source in (*map(SIGNER.joinpath, covered), *sources):
-        name = f"licenses/apple-codesign/{source.relative_to(SIGNER).as_posix()}"
-        files[name] = (source, REGULAR_MODE)
+    files.update((name, (source, REGULAR_MODE)) for name, source in signer_members(ROOT).items())
     return files
 
 
@@ -116,15 +108,16 @@ class DigestedReader:
 
 
 def write_members(prefix, files, add):
-    checksums = []
+    checksums = {}
     for name, (source, mode) in sorted(files.items()):
         with source.open("rb") as file:
             size = os.fstat(file.fileno()).st_size
             reader = DigestedReader(file)
             add(f"{prefix}/{name}", mode, size, reader)
-            checksums.append(f"{reader.digest.hexdigest()}  {name}\n")
-    contents = "".join(checksums).encode("utf-8")
+            checksums[name] = reader.digest.hexdigest()
+    contents = "".join(f"{value}  {name}\n" for name, value in checksums.items()).encode("utf-8")
     add(f"{prefix}/{CHECKSUMS}", REGULAR_MODE, len(contents), io.BytesIO(contents))
+    return checksums
 
 
 def write_tar(output, prefix, files):
@@ -136,7 +129,7 @@ def write_tar(output, prefix, files):
                 entry.size = size
                 archive.addfile(entry, reader)
 
-            write_members(prefix, files, add)
+            return write_members(prefix, files, add)
 
 
 def write_zip(output, prefix, files):
@@ -149,7 +142,7 @@ def write_zip(output, prefix, files):
             with archive.open(entry, "w") as member:
                 shutil.copyfileobj(reader, member)
 
-        write_members(prefix, files, add)
+        return write_members(prefix, files, add)
 
 
 def package(binary, target, notices, output):
@@ -167,7 +160,7 @@ def package(binary, target, notices, output):
     notice_text = notice.decode("utf-8-sig").strip()
     if not notice_text:
         raise ValueError("third-party notices must be nonempty UTF-8 text")
-    notice_digest = notice_binary_digest(notice_text, target)
+    binary_hash, signer_hash = notice_digests(notice_text, target) or (None, None)
     with CLI_MANIFEST.open("rb") as file:
         version = tomllib.load(file)["package"]["version"]
     if not re.fullmatch(r"[A-Za-z0-9.+-]+", version):
@@ -178,7 +171,7 @@ def package(binary, target, notices, output):
         binary_name = "dmgez.exe" if suffix == ".zip" else "dmgez"
         executable = stage / binary_name
         shutil.copyfile(binary, executable)
-        if notice_digest is not None and file_digest(executable) != notice_digest:
+        if binary_hash is not None and file_digest(executable) != binary_hash:
             raise ValueError("dependency notice CLI SHA-256 does not match the staged binary")
         executable.chmod(EXECUTABLE_MODE)
         validate_machine(executable, target)
@@ -190,7 +183,9 @@ def package(binary, target, notices, output):
         archive_path = stage / "archive"
         archive_writer = write_zip if suffix == ".zip" else write_tar
         with archive_path.open("w+b") as archive:
-            archive_writer(archive, f"dmgez-{version}-{target}", files)
+            checksums = archive_writer(archive, f"dmgez-{version}-{target}", files)
+            if signer_hash is not None and signer_digest(checksums) != signer_hash:
+                raise ValueError("dependency notice apple-codesign source SHA-256 does not match the archive")
             archive.seek(0)
             digest = hashlib.file_digest(archive, "sha256").hexdigest()
         os.link(archive_path, output)

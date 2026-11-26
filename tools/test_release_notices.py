@@ -3,11 +3,13 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 
 import package_cli
 from release_notices import (
     NOTICE_DRAFT_HEADER, NOTICE_DRAFT_STATUS, NOTICE_HEADER,
-    SUPPLEMENTAL_NOTICES, check_built_packages, notice_binary_digest, render,
+    SIGNER_ARCHIVE, SIGNER_SHA256_FIELD, SUPPLEMENTAL_NOTICES,
+    check_built_packages, digest, notice_digests, render, signer_digest,
 )
 
 
@@ -32,7 +34,14 @@ def report():
 
 
 def draft(data):
-    return render(data, TARGET, "binary-hash", "lock-hash", ["inspect"], False)
+    return render(data, TARGET, "binary-hash", "lock-hash", ["inspect"], False, signer_hash="source-hash")
+
+
+def reviewed_notice(target, binary_hash, signer_hash):
+    return (
+        f"{NOTICE_HEADER}\nTarget = {target}\nCLI SHA-256 = {binary_hash}\n"
+        f"{SIGNER_SHA256_FIELD} = {signer_hash}\n"
+    )
 
 
 class ReleaseNoticeTests(unittest.TestCase):
@@ -43,6 +52,7 @@ class ReleaseNoticeTests(unittest.TestCase):
         data["licenses"].reverse()
         self.assertEqual(draft(data), original)
         self.assertIn("CLI SHA-256 = binary-hash", original)
+        self.assertIn(f"{SIGNER_SHA256_FIELD} = source-hash", original)
         self.assertIn("Copyright & license\n", original)
         self.assertIn("Canonical license texts requiring source notice review\nsecond 2.0.0 | MIT", original)
         self.assertNotIn("/private/source", original)
@@ -89,19 +99,21 @@ class ReleaseNoticeTests(unittest.TestCase):
                 package_cli.package(source, TARGET, notices, output)
             self.assertFalse(output.exists())
 
-    def test_generated_notice_requires_its_target_and_valid_digest(self):
-        provenance = f"Target = {TARGET}\nCLI SHA-256 = {FIXTURE_DIGEST}"
-        notice = f"{NOTICE_HEADER}\n{provenance}\n\nLicense body\n"
-        self.assertEqual(notice_binary_digest(notice.replace("\n", "\r\n"), TARGET), FIXTURE_DIGEST)
+    def test_generated_notice_requires_its_target_and_valid_digests(self):
+        provenance = reviewed_notice(TARGET, FIXTURE_DIGEST, FIXTURE_DIGEST)
+        notice = f"{provenance}\nLicense body\n"
+        self.assertEqual(notice_digests(notice.replace("\n", "\r\n"), TARGET), (FIXTURE_DIGEST, FIXTURE_DIGEST))
         with self.assertRaisesRegex(ValueError, "target does not match"):
-            notice_binary_digest(notice, "x86_64-apple-darwin")
+            notice_digests(notice, "x86_64-apple-darwin")
         with self.assertRaisesRegex(ValueError, "requires a valid CLI SHA-256"):
-            notice_binary_digest(notice.replace(FIXTURE_DIGEST, "invalid"), TARGET)
+            notice_digests(reviewed_notice(TARGET, "invalid", FIXTURE_DIGEST), TARGET)
+        with self.assertRaisesRegex(ValueError, "requires a valid apple-codesign source SHA-256"):
+            notice_digests(provenance.rsplit(SIGNER_SHA256_FIELD, 1)[0], TARGET)
         with self.assertRaisesRegex(ValueError, "repeats the CLI SHA-256 field"):
-            notice_binary_digest(f"{NOTICE_HEADER}\n{provenance}\nCLI SHA-256 = {FIXTURE_DIGEST}", TARGET)
+            notice_digests(f"{provenance}CLI SHA-256 = {FIXTURE_DIGEST}", TARGET)
         with self.assertRaisesRegex(ValueError, "requires review"):
-            notice_binary_digest(f"{NOTICE_HEADER}\n{NOTICE_DRAFT_STATUS}\n{provenance}", TARGET)
-        self.assertIsNone(notice_binary_digest("dmgez dependency notices\nManual notice text", TARGET))
+            notice_digests(f"{provenance}{NOTICE_DRAFT_STATUS}\n", TARGET)
+        self.assertIsNone(notice_digests("dmgez dependency notices\nManual notice text", TARGET))
 
     def test_packager_rejects_a_stale_notice_before_publishing(self):
         with TemporaryDirectory() as temporary:
@@ -110,13 +122,40 @@ class ReleaseNoticeTests(unittest.TestCase):
             source.write_bytes(b"a different executable fixture")
             notices = directory / "notices.txt"
             notices.write_text(
-                f"{NOTICE_HEADER}\nTarget = {TARGET}\nCLI SHA-256 = {FIXTURE_DIGEST}\n",
+                reviewed_notice(TARGET, FIXTURE_DIGEST, FIXTURE_DIGEST),
                 encoding="utf-8",
             )
             output = directory / "release.tar.gz"
             with self.assertRaisesRegex(ValueError, "does not match the staged binary"):
                 package_cli.package(source, TARGET, notices, output)
             self.assertFalse(output.exists())
+
+    def test_packager_binds_the_archived_signer_source_to_the_notice(self):
+        with TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            binary = directory / "executable"
+            binary.write_bytes(b"test executable")
+            source = directory / "lib.rs"
+            source.write_bytes(b"original signer")
+            member = SIGNER_ARCHIVE + "src/lib.rs"
+            signer_hash = signer_digest({member: digest(source)})
+            notices = directory / "notices.txt"
+            for target in (TARGET, "x86_64-pc-windows-msvc"):
+                with self.subTest(target=target):
+                    notices.write_text(reviewed_notice(target, digest(binary), signer_hash), encoding="utf-8")
+                    suffix = package_cli.archive_format(target)
+                    output = directory / f"release{suffix}"
+                    with (
+                        patch.object(package_cli, "validate_machine"),
+                        patch.object(package_cli, "validate_binary"),
+                        patch.object(package_cli, "signer_members", return_value={member: source}),
+                    ):
+                        source.write_bytes(b"changed signer")
+                        with self.assertRaisesRegex(ValueError, "source SHA-256 does not match the archive"):
+                            package_cli.package(binary, target, notices, output)
+                        self.assertFalse(output.exists())
+                        source.write_bytes(b"original signer")
+                        self.assertEqual(package_cli.package(binary, target, notices, output), digest(output))
 
 
 if __name__ == "__main__":
