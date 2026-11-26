@@ -57,6 +57,10 @@ The `ffb76e4` Windows handoff records the canonical signer-source digest shared 
 
 The expanded hosted handoff at dmgez `017b843` and HFS+ `a1b870f` passed all three project jobs and the final byte-comparison job. All four artifact hashes match the table above. The same run retained the tested executables and notice drafts for the three targets. [Hosted qualification and artifacts](https://github.com/pomologie/dmgez/actions/runs/45795137012)
 
+The three local archives assembled from that run use the same dmgez and HFS+ revisions. Each handoff matched its published artifact digest. The notice reviews matched the complete license and supplemental text from the previous reviewed archive of the corresponding target, along with the composed lockfile hash and feature selection. All three contain the canonical signer-source digest and the exact executable from CI. Repeatable packaging and build, signing, and verification from extraction passed on arm64 macOS, offline emulated Debian 12 x86-64, and Wine 10.0 with Windows Python 3.13.17. The Debian test logged the weak `GLIBC_2.39` warning on glibc 2.36 and passed. Native Windows CI separately qualified that executable and exercised archives with fixture notices.
+
+The set, `SHA256SUMS`, and `provenance.json` are under `target/release-candidates/v0.1.0/017b843-release/`. All outer archive checksums and all member checksums passed. The provenance file has SHA-256 `9a4faa8dbe37433edf5dc31293c5989d2d89b774d3b8dd9493716bca5e5f9474`.
+
 The scoped advisory audit passed for the `ffb76e4` Apple Silicon and Windows x86-64 archives. The checked inventories used the reviewed built-package lists and the candidate lockfile, with 117 and 133 registry packages respectively. Cargo Audit 0.22.2 used RustSec database revision `c9f6c91` with unmaintained, unsound and yanked warnings denied. The inventory and logs are in `target/verification-evidence/v0.1.0-verification/ffb76e4-release-dependency-audit/`. Workspace-wide advisory findings remain open. [RustSec database snapshot](https://github.com/RustSec/advisory-db/tree/c9f6c91a44dbad9d71742329e9df061279f9c4be)
 
 | Local macOS candidate artifact | SHA-256 |
