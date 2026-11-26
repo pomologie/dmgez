@@ -82,11 +82,16 @@ pub(super) fn open_regular(path: &Path) -> io::Result<File> {
 		return Err(invalid("release artifact must be a regular file"));
 	}
 	let file = File::open(path)?;
+	revalidate_opened_entry(path, &path_metadata, &file)?;
+	Ok(file)
+}
+
+fn revalidate_opened_entry(path: &Path, before: &Metadata, file: &File) -> io::Result<()> {
 	let opened = file.metadata()?;
-	if !opened.is_file() || !same_entry(&opened, &fs::symlink_metadata(path)?) {
+	if !same_entry(before, &opened) || !same_entry(&opened, &fs::symlink_metadata(path)?) {
 		return Err(invalid(IMAGE_IDENTITY_CHANGED));
 	}
-	Ok(file)
+	Ok(())
 }
 
 fn same_entry(left: &Metadata, right: &Metadata) -> bool {

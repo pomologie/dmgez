@@ -105,6 +105,25 @@ fn entry_comparison_rejects_length_and_timestamp_changes_on_the_same_handle() {
 	assert!(!same_entry(&grown, &retimed));
 }
 
+#[test]
+fn opened_artifact_must_match_both_named_observations() {
+	let directory = tempfile::tempdir().unwrap();
+	let source_path = directory.path().join(SOURCE_NAME);
+	let unrelated_path = directory.path().join(OUTPUT_NAME);
+	fs::write(&source_path, SIGNED).unwrap();
+	fs::write(&unrelated_path, []).unwrap();
+	let source = File::open(&source_path).unwrap();
+	let observed = fs::symlink_metadata(&source_path).unwrap();
+	let unrelated = fs::symlink_metadata(&unrelated_path).unwrap();
+
+	revalidate_opened_entry(&source_path, &observed, &source).unwrap();
+	for (path, before) in [(&source_path, &unrelated), (&unrelated_path, &observed)] {
+		let error = revalidate_opened_entry(path, before, &source).unwrap_err();
+		assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+		assert_eq!(error.to_string(), IMAGE_IDENTITY_CHANGED);
+	}
+}
+
 #[cfg(unix)]
 #[test]
 fn entry_comparison_detects_a_different_inode_at_the_same_length() {

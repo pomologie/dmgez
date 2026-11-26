@@ -133,6 +133,8 @@ The local arm64 macOS replay of the hosted test command, `python3 -B tools/compo
 
 The follow-up at `09400d8` added witnesses for length and timestamp changes on the same held file and for exact hashing across a buffer boundary. With those tests applied, all 20 filtered runtime release tests and strict Clippy passed. Artifact coverage reached 21 of 26 branches in the same instrumented profile. The report is `target/verification-evidence/v0.1.0-verification/09400d8-release-identity/runtime-identity-coverage.json` with SHA-256 `38f3551b0a8053cdffce0e33e485a39005ddc7617042dfe083c29e2f4d637a47`.
 
+The artifact opener now validates the held regular file against the named metadata sampled before and after opening. The composed runtime at `fe4f928` with this change and HFS+ `a1b870f` passed 21 filtered runtime release tests and strict Clippy on arm64 macOS. The artifact module covered 90 of 91 lines and 23 of 26 branches. The unmatched outcomes were a short successful copy, differing Unix device IDs, and a nonregular comparison operand with matching Unix identity. The bounded `CapturedFile` reader returns exact chunks before the admitted end and reports short reads as errors. The composed CLI reproduced all four signed and unsigned fixture digests, passed the Apple and 7-Zip comparisons, and passed the offline archive smoke with fixture notices. The coverage report is `target/verification-evidence/v0.1.0-verification/fe4f928-artifact-binding/runtime-identity-coverage.json` with SHA-256 `f92a77d019b9bbf4dd4103d7498b7a177d743307d8b6f206decc3b6d4ee8163a`.
+
 ## Proof obligations
 
 | ID | Activation | Scope | Required evidence |
