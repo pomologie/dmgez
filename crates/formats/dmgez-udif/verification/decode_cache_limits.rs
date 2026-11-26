@@ -12,13 +12,16 @@ fn rejects_excessive_reservation_and_decoder_capacity() {
 		}),
 		Err(Error::ResourceLimit("decoded cache bytes"))
 	));
+	let copy = |decoded_bytes, output: &mut [u8]| {
+		cache.copy(0, 1, 0, output, || Ok(vec![7; decoded_bytes]))
+	};
 	assert!(matches!(
-		cache.copy(0, 1, 0, &mut output, || Ok(vec![0; 2])),
+		copy(2, &mut output),
 		Err(Error::ResourceLimit("decoded cache bytes"))
 	));
 	assert_eq!(output, [0xff]);
 
-	cache.copy(0, 1, 0, &mut output, || Ok(vec![7])).unwrap();
+	copy(1, &mut output).unwrap();
 	assert_eq!(output, [7]);
 }
 

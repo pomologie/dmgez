@@ -47,6 +47,8 @@ The detailed UDIF replay at `9b68c63` reproduced the per-file totals above. The 
 
 The positioned read-window regression at `e89d1e0` checks a reversed fragment, a fragment starting before the request, a buffer one byte too short, and exact-fit and empty windows at the end of the address space. All 19 reader-only unit tests and strict Clippy passed. The matching nightly instrumentation passed 116 all-feature tests and measured `index.rs` at 98.48% lines and 90.38% branches (47 of 52). The cache branch discrepancy and workspace coverage review remain open.
 
+The cache regression now exercises oversized rejection and successful recovery through one decoder call site. LLVM recorded one true and one false outcome for that concrete capacity-check instance. The file export recorded both outcomes for each of its three instrumented conditions, including entry-count eviction and retained-capacity eviction. The file summary still reports five of six covered branches. The all-feature suite passed 116 tests. The baseline instantiation annotations are in `target/verification-evidence/v0.1.0-verification/7a361b6-cache-branch-annotations.log`.
+
 ## Proof obligations
 
 | ID | Activation | Scope | Required evidence |
