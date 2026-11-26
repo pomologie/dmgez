@@ -17,7 +17,7 @@ import tempfile
 import tomllib
 import zipfile
 
-from release_notices import NOTICE_DRAFT_HEADER
+from release_notices import digest as file_digest, notice_binary_digest
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -164,11 +164,10 @@ def package(binary, target, notices, output):
         raise ValueError("third-party notices must be a regular file")
 
     notice = notices.read_bytes()
-    notice_text = notice.decode("utf-8").strip()
+    notice_text = notice.decode("utf-8-sig").strip()
     if not notice_text:
         raise ValueError("third-party notices must be nonempty UTF-8 text")
-    if notice_text.splitlines()[0] == NOTICE_DRAFT_HEADER:
-        raise ValueError("dependency notice draft requires review before packaging")
+    notice_digest = notice_binary_digest(notice_text, target)
     with CLI_MANIFEST.open("rb") as file:
         version = tomllib.load(file)["package"]["version"]
     if not re.fullmatch(r"[A-Za-z0-9.+-]+", version):
@@ -179,6 +178,8 @@ def package(binary, target, notices, output):
         binary_name = "dmgez.exe" if suffix == ".zip" else "dmgez"
         executable = stage / binary_name
         shutil.copyfile(binary, executable)
+        if notice_digest is not None and file_digest(executable) != notice_digest:
+            raise ValueError("dependency notice CLI SHA-256 does not match the staged binary")
         executable.chmod(EXECUTABLE_MODE)
         validate_machine(executable, target)
         validate_binary(executable, version)

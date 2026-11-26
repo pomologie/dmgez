@@ -9,7 +9,7 @@ python3 -B tools/compose_hfsplus_cli.py --hfsplus ../hfsplus \
   --release --features inspect --notices-output /path/to/THIRD_PARTY_NOTICES.draft.txt
 ```
 
-Use the executable path printed by the composer. Review the draft against the dependency sources, including any canonical fallback text and source notices, and retain the recorded build identity in the reviewed file. The packager refuses a file that carries the draft heading.
+Use the executable path printed by the composer. Review the draft against the dependency sources, including any canonical fallback text and source notices. In the reviewed file, change the heading to `dmgez dependency notices v1`, remove the review-required line, and retain the recorded build identity. The packager checks the generated notice's target and SHA-256 against the staged executable. It also accepts manually prepared notices.
 
 On macOS arm64, the composed release build and notice tool reported the same 165 Cargo package IDs. Two drafts for the same executable matched byte for byte. The offline scanner identified 39 entries using canonical SPDX text for source review.
 

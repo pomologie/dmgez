@@ -5,7 +5,14 @@ from tempfile import TemporaryDirectory
 import unittest
 
 import package_cli
-from release_notices import NOTICE_DRAFT_HEADER, check_built_packages, render
+from release_notices import (
+    NOTICE_DRAFT_HEADER, NOTICE_DRAFT_STATUS, NOTICE_HEADER,
+    check_built_packages, notice_binary_digest, render,
+)
+
+
+TARGET = "aarch64-apple-darwin"
+FIXTURE_DIGEST = "0" * 64
 
 
 def report():
@@ -25,7 +32,7 @@ def report():
 
 
 def draft(data):
-    return render(data, "aarch64-apple-darwin", "binary-hash", "lock-hash", ["inspect"], False)
+    return render(data, TARGET, "binary-hash", "lock-hash", ["inspect"], False)
 
 
 class ReleaseNoticeTests(unittest.TestCase):
@@ -57,10 +64,39 @@ class ReleaseNoticeTests(unittest.TestCase):
             source = directory / "dmgez"
             source.write_bytes(b"test fixture")
             notices = directory / "notices.txt"
-            notices.write_text(NOTICE_DRAFT_HEADER + "\n", encoding="utf-8")
+            notices.write_text(NOTICE_DRAFT_HEADER + "\n", encoding="utf-8-sig")
             output = directory / "release.tar.gz"
             with self.assertRaisesRegex(ValueError, "requires review"):
-                package_cli.package(source, "aarch64-apple-darwin", notices, output)
+                package_cli.package(source, TARGET, notices, output)
+            self.assertFalse(output.exists())
+
+    def test_generated_notice_requires_its_target_and_valid_digest(self):
+        provenance = f"Target = {TARGET}\nCLI SHA-256 = {FIXTURE_DIGEST}"
+        notice = f"{NOTICE_HEADER}\n{provenance}\n\nLicense body\n"
+        self.assertEqual(notice_binary_digest(notice.replace("\n", "\r\n"), TARGET), FIXTURE_DIGEST)
+        with self.assertRaisesRegex(ValueError, "target does not match"):
+            notice_binary_digest(notice, "x86_64-apple-darwin")
+        with self.assertRaisesRegex(ValueError, "requires a valid CLI SHA-256"):
+            notice_binary_digest(notice.replace(FIXTURE_DIGEST, "invalid"), TARGET)
+        with self.assertRaisesRegex(ValueError, "repeats the CLI SHA-256 field"):
+            notice_binary_digest(f"{NOTICE_HEADER}\n{provenance}\nCLI SHA-256 = {FIXTURE_DIGEST}", TARGET)
+        with self.assertRaisesRegex(ValueError, "requires review"):
+            notice_binary_digest(f"{NOTICE_HEADER}\n{NOTICE_DRAFT_STATUS}\n{provenance}", TARGET)
+        self.assertIsNone(notice_binary_digest("dmgez dependency notices\nManual notice text", TARGET))
+
+    def test_packager_rejects_a_stale_notice_before_publishing(self):
+        with TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            source = directory / "dmgez"
+            source.write_bytes(b"a different executable fixture")
+            notices = directory / "notices.txt"
+            notices.write_text(
+                f"{NOTICE_HEADER}\nTarget = {TARGET}\nCLI SHA-256 = {FIXTURE_DIGEST}\n",
+                encoding="utf-8",
+            )
+            output = directory / "release.tar.gz"
+            with self.assertRaisesRegex(ValueError, "does not match the staged binary"):
+                package_cli.package(source, TARGET, notices, output)
             self.assertFalse(output.exists())
 
 

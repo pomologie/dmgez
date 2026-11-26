@@ -4,12 +4,18 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 from tempfile import TemporaryDirectory
 
 
 CARGO_ABOUT_VERSION = "cargo-about 0.9.3"
+NOTICE_HEADER = "dmgez dependency notices v1"
 NOTICE_DRAFT_HEADER = "dmgez dependency notices draft"
+NOTICE_DRAFT_STATUS = "Review required before release."
+TARGET_FIELD = "Target"
+BINARY_SHA256_FIELD = "CLI SHA-256"
+FIELD_SEPARATOR = " = "
 CONFIG = Path(__file__).with_name("release-notices.toml").resolve()
 CLI_MANIFEST = Path("apps/dmgez-cli/Cargo.toml")
 LOCKFILE = "Cargo.lock"
@@ -28,6 +34,34 @@ def digest(path):
 
 def package_label(package):
     return f'{package["name"]} {package["version"]}'
+
+
+def notice_binary_digest(text, target):
+    """Return the declared binary digest for a generated notice."""
+    lines = iter(text.splitlines())
+    heading = next(lines, "")
+    if heading == NOTICE_DRAFT_HEADER:
+        raise ValueError("dependency notice draft requires review before packaging")
+    if heading != NOTICE_HEADER:
+        return None
+
+    fields = {}
+    for line in lines:
+        if not line.strip():
+            break
+        if line == NOTICE_DRAFT_STATUS:
+            raise ValueError("dependency notice draft requires review before packaging")
+        key, _, value = line.partition(FIELD_SEPARATOR)
+        if key in (TARGET_FIELD, BINARY_SHA256_FIELD):
+            if key in fields:
+                raise ValueError(f"dependency notice repeats the {key} field")
+            fields[key] = value
+    if fields.get(TARGET_FIELD) != target:
+        raise ValueError(f"dependency notice target does not match {target}")
+    binary_hash = fields.get(BINARY_SHA256_FIELD, "")
+    if re.fullmatch(r"[0-9a-f]{64}", binary_hash) is None:
+        raise ValueError("dependency notice requires a valid CLI SHA-256")
+    return binary_hash
 
 
 def render(data, target, binary_hash, lock_hash, features, no_defaults):
@@ -55,9 +89,9 @@ def render(data, target, binary_hash, lock_hash, features, no_defaults):
 
     lines = [
         NOTICE_DRAFT_HEADER,
-        "Review required before release.",
-        f"Target = {target}",
-        f"CLI SHA-256 = {binary_hash}",
+        NOTICE_DRAFT_STATUS,
+        f"{TARGET_FIELD}{FIELD_SEPARATOR}{target}",
+        f"{BINARY_SHA256_FIELD}{FIELD_SEPARATOR}{binary_hash}",
         f"Composed Cargo.lock SHA-256 = {lock_hash}",
         f"Default features = {'disabled' if no_defaults else 'enabled'}",
         f"Additional features = {' '.join(features)}",
