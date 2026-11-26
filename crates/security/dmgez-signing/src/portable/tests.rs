@@ -137,6 +137,46 @@ fn rejects_same_size_body_tampering_and_policy_refusal() {
 }
 
 #[test]
+fn signed_verification_checks_the_body_before_invoking_policy() {
+	const FIRST_PAYLOAD_BYTE: usize = 0;
+	let mut changed = SIGNED.to_vec();
+	changed[FIRST_PAYLOAD_BYTE] ^= 1;
+	let fixture = Fixture::new(&changed);
+	let result = verify_signed(&fixture.source, |_| {
+		panic!("signature policy must not receive an image with a mismatched body digest")
+	});
+	assert!(matches!(result, Err(SignError::ImageIntegrity(_))));
+	assert_eq!(fs::read(&fixture.source).unwrap(), changed);
+	assert_eq!(fixture.entry_count(), 1);
+}
+
+#[cfg(unix)]
+#[test]
+fn signed_verification_rechecks_the_name_after_policy() {
+	const IMAGE_DIRECTORY: &str = "images";
+	const MOVED_DIRECTORY: &str = "moved";
+	let fixture = Fixture::new(SIGNED);
+	let directory = fixture.directory.path().canonicalize().unwrap();
+	let parent = directory.join(IMAGE_DIRECTORY);
+	let moved_parent = directory.join(MOVED_DIRECTORY);
+	let input = parent.join(INPUT_NAME);
+	fs::create_dir(&parent).unwrap();
+	fs::rename(&fixture.source, &input).unwrap();
+	let result = verify_signed(&input, |frame| {
+		assert!(embedded_code_directory(frame).is_ok());
+		fs::rename(&parent, &moved_parent).map_err(SignError::ImageIo)?;
+		fs::create_dir(&parent).map_err(SignError::ImageIo)?;
+		fs::write(&input, SIGNED).map_err(SignError::ImageIo)
+	});
+	assert!(matches!(
+		result,
+		Err(SignError::Signature(crate::Error::ArtifactChanged { path })) if path == input
+	));
+	assert_eq!(fs::read(moved_parent.join(INPUT_NAME)).unwrap(), SIGNED);
+	assert_eq!(fs::read(input).unwrap(), SIGNED);
+}
+
+#[test]
 fn preserves_early_and_late_output_incumbents() {
 	let fixture = Fixture::new(UNSIGNED);
 	fs::write(&fixture.destination, INCUMBENT).unwrap();
