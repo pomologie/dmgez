@@ -138,7 +138,9 @@ Windows copies regular file data from the [NTFS source adapter](../../../docs/re
 
 Cross-target Clippy with warnings denied passed on Rust 1.99.1 for `x86_64-pc-windows-msvc`, composed with HFS+ revision `fb11b35`. The Windows-specific fixture covers dry-run, a copied Unicode-named source, strict metadata refusal, report-mode publication, and no-clobber behavior. Native Windows runtime evidence is pending.
 
-At dmgez `e4cb936` and HFS+ `a1b870f`, cross-target Clippy on macOS passed with warnings denied for the NTFS manifest tests and for the composed unsigned CLI with `build,parallel,inspect`. The default-signing profile's local compile probe stopped at a missing Microsoft C runtime header while compiling `ring`. Native execution of the NTFS and signing tests remains pending.
+At dmgez `e4cb936` and HFS+ `a1b870f`, cross-target Clippy on macOS passed with warnings denied for the NTFS manifest tests and for the composed unsigned CLI with `build,parallel,inspect`. The default-signing profile's local compile probe stopped at a missing Microsoft C runtime header while compiling `ring`.
+
+At dmgez `eddd6ba` with the same HFS+ revision, release-profile Clippy passed with warnings denied for the composed CLI and both project integration test targets on `x86_64-pc-windows-msvc` and `aarch64-pc-windows-msvc`. These checks included the default signer and `inspect`. Rust 1.99.1 checked the MSVC Rust targets on macOS. Zig 0.17.1 compiled ring's real Windows COFF objects using the corresponding GNU Windows C target, and LLVM archived them. Final linking with the Microsoft SDK and native NTFS and signing execution remain pending.
 
 ## Native interoperability evidence
 
