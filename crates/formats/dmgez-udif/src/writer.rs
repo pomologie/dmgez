@@ -7,6 +7,10 @@ mod metadata;
 mod scheduler;
 mod stream;
 
+#[cfg(test)]
+#[path = "../verification/writer_limits.rs"]
+mod writer_limits;
+
 pub use crate::Cancellation;
 #[cfg(feature = "write-cache")]
 pub use cache::write_image_with_cache;
