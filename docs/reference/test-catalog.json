@@ -551,8 +551,8 @@
       "scenario": "blkx decoded count disagrees with length; malformed base64; unknown plist key",
       "oracle": "independent plist fixture",
       "expected": "Length errors reject; unknown safe key reported, never executed",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/tests/plist_admission.rs"
     },
     {
       "id": "D-UDIF-02-T02",
@@ -624,7 +624,7 @@
       "oracle": "Kani; byte counter sink",
       "expected": "Valid within limits or typed overflow error before write",
       "status": "planned",
-      "evidence": null
+      "evidence": "crates/formats/dmgez-udif/verification/writer_limits.rs"
     },
     {
       "id": "D-UDIF-04-T02",

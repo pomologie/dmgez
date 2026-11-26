@@ -33,7 +33,7 @@ Read the shared ecosystem verification standard EVS-1 (`docs/architecture/ECOSYS
 **Assumptions and initial bounds:** Kani full u64 operands; arbitrary 0..64-byte buffer windows and 0..8 records; unwind assertions; header/trailer buffers tested at exact format length.\
 **Negative witness:** offset near MAX + length wraps into valid looking offset.\
 **Requirement links:** D-UDIF-01, D-UDIF-04.\
-**Evidence:** kani, property, fuzz; status planned.
+**Evidence:** Recorded Kani, property, and fuzz runs pass within the stated bounds. [D-V01 evidence](../../crates/formats/dmgez-udif/verification/evidence/D-V01.json)
 
 ### D-V02 — UDRO/UDZO
 **Target:** dmgez-udif / run validation, logical map.\
@@ -41,7 +41,7 @@ Read the shared ecosystem verification standard EVS-1 (`docs/architecture/ECOSYS
 **Assumptions and initial bounds:** Only fixture-qualified UDIF profiles; finite 0..8 runs and 0..16 sectors; zero/ignore semantics must be established by independent ledger, not an assumption that they are interchangeable.\
 **Negative witness:** gap or overlap hidden by sorted index; ignore run treated as stored zero bytes.\
 **Requirement links:** D-UDIF-02, D-UDIF-03, D-UDIF-04.\
-**Evidence:** kani, property, differential, native; status planned.
+**Evidence:** Recorded Kani, property, differential, and native runs pass within the stated bounds. The crate verification notes document the stopped experimental physical-sort proof. [D-V02 evidence](../../crates/formats/dmgez-udif/verification/evidence/D-V02.json)
 
 ### D-V03 — UDRO/UDZO
 **Target:** dmgez-udif / checksum accumulation and finalization.\
@@ -49,7 +49,7 @@ Read the shared ecosystem verification standard EVS-1 (`docs/architecture/ECOSYS
 **Assumptions and initial bounds:** CRC library contract tested with independent known vectors; compare all qualified checksum domains and zero/ignore cases to native fixtures.\
 **Negative witness:** valid table CRC but wrong data-fork checksum accepted.\
 **Requirement links:** D-UDIF-02, D-UDIF-03.\
-**Evidence:** property, differential, native; status planned.
+**Evidence:** Recorded property, differential, and native runs pass within the stated bounds. [D-V03 evidence](../../crates/formats/dmgez-udif/verification/evidence/D-V03.json)
 
 ### D-V04 — UDIF reader
 **Target:** dmgez-udif / indexed reads and bounded decoder.\
@@ -57,7 +57,7 @@ Read the shared ecosystem verification standard EVS-1 (`docs/architecture/ECOSYS
 **Assumptions and initial bounds:** Qualified codec contracts; small runs <=8 and range partitions; independent arbitrary byte stream, decoder budget including hostile lengths.\
 **Negative witness:** last partial read crosses block boundary and returns data from adjacent block.\
 **Requirement links:** D-UDIF-04.\
-**Evidence:** kani, property, fuzz, differential; status planned.
+**Evidence:** Recorded Kani, property, fuzz, and differential runs pass within the stated bounds. The separate concurrent cache acceptance case remains open. [D-V04 evidence](../../crates/formats/dmgez-udif/verification/evidence/D-V04.json)
 
 ### D-V05 — builder
 **Target:** dmgez-builder / manifest sealing and metadata.\

@@ -34,6 +34,8 @@ The routing checks enable only `read`. The [reader limit tests](reader_limits.rs
 
 The boundary mutation witness extends the current run by one byte before clipping the fragment to the request end. In an isolated source copy, Kani rejected the mutated `ReadCursor::next` at the exact-intersection assertion.
 
+The [v0.1.0 evidence records](evidence) identify the tested revisions, methods, bounds, and log hashes. `source_hash` covers the Git tar archive of this crate, `dmgez-core` and the workspace lockfile at the recorded revision. `fixture_hash` covers the tracked repository and crate fixture trees. Local logs live under `target/verification-evidence/udif-v0.1.0/` with private paths replaced by placeholders. The 78-test run used 4,096 property cases and seed `20261126`. The AddressSanitizer run processed 20,000 inputs from nine seed fixtures and left no crash artifacts. The local Apple Silicon candidate replayed the native UDRO and UDZO checks with p7zip 17.05 and macOS 14.7.2. The concurrent cache acceptance case and a direct Kani proof of the writer cursor remain open.
+
 Install Kani 0.68.0 and run `cargo kani setup` before running `bash check.sh` from this directory. The checker also accepts an absolute path to `check.sh`.
 
 The [ordered batch model](models/README.md) covers the TLC portion of D-V07, including batch admission, input-order writes, cancellation, and credit release.

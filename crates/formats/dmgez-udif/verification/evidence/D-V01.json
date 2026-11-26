@@ -1,0 +1,282 @@
+[
+  {
+    "schema_version": 1,
+    "obligation_id": "D-V01",
+    "method": "kani",
+    "status": "pass",
+    "commit": "08238ead10678aca66edf1c49979c606fdf62d25",
+    "dirty": false,
+    "source_hash": "39e169da6d4316250c62aacbf2f24143ea2bad5549572e299e20f53a811bc9e0",
+    "profile": "checked u64 byte ranges",
+    "features": [],
+    "tool_versions": {
+      "kani": "0.68.0",
+      "cbmc": "6.11.0",
+      "rustc": "1.100.0-nightly (8925ea358 2026-08-20)"
+    },
+    "command": [
+      "cargo",
+      "kani",
+      "--manifest-path",
+      "crates/formats/dmgez-udif/Cargo.toml",
+      "--no-default-features",
+      "--harness",
+      "checked_range_matches_mathematical_window",
+      "--output-format",
+      "terse",
+      "--jobs",
+      "4"
+    ],
+    "assumptions": [
+      "Harness-specific assumptions are recorded in the crate verification README."
+    ],
+    "bounds": {
+      "operand_bits": 64
+    },
+    "artifacts": [
+      {
+        "name": "kani-checked_range_matches_mathematical_window.log",
+        "sha256": "a094cedf1f384167f4929a545a8ea53d5e4232a26300001ddacf34d9ae29a069",
+        "uri": "target/verification-evidence/udif-v0.1.0/a094cedf1f384167f4929a545a8ea53d5e4232a26300001ddacf34d9ae29a069.log"
+      }
+    ],
+    "runner": {
+      "os": "macOS 14.7.2 (23H311)",
+      "arch": "arm64"
+    },
+    "duration_ms": 12300,
+    "exit_code": 0,
+    "proof": {
+      "theorem": "checked_range_matches_mathematical_window"
+    }
+  },
+  {
+    "schema_version": 1,
+    "obligation_id": "D-V01",
+    "method": "kani",
+    "status": "pass",
+    "commit": "08238ead10678aca66edf1c49979c606fdf62d25",
+    "dirty": false,
+    "source_hash": "39e169da6d4316250c62aacbf2f24143ea2bad5549572e299e20f53a811bc9e0",
+    "profile": "fixed-width readers, block maps and trailer geometry",
+    "features": [
+      "read"
+    ],
+    "tool_versions": {
+      "kani": "0.68.0",
+      "cbmc": "6.11.0",
+      "rustc": "1.100.0-nightly (8925ea358 2026-08-20)"
+    },
+    "command": [
+      "cargo",
+      "kani",
+      "--manifest-path",
+      "crates/formats/dmgez-udif/Cargo.toml",
+      "--no-default-features",
+      "--features",
+      "read",
+      "--harness",
+      "binary_geometry_proof",
+      "--output-format",
+      "terse",
+      "--jobs",
+      "4"
+    ],
+    "assumptions": [
+      "Harness-specific assumptions are recorded in the crate verification README."
+    ],
+    "bounds": {
+      "max_field_window_bytes": 64,
+      "max_block_map_records": 8,
+      "operand_bits": 64
+    },
+    "artifacts": [
+      {
+        "name": "kani-binary_geometry_proof.log",
+        "sha256": "a7282cf09c43f086fe0a72e224e351da032995b15a23bbd44fb17b5552b42367",
+        "uri": "target/verification-evidence/udif-v0.1.0/a7282cf09c43f086fe0a72e224e351da032995b15a23bbd44fb17b5552b42367.log"
+      }
+    ],
+    "runner": {
+      "os": "macOS 14.7.2 (23H311)",
+      "arch": "arm64"
+    },
+    "duration_ms": 491970,
+    "exit_code": 0,
+    "proof": {
+      "theorem": "binary_geometry_proof"
+    }
+  },
+  {
+    "schema_version": 1,
+    "obligation_id": "D-V01",
+    "method": "kani",
+    "status": "pass",
+    "commit": "08238ead10678aca66edf1c49979c606fdf62d25",
+    "dirty": false,
+    "source_hash": "39e169da6d4316250c62aacbf2f24143ea2bad5549572e299e20f53a811bc9e0",
+    "profile": "fixed-width fields and trailer encoding",
+    "features": [
+      "write"
+    ],
+    "tool_versions": {
+      "kani": "0.68.0",
+      "cbmc": "6.11.0",
+      "rustc": "1.100.0-nightly (8925ea358 2026-08-20)"
+    },
+    "command": [
+      "cargo",
+      "kani",
+      "--manifest-path",
+      "crates/formats/dmgez-udif/Cargo.toml",
+      "--no-default-features",
+      "--features",
+      "write",
+      "--harness",
+      "write_geometry_proof",
+      "--output-format",
+      "terse",
+      "--jobs",
+      "4"
+    ],
+    "assumptions": [
+      "Harness-specific assumptions are recorded in the crate verification README."
+    ],
+    "bounds": {
+      "max_field_window_bytes": 64,
+      "trailer_bytes": 512
+    },
+    "artifacts": [
+      {
+        "name": "independent-write_geometry_proof.log",
+        "sha256": "72410a59396f00c2a5feee46359d9d0c7e4b11ee1b30ca392b7a118b081caa14",
+        "uri": "target/verification-evidence/udif-v0.1.0/72410a59396f00c2a5feee46359d9d0c7e4b11ee1b30ca392b7a118b081caa14.log"
+      }
+    ],
+    "runner": {
+      "os": "macOS 14.7.2 (23H311)",
+      "arch": "arm64"
+    },
+    "duration_ms": 293240,
+    "exit_code": 0,
+    "proof": {
+      "theorem": "write_geometry_proof"
+    }
+  },
+  {
+    "schema_version": 1,
+    "obligation_id": "D-V01",
+    "method": "property",
+    "status": "pass",
+    "commit": "890de44c1f6d60ecb4bbd8c93c0c6790c028de37",
+    "dirty": false,
+    "source_hash": "9db184d9d0537f687f49b4e7bd1aa952a10008c08392396536f2646b8775a1a8",
+    "profile": "checked binary geometry and resource admission",
+    "features": [
+      "read",
+      "write",
+      "zlib",
+      "lzfse",
+      "lzma",
+      "parallel",
+      "write-cache",
+      "signature-integrity"
+    ],
+    "tool_versions": {
+      "rustc": "1.99.1 (58cf8f9c3 2026-10-13)"
+    },
+    "command": [
+      "env",
+      "PROPTEST_CASES=4096",
+      "PROPTEST_RNG_SEED=20261126",
+      "rustup",
+      "run",
+      "1.99.1",
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "dmgez-udif",
+      "--all-features"
+    ],
+    "assumptions": [
+      "Boundary counters are seeded in writer tests instead of materializing the prefix."
+    ],
+    "bounds": {
+      "tests_passed": 78,
+      "proptest_cases": 4096
+    },
+    "artifacts": [
+      {
+        "name": "test-final.log",
+        "sha256": "27d969dae75be1352fa801104431bd53e405c25610dc174f74e173292dce9a70",
+        "uri": "target/verification-evidence/udif-v0.1.0/27d969dae75be1352fa801104431bd53e405c25610dc174f74e173292dce9a70.log"
+      }
+    ],
+    "runner": {
+      "os": "macOS 14.7.2 (23H311)",
+      "arch": "arm64"
+    },
+    "duration_ms": 122970,
+    "exit_code": 0,
+    "seed": "20261126",
+    "fixture_hash": "229665fe59b3c463f62add4189c66e67a4547c44121f4b587063dfff0362b689"
+  },
+  {
+    "schema_version": 1,
+    "obligation_id": "D-V01",
+    "method": "fuzz",
+    "status": "pass",
+    "commit": "08238ead10678aca66edf1c49979c606fdf62d25",
+    "dirty": false,
+    "source_hash": "39e169da6d4316250c62aacbf2f24143ea2bad5549572e299e20f53a811bc9e0",
+    "profile": "UDIF-only AddressSanitizer smoke",
+    "features": [
+      "read",
+      "zlib",
+      "lzfse",
+      "lzma"
+    ],
+    "tool_versions": {
+      "cargo-fuzz": "0.13.2",
+      "rustc": "rustc 1.101.0-nightly (708c94ef0 2026-11-03)"
+    },
+    "command": [
+      "cargo",
+      "+nightly-2026-11-04",
+      "fuzz",
+      "run",
+      "udif",
+      "$CORPUS",
+      "--",
+      "-runs=20000",
+      "-seed=20261126",
+      "-max_len=65536",
+      "-artifact_prefix=$ARTIFACTS/"
+    ],
+    "assumptions": [
+      "Nine checked-in DMG fixtures seed the corpus."
+    ],
+    "bounds": {
+      "inputs": 20000,
+      "seed_fixtures": 9,
+      "max_input_bytes": 65536,
+      "crash_artifacts": 0
+    },
+    "artifacts": [
+      {
+        "name": "fuzz.log",
+        "sha256": "2abbdda10a31a91889bd1f22ef478bb88a89d11e0467d7d51977272d13116cdb",
+        "uri": "target/verification-evidence/udif-v0.1.0/2abbdda10a31a91889bd1f22ef478bb88a89d11e0467d7d51977272d13116cdb.log"
+      }
+    ],
+    "runner": {
+      "os": "macOS 14.7.2 (23H311)",
+      "arch": "arm64"
+    },
+    "duration_ms": 137540,
+    "exit_code": 0,
+    "seed": "20261126",
+    "fixture_hash": "229665fe59b3c463f62add4189c66e67a4547c44121f4b587063dfff0362b689"
+  }
+]

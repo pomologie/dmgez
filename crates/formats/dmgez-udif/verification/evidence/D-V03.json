@@ -1,0 +1,187 @@
+[
+  {
+    "schema_version": 1,
+    "obligation_id": "D-V03",
+    "method": "property",
+    "status": "pass",
+    "commit": "890de44c1f6d60ecb4bbd8c93c0c6790c028de37",
+    "dirty": false,
+    "source_hash": "9db184d9d0537f687f49b4e7bd1aa952a10008c08392396536f2646b8775a1a8",
+    "profile": "independent CRC32 domains and bounded writer cursors",
+    "features": [
+      "read",
+      "write",
+      "zlib",
+      "lzfse",
+      "lzma",
+      "parallel",
+      "write-cache",
+      "signature-integrity"
+    ],
+    "tool_versions": {
+      "rustc": "1.99.1 (58cf8f9c3 2026-10-13)"
+    },
+    "command": [
+      "env",
+      "PROPTEST_CASES=4096",
+      "PROPTEST_RNG_SEED=20261126",
+      "rustup",
+      "run",
+      "1.99.1",
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "dmgez-udif",
+      "--all-features"
+    ],
+    "assumptions": [
+      "Boundary counters are seeded in writer tests instead of materializing the prefix."
+    ],
+    "bounds": {
+      "tests_passed": 78,
+      "proptest_cases": 4096
+    },
+    "artifacts": [
+      {
+        "name": "test-final.log",
+        "sha256": "27d969dae75be1352fa801104431bd53e405c25610dc174f74e173292dce9a70",
+        "uri": "target/verification-evidence/udif-v0.1.0/27d969dae75be1352fa801104431bd53e405c25610dc174f74e173292dce9a70.log"
+      }
+    ],
+    "runner": {
+      "os": "macOS 14.7.2 (23H311)",
+      "arch": "arm64"
+    },
+    "duration_ms": 122970,
+    "exit_code": 0,
+    "seed": "20261126",
+    "fixture_hash": "229665fe59b3c463f62add4189c66e67a4547c44121f4b587063dfff0362b689"
+  },
+  {
+    "schema_version": 1,
+    "obligation_id": "D-V03",
+    "method": "native",
+    "status": "pass",
+    "commit": "163a5f1f30b8873039eccc2c42bc599fe647e489",
+    "dirty": false,
+    "source_hash": "08e71488181c733de307eb77cca7c5b84bd2d76af1a38bc95177a5c63959572e",
+    "profile": "Apple Silicon release CLI with independent Apple and 7-Zip UDIF oracles",
+    "features": [
+      "default",
+      "inspect"
+    ],
+    "tool_versions": {
+      "rustc": "1.99.1 (58cf8f9c3 2026-10-13)",
+      "hdiutil": "macOS 14.7.2 (23H311)",
+      "p7zip": "17.05"
+    },
+    "command": [
+      "python3",
+      "-B",
+      "tests/compatibility/verify_udif.py",
+      "$ARCHIVED_CLI",
+      "--seven-zip",
+      "$SEVEN_ZIP",
+      "--attach-hfs"
+    ],
+    "assumptions": [
+      "CLI from the reviewed Apple Silicon archive.",
+      "The checked-in fixture generator supplies independent CRC and raw-byte expectations."
+    ],
+    "bounds": {
+      "storage_profiles": [
+        "UDRO",
+        "UDZO"
+      ],
+      "raw_cases": [
+        "tiny",
+        "mixed",
+        "zero"
+      ],
+      "control_cases": [
+        "zero",
+        "ignore",
+        "comment"
+      ],
+      "native_hfs_read_only": true
+    },
+    "artifacts": [
+      {
+        "name": "native.log",
+        "sha256": "586ed81d6ec0c22a1e53da3c6c830149a38159d1cd74d68d79c28fccf58842ab",
+        "uri": "target/verification-evidence/udif-v0.1.0/586ed81d6ec0c22a1e53da3c6c830149a38159d1cd74d68d79c28fccf58842ab.log"
+      }
+    ],
+    "runner": {
+      "os": "macOS 14.7.2 (23H311)",
+      "arch": "arm64"
+    },
+    "duration_ms": 11730,
+    "exit_code": 0,
+    "fixture_hash": "229665fe59b3c463f62add4189c66e67a4547c44121f4b587063dfff0362b689"
+  },
+  {
+    "schema_version": 1,
+    "obligation_id": "D-V03",
+    "method": "differential",
+    "status": "pass",
+    "commit": "163a5f1f30b8873039eccc2c42bc599fe647e489",
+    "dirty": false,
+    "source_hash": "08e71488181c733de307eb77cca7c5b84bd2d76af1a38bc95177a5c63959572e",
+    "profile": "Apple Silicon release CLI with independent Apple and 7-Zip UDIF oracles",
+    "features": [
+      "default",
+      "inspect"
+    ],
+    "tool_versions": {
+      "rustc": "1.99.1 (58cf8f9c3 2026-10-13)",
+      "hdiutil": "macOS 14.7.2 (23H311)",
+      "p7zip": "17.05"
+    },
+    "command": [
+      "python3",
+      "-B",
+      "tests/compatibility/verify_udif.py",
+      "$ARCHIVED_CLI",
+      "--seven-zip",
+      "$SEVEN_ZIP",
+      "--attach-hfs"
+    ],
+    "assumptions": [
+      "CLI from the reviewed Apple Silicon archive.",
+      "The checked-in fixture generator supplies independent CRC and raw-byte expectations."
+    ],
+    "bounds": {
+      "storage_profiles": [
+        "UDRO",
+        "UDZO"
+      ],
+      "raw_cases": [
+        "tiny",
+        "mixed",
+        "zero"
+      ],
+      "control_cases": [
+        "zero",
+        "ignore",
+        "comment"
+      ],
+      "native_hfs_read_only": true
+    },
+    "artifacts": [
+      {
+        "name": "native.log",
+        "sha256": "586ed81d6ec0c22a1e53da3c6c830149a38159d1cd74d68d79c28fccf58842ab",
+        "uri": "target/verification-evidence/udif-v0.1.0/586ed81d6ec0c22a1e53da3c6c830149a38159d1cd74d68d79c28fccf58842ab.log"
+      }
+    ],
+    "runner": {
+      "os": "macOS 14.7.2 (23H311)",
+      "arch": "arm64"
+    },
+    "duration_ms": 11730,
+    "exit_code": 0,
+    "fixture_hash": "229665fe59b3c463f62add4189c66e67a4547c44121f4b587063dfff0362b689"
+  }
+]

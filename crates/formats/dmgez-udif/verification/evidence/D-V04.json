@@ -1,0 +1,238 @@
+[
+  {
+    "schema_version": 1,
+    "obligation_id": "D-V04",
+    "method": "kani",
+    "status": "pass",
+    "commit": "08238ead10678aca66edf1c49979c606fdf62d25",
+    "dirty": false,
+    "source_hash": "39e169da6d4316250c62aacbf2f24143ea2bad5549572e299e20f53a811bc9e0",
+    "profile": "indexed read fragments and output windows",
+    "features": [
+      "read"
+    ],
+    "tool_versions": {
+      "kani": "0.68.0",
+      "cbmc": "6.11.0",
+      "rustc": "1.100.0-nightly (8925ea358 2026-08-20)"
+    },
+    "command": [
+      "cargo",
+      "kani",
+      "--manifest-path",
+      "crates/formats/dmgez-udif/Cargo.toml",
+      "--no-default-features",
+      "--features",
+      "read",
+      "--harness",
+      "indexed_read_",
+      "--output-format",
+      "terse",
+      "--jobs",
+      "4"
+    ],
+    "assumptions": [
+      "Harness-specific assumptions are recorded in the crate verification README."
+    ],
+    "bounds": {
+      "max_runs": 8,
+      "operand_bits": 64,
+      "max_routing_unwind": 10
+    },
+    "artifacts": [
+      {
+        "name": "independent-indexed_read_.log",
+        "sha256": "83b7b1eef2fbe841ae60043238eeca72eaefc3d14d06c27b3f79943ddf45e2e5",
+        "uri": "target/verification-evidence/udif-v0.1.0/83b7b1eef2fbe841ae60043238eeca72eaefc3d14d06c27b3f79943ddf45e2e5.log"
+      }
+    ],
+    "runner": {
+      "os": "macOS 14.7.2 (23H311)",
+      "arch": "arm64"
+    },
+    "duration_ms": 412310,
+    "exit_code": 0,
+    "proof": {
+      "theorem": "indexed_read_"
+    }
+  },
+  {
+    "schema_version": 1,
+    "obligation_id": "D-V04",
+    "method": "property",
+    "status": "pass",
+    "commit": "890de44c1f6d60ecb4bbd8c93c0c6790c028de37",
+    "dirty": false,
+    "source_hash": "9db184d9d0537f687f49b4e7bd1aa952a10008c08392396536f2646b8775a1a8",
+    "profile": "positioned raw ranges and reader limits",
+    "features": [
+      "read",
+      "write",
+      "zlib",
+      "lzfse",
+      "lzma",
+      "parallel",
+      "write-cache",
+      "signature-integrity"
+    ],
+    "tool_versions": {
+      "rustc": "1.99.1 (58cf8f9c3 2026-10-13)"
+    },
+    "command": [
+      "env",
+      "PROPTEST_CASES=4096",
+      "PROPTEST_RNG_SEED=20261126",
+      "rustup",
+      "run",
+      "1.99.1",
+      "cargo",
+      "test",
+      "--locked",
+      "-p",
+      "dmgez-udif",
+      "--all-features"
+    ],
+    "assumptions": [
+      "Boundary counters are seeded in writer tests instead of materializing the prefix."
+    ],
+    "bounds": {
+      "tests_passed": 78,
+      "proptest_cases": 4096
+    },
+    "artifacts": [
+      {
+        "name": "test-final.log",
+        "sha256": "27d969dae75be1352fa801104431bd53e405c25610dc174f74e173292dce9a70",
+        "uri": "target/verification-evidence/udif-v0.1.0/27d969dae75be1352fa801104431bd53e405c25610dc174f74e173292dce9a70.log"
+      }
+    ],
+    "runner": {
+      "os": "macOS 14.7.2 (23H311)",
+      "arch": "arm64"
+    },
+    "duration_ms": 122970,
+    "exit_code": 0,
+    "seed": "20261126",
+    "fixture_hash": "229665fe59b3c463f62add4189c66e67a4547c44121f4b587063dfff0362b689"
+  },
+  {
+    "schema_version": 1,
+    "obligation_id": "D-V04",
+    "method": "fuzz",
+    "status": "pass",
+    "commit": "08238ead10678aca66edf1c49979c606fdf62d25",
+    "dirty": false,
+    "source_hash": "39e169da6d4316250c62aacbf2f24143ea2bad5549572e299e20f53a811bc9e0",
+    "profile": "UDIF-only AddressSanitizer smoke",
+    "features": [
+      "read",
+      "zlib",
+      "lzfse",
+      "lzma"
+    ],
+    "tool_versions": {
+      "cargo-fuzz": "0.13.2",
+      "rustc": "rustc 1.101.0-nightly (708c94ef0 2026-11-03)"
+    },
+    "command": [
+      "cargo",
+      "+nightly-2026-11-04",
+      "fuzz",
+      "run",
+      "udif",
+      "$CORPUS",
+      "--",
+      "-runs=20000",
+      "-seed=20261126",
+      "-max_len=65536",
+      "-artifact_prefix=$ARTIFACTS/"
+    ],
+    "assumptions": [
+      "Nine checked-in DMG fixtures seed the corpus."
+    ],
+    "bounds": {
+      "inputs": 20000,
+      "seed_fixtures": 9,
+      "max_input_bytes": 65536,
+      "crash_artifacts": 0
+    },
+    "artifacts": [
+      {
+        "name": "fuzz.log",
+        "sha256": "2abbdda10a31a91889bd1f22ef478bb88a89d11e0467d7d51977272d13116cdb",
+        "uri": "target/verification-evidence/udif-v0.1.0/2abbdda10a31a91889bd1f22ef478bb88a89d11e0467d7d51977272d13116cdb.log"
+      }
+    ],
+    "runner": {
+      "os": "macOS 14.7.2 (23H311)",
+      "arch": "arm64"
+    },
+    "duration_ms": 137540,
+    "exit_code": 0,
+    "seed": "20261126",
+    "fixture_hash": "229665fe59b3c463f62add4189c66e67a4547c44121f4b587063dfff0362b689"
+  },
+  {
+    "schema_version": 1,
+    "obligation_id": "D-V04",
+    "method": "differential",
+    "status": "pass",
+    "commit": "163a5f1f30b8873039eccc2c42bc599fe647e489",
+    "dirty": false,
+    "source_hash": "08e71488181c733de307eb77cca7c5b84bd2d76af1a38bc95177a5c63959572e",
+    "profile": "Apple Silicon release CLI with independent Apple and 7-Zip UDIF oracles",
+    "features": [
+      "default",
+      "inspect"
+    ],
+    "tool_versions": {
+      "rustc": "1.99.1 (58cf8f9c3 2026-10-13)",
+      "hdiutil": "macOS 14.7.2 (23H311)",
+      "p7zip": "17.05"
+    },
+    "command": [
+      "python3",
+      "-B",
+      "tests/compatibility/verify_udif.py",
+      "$ARCHIVED_CLI",
+      "--seven-zip",
+      "$SEVEN_ZIP",
+      "--attach-hfs"
+    ],
+    "assumptions": [
+      "CLI from the reviewed Apple Silicon archive.",
+      "The checked-in fixture generator supplies independent CRC and raw-byte expectations."
+    ],
+    "bounds": {
+      "storage_profiles": [
+        "UDRO",
+        "UDZO"
+      ],
+      "raw_cases": [
+        "tiny",
+        "mixed",
+        "zero"
+      ],
+      "control_cases": [
+        "zero",
+        "ignore",
+        "comment"
+      ],
+      "native_hfs_read_only": true
+    },
+    "artifacts": [
+      {
+        "name": "native.log",
+        "sha256": "586ed81d6ec0c22a1e53da3c6c830149a38159d1cd74d68d79c28fccf58842ab",
+        "uri": "target/verification-evidence/udif-v0.1.0/586ed81d6ec0c22a1e53da3c6c830149a38159d1cd74d68d79c28fccf58842ab.log"
+      }
+    ],
+    "runner": {
+      "os": "macOS 14.7.2 (23H311)",
+      "arch": "arm64"
+    },
+    "duration_ms": 11730,
+    "exit_code": 0,
+    "fixture_hash": "229665fe59b3c463f62add4189c66e67a4547c44121f4b587063dfff0362b689"
+  }
+]
