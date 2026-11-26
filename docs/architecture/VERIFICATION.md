@@ -199,6 +199,17 @@ Portable signature verification now checks in regression tests that a changed im
 
 The UDIF release-reader tests now reject a structurally valid CodeDirectory whose signing limit disagrees with the UDIF body length. Metered reads also verify that an over-budget physical image triggers zero reads, a signature one byte beyond the remaining metadata budget triggers only the trailer read, and the exact physical and metadata budgets admit both fixture layouts. All 117 all-feature UDIF tests and strict Clippy passed. The focused `read,zlib` suite on `nightly-2026-11-04` covered all 68 lines and 10 branch outcomes reported for `reader/release.rs`. The source-bound report is `target/verification-evidence/v0.1.0-verification/a5d1ca4-release-admission/coverage.json` with SHA-256 `551045dded70d8e8c94b82e51ee6a011333aaefce492da47b903b75f16c746e6`. [Release-reader tests](../../crates/formats/dmgez-udif/tests/release_reader.rs)
 
+### D-VER-01 candidate audit
+
+| Acceptance check | Evidence for archived candidate `c76fcf1` |
+| --- | --- |
+| Workspace test and architecture apparatus | Nextest passed 779 tests on Ubuntu, 899 on macOS and 693 on Windows, with 6, 8 and 6 skips respectively. All three runners passed the CLI dependency-profile and source checks. [Workspace CI](https://github.com/pomologie/dmgez/actions/runs/45817074693) |
+| Negative graph and source-size checks | Replayed against the exact source archive. The existing mutation test rejected the added `eframe` edge in the minimal, serial and default CLI dependency profiles. The architecture command also exited with status 1 for a 501-line source file. |
+| Fuzz, malformed geometry and native fixtures | The hosted UDIF and project-manifest fuzzers completed 144,750 and 288,978 executions. The candidate evidence bundle records malformed geometry refusals, the independent readers and the native read-only HFS+ replay. [Fuzz job](https://github.com/pomologie/dmgez/actions/runs/45817074693/job/139899466587) · [Cross-platform project smoke](https://github.com/pomologie/dmgez/actions/runs/45817074710) |
+| Critical coverage and exceptions | Open. The publication artifact implementation changed after the composed branch map. The candidate's own files match the earlier coverage input for cache, release staging and portable signing. These maps still require a review of uncovered outcomes alongside the recorded refusal tests. |
+
+The local architecture replay is under `target/verification-evidence/v0.1.0-verification/c76fcf1-apparatus-audit/`. Its `SHA256SUMS` has SHA-256 `dd80b0b4c652eee0c9b3879810442a53ee2d3432b7684f90f32552e2b4d212fe`. The standalone CLI dependency audit passed for all three targets. The workspace audit failed on unmaintained desktop and MCP dependencies. [Standalone audit](https://github.com/pomologie/dmgez/actions/runs/45817074710/job/139904407460) · [Workspace audit](https://github.com/pomologie/dmgez/actions/runs/45817074693/job/139899466992)
+
 ## Proof obligations
 
 | ID | Activation | Scope | Required evidence |
