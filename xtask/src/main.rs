@@ -4,6 +4,7 @@ use cargo_metadata::MetadataCommand;
 use clap::{Args, Parser, Subcommand};
 
 mod dependencies;
+mod evidence;
 mod source;
 
 const MANIFEST: &str = "Cargo.toml";
@@ -18,6 +19,8 @@ struct Cli {
 enum Command {
 	/// Check structural Rust entry points, source size and CLI dependency profiles.
 	Architecture(Architecture),
+	/// Check the supplied release evidence against the clean candidate checkout.
+	ReleaseEvidence(evidence::Arguments),
 }
 
 #[derive(Args)]
@@ -31,8 +34,11 @@ struct Architecture {
 }
 
 fn main() -> ExitCode {
-	let Command::Architecture(arguments) = Cli::parse().command;
-	match check(arguments) {
+	let result = match Cli::parse().command {
+		Command::Architecture(arguments) => check(arguments),
+		Command::ReleaseEvidence(arguments) => evidence::check(arguments),
+	};
+	match result {
 		Ok(()) => ExitCode::SUCCESS,
 		Err(error) => {
 			eprintln!("{error}");

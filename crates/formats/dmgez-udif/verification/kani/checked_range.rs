@@ -6,8 +6,10 @@ fn checked_range_matches_mathematical_window() {
 	let end = u128::from(offset) + u128::from(len);
 	let actual = checked_range(offset, len, limit);
 	assert_eq!(actual.is_some(), end <= u128::from(limit));
-	if let Some(range) = actual {
+	if let Some(range) = &actual {
 		assert_eq!(range.start, offset);
 		assert_eq!(u128::from(range.end), end);
 	}
+	kani::cover!(actual.is_some() && len > 0 && end == u128::from(limit));
+	kani::cover!(actual.is_none() && end > u128::from(u64::MAX));
 }

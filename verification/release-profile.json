@@ -1,0 +1,262 @@
+{
+  "milestone": "0.1.0",
+  "profiles": {
+    "checked-range": {
+      "obligations": [
+        "D-V01"
+      ],
+      "method": "kani",
+      "features": [],
+      "check": {
+        "kind": "kani",
+        "filter": "checked_range_matches_mathematical_window",
+        "harnesses": {
+          "checked_range_matches_mathematical_window": 2
+        }
+      }
+    },
+    "reader-geometry": {
+      "obligations": [
+        "D-V01"
+      ],
+      "method": "kani",
+      "features": [
+        "read"
+      ],
+      "check": {
+        "kind": "kani",
+        "filter": "binary_geometry_proof",
+        "harnesses": {
+          "fixed_fields_match_bytewise_windows": 3,
+          "block_map_size_matches_widened_geometry": 0,
+          "block_map_requires_exact_length_and_budget": 2,
+          "trailer_matches_widened_endpoints_and_sector_length": 3
+        }
+      }
+    },
+    "writer-geometry": {
+      "obligations": [
+        "D-V01"
+      ],
+      "method": "kani",
+      "features": [
+        "write"
+      ],
+      "check": {
+        "kind": "kani",
+        "filter": "write_geometry_proof",
+        "harnesses": {
+          "fixed_writes_change_only_the_requested_window": 0,
+          "trailer_writes_geometry_at_the_exact_wire_offsets": 0
+        }
+      }
+    },
+    "run-admission": {
+      "obligations": [
+        "D-V02"
+      ],
+      "method": "kani",
+      "features": [
+        "read"
+      ],
+      "check": {
+        "kind": "kani",
+        "filter": "run_admission",
+        "harnesses": {
+          "run_admission_projects_the_exact_table_partition": 4,
+          "run_admission_checks_full_width_physical_bounds": 2,
+          "run_admission_rejects_gaps_and_overlaps_across_tables": 3,
+          "run_admission_requires_a_well_formed_terminator": 2
+        }
+      }
+    },
+    "writer-cursor": {
+      "obligations": [
+        "D-V03"
+      ],
+      "method": "kani",
+      "features": [
+        "write"
+      ],
+      "check": {
+        "kind": "kani",
+        "filter": "writer_cursor_proof",
+        "harnesses": {
+          "data_cursor_checks_the_final_sector_before_any_sink_write": 3,
+          "metadata_cursor_checks_both_lengths_at_full_width": 3
+        }
+      }
+    },
+    "indexed-reads": {
+      "obligations": [
+        "D-V04"
+      ],
+      "method": "kani",
+      "features": [
+        "read"
+      ],
+      "check": {
+        "kind": "kani",
+        "filter": "indexed_read_",
+        "harnesses": {
+          "indexed_read_cursor_starts_at_containing_run": 2,
+          "indexed_read_cursor_advances_one_exact_intersection": 2,
+          "indexed_read_output_window_matches_widened_endpoints": 3
+        }
+      }
+    },
+    "udif-tests": {
+      "obligations": [
+        "D-V01",
+        "D-V02",
+        "D-V03",
+        "D-V04"
+      ],
+      "method": "property",
+      "features": [
+        "read",
+        "write",
+        "zlib",
+        "lzfse",
+        "lzma",
+        "parallel",
+        "write-cache",
+        "signature-integrity"
+      ],
+      "check": {
+        "kind": "rust_tests",
+        "minimum": 98
+      },
+      "command": [
+        "env",
+        "PROPTEST_CASES=4096",
+        "PROPTEST_RNG_SEED=20261126",
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "dmgez-udif",
+        "--all-features"
+      ]
+    },
+    "udif-asan": {
+      "obligations": [
+        "D-V01",
+        "D-V04"
+      ],
+      "method": "fuzz",
+      "features": [
+        "read",
+        "zlib",
+        "lzfse",
+        "lzma"
+      ],
+      "check": {
+        "kind": "fuzz",
+        "minimum": 20000
+      },
+      "command": [
+        "cargo",
+        "+nightly-2026-11-04",
+        "fuzz",
+        "run",
+        "udif",
+        "$CORPUS",
+        "--",
+        "-runs=20000",
+        "-seed=20261126",
+        "-max_len=65536",
+        "-artifact_prefix=$CRASHES/"
+      ]
+    },
+    "native-udif": {
+      "obligations": [
+        "D-V02",
+        "D-V03"
+      ],
+      "method": "native",
+      "features": [
+        "default",
+        "inspect"
+      ],
+      "check": {
+        "kind": "native",
+        "markers": {
+          "appears to be OK.": 1,
+          "Media Read-Only:": 1,
+          "Both reference readers matched ": 4
+        }
+      },
+      "command": [
+        "python3",
+        "-B",
+        "tests/compatibility/verify_udif.py",
+        "$CLI",
+        "--seven-zip",
+        "$SEVEN_ZIP",
+        "--reference-readers",
+        "$REFERENCE_READERS",
+        "--attach-hfs"
+      ]
+    },
+    "differential-udif": {
+      "obligations": [
+        "D-V02",
+        "D-V03",
+        "D-V04"
+      ],
+      "method": "differential",
+      "features": [
+        "default",
+        "inspect"
+      ],
+      "check": {
+        "kind": "native",
+        "markers": {
+          "Both reference readers matched ": 4,
+          " is VALID": 6
+        }
+      },
+      "command": [
+        "python3",
+        "-B",
+        "tests/compatibility/verify_udif.py",
+        "$CLI",
+        "--seven-zip",
+        "$SEVEN_ZIP",
+        "--reference-readers",
+        "$REFERENCE_READERS",
+        "--attach-hfs"
+      ]
+    },
+    "loom-cache": {
+      "obligations": [
+        "D-V04"
+      ],
+      "method": "loom",
+      "features": [
+        "read",
+        "write",
+        "zlib"
+      ],
+      "check": {
+        "kind": "rust_tests",
+        "minimum": 4
+      },
+      "command": [
+        "env",
+        "RUSTFLAGS=--cfg dmgez_loom",
+        "cargo",
+        "test",
+        "--locked",
+        "-p",
+        "dmgez-udif",
+        "--no-default-features",
+        "--features",
+        "read,write,zlib",
+        "--lib",
+        "decode_cache_model"
+      ]
+    }
+  }
+}

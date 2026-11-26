@@ -18,6 +18,11 @@ syn.workspace = true
 # Command-line interface
 clap.workspace = true
 
+# Release evidence
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+
 [dev-dependencies]
 # Disposable workspace fixtures
 tempfile.workspace = true
