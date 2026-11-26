@@ -197,6 +197,8 @@ The release composer records the unsigned SHA-256 through the writer-verified st
 
 Portable signature verification now checks in regression tests that a changed image body is rejected before the signing policy callback runs. On Unix, a second test checks that verification rejects a byte-identical replacement at the original path after the policy callback. All nine portable signing tests and strict Clippy passed on arm64 macOS. Each test caught the corresponding bypass in a disposable checkout. The exact changes and log digests are in `target/verification-evidence/v0.1.0-verification/ed06f11-portable-verify/summary.json` with SHA-256 `6d998677a7e2b627ab797cff7659539c58bc71be3d95d494a4324597e62b3191`. [Portable signing tests](../../crates/security/dmgez-signing/src/portable/tests.rs)
 
+The UDIF release-reader tests now reject a structurally valid CodeDirectory whose signing limit disagrees with the UDIF body length. Metered reads also verify that an over-budget physical image triggers zero reads, a signature one byte beyond the remaining metadata budget triggers only the trailer read, and the exact physical and metadata budgets admit both fixture layouts. All 117 all-feature UDIF tests and strict Clippy passed. The focused `read,zlib` suite on `nightly-2026-11-04` covered all 68 lines and 10 branch outcomes reported for `reader/release.rs`. The source-bound report is `target/verification-evidence/v0.1.0-verification/a5d1ca4-release-admission/coverage.json` with SHA-256 `551045dded70d8e8c94b82e51ee6a011333aaefce492da47b903b75f16c746e6`. [Release-reader tests](../../crates/formats/dmgez-udif/tests/release_reader.rs)
+
 ## Proof obligations
 
 | ID | Activation | Scope | Required evidence |
