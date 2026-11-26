@@ -38,6 +38,13 @@ The local arm64 macOS candidate at dmgez `163a5f1` and HFS+ `a1b870f` used Rust 
 | `dmgez-0.1.0-aarch64-apple-darwin.tar.gz` | `dfc262861c2c2d74410a424882307e97e5ec4a770a0d3a1536bfe0dc2fdc2128` |
 | Archived `THIRD_PARTY_NOTICES.txt` | `20a8bfd54d47657615712e8d71ba253b23cdfed039b20440e630b3c219527a55` |
 
+The local Linux x86-64 candidate at dmgez `d56c80d` and HFS+ `a1b870f` was built and tested in emulated Debian 12.15 with Rust 1.99.1 and GCC 12.2.0. Build, notice generation, and tests ran without networking after staging the dependencies. The notice review covered 164 build packages, including checksum verification of all 148 registry archives, comparison with the macOS selections, and the separate `linux-raw-sys` copyright. The archive test used those reviewed notices. It passed installation and example build, signing, and verification from extraction. Debian's 7-Zip 26.02 verified both project formats, all four fixture digests matched the table above, and Apple tools accepted the containers and ad hoc signatures.
+
+| Local Linux candidate artifact | SHA-256 |
+|---|---|
+| `dmgez-0.1.0-x86_64-unknown-linux-gnu.tar.gz` | `95e00779d6564bb93eec055552e7548312ad8b38cd5bf752e9ba41805152423f` |
+| Archived `THIRD_PARTY_NOTICES.txt` | `24ac145c894a00ec370f83ab08a9419fdf32eaab5deca7ead8df19a17df0f8d6` |
+
 ## Pipeline
 
 1. Plan inputs, validate credentials/capabilities without exposing secrets. Stage source apps if sign requested; default `[signing].apps="verify"` checks existing signatures and does not re-sign. `preserve` packages without claiming validity; `sign` explicit and stage only. Inspect nested Mach-O, frameworks, plugins, helpers, dylibs, bundles; per-path signing policy/entitlements, sign inside-out; no blind `codesign --deep` for signing. Preserve symlinks and resources. Validate Developer ID Application identity, secure timestamps, hardened runtime for eligible executables, and entitlement policy; signing alone does not satisfy Apple requirements.
