@@ -29,6 +29,7 @@ SIGNER_ROOT_FILES = (
 )
 # Package files with attributions or component terms missed by the scanner.
 SUPPLEMENTAL_NOTICES = {
+    ("linux-raw-sys", "0.12.1"): ("COPYRIGHT",),
     ("miniz_oxide", "0.8.9"): ("LICENSE",),
     ("miniz_oxide", "0.9.1"): ("LICENSE",),
     ("rasn", "0.20.2"): ("LICENCE-APACHE",),
