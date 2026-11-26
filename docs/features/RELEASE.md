@@ -18,6 +18,8 @@ The set in `target/release-candidates/v0.1.0/e0ac797-release/` contains the Carg
 
 An independent macOS composition of dmgez `e0ac797` with the later HFS+ revision `9add11a` passed all 12 project CLI cases, the public library integration test, and 29 runtime tests.
 
+Mounted HFS+ name parity remains an open qualification item for the `e0ac797` archives. The packaged CLI's project dry run reported equivalent catalog paths when a manifest contained both U+1D15E and U+1D157 U+1D165. The native HFS+ lookup capture kept those spellings distinct. The replay and packaged executable digest are recorded in `target/verification-evidence/v0.1.0-verification/e0ac797-hfs-name-compatibility/result.json`.
+
 At dmgez `98f4442` and HFS+ `a1b870f`, the three native build, signing, and archive smoke jobs, byte comparison, and standalone CLI dependency audit all passed. [Hosted release verification](https://github.com/pomologie/dmgez/actions/runs/45813282977)
 
 At dmgez `c76fcf1` and HFS+ `a1b870f`, the hosted build, byte comparison, and standalone dependency audit passed. All three downloaded handoffs matched their published checksums and the reviewed `ec0f4bd` notice bodies and registry inventories. The exact executables passed repeatable packaging, member checksum verification, and example build, ad hoc signing, and verification on arm64 macOS, offline emulated Debian 12 x86-64, and Wine 10.0 with Windows Python 3.13.17. The macOS and Linux installer checks also passed. Native Windows CI separately passed the NTFS, signing, and archive smoke checks. [Hosted release verification](https://github.com/pomologie/dmgez/actions/runs/45817074710)
