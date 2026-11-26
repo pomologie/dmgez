@@ -41,6 +41,8 @@ D-VER-01 remains open. The index and cache are below the proposed 90% branch flo
 
 Three targeted mutation checks ran on macOS arm64 against `f5e2fb4` with Rust 1.99.1 and the reader-only feature set. Each focused test passed against the original source and failed its assertion after one change in a disposable checkout. The trailer test caught an unexpected XML read after encountering unsupported flags, the cache test caught acceptance of an allocation one byte over its reservation, and the index test caught the loss of the specific empty-run refusal. The exact edits, test commands, and transcript hashes are in `target/verification-evidence/v0.1.0-verification/f5e2fb4-mutations/summary.json` with SHA-256 `57f3b9ca844e2550d43978e876f87897965a9d2a86809363f8812c3e489956fa`.
 
+The hosted Linux coverage and minimum-Rust job passed at `ffb76e4`. The all-feature workspace report covered 27,741 of 32,755 instrumented lines (84.69%) and 41,574 of 50,363 regions (82.55%). This job did not instrument branches. Rust 1.98.0 compiled the locked all-feature workspace on the same host. [Hosted coverage and minimum-Rust job](https://github.com/pomologie/dmgez/actions/runs/45790210058/job/139807027014)
+
 ## Proof obligations
 
 | ID | Activation | Scope | Required evidence |
