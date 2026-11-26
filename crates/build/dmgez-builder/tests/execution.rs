@@ -22,6 +22,8 @@ use dmgez_core::output::PublishError;
 
 #[path = "execution/raw.rs"]
 mod raw;
+#[path = "execution/udif_length.rs"]
+mod udif_length;
 
 const LOGICAL_BYTES: usize = 512;
 const RAW: [u8; LOGICAL_BYTES] = [0xA5; LOGICAL_BYTES];

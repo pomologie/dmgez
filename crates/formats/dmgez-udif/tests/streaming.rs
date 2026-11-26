@@ -3,6 +3,7 @@
 use std::{
 	io::{self, Read, Write},
 	num::NonZeroUsize,
+	ops::Range,
 };
 
 use dmgez_udif::{
@@ -11,6 +12,133 @@ use dmgez_udif::{
 };
 
 const SECTOR_SIZE: usize = SECTOR_BYTES as usize;
+const FRAGMENT_BYTES: usize = 37;
+
+struct FragmentedSource<'data>(&'data [u8]);
+
+impl Read for FragmentedSource<'_> {
+	fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+		let size = buffer.len().min(FRAGMENT_BYTES);
+		self.0.read(&mut buffer[..size])
+	}
+}
+
+struct RecordingSink {
+	bytes: Vec<u8>,
+	writes: Vec<Range<usize>>,
+	limit: usize,
+}
+
+impl RecordingSink {
+	fn new(limit: usize) -> Self {
+		Self {
+			bytes: Vec::new(),
+			writes: Vec::new(),
+			limit,
+		}
+	}
+}
+
+impl Write for RecordingSink {
+	fn write(&mut self, data: &[u8]) -> io::Result<usize> {
+		let start = self.bytes.len();
+		let count = data.len().min(FRAGMENT_BYTES).min(self.limit - start);
+		let end = start + count;
+		self.bytes.extend_from_slice(&data[..count]);
+		self.writes.push(start..end);
+		Ok(count)
+	}
+
+	fn flush(&mut self) -> io::Result<()> {
+		Ok(())
+	}
+}
+
+#[cfg(all(feature = "read", feature = "zlib"))]
+#[test]
+fn nonseekable_profiles_preserve_bytes_offsets_and_raw_fallback() {
+	use dmgez_udif::reader::{Image, Limits};
+
+	// Two nonzero sectors. The repeated bytes admit zlib, while the xorshift
+	// bytes require a raw run with the pinned encoder.
+	let mut logical = [b'A'; 2 * SECTOR_SIZE];
+	let mut state = 0x9e37_79b9_u32;
+	for byte in &mut logical[SECTOR_SIZE..] {
+		state ^= state << 13;
+		state ^= state >> 17;
+		state ^= state << 5;
+		*byte = state.to_be_bytes()[0];
+	}
+
+	for (profile, raw_runs, compressed_runs) in [(Profile::Udro, 2, 0), (Profile::Udzo, 1, 1)] {
+		let options = WriteOptions {
+			profile,
+			chunk_bytes: SECTOR_SIZE,
+			..WriteOptions::default()
+		};
+		let mut sink = RecordingSink::new(usize::MAX);
+		let report = write_image(
+			FragmentedSource(&logical),
+			logical.len() as u64,
+			&mut sink,
+			&options,
+		)
+		.unwrap();
+		let mut end = 0;
+		for write in &sink.writes {
+			assert_eq!(write.start, end);
+			assert!((1..=FRAGMENT_BYTES).contains(&write.len()));
+			end = write.end;
+		}
+		assert_eq!(end, sink.bytes.len());
+		assert_eq!(report.physical_bytes, end as u64);
+		assert_eq!(report.raw_runs, raw_runs);
+		assert_eq!(report.compressed_runs, compressed_runs);
+
+		let mut image = Image::open(sink.bytes.as_slice(), Limits::default()).unwrap();
+		image.verify().unwrap();
+		let mut decoded = Vec::new();
+		image.write_raw_to(&mut decoded).unwrap();
+		assert_eq!(decoded, logical);
+	}
+}
+
+#[test]
+fn source_length_and_sink_failures_leave_only_an_unfinished_prefix() {
+	let logical = [b'A'; 3 * SECTOR_SIZE];
+	let expected = 2 * SECTOR_BYTES;
+	let options = WriteOptions {
+		profile: Profile::Udro,
+		chunk_bytes: SECTOR_SIZE,
+		..WriteOptions::default()
+	};
+	for (length, expected_prefix) in [(SECTOR_SIZE, SECTOR_SIZE), (logical.len(), 2 * SECTOR_SIZE)]
+	{
+		let mut sink = RecordingSink::new(usize::MAX);
+		assert!(matches!(
+			write_image(
+				FragmentedSource(&logical[..length]),
+				expected,
+				&mut sink,
+				&options
+			),
+			Err(Error::SourceLength(_))
+		));
+		assert_eq!(sink.bytes, logical[..expected_prefix]);
+	}
+	let fail_at = SECTOR_SIZE + FRAGMENT_BYTES;
+	let mut sink = RecordingSink::new(fail_at);
+	assert!(matches!(
+		write_image(
+			FragmentedSource(&logical[..2 * SECTOR_SIZE]),
+			expected,
+			&mut sink,
+			&options
+		),
+		Err(Error::Io(error)) if error.kind() == io::ErrorKind::WriteZero
+	));
+	assert_eq!(sink.bytes, logical[..fail_at]);
+}
 
 #[test]
 fn rejects_unaligned_short_long_and_over_budget_input() {
