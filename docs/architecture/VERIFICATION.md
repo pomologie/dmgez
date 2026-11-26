@@ -131,6 +131,8 @@ The matching runtime unit suite passed 21 tests on stable Rust, and strict Clipp
 
 The local arm64 macOS replay of the hosted test command, `python3 -B tools/compose_hfsplus_cli.py --hfsplus ../hfsplus --release --features inspect --test`, passed the 12 project CLI tests and all 21 composed runtime tests. The hosted project matrix runs that command on each target.
 
+The follow-up at `09400d8` added witnesses for length and timestamp changes on the same held file and for exact hashing across a buffer boundary. With those tests applied, all 20 filtered runtime release tests and strict Clippy passed. Artifact coverage reached 21 of 26 branches in the same instrumented profile. The report is `target/verification-evidence/v0.1.0-verification/09400d8-release-identity/runtime-identity-coverage.json` with SHA-256 `38f3551b0a8053cdffce0e33e485a39005ddc7617042dfe083c29e2f4d637a47`.
+
 ## Proof obligations
 
 | ID | Activation | Scope | Required evidence |

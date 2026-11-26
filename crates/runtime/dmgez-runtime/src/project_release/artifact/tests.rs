@@ -66,6 +66,45 @@ fn image_identity_requires_bounded_nonempty_input_and_an_exact_read() {
 	);
 }
 
+#[test]
+fn image_identity_hashes_exactly_the_admitted_bytes_across_chunks() {
+	const FINAL_CHUNK_BYTES: usize = 3;
+	const UNADMITTED_BYTES: usize = 1;
+	let admitted = HASH_BUFFER_BYTES + FINAL_CHUNK_BYTES;
+	let data = vec![0x42; admitted + UNADMITTED_BYTES];
+	let mut reader = data.as_slice();
+
+	let identity = hash_image(&mut reader, admitted as u64).unwrap();
+	let digest: String = Sha256::digest(&data[..admitted])
+		.iter()
+		.map(|byte| format!("{byte:02x}"))
+		.collect();
+	assert_eq!(identity.sha256(), digest);
+	assert_eq!(identity.bytes(), admitted as u64);
+	assert_eq!(reader, &data[admitted..]);
+}
+
+#[test]
+fn entry_comparison_rejects_length_and_timestamp_changes_on_the_same_handle() {
+	use std::time::{Duration, SystemTime};
+
+	const TIME_STEP_SECONDS: u64 = 60;
+	const GROWN_FILE_BYTES: u64 = 1;
+	let file = tempfile::tempfile().unwrap();
+	let initial = file.metadata().unwrap();
+	file.set_len(GROWN_FILE_BYTES).unwrap();
+	let grown = file.metadata().unwrap();
+	assert_ne!(initial.len(), grown.len());
+	assert!(!same_entry(&initial, &grown));
+
+	file.set_modified(SystemTime::UNIX_EPOCH + Duration::from_secs(TIME_STEP_SECONDS))
+		.unwrap();
+	let retimed = file.metadata().unwrap();
+	assert_eq!(grown.len(), retimed.len());
+	assert_ne!(grown.modified().unwrap(), retimed.modified().unwrap());
+	assert!(!same_entry(&grown, &retimed));
+}
+
 #[cfg(unix)]
 #[test]
 fn entry_comparison_detects_a_different_inode_at_the_same_length() {
