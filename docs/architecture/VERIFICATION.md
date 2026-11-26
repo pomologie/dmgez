@@ -55,7 +55,21 @@ All 334 file rows in that report match tracked files from the candidate. Their c
 | `dmgez-runtime` | 561 | 1,049 | 53.48% |
 | `dmgez-cli` | 883 | 1,236 | 71.44% |
 
-The hosted workspace contains no instrumented HFS+ adapter rows. The separate composed CLI workflow exercises that adapter on each host. A precise release-profile coverage review still needs to measure the composed CLI and identify which production paths correspond to its advertised capabilities. The row-level inventory is in `target/verification-evidence/v0.1.0-verification/ffb76e4-hosted-coverage-scope.json` with SHA-256 `8a537b7e54bcd5eeaf6c90980d1e48e2eb3374980ed0aed66c33aa3d36f82b5a`.
+The hosted workspace contains no instrumented HFS+ adapter rows. The separate composed CLI workflow exercises that adapter on each host. The workspace row-level inventory is in `target/verification-evidence/v0.1.0-verification/ffb76e4-hosted-coverage-scope.json` with SHA-256 `8a537b7e54bcd5eeaf6c90980d1e48e2eb3374980ed0aed66c33aa3d36f82b5a`.
+
+The composed smoke baseline at dmgez `2950125` used the HFS+ sibling checkout at `a1b870f`. An optimized arm64 macOS build used the default features plus `inspect` and nightly `2026-11-04` with `-C instrument-coverage -Z coverage-options=branch`. The instrumented executable reproduced all four expected signed and unsigned UDRO and UDZO digests. 7-Zip, strict Apple signature verification, read-only HFS+ checking and mounts, and the offline archive smoke with fixture notices all passed. The merge collected 124 process profiles across 225 tracked source rows.
+
+| Package | Lines covered | Branches covered |
+| --- | ---: | ---: |
+| `dmgez-cli` | 469 / 1,085 | 28 / 132 |
+| `dmgez-runtime` | 582 / 1,260 | 67 / 170 |
+| `dmgez-builder` | 1,434 / 4,567 | 123 / 781 |
+| `dmgez-udif` | 1,503 / 2,031 | 166 / 346 |
+| `dmgez-signing` | 544 / 882 | 46 / 148 |
+| `dmgez-hfsplus` | 535 / 852 | 25 / 78 |
+| `hfsplus-builder` | 1,258 / 1,980 | 83 / 174 |
+
+These counts reflect the end-to-end project and archive smokes. The instrumented binary includes compiled optional paths the smokes leave unexercised, such as Finder backgrounds, and the run excludes standalone unit, fault, and property tests. D-VER-01 still requires the release-profile coverage review to account for those paths and the corresponding focused tests. The revision-bound inventory is in `target/verification-evidence/v0.1.0-verification/2950125-composed-project-coverage.json` with SHA-256 `8cd4d1909037640210c144e68b229e4c0d3cd097adb39fd51e67f462fdc0dbc3`.
 
 The detailed UDIF replay at `9b68c63` reproduced the per-file totals above. The exported source counters showed no rejected outcome at the empty-table check and the reversed-fragment comparison. The block-map decoder rejects an empty table before normalization, and the positioned-window Kani harness tests arbitrary fragment ordering. The LLVM summary also reports one uncovered cache branch even though the merged source-location counters show both outcomes for every exported cache condition. The per-file summaries and condition counters are in `target/verification-evidence/v0.1.0-verification/9b68c63-branch-conditions.json` with SHA-256 `56fc87dfa490f2b3fe9510012353185ac7931469685311e8dca68b28415ee85d`.
 
