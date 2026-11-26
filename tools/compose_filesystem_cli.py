@@ -525,6 +525,7 @@ def run_cli(cargo, directory, options, packages):
         release_notices.generate(
             cargo, directory, binary, target, options.features,
             options.no_default_features, options.notices_output, built_packages=built_packages,
+            lock_output=options.notices_lock_output,
         )
     else:
         binary = run_binary(command, directory, CLI_BINARY)
@@ -587,6 +588,10 @@ def main():
         "--notices-output", type=Path,
         help="write a dependency notice draft for this native optimized CLI build",
     )
+    parser.add_argument(
+        "--notices-lock-output", type=Path,
+        help="retain the exact composed Cargo.lock used for the notice draft",
+    )
     parser.add_argument("--desktop", action="store_true", help="compose the desktop app with the supplied filesystem readers")
     parser.add_argument("--test", action="store_true", help="run the selected composed app tests")
     parser.add_argument(
@@ -598,6 +603,11 @@ def main():
     options = parser.parse_args()
     if options.notices_output is not None and (not options.release or options.desktop or options.test):
         parser.error("--notices-output requires an optimized CLI build without --desktop or --test")
+    if options.notices_lock_output is not None:
+        if options.notices_output is None:
+            parser.error("--notices-lock-output requires --notices-output")
+        if options.notices_lock_output.resolve() == options.notices_output.resolve():
+            parser.error("the notice draft and composed Cargo.lock require different output paths")
     use_hfsplus = options.hfsplus is not None or options.hfsplus_packages is not None
     use_apfs = options.apfs is not None or options.apfs_packages is not None
     if not (use_hfsplus or use_apfs):

@@ -6,7 +6,8 @@ To prepare a target-specific draft, install `cargo-about` 0.9.3 and compose the 
 
 ```sh
 python3 -B tools/compose_hfsplus_cli.py --hfsplus ../hfsplus \
-  --release --features inspect --notices-output /path/to/THIRD_PARTY_NOTICES.draft.txt
+  --release --features inspect --notices-output /path/to/THIRD_PARTY_NOTICES.draft.txt \
+  --notices-lock-output /path/to/composed-Cargo.lock
 ```
 
 Use the executable path printed by the composer. Review the draft against the dependency sources, including any canonical fallback text and source notices. The draft includes supplemental source files from the locked packages where the scanner omits component notices or publisher attributions. These include ring's Fiat Crypto attribution and the Apache notice for shlex. In the reviewed file, change the heading to `dmgez dependency notices v1`, remove the review-required line, and retain the recorded build identity. The packager checks the target and both SHA-256 fields against the staged executable and the exact signer sources written into the archive. Regenerate older drafts that lack the source digest. The packager also accepts manually prepared notices.
@@ -31,6 +32,18 @@ python3 -B tools/package_cli.py \
 
 Use `.tar.gz` for macOS and Linux. Use `.zip` with `dmgez.exe` on Windows. The supported targets are `aarch64` and `x86_64` on macOS Darwin, Linux GNU and Windows MSVC. Use the target triple the CLI was built with. The packager checks the executable format, machine, version, and required capabilities. It prints the finished archive's SHA-256 and filename. The `dmgez-<version>-<target>` folder contains the executable, project license, dependency notices, two-file example and `SHA256SUMS`. The macOS and Linux archives include `install.sh`. Archives with the portable signer also include the covered vendored source, its license and provenance. File modes, member order and timestamps are fixed for repeatable packaging of the same input bytes.
 
+Generate a CycloneDX 1.6 SBOM sidecar from the archive and the composed lockfile retained with the notice draft.
+
+```sh
+python3 -B tools/release_sbom.py \
+  --archive /path/to/dmgez-0.1.0-aarch64-apple-darwin.tar.gz \
+  --target aarch64-apple-darwin \
+  --lockfile /path/to/composed-Cargo.lock \
+  --output /path/to/dmgez-0.1.0-aarch64-apple-darwin.cdx.json
+```
+
+The SBOM records the Cargo build inventory, including build-time packages, and binds it to the archive, executable, reviewed notices and composed lockfile by digest. Registry package hashes identify the crate archives. Publish the sidecar and its checksum alongside the CLI archive. [CycloneDX 1.6 JSON reference](https://cyclonedx.org/docs/1.6/json/)
+
 Extract the archive into a writable directory and verify `SHA256SUMS` from inside the extracted folder with `shasum -a 256 -c SHA256SUMS` on macOS or `sha256sum -c SHA256SUMS` on Linux. Build and verify the included project from that folder.
 
 ```sh
@@ -53,4 +66,4 @@ On Windows, use `Expand-Archive` on a local NTFS volume. Use `Get-FileHash -Algo
 
 The offline packaging test accepts the same `--binary`, `--target` and `--notices` inputs. It compares two archives byte for byte, verifies every extracted file against the checksum ledger, and uses the extracted executable to build, ad hoc sign, and verify the example. On macOS and Linux it also installs the extracted binary into a disposable directory and runs the installed copy. [Packaging test](../../tools/test_package_cli.py)
 
-The project-build workflow runs this test on Linux, macOS and Windows with the executable built by that runner. It supplies an explicitly labeled fixture notice and discards the test archives. Each job uploads the exact tested executable, its generated notice draft, and the source revisions. The Windows artifact is named `windows-msvc-notice-review`. The Linux and macOS artifacts use `notice-review-<target>`. Review the draft for the target before packaging the shipped executable. [Project qualification workflow](../../.github/workflows/project-build.yml)
+The project-build workflow runs this test on Linux, macOS and Windows with the executable built by that runner. It supplies an explicitly labeled fixture notice and discards the test archives. Each job uploads the exact tested executable, its generated notice draft, the composed lockfile and the source revisions. The Windows artifact is named `windows-msvc-notice-review`. The Linux and macOS artifacts use `notice-review-<target>`. Review the draft for the target before packaging the shipped executable. [Project qualification workflow](../../.github/workflows/project-build.yml)

@@ -13,6 +13,8 @@ CARGO_ABOUT_VERSION = "cargo-about 0.9.3"
 NOTICE_HEADER = "dmgez dependency notices v1"
 NOTICE_DRAFT_HEADER = "dmgez dependency notices draft"
 NOTICE_DRAFT_STATUS = "Review required before release."
+PACKAGE_HEADING = "Resolved packages and selected licenses"
+LOCK_SHA256_FIELD = "Composed Cargo.lock SHA-256"
 TARGET_FIELD = "Target"
 BINARY_SHA256_FIELD = "CLI SHA-256"
 SIGNER_SHA256_FIELD = "apple-codesign source SHA-256"
@@ -167,12 +169,12 @@ def render(data, target, binary_hash, lock_hash, features, no_defaults, *, signe
         f"{TARGET_FIELD}{FIELD_SEPARATOR}{target}",
         f"{BINARY_SHA256_FIELD}{FIELD_SEPARATOR}{binary_hash}",
         f"{SIGNER_SHA256_FIELD}{FIELD_SEPARATOR}{signer_hash}",
-        f"Composed Cargo.lock SHA-256 = {lock_hash}",
+        f"{LOCK_SHA256_FIELD}{FIELD_SEPARATOR}{lock_hash}",
         f"Default features = {'disabled' if no_defaults else 'enabled'}",
         f"Additional features = {' '.join(features)}",
         f"License tool = {CARGO_ABOUT_VERSION}",
         "",
-        "Resolved packages and selected licenses",
+        PACKAGE_HEADING,
         *(f"{label} | {license_id}" for label, license_id in sorted(packages.items())),
         "",
         "Canonical license texts requiring source notice review",
@@ -199,7 +201,7 @@ def check_built_packages(report, built_packages):
         raise ValueError(f"license report disagrees with the build packages (missing {missing}, extra {extra})")
 
 
-def generate(cargo, workspace, binary, target, features, no_defaults, output, *, built_packages):
+def generate(cargo, workspace, binary, target, features, no_defaults, output, *, built_packages, lock_output=None):
     version = subprocess.check_output(
         [*cargo, "about", "--version"], cwd=workspace, encoding="utf-8",
     ).strip()
@@ -216,11 +218,19 @@ def generate(cargo, workspace, binary, target, features, no_defaults, output, *,
     report = json.loads(subprocess.check_output(command, cwd=workspace, encoding="utf-8"))
     check_built_packages(report, built_packages)
     signer_checksums = {name: digest(path) for name, path in signer_members(workspace).items()}
+    lock = workspace / LOCKFILE
+    lock_bytes = lock.read_bytes()
     text = render(
-        report, target, digest(binary), digest(workspace / LOCKFILE), features, no_defaults,
+        report, target, digest(binary), hashlib.sha256(lock_bytes).hexdigest(), features, no_defaults,
         signer_hash=signer_digest(signer_checksums),
     )
-    with TemporaryDirectory(prefix=".dmgez-notices.", dir=output.parent) as temporary:
-        stage = Path(temporary) / "notices"
-        stage.write_bytes(text.encode("utf-8"))
-        os.link(stage, output)
+    if lock_output is not None:
+        write_new(lock_output, lock_bytes)
+    write_new(output, text.encode("utf-8"))
+
+
+def write_new(path, contents):
+    with TemporaryDirectory(prefix=".dmgez-release.", dir=path.parent) as temporary:
+        stage = Path(temporary) / "output"
+        stage.write_bytes(contents)
+        os.link(stage, path)

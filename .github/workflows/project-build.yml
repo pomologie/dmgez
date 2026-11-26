@@ -103,7 +103,10 @@ jobs:
               environment["CARGO_BUILD_TARGET"] = target
           handoff = work / "notice-review"
           handoff.mkdir(parents=True)
-          build_options = ["--fetch", "--notices-output", handoff / "THIRD_PARTY_NOTICES.draft.txt"]
+          build_options = [
+              "--fetch", "--notices-output", handoff / "THIRD_PARTY_NOTICES.draft.txt",
+              "--notices-lock-output", handoff / "composed-Cargo.lock",
+          ]
           built = Path(subprocess.check_output([*compose, *build_options], env=environment, text=True).strip())
           executable = handoff / built.name
           shutil.copy2(built, executable)
