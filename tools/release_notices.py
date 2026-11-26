@@ -32,8 +32,6 @@ SUPPLEMENTAL_NOTICES = {
     ("linux-raw-sys", "0.12.1"): ("COPYRIGHT",),
     ("miniz_oxide", "0.8.9"): ("LICENSE",),
     ("miniz_oxide", "0.9.1"): ("LICENSE",),
-    ("rasn", "0.20.2"): ("LICENCE-APACHE",),
-    ("rasn-derive", "0.20.2"): ("LICENCE-APACHE",),
     ("ring", "0.17.14"): (
         "LICENSE", "src/polyfill/once_cell/LICENSE-MIT", "third_party/fiat/LICENSE",
     ),

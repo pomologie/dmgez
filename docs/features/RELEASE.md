@@ -43,6 +43,8 @@ The `x86_64-unknown-linux-gnu` CLI at dmgez `e1dc40b` and HFS+ `a1b870f` was cro
 
 The local arm64 macOS candidate at dmgez `163a5f1` and HFS+ `a1b870f` used Rust 1.99.1 on macOS 14.7.2 (23H311). Its notice review covered 165 build packages, including checksum verification of all 149 registry archives and source review of the 39 canonical fallback entries. The archive test used those reviewed notices and passed installation and example build, signing, and verification from extraction. Both signed project fixtures passed read-only `fsck_hfs` and native mount checks. All four DMGs matched the digests above.
 
+The optimized arm64 macOS candidate at dmgez `57eecd7` used the same HFS+ revision and toolchain with the trimmed signer. Its notice review verified all 117 registry archive checksums and matched the license texts and supplemental notices for all 133 packages against the reviewed `163a5f1` notices, including 37 canonical fallback entries. With those reviewed notices, the archive test passed repeatable packaging, extraction and checksum verification, installation, and example build, signing, and verification. The local archive has SHA-256 `60ce6ee350863d3a6ac85475d5ddfa9b9cd9d11987e18f509fd66cb184184d7e`. The archived notices have SHA-256 `b2dff0f23abc8dc1e9d137f47dd4e4aa5034493d97f8ccd45fec020f71f44253`.
+
 | Local macOS candidate artifact | SHA-256 |
 |---|---|
 | `dmgez-0.1.0-aarch64-apple-darwin.tar.gz` | `dfc262861c2c2d74410a424882307e97e5ec4a770a0d3a1536bfe0dc2fdc2128` |
