@@ -659,8 +659,8 @@
       "scenario": "Cache eviction and two overlapping concurrent reads",
       "oracle": "Loom; raw oracle",
       "expected": "Correct bytes and bounded cache, no cross-image identity leak",
-      "status": "planned",
-      "evidence": null
+      "status": "pass",
+      "evidence": "crates/formats/dmgez-udif/verification/decode_cache.rs"
     },
     {
       "id": "D-UDIF-05-T02",

@@ -9,7 +9,7 @@ Read the shared ecosystem verification standard EVS-1 (`docs/architecture/ECOSYS
 | D-V01 | 0.1.0 | UDIF read/write | kani, property, fuzz |
 | D-V02 | 0.1.0 | UDRO/UDZO | kani, property, differential, native |
 | D-V03 | 0.1.0 | UDRO/UDZO | property, differential, native |
-| D-V04 | 0.1.0 | UDIF reader | kani, property, fuzz, differential |
+| D-V04 | 0.1.0 | UDIF reader | kani, property, fuzz, differential, loom |
 | D-V05 | 0.2.0 | builder | property, differential, native |
 | D-V06 | 0.2.0 | builder publication | tlc, fault, integration |
 | D-V07 | 0.2.0 | parallel builder | tlc, loom, shuttle, property, fault |
@@ -53,11 +53,11 @@ Read the shared ecosystem verification standard EVS-1 (`docs/architecture/ECOSYS
 
 ### D-V04 — UDIF reader
 **Target:** dmgez-udif / indexed reads and bounded decoder.\
-**Property:** A request for admitted [a,b) returns exact concatenation of decoded runs or an error; decoded lengths and budget checked before accepting output; unknown run never yields synthetic zeros.\
-**Assumptions and initial bounds:** Qualified codec contracts; small runs <=8 and range partitions; independent arbitrary byte stream, decoder budget including hostile lengths.\
+**Property:** An admitted read returns exact bytes or an error. Decoded lengths and capacity are checked before output is accepted. Unknown runs never yield synthetic zeros. Concurrent reads remain exact through eviction, with bounded decoded capacity and per-image isolation.\
+**Assumptions and initial bounds:** Qualified codec contracts, small runs <=8 and range partitions, independent arbitrary byte streams, and hostile lengths. The cache model uses two readers, three 512-byte zlib runs, and a two-entry cache.\
 **Negative witness:** last partial read crosses block boundary and returns data from adjacent block.\
 **Requirement links:** D-UDIF-04.\
-**Evidence:** Recorded Kani, property, fuzz, and differential runs pass within the stated bounds. The separate concurrent cache acceptance case remains open. [D-V04 evidence](../../crates/formats/dmgez-udif/verification/evidence/D-V04.json)
+**Evidence:** Kani, property, fuzz, and differential runs pass within the stated bounds. Loom explores two overlapping reads across three zlib runs with a two-entry cache and compares both results to the raw fixture. [D-V04 evidence](../../crates/formats/dmgez-udif/verification/evidence/D-V04.json)
 
 ### D-V05 — builder
 **Target:** dmgez-builder / manifest sealing and metadata.\

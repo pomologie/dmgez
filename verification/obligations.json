@@ -92,13 +92,14 @@
         "D-UDIF-04"
       ],
       "target": "dmgez-udif / indexed reads and bounded decoder",
-      "property": "A request for admitted [a,b) returns exact concatenation of decoded runs or an error; decoded lengths and budget checked before accepting output; unknown run never yields synthetic zeros.",
-      "assumptions_and_initial_bounds": "Qualified codec contracts; small runs <=8 and range partitions; independent arbitrary byte stream, decoder budget including hostile lengths.",
+      "property": "An admitted read returns exact bytes or an error. Decoded lengths and capacity are checked before output is accepted. Unknown runs never yield synthetic zeros. Concurrent reads remain exact through eviction, with bounded decoded capacity and per-image isolation.",
+      "assumptions_and_initial_bounds": "Qualified codec contracts, small runs <=8 and range partitions, independent arbitrary byte streams, and hostile lengths. The cache model uses two readers, three 512-byte zlib runs, and a two-entry cache.",
       "required_methods": [
         "kani",
         "property",
         "fuzz",
-        "differential"
+        "differential",
+        "loom"
       ],
       "negative_witness": "last partial read crosses block boundary and returns data from adjacent block",
       "mandatory_when_activated": true,

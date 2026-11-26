@@ -51,7 +51,18 @@ The routing checks enable only `read`. The [reader limit tests](reader_limits.rs
 
 The boundary mutation witness extends the current run by one byte before clipping the fragment to the request end. In an isolated source copy, Kani rejected the mutated `ReadCursor::next` at the exact-intersection assertion.
 
-The [v0.1.0 evidence records](evidence) identify the tested revisions, methods, bounds, and log hashes. `source_hash` covers the Git tar archive of this crate, `dmgez-core` and the workspace lockfile at the recorded revision. `fixture_hash` covers the tracked repository and crate fixture trees. Local logs live under `target/verification-evidence/udif-v0.1.0/` with private paths replaced by placeholders. The 78-test run used 4,096 property cases and seed `20261126`. The AddressSanitizer run processed 20,000 inputs from nine seed fixtures and left no crash artifacts. The local Apple Silicon candidate replayed the native UDRO and UDZO checks with p7zip 17.05 and macOS 14.7.2. The concurrent cache acceptance case remains open.
+The [v0.1.0 evidence records](evidence) identify the tested revisions, methods, bounds, and log hashes. `source_hash` covers the Git tar archive of this crate, `dmgez-core` and the workspace lockfile at the recorded revision. `fixture_hash` covers the tracked repository and crate fixture trees. Local logs live under `target/verification-evidence/udif-v0.1.0/` with private paths replaced by placeholders. The 78-test run used 4,096 property cases and seed `20261126`. The AddressSanitizer run processed 20,000 inputs from nine seed fixtures and left no crash artifacts. The local Apple Silicon candidate replayed the native UDRO and UDZO checks with p7zip 17.05 and macOS 14.7.2.
+
+## Concurrent decode cache
+
+The [cache tests](decode_cache.rs) exercise D-UDIF-04-T04 against the production reader. The Loom build substitutes the cache mutex and fixture synchronization. The encoder, parser, decoder and cache policy use their normal implementations. Two readers overlap within two resident runs to check one inflate per run. A separate case overlaps across three runs to force eviction. Raw fixture bytes are the read oracle. Further checks establish least-recently-used eviction, count the spare zlib output byte in the capacity limit, and compare different images with equal segment identifiers.
+
+At `b0b61d00a2c14391d9f7315b8f8c93a0d68b9d1d`, all four cases passed with Loom 0.7.2 on macOS 14.7.2 arm64. Removing the retained-capacity check in a scratch copy caused the capacity test to fail. The native build passed 82 UDIF tests. A composed CLI using HFS+ `a1b870f` reproduced all four project digests and passed Apple and 7-Zip verification. [Structured evidence](evidence/D-V04.json)
+
+```sh
+RUSTFLAGS="--cfg dmgez_loom" cargo test --locked -p dmgez-udif \
+  --no-default-features --features read,write,zlib --lib decode_cache_model
+```
 
 Install Kani 0.68.0 and run `cargo kani setup` before running `bash check.sh` from this directory. The checker also accepts an absolute path to `check.sh`.
 

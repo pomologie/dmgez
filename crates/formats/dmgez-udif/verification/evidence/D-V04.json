@@ -234,5 +234,88 @@
     "duration_ms": 11730,
     "exit_code": 0,
     "fixture_hash": "229665fe59b3c463f62add4189c66e67a4547c44121f4b587063dfff0362b689"
+  },
+  {
+    "schema_version": 1,
+    "obligation_id": "D-V04",
+    "method": "loom",
+    "status": "pass",
+    "commit": "b0b61d00a2c14391d9f7315b8f8c93a0d68b9d1d",
+    "dirty": false,
+    "source_hash": "380b7101e9687b18402f6d28b4505c2ee1db097c44069efd80f15ce95823b5ec",
+    "profile": "overlapping positioned reads through the production per-image zlib cache",
+    "features": [
+      "read",
+      "write",
+      "zlib"
+    ],
+    "tool_versions": {
+      "loom": "0.7.2",
+      "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)"
+    },
+    "command": [
+      "env",
+      "RUSTFLAGS=--cfg dmgez_loom",
+      "cargo",
+      "test",
+      "--offline",
+      "--locked",
+      "--manifest-path",
+      "crates/formats/dmgez-udif/Cargo.toml",
+      "--no-default-features",
+      "--features",
+      "read,write,zlib",
+      "--lib",
+      "decode_cache_model"
+    ],
+    "assumptions": [
+      "Immutable synthetic storage. The model checks positioned reads against their original raw bytes.",
+      "The test replaces cache and fixture synchronization with Loom primitives. It uses the production encoder, parser, decoder and eviction policy."
+    ],
+    "bounds": {
+      "scenarios": 4,
+      "readers": 2,
+      "images": 2,
+      "runs_per_image": 3,
+      "logical_bytes_per_run": 512,
+      "cache_entries": 2,
+      "cache_byte_limits": [
+        1025,
+        1026
+      ]
+    },
+    "artifacts": [
+      {
+        "name": "loom-clean",
+        "sha256": "06bde7f7a84a02b33d5db77a0e52430cf1a0d9fe7cf7f1d85300c9a14ee41e19",
+        "uri": "target/verification-evidence/udif-v0.1.0/decode-cache-loom-clean-06bde7f7a84a02b33d5db77a0e52430cf1a0d9fe7cf7f1d85300c9a14ee41e19.log"
+      },
+      {
+        "name": "mutation",
+        "sha256": "a7e2116989334c6c63c0053e8a6f74c04c16d92c374efd1a20e749f257849903",
+        "uri": "target/verification-evidence/udif-v0.1.0/decode-cache-mutation-a7e2116989334c6c63c0053e8a6f74c04c16d92c374efd1a20e749f257849903.log"
+      },
+      {
+        "name": "checks-verified",
+        "sha256": "2b74b337e289c07314fac3d16266ce707eab1abf3f50449218161dd90932448f",
+        "uri": "target/verification-evidence/udif-v0.1.0/decode-cache-checks-verified-2b74b337e289c07314fac3d16266ce707eab1abf3f50449218161dd90932448f.log"
+      },
+      {
+        "name": "dependencies-verified",
+        "sha256": "5041a8778c6961875e021b3e63ca9369c0860632b91359a2e6a844d316e764e3",
+        "uri": "target/verification-evidence/udif-v0.1.0/decode-cache-dependencies-verified-5041a8778c6961875e021b3e63ca9369c0860632b91359a2e6a844d316e764e3.log"
+      },
+      {
+        "name": "project",
+        "sha256": "63429085083b348115baaf5b515bfacaef2be4fd78a9e41500dd4419da4a6c55",
+        "uri": "target/verification-evidence/udif-v0.1.0/decode-cache-project-63429085083b348115baaf5b515bfacaef2be4fd78a9e41500dd4419da4a6c55.log"
+      }
+    ],
+    "runner": {
+      "os": "macOS 14.7.2 (23H311)",
+      "arch": "arm64"
+    },
+    "duration_ms": 6150,
+    "exit_code": 0
   }
 ]
