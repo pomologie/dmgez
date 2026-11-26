@@ -49,6 +49,10 @@ The local arm64 macOS candidate at dmgez `163a5f1` and HFS+ `a1b870f` used Rust 
 
 The optimized arm64 macOS candidate at dmgez `57eecd7` used the same HFS+ revision and toolchain with the trimmed signer. Its notice review verified all 117 registry archive checksums and matched the license texts and supplemental notices for all 133 packages against the reviewed `163a5f1` notices, including 37 canonical fallback entries. With those reviewed notices, the archive test passed repeatable packaging, extraction and checksum verification, installation, and example build, signing, and verification. The local archive has SHA-256 `60ce6ee350863d3a6ac85475d5ddfa9b9cd9d11987e18f509fd66cb184184d7e`. The archived notices have SHA-256 `b2dff0f23abc8dc1e9d137f47dd4e4aa5034493d97f8ccd45fec020f71f44253`.
 
+The arm64 macOS archive at `ffb76e4` uses the canonical signer-source digest. Its 133 packages and license texts match the reviewed `57eecd7` notice body. Repeatable packaging, extraction, installation, and example build, signing, and verification passed with the reviewed notices. The local archive has SHA-256 `b6111cf98a0f03b69bf040288f35688ca4a3a41c6faf2e6847bb3d67ea7424f4`.
+
+The exact Windows x86-64 MSVC executable from `57eecd7` was also packaged with its reviewed notices using Python 3.13.17 under Wine 10.0. The test compared two archives byte for byte, verified the extracted files, and built, signed, and verified the example with the extracted CLI. The archive contains the signer source bytes from that Windows checkout. The local ZIP has SHA-256 `97a9eb7b8156a3e2b1d57aff3db299db328ff98a9d825216e16bffab4259e94b`. The Windows Server 2025 archive smoke for that executable used fixture notices.
+
 | Local macOS candidate artifact | SHA-256 |
 |---|---|
 | `dmgez-0.1.0-aarch64-apple-darwin.tar.gz` | `dfc262861c2c2d74410a424882307e97e5ec4a770a0d3a1536bfe0dc2fdc2128` |
