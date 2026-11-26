@@ -1,3 +1,11 @@
+use std::ops::Range;
+
+#[cfg(feature = "zlib")]
+use std::io::Write as _;
+
+#[cfg(feature = "zlib")]
+use proptest::prelude::*;
+
 use crate::{
 	SECTOR_BYTES, TRAILER_BYTES,
 	blkx::{self, Kind, NO_RUN_COMMENT, Record},
@@ -34,6 +42,14 @@ impl MetadataSource {
 			xml_offset,
 			xml,
 		}
+	}
+
+	#[cfg(feature = "zlib")]
+	fn with_payload(self, mut data: Vec<u8>) -> Vec<u8> {
+		assert_eq!(data.len() as u64, self.xml_offset);
+		data.extend(self.xml);
+		data.extend(self.tail);
+		data
 	}
 }
 
@@ -73,26 +89,30 @@ fn rejects_xml_larger_than_a_byte_buffer_before_reading_it() {
 	));
 }
 
-fn run_metadata(kind: Kind, sectors: u64, stored_len: u64) -> MetadataSource {
-	let run = Record {
+fn run(kind: Kind, sectors: Range<u64>, stored: Range<u64>) -> Record {
+	Record {
 		kind,
 		comment: NO_RUN_COMMENT,
-		first_sector: 0,
-		sector_count: sectors,
-		offset: 0,
-		stored_len,
-	};
-	let terminator = Record {
-		kind: Kind::End,
-		first_sector: sectors,
-		sector_count: 0,
-		offset: stored_len,
-		stored_len: 0,
-		..run
-	};
-	let table = blkx::encode(sectors, 0, 0, &[run, terminator]).unwrap();
+		first_sector: sectors.start,
+		sector_count: sectors.end - sectors.start,
+		offset: stored.start,
+		stored_len: stored.end - stored.start,
+	}
+}
+
+fn table_source(sectors: u64, stored_len: u64, mut runs: Vec<Record>) -> MetadataSource {
+	runs.push(run(Kind::End, sectors..sectors, stored_len..stored_len));
+	let table = blkx::encode(sectors, 0, 0, &runs).unwrap();
 	let xml = resource::encode(table, false).unwrap();
 	MetadataSource::new(sectors, stored_len, xml.len() as u64, xml)
+}
+
+fn run_metadata(kind: Kind, sectors: u64, stored_len: u64) -> MetadataSource {
+	table_source(
+		sectors,
+		stored_len,
+		vec![run(kind, 0..sectors, 0..stored_len)],
+	)
 }
 
 #[test]
@@ -127,6 +147,190 @@ fn unknown_run_cannot_supply_zero_bytes() {
 		})
 	));
 	assert_eq!(output, [u8::MAX]);
+}
+
+#[test]
+fn mixed_run_admission_rejects_logical_overlap_and_physical_reuse() {
+	let logical_overlap = table_source(
+		2,
+		2 * SECTOR_BYTES,
+		vec![
+			run(Kind::Raw, 0..1, 0..SECTOR_BYTES),
+			run(Kind::Raw, 0..1, SECTOR_BYTES..2 * SECTOR_BYTES),
+		],
+	);
+	assert!(matches!(
+		Image::open(logical_overlap, Limits::default()),
+		Err(Error::Corrupt("misordered, overlapping or empty mish run"))
+	));
+
+	let physical_overlap = table_source(
+		2,
+		SECTOR_BYTES,
+		vec![
+			run(Kind::Raw, 0..1, 0..SECTOR_BYTES),
+			run(Kind::Raw, 1..2, 0..SECTOR_BYTES),
+		],
+	);
+	assert!(matches!(
+		Image::open(physical_overlap, Limits::default()),
+		Err(Error::Corrupt("mish runs reuse overlapping physical data"))
+	));
+}
+
+#[cfg(feature = "zlib")]
+const SECTOR_SIZE: usize = SECTOR_BYTES as usize;
+#[cfg(feature = "zlib")]
+const MIXED_LOGICAL_LEN: usize = 3 * SECTOR_SIZE;
+
+#[cfg(feature = "zlib")]
+fn zlib_fixture(raw: &[u8]) -> Vec<u8> {
+	let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::default());
+	encoder.write_all(raw).unwrap();
+	encoder.finish().unwrap()
+}
+
+#[cfg(feature = "zlib")]
+fn mixed_fixture() -> (Vec<u8>, [u8; MIXED_LOGICAL_LEN]) {
+	let mut raw = [0; MIXED_LOGICAL_LEN];
+	for (index, byte) in raw[..SECTOR_SIZE].iter_mut().enumerate() {
+		*byte = index.to_le_bytes()[0];
+	}
+	raw[SECTOR_SIZE..2 * SECTOR_SIZE].fill(0x5a);
+	let mut payload = raw[..SECTOR_SIZE].to_vec();
+	payload.extend(zlib_fixture(&raw[SECTOR_SIZE..2 * SECTOR_SIZE]));
+	let stored_end = payload.len() as u64;
+	let source = table_source(
+		3,
+		stored_end,
+		vec![
+			run(Kind::Raw, 0..1, 0..SECTOR_BYTES),
+			run(Kind::Zlib, 1..2, SECTOR_BYTES..stored_end),
+			run(Kind::Zero, 2..3, stored_end..stored_end),
+		],
+	);
+	(source.with_payload(payload), raw)
+}
+
+#[cfg(feature = "zlib")]
+#[test]
+fn unaligned_read_spans_raw_zlib_and_zero_runs() {
+	let (stored, raw) = mixed_fixture();
+	let image = Image::open(stored.as_slice(), Limits::default()).unwrap();
+	let start = SECTOR_SIZE - 3;
+	let end = 2 * SECTOR_SIZE + 5;
+	let mut output = vec![u8::MAX; end - start];
+	image.read_exact_at(start as u64, &mut output).unwrap();
+	assert_eq!(output, raw[start..end]);
+
+	image
+		.read_exact_at(MIXED_LOGICAL_LEN as u64, &mut [])
+		.unwrap();
+	let mut byte = [u8::MAX];
+	assert!(matches!(
+		image.read_exact_at(MIXED_LOGICAL_LEN as u64, &mut byte),
+		Err(Error::OutOfRange { .. })
+	));
+	assert_eq!(byte, [u8::MAX]);
+}
+
+#[cfg(feature = "zlib")]
+proptest! {
+	#[test]
+	fn random_mixed_ranges_match_generated_bytes(
+		start in 0..=MIXED_LOGICAL_LEN,
+		len in 0..=MIXED_LOGICAL_LEN,
+	) {
+		let (stored, raw) = mixed_fixture();
+		let image = Image::open(stored.as_slice(), Limits::default()).unwrap();
+		let mut output = vec![u8::MAX; len];
+		let result = image.read_exact_at(start as u64, &mut output);
+		if let Some(expected) = raw.get(start..start + len) {
+			result.unwrap();
+			prop_assert_eq!(output, expected);
+		} else {
+			prop_assert!(matches!(result, Err(Error::OutOfRange { .. })), "invalid range");
+			prop_assert!(output.iter().all(|&byte| byte == u8::MAX));
+		}
+	}
+}
+
+#[cfg(feature = "zlib")]
+#[test]
+fn rejects_wrong_zlib_output_lengths_and_truncated_input() {
+	let too_short = zlib_fixture(&[0x15; SECTOR_SIZE - 1]);
+	let too_long = zlib_fixture(&[0x15; SECTOR_SIZE + 1]);
+	let mut truncated = zlib_fixture(&[0x15; SECTOR_SIZE]);
+	truncated.pop().unwrap();
+	for payload in [too_short, too_long, truncated] {
+		let image_bytes =
+			run_metadata(Kind::Zlib, ONE_SECTOR, payload.len() as u64).with_payload(payload);
+		let image = Image::open(image_bytes.as_slice(), Limits::default()).unwrap();
+		let mut byte = [u8::MAX];
+		assert!(matches!(
+			image.read_exact_at(0, &mut byte),
+			Err(Error::InvalidZlib {
+				offset: 0,
+				logical_offset: 0
+			})
+		));
+		assert_eq!(byte, [u8::MAX]);
+	}
+}
+
+#[cfg(feature = "zlib")]
+#[test]
+fn bounded_inflate_refuses_large_expansion_in_an_unallocatable_sparse_disk() {
+	const EXPANDED_BYTES: usize = 128 * SECTOR_SIZE;
+	const SPARSE_SECTORS: u64 = FIRST_NON_ALLOCATABLE_BYTE_COUNT / SECTOR_BYTES;
+	let payload = zlib_fixture(&vec![0x15; EXPANDED_BYTES]);
+	assert!(payload.len() < SECTOR_SIZE);
+	let mut requests = Vec::new();
+	assert!(
+		crate::codec::inflate_with_buffer(&payload, SECTOR_SIZE, |size| {
+			requests.push(size);
+			vec![0; size]
+		})
+		.is_none()
+	);
+	assert_eq!(
+		requests,
+		[SECTOR_SIZE + crate::geometry::DECODER_SPARE_BYTES]
+	);
+	let stored_end = payload.len() as u64;
+	let image_bytes = table_source(
+		SPARSE_SECTORS,
+		stored_end,
+		vec![
+			run(Kind::Zlib, 0..1, 0..stored_end),
+			run(Kind::Zero, 1..SPARSE_SECTORS, stored_end..stored_end),
+		],
+	)
+	.with_payload(payload);
+	let image = Image::open(
+		image_bytes.as_slice(),
+		Limits {
+			max_records: 3,
+			max_compressed_bytes: SECTOR_SIZE,
+			max_decoded_bytes: SECTOR_SIZE,
+			..PERMISSIVE_LIMITS
+		},
+	)
+	.unwrap();
+	assert_eq!(
+		image.descriptor().logical_bytes,
+		FIRST_NON_ALLOCATABLE_BYTE_COUNT
+	);
+	let mut byte = [u8::MAX];
+	assert!(matches!(
+		image.read_exact_at(0, &mut byte),
+		Err(Error::InvalidZlib { .. })
+	));
+	assert_eq!(byte, [u8::MAX]);
+	image
+		.read_exact_at(FIRST_NON_ALLOCATABLE_BYTE_COUNT - 1, &mut byte)
+		.unwrap();
+	assert_eq!(byte, [0]);
 }
 
 #[cfg(feature = "zlib")]

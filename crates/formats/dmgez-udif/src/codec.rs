@@ -1,9 +1,18 @@
 #[cfg(feature = "read")]
 pub(crate) fn inflate(stored: &[u8], length: usize) -> Option<Vec<u8>> {
+	inflate_with_buffer(stored, length, |size| vec![0; size])
+}
+
+#[cfg(feature = "read")]
+pub(crate) fn inflate_with_buffer(
+	stored: &[u8],
+	length: usize,
+	make_buffer: impl FnOnce(usize) -> Vec<u8>,
+) -> Option<Vec<u8>> {
 	use flate2::{Decompress, FlushDecompress, Status};
 
 	// One extra byte distinguishes an exact stream from one that expands beyond its mapping.
-	let mut decoded = vec![0; length.checked_add(crate::geometry::DECODER_SPARE_BYTES)?];
+	let mut decoded = make_buffer(length.checked_add(crate::geometry::DECODER_SPARE_BYTES)?);
 	let mut inflater = Decompress::new(true);
 	let status = inflater
 		.decompress(stored, &mut decoded, FlushDecompress::Finish)
