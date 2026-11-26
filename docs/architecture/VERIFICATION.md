@@ -155,6 +155,8 @@ The coverage inventory has SHA-256 `de5bec140546eaf3ec663de8f4f0f9bf3996130fce88
 
 The captured-source regression exercises two independent reader cursors over one held file and checks exact completion at its admitted extent. It also confirms that truncation returns `SourceError::Changed` through `io::copy` without appending another byte. Both cases passed with the source feature alone. The core all-feature suite passed 19 tests and strict Clippy. [Captured-source tests](../../crates/foundation/dmgez-core/tests/captured_source.rs)
 
+The builder execution suite covers three release staging refusals. A stream plan creates no output. Cancellation at `VerifyingOutput` skips the verifier, removes the private stage and preserves the incumbent. Source truncation during successful verification returns `ManifestError::SourceChanged` and also removes the private stage without replacing the incumbent. All 16 execution tests passed on arm64 macOS. With default builder features, the nightly coverage run recorded 48 of 54 lines for `release_stage.rs`. Both outcomes of the two admission conditions appear across generic instantiations. LLVM's file summary reports 2 of 4 branch outcomes, so the source-span observations are recorded separately from the reported branch percentage. The report is `target/verification-evidence/v0.1.0-verification/5848a2f-builder-release-faults/release-stage-coverage.json` with SHA-256 `0e47740198b3922dc253ffc7b60649ba7dc38fca2a797b9ad9a6d75abef0f83b`. D-VER-01 remains open. [Release staging tests](../../crates/build/dmgez-builder/tests/execution/release_faults.rs)
+
 ## Proof obligations
 
 | ID | Activation | Scope | Required evidence |
