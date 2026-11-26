@@ -30,14 +30,24 @@ pub(super) fn observe(path: &Path) -> io::Result<ImageIdentity> {
 
 /// Record the identity of the same held file the builder verified.
 pub(super) fn observe_stage(
+	reader: StagedReader<'_>,
+	physical_bytes: u64,
+) -> io::Result<ImageIdentity> {
+	observe_stage_with(reader, physical_bytes, |reader, bytes| {
+		hash_image(reader, bytes)
+	})
+}
+
+fn observe_stage_with(
 	mut reader: StagedReader<'_>,
 	physical_bytes: u64,
+	hash: impl FnOnce(&mut StagedReader<'_>, u64) -> io::Result<ImageIdentity>,
 ) -> io::Result<ImageIdentity> {
 	let before = reader.metadata()?;
 	if before.len() != physical_bytes {
 		return Err(invalid(IMAGE_IDENTITY_CHANGED));
 	}
-	let identity = hash_image(&mut reader, physical_bytes)?;
+	let identity = hash(&mut reader, physical_bytes)?;
 	if !same_entry(&before, &reader.metadata()?) {
 		return Err(invalid(IMAGE_IDENTITY_CHANGED));
 	}

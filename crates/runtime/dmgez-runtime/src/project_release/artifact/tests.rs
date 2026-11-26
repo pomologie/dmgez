@@ -37,6 +37,45 @@ fn held_stage_identity_requires_the_verified_extent() {
 
 #[cfg(unix)]
 #[test]
+fn held_stage_identity_rejects_metadata_changed_during_hashing() {
+	use std::time::Duration;
+
+	const TIMESTAMP_CHANGE: Duration = Duration::from_secs(60);
+	let directory = tempfile::tempdir().unwrap();
+	let output = directory.path().join(OUTPUT_NAME);
+	let mut stage = stage_new(
+		&output,
+		STAGED_SUFFIX,
+		|writer| writer.write_all(UNSIGNED),
+		|_, &()| Ok(()),
+	)
+	.unwrap();
+	let writer = fs::OpenOptions::new()
+		.write(true)
+		.open(stage.path())
+		.unwrap();
+	let original = writer.metadata().unwrap().modified().unwrap();
+	let changed = original.checked_sub(TIMESTAMP_CHANGE).unwrap();
+	let error = observe_stage_with(
+		stage.reader().unwrap(),
+		UNSIGNED.len() as u64,
+		|reader, bytes| {
+			let identity = hash_image(reader, bytes)?;
+			writer.set_modified(changed)?;
+			Ok(identity)
+		},
+	)
+	.unwrap_err();
+	assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+	assert_eq!(error.to_string(), IMAGE_IDENTITY_CHANGED);
+	assert_eq!(fs::read(stage.path()).unwrap(), UNSIGNED);
+	drop(writer);
+	drop(stage);
+	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 0);
+}
+
+#[cfg(unix)]
+#[test]
 fn held_stage_identity_stays_bound_after_its_name_is_replaced() {
 	let directory = tempfile::tempdir().unwrap();
 	let output = directory.path().join(OUTPUT_NAME);
