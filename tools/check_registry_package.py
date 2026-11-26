@@ -48,7 +48,12 @@ def check(package, cargo, seven_zip, native_filesystem):
         run(cargo, [
             "install", "--locked", "--offline", "--path", source, "--root", installation,
         ], scratch, environment)
-        executable = installation / "bin" / ("dmgez.exe" if os.name == "nt" else "dmgez")
+        bin_path = installation / "bin"
+        environment["PATH"] = os.pathsep.join((str(bin_path), environment["PATH"]))
+        executable = shutil.which("dmgez", path=environment["PATH"])
+        if executable is None or Path(executable).resolve().parent != bin_path.resolve():
+            raise ValueError("Cargo did not install dmgez into its bin directory")
+        subprocess.run([executable, "--version"], cwd=scratch, env=environment, check=True)
         for format_name in ("udro", "udzo"):
             command = [
                 sys.executable, "-B", PROJECT_SMOKE, executable, scratch / format_name,

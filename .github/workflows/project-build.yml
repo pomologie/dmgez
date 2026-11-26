@@ -128,6 +128,39 @@ jobs:
               print(f"executable={executable}", file=output)
               print(f"target={target}", file=output)
               print(f"notice_review={handoff}", file=output)
+              print(f"seven_zip={seven_zip}", file=output)
+      - name: Verify the CLI and library from one Cargo package
+        env:
+          DMGEZ_SEVEN_ZIP: ${{ steps.project.outputs.seven_zip }}
+        shell: python
+        run: |
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+          import tempfile
+          import tomllib
+
+          with Path("rust-toolchain.toml").open("rb") as manifest:
+              channel = tomllib.load(manifest)["toolchain"]["channel"]
+          environment = os.environ | {"RUSTUP_TOOLCHAIN": channel}
+          with tempfile.TemporaryDirectory(prefix="dmgez-cargo-package-") as temporary:
+              scratch = Path(temporary)
+              target = scratch / "xtask"
+              subprocess.run([
+                  "cargo", "build", "--locked", "-p", "xtask", "--target-dir", target,
+              ], env=environment, check=True)
+              xtask = target / "debug" / ("xtask.exe" if sys.platform == "win32" else "xtask")
+              package = scratch / "dmgez"
+              subprocess.run([
+                  sys.executable, "-B", "tools/prepare_registry_package.py", "--hfsplus", "hfsplus",
+                  "--xtask", xtask, "--output", package, "--fetch",
+              ], env=environment, check=True)
+              native = ["--native-filesystem"] if sys.platform == "darwin" else []
+              subprocess.run([
+                  sys.executable, "-B", "tools/check_registry_package.py", package,
+                  "--seven-zip", os.environ["DMGEZ_SEVEN_ZIP"], *native,
+              ], env=environment, check=True)
       - name: Verify offline CLI archive on this host
         env:
           DMGEZ_EXECUTABLE: ${{ steps.project.outputs.executable }}
