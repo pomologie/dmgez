@@ -54,6 +54,9 @@ jobs:
           "PROJECT_CI_DIR=$work" >> $env:GITHUB_ENV
           "TEMP=$work" >> $env:GITHUB_ENV
           "TMP=$work" >> $env:GITHUB_ENV
+      - name: Verify Windows NTFS source discovery
+        if: runner.os == 'Windows'
+        run: cargo test --locked -p dmgez-builder --test windows_manifest
       - name: Build, sign, and verify dmg.toml
         id: project
         shell: python

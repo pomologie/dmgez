@@ -124,9 +124,10 @@ The fixture passed on arm64 macOS 14.7.2 and in an offline x86-64 Linux containe
 
 ## Windows NTFS composition
 
-Run the standalone HFS+ composition tool with Python 3.11 or newer on local NTFS. Use the checkout or unpacked package form. Add `--test` on a native Windows machine to execute the project build tests, including the NTFS source and metadata fixture.
+Run the standalone HFS+ composition tool with Python 3.11 or newer on local NTFS. Use the checkout or unpacked package form. The release workflow runs the builder's NTFS manifest tests and the composed CLI tests on the same NTFS temporary storage.
 
 ```powershell
+cargo test --locked -p dmgez-builder --test windows_manifest
 py -3 tools\compose_hfsplus_cli.py --hfsplus ..\hfsplus --test
 py -3 tools\compose_hfsplus_cli.py --hfsplus ..\hfsplus
 target\hfsplus-cli\debug\dmgez.exe build dmg.toml --dry-run
@@ -136,6 +137,8 @@ target\hfsplus-cli\debug\dmgez.exe build dmg.toml
 Windows copies regular file data from the [NTFS source adapter](../../../docs/reference/WINDOWS_SOURCES.md). Requested attributes that the host cannot observe fail in strict metadata mode. `[metadata] policy = "report"` permits the build and reports omissions. The Windows builder publishes to a new output and refuses `--overwrite`. Finder custom item icons require host metadata conflict checks and are unavailable on this path. APFS and filesystem reader composition continue to require macOS or Linux.
 
 Cross-target Clippy with warnings denied passed on Rust 1.99.1 for `x86_64-pc-windows-msvc`, composed with HFS+ revision `fb11b35`. The Windows-specific fixture covers dry-run, a copied Unicode-named source, strict metadata refusal, report-mode publication, and no-clobber behavior. Native Windows runtime evidence is pending.
+
+At dmgez `e4cb936` and HFS+ `a1b870f`, cross-target Clippy on macOS passed with warnings denied for the NTFS manifest tests and for the composed unsigned CLI with `build,parallel,inspect`. The default-signing profile's local compile probe stopped at a missing Microsoft C runtime header while compiling `ring`. Native execution of the NTFS and signing tests remains pending.
 
 ## Native interoperability evidence
 
