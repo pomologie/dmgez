@@ -720,7 +720,7 @@
       "acceptance_tests": [
         "D-VER-02-T01"
       ],
-      "status": "planned",
+      "status": "pass",
       "mandatory": true
     },
     {

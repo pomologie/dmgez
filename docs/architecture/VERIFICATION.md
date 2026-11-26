@@ -2,7 +2,32 @@
 
 Immutable image generation and untrusted reading are the first priority. Model ordering/credits and publication before the parallel builder release, not after it. Do not require APFS or mutable filesystem proofs for the default CLI. Native format checks, data preservation, and proofs of pure Rust are separate evidence. Signing, mount, remote and MCP get their own approval/state gates.
 
-Read the shared ecosystem verification standard EVS-1 (`docs/architecture/ECOSYSTEM_VERIFICATION.md` after handoff). The following summarizes the repository-wide planning index at `verification/obligations.json`, which defines properties, assumptions, bounds, negative witnesses and required evidence methods. Implemented proof artifacts live in the owning crate’s `verification/` directory. All obligations are planned. Gate applies only to the activated supported profile; required proofs/tests must pass before that capability ships. Nonblocking advanced capabilities remain disabled if not qualified.
+Read the shared ecosystem verification standard [EVS-1](ECOSYSTEM_VERIFICATION.md). The [obligation index](../../verification/obligations.json) defines properties, bounds, negative witnesses, methods, and current status. Implemented proof artifacts live in the owning crate’s `verification/` directory. Required proofs and tests must pass before the affected capability ships.
+
+## v0.1.0 release evidence
+
+```sh
+cargo run --locked -p xtask -- release-evidence \
+  --root /path/to/clean/candidate \
+  --bundle /path/to/evidence/bundle.json
+```
+
+The [release profile](../../verification/release-profile.json) lists the required invocation groups for the activated obligations. Supply one [schema v1](../../verification/evidence.schema.json) record per profile and obligation in a JSON array, with each transcript named by a path relative to the bundle. A release record's `source_hash` is the SHA-256 of `git -c tar.umask=0002 archive --format=tar HEAD` from the candidate. Commands use the exact profile arguments and replace disposable paths with the profile's placeholders. Run each Kani group serially to retain the per-harness result and cover lines in order. The checker requires the clean candidate commit, the complete activated matrix, the declared command and features, matching transcript hashes, meaningful Kani assertions and the expected covers. The release process supplies the transcripts from the actual invocation. The checker validates their consistency and scope.
+
+The clean candidate `e048add07f0932a47ddd70c5ee8b7f75a85f5206` passed all 18 records on macOS 14.7.2 arm64. The run included 16 Kani harnesses, 98 UDIF tests, four Loom scenarios, 20,000 AddressSanitizer inputs, both named Rust reference decoders, and native read-only HFS+ attachment and filesystem checking. The checked-range harness reached an exact-fit request and a rejected overflowing request. The executable rejected missing, stale, dirty, timed-out, unsupported and wrong-feature records, a command that suppressed default Kani checks, a hash mismatch and a fresh transcript with missing covers.
+
+Local logs and the bundle are under `target/verification-evidence/v0.1.0-verification/e048add-release/`.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Qualified bundle | `3fb452a2ff3399d0eb92c1ef0142011e8a21559f2796acdfe288ee64ffa6d765` |
+| Validator success | `65630e1a30ef97fa723334eba25d529ec44c0cc156869517f3e3c0cfac133823` |
+| Validator rejections | `76cf263f674a440d90ad45acb0a68027ae11d59e1ffb2033d30c9d2972b5458e` |
+| Workspace nextest | `99bbf01c88b1f0408293e69791caeee34c0907fe5b9eb23714e512d9231c66cd` |
+
+Nextest passed 874 workspace tests with localhost access and skipped eight. The negative architecture checks rejected a CLI dependency on the GUI runtime and a 501-line source file. The coverage audit at `9e04fb0` measured 86.53% lines across the four selected builder, config, core and UDIF packages, and 89.87% lines and 75.00% branches in the separate UDIF run. The local coverage driver was 0.9.1. The coverage scope and uncovered critical branches remain open under D-VER-01. Its normalized coverage records are indexed in `target/verification-evidence/v0.1.0-verification/9e04fb0-apparatus-49a997ddf1a4db762b344d84861e15604b8314e6914007a2f6c535e7030c26e2.json`.
+
+## Proof obligations
 
 | ID | Activation | Scope | Required evidence |
 |---|---|---|---|
