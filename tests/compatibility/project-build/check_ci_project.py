@@ -18,6 +18,8 @@ PROJECT = Path(__file__).resolve().parent / "ci" / "dmg.toml"
 SOURCE_NAME = "release nôtes.bin"
 IMAGE_NAME = "installer.dmg"
 SIGNED_IMAGE_NAME = "installer-adhoc.dmg"
+OCCUPIED_IMAGE_NAME = "occupied.dmg"
+OCCUPIED_IMAGE_BYTES = b"pre-existing release destination"
 LOGICAL_BYTES = 4_096_000
 PAYLOAD = bytes(range(256)) * 1024
 VOLUME_NAME = "Pomologie CI"
@@ -25,6 +27,7 @@ PAYLOAD_PATH = f"{VOLUME_NAME}/Documentation/Release Nôtes.bin"
 APPLICATIONS_PATH = f"{VOLUME_NAME}/Applications"
 APPLICATIONS_TARGET = b"/Applications"
 BUILD_REPORT_SCHEMA_VERSION = 1
+BUILD_FAILURE = 1
 UDRO = "udro"
 UDZO = "udzo"
 HDIUTIL = "/usr/bin/hdiutil"
@@ -91,11 +94,30 @@ def image_identity(data):
     return {"bytes": len(data), "sha256": hashlib.sha256(data).hexdigest()}
 
 
-def build_signed(cli, directory, unsigned, image_format):
-    report = json.loads(subprocess.check_output([
-        cli, "build", PROJECT.name, "--release", "--json", "--set", f"image.output={SIGNED_IMAGE_NAME}",
+def release_command(cli, output_name, image_format):
+    return [
+        cli, "build", PROJECT.name, "--release", "--json", "--set", f"image.output={output_name}",
         "--set", f"image.format={image_format}",
-    ], cwd=directory, encoding="utf-8"))
+    ]
+
+
+def build_signed(cli, directory, unsigned, image_format):
+    command = release_command(cli, SIGNED_IMAGE_NAME, image_format)
+    before = set(directory.iterdir())
+    plan = json.loads(subprocess.check_output([*command, "--dry-run"], cwd=directory, encoding="utf-8"))
+    expected_plan = {
+        "schema_version": BUILD_REPORT_SCHEMA_VERSION,
+        "operation": "build",
+        "format": image_format,
+        "mode": "dry_run",
+        "release": "requested",
+        "logical_bytes": str(LOGICAL_BYTES),
+        "physical_bytes": None,
+    }
+    if not expected_plan.items() <= plan.items() or "steps" in plan or set(directory.iterdir()) != before:
+        raise RuntimeError(f"unexpected release dry-run result: {plan}")
+
+    report = json.loads(subprocess.check_output(command, cwd=directory, encoding="utf-8"))
     image = directory / SIGNED_IMAGE_NAME
     signed = image_identity(image.read_bytes())
     steps = {step["stage"]: step for step in report["steps"]}
@@ -110,6 +132,24 @@ def build_signed(cli, directory, unsigned, image_format):
     ):
         raise RuntimeError(f"unexpected signing release result: {report}")
     return image, signed
+
+
+def verify_publication_conflict(cli, directory, image_format):
+    destination = directory / OCCUPIED_IMAGE_NAME
+    destination.write_bytes(OCCUPIED_IMAGE_BYTES)
+    before = set(directory.iterdir())
+    result = subprocess.run(
+        release_command(cli, OCCUPIED_IMAGE_NAME, image_format), cwd=directory,
+        capture_output=True, encoding="utf-8",
+    )
+    if (
+        result.returncode != BUILD_FAILURE
+        or result.stdout
+        or "output already exists" not in result.stderr
+        or destination.read_bytes() != OCCUPIED_IMAGE_BYTES
+        or set(directory.iterdir()) != before
+    ):
+        raise RuntimeError(f"unexpected release destination conflict: {result}")
 
 
 def verify_signature(cli, image):
@@ -211,6 +251,7 @@ def main():
         decode_image(seven_zip, image, raw)
         verify_files(seven_zip, raw)
         signed_image, signed = build_signed(cli, image.parent, unsigned, args.format)
+        verify_publication_conflict(cli, image.parent, args.format)
         verify_container(cli, signed_image, args.format, signed=True)
         verify_signature(cli, signed_image)
         signed_raw = workspace / "installer-adhoc.hfs"

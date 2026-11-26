@@ -114,13 +114,15 @@ The qualified source profile covers ordinary regular file permissions and owners
 
 ## Cross-platform signing fixture
 
-With a composed release CLI that includes `inspect`, run `python3 check_ci_project.py /path/to/dmgez /path/to/output --seven-zip 7z`. The fixture builds the unsigned image twice and builds an ad hoc release with the default Rust signer. It checks each container, verifies the signature separately, and compares the signed raw export with 7-Zip’s independent decode.
+With a composed release CLI that includes `inspect`, run `python3 check_ci_project.py /path/to/dmgez /path/to/output --seven-zip 7z`. The fixture runs unsigned and signed-release dry runs, builds the unsigned image twice, and builds an ad hoc release with the default Rust signer. It checks that a release refuses an occupied destination and leaves its existing bytes in place. It verifies the signature separately and compares the signed raw export with 7-Zip’s independent decode.
 
 Run once with `--format udro` and once with `--format udzo`, using a fresh output directory for each format. On macOS, add `--native-filesystem` to run read-only `fsck_hfs` and mount the signed fixture at a disposable path. The mounted check compares the payload, confirms the `/Applications` link and Finder store, and detaches the image afterward. The host needs permission to attach disk images and run the read-only check.
 
 The fixture defaults to UDZO and requires a zlib run. For UDRO, pass `--format udro` and use a separate output directory. The UDRO check requires stored raw runs with no zlib runs. Both profiles check the same HFS+ payload and symlink, byte-for-byte unsigned reproducibility, and exact preservation of the logical disk during signing.
 
-The fixture passed on arm64 macOS 14.7.2 and in an offline x86-64 Linux container with HFS+ `185ba1d`. The two hosts produced identical DMGs. The unsigned SHA-256 was `2ee99222fba33459bb167732656ded0452e53f5db3d01f7e536900a193fb16ea`. The signed SHA-256 was `7d4e0d4a49f1287c02ab40ba5c681aab4b2a2c7944c55ec1d50f08e0b787e85b`. Apple’s `hdiutil verify` and strict `codesign` checks passed on macOS. The hosted three-platform matrix still awaits its first recorded run. [CI workflow](../../../.github/workflows/project-build.yml)
+The hosted signing and build matrix at dmgez `98f4442` and HFS+ `a1b870f` passed on macOS 15, Ubuntu 24.04, and Windows Server 2025. Its comparison job confirmed byte-for-byte equality for the signed and unsigned UDRO and UDZO fixtures across all three runners. [Hosted project build](https://github.com/pomologie/dmgez/actions/runs/45813282977) · [Release fixture hashes](../../../docs/features/RELEASE.md#v010-release-profile)
+
+The release dry-run and occupied-destination checks passed locally on arm64 macOS 14.7.2 for both formats. Read-only `fsck_hfs`, native mounts, Apple signature verification, and the independent 7-Zip decode also passed. All four image hashes matched the release fixture hashes.
 
 ## Windows NTFS composition
 
@@ -136,11 +138,11 @@ target\hfsplus-cli\debug\dmgez.exe build dmg.toml
 
 Windows copies regular file data from the [NTFS source adapter](../../../docs/reference/WINDOWS_SOURCES.md). Requested attributes that the host cannot observe fail in strict metadata mode. `[metadata] policy = "report"` permits the build and reports omissions. The Windows builder publishes to a new output and refuses `--overwrite`. Finder custom item icons require host metadata conflict checks and are unavailable on this path. APFS and filesystem reader composition continue to require macOS or Linux.
 
-Cross-target Clippy with warnings denied passed on Rust 1.99.1 for `x86_64-pc-windows-msvc`, composed with HFS+ revision `fb11b35`. The Windows-specific fixture covers dry-run, a copied Unicode-named source, strict metadata refusal, report-mode publication, and no-clobber behavior. Native Windows runtime evidence is pending.
+Native x86-64 MSVC tests on Windows Server 2025 passed using NTFS scratch storage, dmgez `98f4442`, and HFS+ `a1b870f`. The Windows-specific fixtures exercised source discovery, a copied Unicode-named source, strict metadata refusal, report-mode publication, and no-clobber behavior. The same job built and signed both project formats and passed the archive smoke. [Hosted Windows qualification](https://github.com/pomologie/dmgez/actions/runs/45813282977/job/139886395045)
 
 At dmgez `e4cb936` and HFS+ `a1b870f`, cross-target Clippy on macOS passed with warnings denied for the NTFS manifest tests and for the composed unsigned CLI with `build,parallel,inspect`. The default-signing profile's local compile probe stopped at a missing Microsoft C runtime header while compiling `ring`.
 
-At dmgez `eddd6ba` with the same HFS+ revision, release-profile Clippy passed with warnings denied for the composed CLI and both project integration test targets on `x86_64-pc-windows-msvc` and `aarch64-pc-windows-msvc`. These checks included the default signer and `inspect`. Rust 1.99.1 checked the MSVC Rust targets on macOS. Zig 0.17.1 compiled ring's real Windows COFF objects using the corresponding GNU Windows C target, and LLVM archived them. Final linking with the Microsoft SDK and native NTFS and signing execution remain pending.
+At dmgez `eddd6ba` with the same HFS+ revision, release-profile Clippy passed with warnings denied for the composed CLI and both project integration test targets on `x86_64-pc-windows-msvc` and `aarch64-pc-windows-msvc`. These checks included the default signer and `inspect`. Rust 1.99.1 checked the MSVC Rust targets on macOS. Zig 0.17.1 compiled ring's real Windows COFF objects using the corresponding GNU Windows C target, and LLVM archived them. Native ARM64 Windows linking, NTFS and signing qualification remain pending.
 
 ## Native interoperability evidence
 
