@@ -13,6 +13,7 @@ import tempfile
 HDIUTIL = "/usr/bin/hdiutil"
 APPLE_RAW_FORMAT = "UDTO"
 EMPTY_BYTE = 0
+REFERENCE_CHUNK_BYTES = 1 << 20
 FIXTURES = pathlib.Path(__file__).resolve().parents[1] / "fixtures"
 
 
@@ -52,6 +53,30 @@ def exercise_control_runs(cli, native, work):
         raise RuntimeError("dmgez export does not match the independently decoded APM image")
     if not dmgez.startswith(apple) or any(byte != EMPTY_BYTE for byte in dmgez[len(apple):]):
         raise RuntimeError("dmgez export differs from the Apple prefix and its declared zero tail")
+
+
+def exercise_reference_readers(cli, reference_reader, native, work):
+    tiny = native / "tiny.raw"
+    for mode in ("UDRO", "UDZO"):
+        run(reference_reader, native / f"tiny-{mode}.dmg", tiny)
+
+    # The catalog's apple-dmg oracle counts stored bytes for zero runs.
+    # Keep this fixture to one zlib run and one raw fallback run.
+    mixed = (native / "mixed.raw").read_bytes()
+    raw = work / "reference.raw"
+    raw.write_bytes(mixed[REFERENCE_CHUNK_BYTES:3 * REFERENCE_CHUNK_BYTES])
+    for mode in ("udro", "udzo"):
+        image = work / f"reference-{mode}.dmg"
+        run(cli, "wrap-raw", str(raw), "--format", mode, "-o", str(image))
+        report = json.loads(subprocess.check_output([
+            cli, "verify", str(image), "--container", "--json",
+        ]))
+        runs = report["container"]["runs"]
+        expected = (2, 0) if mode == "udro" else (1, 1)
+        if (runs["raw"], runs["zlib"]) != expected:
+            raise RuntimeError(f"unexpected {mode} reference run types: {runs}")
+        same_bytes(export_with_apple(image, work / f"apple-reference-{mode}"), raw)
+        run(reference_reader, image, raw)
 
 
 def exercise_hfs(cli, work):
@@ -98,6 +123,8 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("cli", type=pathlib.Path)
     parser.add_argument("--seven-zip", default="7z")
+    parser.add_argument("--reference-readers", type=pathlib.Path,
+                        help="standalone apple-dmg and udif fixture adapter")
     parser.add_argument("--attach-hfs", action="store_true")
     args = parser.parse_args()
     cli = str(args.cli.resolve(strict=True))
@@ -120,6 +147,8 @@ def main():
                 if subprocess.check_output([args.seven_zip, "x", "-so", str(emitted)]) != raw.read_bytes():
                     raise RuntimeError(f"7-Zip exported different bytes for {emitted.name}")
         exercise_control_runs(cli, native, work)
+        if args.reference_readers:
+            exercise_reference_readers(cli, args.reference_readers.resolve(strict=True), native, work)
         if args.attach_hfs:
             exercise_hfs(cli, work)
 
