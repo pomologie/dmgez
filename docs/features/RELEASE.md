@@ -71,6 +71,10 @@ The local Intel macOS candidate at dmgez `cccaa28` and HFS+ `a1b870f` was cross-
 
 The local Linux x86-64 candidate at dmgez `d56c80d` and HFS+ `a1b870f` was built and tested in emulated Debian 12.15 with Rust 1.99.1 and GCC 12.2.0. Build, notice generation, and tests ran without networking after staging the dependencies. The notice review covered 164 build packages, including checksum verification of all 148 registry archives, comparison with the macOS selections, and the separate `linux-raw-sys` copyright. The archive test used those reviewed notices. It passed installation and example build, signing, and verification from extraction. Debian's 7-Zip 26.02 verified both project formats, all four fixture digests matched the table above, and Apple tools accepted the containers and ad hoc signatures.
 
+The Ubuntu 24.04 handoff for dmgez `e915d90` and HFS+ `a1b870f` ties the x86-64 Linux executable to the successful hosted project and archive smoke tests. Its reviewed notices match the previous license selections and texts for all 133 retained packages. The review checked 117 registry archive hashes and 37 canonical fallback entries. The exact hosted executable passed repeatable packaging, all 22 listed member checksums, installation, and example build, signing, and verification in an offline emulated Debian 12 container. On glibc 2.36 the loader emitted a weak `GLIBC_2.39` warning and the smoke completed. The local archive has SHA-256 `15f839f8ea12361e42e0f5fa07380765ed1336e2bc3d1747b8018775eec80535`. [Linux notice handoff](https://github.com/pomologie/dmgez/actions/runs/45792868513/artifacts/15104465311)
+
+Cargo Audit passed the 117-package Linux x86-64 registry inventory against RustSec database revision `c9f6c91`, with unmaintained, unsound and yanked warnings denied. The inventory and log are in `target/verification-evidence/v0.1.0-verification/e915d90-linux-dependency-audit/`.
+
 | Local Linux candidate artifact | SHA-256 |
 |---|---|
 | `dmgez-0.1.0-x86_64-unknown-linux-gnu.tar.gz` | `95e00779d6564bb93eec055552e7548312ad8b38cd5bf752e9ba41805152423f` |
