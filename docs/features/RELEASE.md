@@ -10,6 +10,8 @@ The cross-platform workflow runs on pushes to `main` and can also be started man
 
 The workflow exports a Cargo Audit inventory of the registry packages for each tested CLI from the compiler's built-package set and that build's composed lockfile. The hosted audit denies unmaintained, unsound, and yanked packages in those inventories. Workspace CI continues to audit the full dependency graph. [Project build workflow](../../.github/workflows/project-build.yml)
 
+At dmgez `98f4442` and HFS+ `a1b870f`, the three native build, signing, and archive smoke jobs, byte comparison, and standalone CLI dependency audit all passed. [Hosted release verification](https://github.com/pomologie/dmgez/actions/runs/45813282977)
+
 The D-V01 UDIF geometry checks passed within the crate's documented proof and fuzz bounds. They cover fixed-width reads and writes, exact block-map record admission before allocation, and trailer ranges and sector conversion. [Crate-local proof and fuzz evidence](../../crates/formats/dmgez-udif/verification/README.md)
 
 The D-UDIF-03 writer cursor checks passed with Kani and a byte-counting sink. A fresh macOS CLI composed from dmgez `41d3afa` and HFS+ `a1b870f` reproduced all four signed and unsigned project digests below. Apple and 7-Zip independently decoded the same HFS+ bytes, and Apple verified the ad hoc signatures. [Writer cursor evidence](../../crates/formats/dmgez-udif/verification/README.md#writer-cursor)
