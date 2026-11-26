@@ -62,11 +62,10 @@ pub(super) fn host_supports(entry: &CopyEntry) -> bool {
 					resource_bytes: Some(_),
 					..
 				}
-			)
-			&& entry
-				.attributes
-				.iter()
-				.all(|item| item.host_name.starts_with(USER_ATTRIBUTE));
+			) && entry
+			.attributes
+			.iter()
+			.all(|item| item.host_name.starts_with(USER_ATTRIBUTE));
 	}
 	entry.attributes.iter().all(|item| {
 		let name = item.host_name.as_str();

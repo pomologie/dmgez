@@ -84,8 +84,7 @@ fn distinguishes_layout_findings_from_container_corruption() {
 		result["layout"]["evidence"]["diagnostics"]
 			.as_array()
 			.unwrap()
-			.len()
-			>= 2
+			.len() >= 2
 	);
 	let image = root.join(IMAGE_NAME);
 	let mut bytes = fs::read(&image).unwrap();

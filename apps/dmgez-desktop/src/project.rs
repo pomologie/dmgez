@@ -222,8 +222,7 @@ impl ProjectTab {
 					if response.clicked() {
 						action = Some(input::select(ui, entry.path()));
 					} else if action.is_none()
-						&& selected
-						&& self.drag.is_none()
+						&& selected && self.drag.is_none()
 						&& let Some(keyboard) = input::nudge(ui, &response)
 					{
 						action = Some(keyboard);

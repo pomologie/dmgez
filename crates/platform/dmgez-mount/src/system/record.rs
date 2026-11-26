@@ -66,10 +66,9 @@ pub(crate) fn valid_native_path(path: &Path) -> bool {
 		&& path.file_name().is_some()
 		&& path.to_str().is_some_and(|text| {
 			text.len() <= MAX_NATIVE_PATH_BYTES && !text.as_bytes().contains(&0)
-		})
-		&& !path
-			.components()
-			.any(|part| matches!(part, Component::ParentDir))
+		}) && !path
+		.components()
+		.any(|part| matches!(part, Component::ParentDir))
 		&& path.components().collect::<PathBuf>().as_os_str() == path.as_os_str()
 }
 

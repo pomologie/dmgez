@@ -205,8 +205,7 @@ pub(super) fn movable_selection<'layout, 'project>(
 			.contents
 			.iter()
 			.filter(|entry| selected.contains(&entry.destination))
-			.count()
-			!= selected.len()
+			.count() != selected.len()
 	{
 		return None;
 	}
