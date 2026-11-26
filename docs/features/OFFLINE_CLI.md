@@ -17,6 +17,8 @@ The locked `binrw` and `binrw_derive` 0.15.2 crate archives declare MIT but omit
 
 For the Linux CLI, the draft also retains the locked `linux-raw-sys` 0.12.1 crate's separate `COPYRIGHT` file alongside its selected Apache license texts.
 
+For the Windows CLI, the draft retains the packaged source copyright headers for six locked MIT crates whose archives omit standalone license text. Offline scans of both Windows MSVC targets confirmed their source notices and the architecture-specific Microsoft import-library license. These scans cover source attribution. The notice for a shipped Windows executable still comes from its own composed build.
+
 Run from the checkout on the same operating system as the supplied executable. The output directory must already exist on a filesystem that supports hard links. Use a fresh path.
 
 ```sh

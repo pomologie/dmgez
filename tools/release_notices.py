@@ -44,6 +44,16 @@ UPSTREAM_NOTICES = {
     ("binrw", "0.15.2"): "binrw-0.15.2-MIT.txt",
     ("binrw_derive", "0.15.2"): "binrw-0.15.2-MIT.txt",
 }
+SOURCE_HEADER_NOTICES = {
+    ("io-buffers", "0.1.0"),
+    ("win-authorization-sys", "0.1.0"),
+    ("win-error-codes", "0.0.2"),
+    ("win-shared-os-owned-handle", "0.1.0"),
+    ("windows-namespace-request-sys", "0.5.1"),
+    ("wtf-string", "0.1.0"),
+}
+SOURCE_HEADER_PATH = "src/lib.rs"
+SOURCE_COPYRIGHT_PREFIX = "// Copyright "
 
 
 def host_target(cargo, workspace):
@@ -121,6 +131,13 @@ def supplemental_notices(packages):
         if key in UPSTREAM_NOTICES:
             source = NOTICE_SOURCES / UPSTREAM_NOTICES[key]
             yield package_label(package), "upstream LICENSE", source.read_text(encoding="utf-8")
+        if key in SOURCE_HEADER_NOTICES:
+            source = Path(package["manifest_path"]).parent / SOURCE_HEADER_PATH
+            with source.open(encoding="utf-8") as file:
+                header = file.readline().rstrip("\n")
+            if not header.startswith(SOURCE_COPYRIGHT_PREFIX):
+                raise ValueError(f"{package_label(package)} lacks a copyright header in {SOURCE_HEADER_PATH}")
+            yield package_label(package), f"{SOURCE_HEADER_PATH}:1", header.removeprefix("// ")
 
 
 def render(data, target, binary_hash, lock_hash, features, no_defaults, *, signer_hash):

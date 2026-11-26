@@ -99,6 +99,22 @@ class ReleaseNoticeTests(unittest.TestCase):
                 text,
             )
 
+    def test_supplemental_notice_retains_only_the_source_copyright_header(self):
+        with TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            data = report()
+            package = data["crates"][0]["package"]
+            package.update(name="wtf-string", version="0.1.0", manifest_path=str(directory / "Cargo.toml"))
+            source = directory / "src/lib.rs"
+            source.parent.mkdir()
+            source.write_text("// Copyright (c) 2026 Mike Grier\nfn private_code() {}\n", encoding="utf-8")
+            notice = draft(data)
+            self.assertIn("wtf-string 0.1.0 | src/lib.rs:1\n\nCopyright (c) 2026 Mike Grier", notice)
+            self.assertNotIn("private_code", notice)
+            source.write_text("fn private_code() {}\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "lacks a copyright header"):
+                draft(data)
+
     def test_packager_refuses_an_unreviewed_draft(self):
         with TemporaryDirectory() as temporary:
             directory = Path(temporary)
