@@ -6,6 +6,8 @@ Read the shared ecosystem verification standard [EVS-1](ECOSYSTEM_VERIFICATION.m
 
 ## v0.1.0 release evidence
 
+The current standalone CLI candidate is `c667b9c`. All six mandatory v0.1.0 requirements and their 18 linked acceptance cases have recorded passing results for this profile. Earlier entries below preserve the results from their named revisions. [Current candidate audit](#d-ver-01-audit-for-c667b9c)
+
 ```sh
 cargo run --locked -p xtask -- release-evidence \
   --root /path/to/clean/candidate \
@@ -225,6 +227,28 @@ The coverage report and reproduction command are in `target/verification-evidenc
 The held-stage follow-up changes only how the existing hash operation is passed into the observation routine. Its regression changes the held file's modification time after the last hash read and before revalidation. The runtime refuses the identity, and dropping the stage removes it without creating a destination. The composed run applied the runtime and test edits to the `c76fcf1` archive with HFS+ `a1b870f`. All 12 CLI project tests and 29 runtime tests passed on arm64 macOS. The source-span counters record both outcomes of the post-hash check. LLVM's aggregate still reports 26 of 30 branches for the file across generic instantiations. The overlay and source hashes, test results and branch counters are in `target/verification-evidence/v0.1.0-verification/d6601c8-held-stage-recheck/coverage.json` with SHA-256 `2ed9c1ad184be0bd3320c884262467d0586a0d7aff19d94fc8ab32bf809983f3`. [Held stage tests](../../crates/runtime/dmgez-runtime/src/project_release/artifact/tests.rs)
 
 The exact candidate archive also passed all 16 builder execution tests. The focused `release_stage.rs` export recorded both outcomes of the path-output guard (one refusal, five admissions) and both outcomes of the release-intent guard (one refusal, four admissions). The runtime and CLI publication suite exercises the admitted path, and the builder tests exercise both refusals without creating an output. LLVM's focused file summary reports 48 of 54 lines and two of four branch outcomes across the generic instantiations. The source-span counters for both guards are in `target/verification-evidence/v0.1.0-verification/c76fcf1-builder-staging/coverage.json` with SHA-256 `74efe27cce7b1c086adf5af7414802c0b18187d9658f3ff1244df4cb650d5b1e`. [Builder execution tests](../../crates/build/dmgez-builder/tests/execution.rs)
+
+### D-VER-01 audit for c667b9c
+
+`D-VER-01-T01` passed for the v0.1.0 standalone CLI profile on dmgez `c667b9c` and HFS+ `a1b870f`. The exact candidate archive has SHA-256 `b03c6c7b90990d088a0de2edc9722c4fb49ece7f702fb28a108073d21a03e4cd`.
+
+| Acceptance check | Candidate result |
+| --- | --- |
+| Nextest and architecture | Hosted Ubuntu passed 784 tests and Windows passed 696. Each skipped six. The hosted workspace macOS job was cancelled. Local macOS arm64 Nextest passed 905 tests, with eight skips for opt-in Finder and conversion oracles. The local doctest command completed across 16 targets with zero cases. The exact source replay rejected a 501-line source file and a CLI dependency on the GUI runtime in the minimal, serial, and default profiles. [Workspace workflow](https://github.com/pomologie/dmgez/actions/runs/45827549335) |
+| Property, fuzz, native and differential checks | 117 UDIF tests passed with 4,096 property cases. Four Loom cases passed. The ASan replay ran 20,000 inputs from nine seeds with an empty crash directory. Hosted UDIF and manifest fuzzing completed 81,599 and 195,814 executions respectively. Both pinned reference readers matched all four comparisons. Apple verified seven images, and the native HFS+ fixture passed a read-only attachment and filesystem check. [Fuzz job](https://github.com/pomologie/dmgez/actions/runs/45827549335/job/139935488264) |
+| Evidence validation | All 16 Kani harnesses passed and reached their required covers. The validator accepted all 18 records and rejected all eight invalid trials. |
+| Cross-platform release and dependencies | The project matrix passed on macOS, Windows, and Linux. All four image digests matched. The standalone CLI audit passed. The full-workspace audit failed on unmaintained desktop and MCP dependencies. [Project workflow](https://github.com/pomologie/dmgez/actions/runs/45827549251) · [Workspace audit](https://github.com/pomologie/dmgez/actions/runs/45827549335/job/139935488313) |
+
+The source-bound workspace report covered 27,778 of 32,776 lines (84.75%). EVS-1 proposes an initial 85% workspace target. The release review uses the separate branch reports and the refusal tests above to audit the declared safety checks. [Workspace coverage artifact](https://github.com/pomologie/dmgez/actions/runs/45827549335/artifacts/15120583823)
+
+| Release invariant | Coverage disposition |
+| --- | --- |
+| Bounded reads, range admission and eviction | The malformed-geometry tests and bounded proofs exercise the rejection paths. The source counters show both outcomes of all three cache conditions, with the LLVM file summary retained at five of six. |
+| Staged output, held identity and no-clobber publication | The builder tests cover both staging refusals. Runtime tests reject changes to held metadata, substituted names, changed image length, bad checksums and occupied destinations. The short-success copy check remains unobserved. The captured reader returns an error on a short physical read. The Unix cross-device and same-identity nonregular comparisons remain unobserved. The same-device inode and metadata comparisons have direct witnesses. |
+| Portable artifact admission and signature verification | Final symlink refusal, exact named binding, held metadata changes, and body and checksum refusal have direct tests. The extracted hosted macOS CLI returned the trailer diagnostic at the upper image-size limit and the size diagnostic one byte above it for both signing and signature verification. Both sparse witnesses allocated zero data blocks and produced no output. The post-open nonregular-file outcome remains unobserved. |
+| Prepared and signed stage fidelity | Unsigned checksum refusal occurs before the signer runs. The signed-stage tests reject body or quarantine changes and preserve the source and an occupied destination. The pre-signer trailer and quarantine mismatch outcomes and the final source-quarantine comparison remain unobserved. The native Windows job supplies platform-specific qualification for its tested path. The fuller D-V12 signing protocol obligation activates at v0.6.0. |
+
+The exact candidate logs and reports are under `target/verification-evidence/v0.1.0-verification/c667b9c-release-replay/`. The SHA-256 of `bundle.json` is `218f5bc62a53706d996a9ec7adec14256d424474017b116e85b5792e0782178e`. The local macOS workspace checksum manifest has SHA-256 `b0a146131cbeb4750e830f4edc14134a1765c701337cba17478400deff8c643f`. The `signing-size-boundary.json` report has SHA-256 `c3dfb31a037239bb5a272d731653ad30d3d74c112a290b6dbafbe1dc89be6425`.
 
 ## Proof obligations
 
