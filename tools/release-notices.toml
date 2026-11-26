@@ -17,6 +17,3 @@ accepted = ["ISC"]
 
 [untrusted]
 accepted = ["ISC"]
-
-[bcder]
-accepted = ["BSD-3-Clause"]

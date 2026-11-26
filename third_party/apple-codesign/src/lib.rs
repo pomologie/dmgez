@@ -15,7 +15,5 @@ pub mod dmg;
 pub mod embedded_signature;
 pub use embedded_signature::*;
 pub mod embedded_signature_builder;
-pub mod environment_constraints;
 mod error;
 pub use error::*;
-pub mod plist_der;

@@ -22,9 +22,11 @@ FILES = (
     "src/dmg.rs",
     "src/embedded_signature.rs",
     "src/embedded_signature_builder.rs",
-    "src/environment_constraints.rs",
     "src/error.rs",
     "src/lib.rs",
+)
+OMITTED_FILES = (
+    "src/environment_constraints.rs",
     "src/plist_der.rs",
 )
 
@@ -38,7 +40,7 @@ def verify(archive_path, package):
         with tempfile.TemporaryDirectory() as temporary:
             extracted = Path(temporary)
             with tarfile.open(fileobj=archive_file, mode="r:gz") as archive:
-                for name in FILES:
+                for name in (*FILES, *OMITTED_FILES):
                     member = archive.getmember(f"{ARCHIVE_ROOT}/{name}")
                     if not member.isfile():
                         raise ValueError(f"archive source is not a file: {name}")
@@ -48,7 +50,7 @@ def verify(archive_path, package):
                         path.write_bytes(stream.read())
 
             subprocess.run(
-                ["patch", "-s", "-f", "-F", "0", "-p1", "-i", str(package / PATCH)],
+                ["patch", "-s", "-f", "-F", "0", "-E", "-p1", "-i", str(package / PATCH)],
                 cwd=extracted,
                 check=True,
             )
@@ -60,6 +62,8 @@ def verify(archive_path, package):
             }
             if expected_sources != actual_sources:
                 raise ValueError("vendored source file list differs")
+            if any((extracted / name).exists() for name in OMITTED_FILES):
+                raise ValueError("profile patch did not remove the omitted source files")
             for name in FILES:
                 if (extracted / name).read_bytes() != (package / name).read_bytes():
                     raise ValueError(f"vendored file differs from the reconstructed source: {name}")

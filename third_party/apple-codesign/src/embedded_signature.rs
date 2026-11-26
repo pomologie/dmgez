@@ -42,9 +42,8 @@
 use {
     crate::{
         code_directory::CodeDirectoryBlob,
-        code_requirement::{CodeRequirements, RequirementType},
+        code_requirement::RequirementType,
         cryptography::DigestType,
-        environment_constraints::EncodedEnvironmentConstraints,
         AppleCodesignError, Result,
     },
     scroll::{IOwrite, Pread},
@@ -578,11 +577,6 @@ impl<'a> RequirementBlob<'a> {
             data: Cow::Owned(self.data.clone().into_owned()),
         }
     }
-
-    /// Parse the binary data in this blob into Code Requirement expressions.
-    pub fn parse_expressions(&self) -> Result<CodeRequirements<'_>, AppleCodesignError> {
-        Ok(CodeRequirements::parse_binary(&self.data)?.0)
-    }
 }
 
 /// Represents a Requirement set blob.
@@ -793,34 +787,6 @@ impl<'a> Blob<'a> for EntitlementsDerBlob<'a> {
     }
 }
 
-impl<'a> EntitlementsDerBlob<'a> {
-    /// Construct an instance from a [plist::Value].
-    ///
-    /// Not all plists can be encoded to this blob as not all plist value types can
-    /// be encoded to DER. If a plist with an illegal value is passed in, this
-    /// function will error, as DER encoding is performed immediately.
-    ///
-    /// The outermost plist value should be a dictionary.
-    pub fn from_plist(v: &plist::Value) -> Result<Self, AppleCodesignError> {
-        let der = crate::plist_der::der_encode_plist(v)?;
-
-        Ok(Self { der: der.into() })
-    }
-
-    /// Attempt to parse and resolve the DER data into a plist.
-    pub fn parse_der(&self) -> Result<plist::Value, AppleCodesignError> {
-        crate::plist_der::der_decode_plist(self.der.as_ref())
-    }
-
-    /// Parse the plist from DER and format to XML.
-    pub fn plist_xml(&self) -> Result<Vec<u8>, AppleCodesignError> {
-        let mut buffer = vec![];
-        self.parse_der()?.to_writer_xml(&mut buffer)?;
-
-        Ok(buffer)
-    }
-}
-
 /// A blob holding DER encoded launch/library constraints.
 ///
 /// The inner data is a plist.
@@ -846,33 +812,6 @@ impl<'a> Blob<'a> for ConstraintsDerBlob<'a> {
 
     fn serialize_payload(&self) -> Result<Vec<u8>> {
         Ok(self.der.to_vec())
-    }
-}
-
-impl<'a> ConstraintsDerBlob<'a> {
-    /// Construct an instance from a [EncodedEnvironmentConstraints] instance.
-    pub fn from_encoded_constraints(v: &EncodedEnvironmentConstraints) -> Result<Self> {
-        let der = v.der_encode()?;
-
-        Ok(Self { der: der.into() })
-    }
-
-    /// Attempt to parse and resolve the DER data into a plist.
-    pub fn parse_der_plist(&self) -> Result<plist::Value> {
-        crate::plist_der::der_decode_plist(self.der.as_ref())
-    }
-
-    /// Attempt to parse DER into an [EncodedEnvironmentConstraints] instance.
-    pub fn parse_encoded_constraints(&self) -> Result<EncodedEnvironmentConstraints> {
-        EncodedEnvironmentConstraints::from_der(self.der.as_ref())
-    }
-
-    /// Parse the plist from DER and format to XML.
-    pub fn plist_xml(&self) -> Result<Vec<u8>> {
-        let mut buffer = vec![];
-        self.parse_der_plist()?.to_writer_xml(&mut buffer)?;
-
-        Ok(buffer)
     }
 }
 

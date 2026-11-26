@@ -37,17 +37,11 @@ pub enum AppleCodesignError {
     #[error("certificate error: {0}")]
     CertificateGeneric(String),
 
-    #[error("certificate decode error: {0}")]
-    CertificateDecode(bcder::decode::DecodeError<std::convert::Infallible>),
-
     #[error("X.509 certificate parsing error: {0}")]
     X509Parse(String),
 
     #[error("unspecified cryptography error in certificate")]
     CertificateRing(ring::error::Unspecified),
-
-    #[error("bad string value in certificate: {0:?}")]
-    CertificateCharset(bcder::string::CharSetError),
 
     #[error("unable to locate __TEXT segment")]
     MissingText,
@@ -61,20 +55,11 @@ pub enum AppleCodesignError {
     #[error("data structure parse error: {0}")]
     Scroll(#[from] scroll::Error),
 
-    #[error("error parsing plist XML: {0}")]
-    PlistParseXml(plist::Error),
-
-    #[error("error serializing plist to XML: {0}")]
-    PlistSerializeXml(plist::Error),
-
     #[error("malformed identifier string in code directory")]
     CodeDirectoryMalformedIdentifier,
 
     #[error("malformed team name string in code directory")]
     CodeDirectoryMalformedTeam,
-
-    #[error("plist error in code directory: {0}")]
-    CodeDirectoryPlist(plist::Error),
 
     #[error("SuperBlob data is malformed")]
     SuperblobMalformed,
@@ -91,26 +76,8 @@ pub enum AppleCodesignError {
     #[error("entitlements data not valid UTF-8: {0}")]
     EntitlementsBadUtf8(std::str::Utf8Error),
 
-    #[error("error with plist DER encoding: {0}")]
-    PlistDer(String),
-
     #[error("unknown executable segment flag: {0}")]
     ExecutableSegmentUnknownFlag(String),
-
-    #[error("unknown code requirement opcode: {0}")]
-    RequirementUnknownOpcode(u32),
-
-    #[error("unknown code requirement match expression: {0}")]
-    RequirementUnknownMatchExpression(u32),
-
-    #[error("code requirement data malformed: {0}")]
-    RequirementMalformed(&'static str),
-
-    #[error("plist error in code resources: {0}")]
-    ResourcesPlist(plist::Error),
-
-    #[error("plist parse error in code resources: {0}")]
-    ResourcesPlistParse(String),
 
     #[error("__LINKEDIT isn't final Mach-O segment")]
     LinkeditNotLast,
@@ -263,15 +230,6 @@ pub enum AppleCodesignError {
 
     #[error("internal API / logic error: {0}")]
     LogicError(String),
-
-    #[error("bad time value")]
-    BadTime,
-
-    #[error("plist: {0}")]
-    Plist(#[from] plist::Error),
-
-    #[error("environment constraints: {0}")]
-    EnvironmentConstraint(String),
 }
 
 /// Result type for this library.
