@@ -18,6 +18,7 @@ BINARY_SHA256_FIELD = "CLI SHA-256"
 SIGNER_SHA256_FIELD = "apple-codesign source SHA-256"
 FIELD_SEPARATOR = " = "
 CONFIG = Path(__file__).with_name("release-notices.toml").resolve()
+NOTICE_SOURCES = CONFIG.with_name("release-notice-sources")
 CLI_MANIFEST = Path("apps/dmgez-cli/Cargo.toml")
 LOCKFILE = "Cargo.lock"
 SIGNER_SOURCE = Path("third_party/apple-codesign")
@@ -37,6 +38,10 @@ SUPPLEMENTAL_NOTICES = {
     ),
     ("rustix", "1.1.6"): ("COPYRIGHT",),
     ("shlex", "2.0.1"): ("LICENSE-APACHE",),
+}
+UPSTREAM_NOTICES = {
+    ("binrw", "0.15.2"): "binrw-0.15.2-MIT.txt",
+    ("binrw_derive", "0.15.2"): "binrw-0.15.2-MIT.txt",
 }
 
 
@@ -112,6 +117,9 @@ def supplemental_notices(packages):
             if not text.strip():
                 raise ValueError(f"{package_label(package)} has an empty source notice: {relative}")
             yield package_label(package), relative, text
+        if key in UPSTREAM_NOTICES:
+            source = NOTICE_SOURCES / UPSTREAM_NOTICES[key]
+            yield package_label(package), "upstream LICENSE", source.read_text(encoding="utf-8")
 
 
 def render(data, target, binary_hash, lock_hash, features, no_defaults, *, signer_hash):

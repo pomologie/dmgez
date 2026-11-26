@@ -87,6 +87,18 @@ class ReleaseNoticeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "missing other-id, extra second-id"):
             check_built_packages(report(), {"first-id", "other-id"})
 
+    def test_draft_recovers_the_upstream_binrw_attribution(self):
+        data = report()
+        for entry, name in zip(data["crates"], ("binrw", "binrw_derive")):
+            entry["package"].update(name=name, version="0.15.2")
+        text = draft(data)
+        for name in ("binrw", "binrw_derive"):
+            self.assertIn(
+                f"{name} 0.15.2 | upstream LICENSE\n\nMIT License\n\n"
+                "Copyright (c) jam1garner and other contributors",
+                text,
+            )
+
     def test_packager_refuses_an_unreviewed_draft(self):
         with TemporaryDirectory() as temporary:
             directory = Path(temporary)

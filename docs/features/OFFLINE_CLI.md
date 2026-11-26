@@ -13,6 +13,8 @@ Use the executable path printed by the composer. Review the draft against the de
 
 On macOS arm64, the composed release build and notice tool reported the same 165 Cargo package IDs. Two drafts for the same executable matched byte for byte. The offline scanner identified 39 entries using canonical SPDX text for source review.
 
+The locked `binrw` and `binrw_derive` 0.15.2 crate archives declare MIT but omit the license file. The draft includes the exact upstream license from the shared commit recorded in their Cargo VCS metadata. The retained file has SHA-256 `08159509fe99d146416fe110053a7360ddfccbba5f0c8f955bdbda025d4d2a20`. [Upstream license at the packaged revision](https://raw.githubusercontent.com/jam1garner/binrw/db9ef7bece9525057001edd260439fa2748287df/LICENSE)
+
 Run from the checkout on the same operating system as the supplied executable. The output directory must already exist on a filesystem that supports hard links. Use a fresh path.
 
 ```sh
