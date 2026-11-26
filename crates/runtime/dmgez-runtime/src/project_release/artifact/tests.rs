@@ -1,4 +1,4 @@
-use dmgez_core::output::stage_new;
+use dmgez_core::output::{PublishError, stage_new};
 use dmgez_udif::{
 	SECTOR_BYTES,
 	writer::{Profile, WriteOptions, write_image},
@@ -15,7 +15,7 @@ const SIGNED: &[u8] =
 const SIGNED_SHA256: &str = "5b2bd2040ed7234affd8db97f05717a7541f821470d1451d26699f4ec1f8395e";
 
 #[test]
-fn publishes_the_exact_signed_image_once() {
+fn publishes_the_exact_signed_image() {
 	let directory = tempfile::tempdir().unwrap();
 	let source = directory.path().join(SOURCE_NAME);
 	let output = directory.path().join(OUTPUT_NAME);
@@ -25,8 +25,24 @@ fn publishes_the_exact_signed_image_once() {
 	assert_eq!(verify(&source).unwrap(), expected);
 	publish(&source, &expected, &output).unwrap();
 	assert_eq!(fs::read(&output).unwrap(), SIGNED);
-	assert!(publish(&source, &expected, &output).is_err());
-	assert_eq!(fs::read(&output).unwrap(), SIGNED);
+	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 2);
+}
+
+#[test]
+fn publication_refuses_an_incumbent_and_removes_the_stage() {
+	let directory = tempfile::tempdir().unwrap();
+	let source = directory.path().join(SOURCE_NAME);
+	let output = directory.path().join(OUTPUT_NAME);
+	fs::write(&source, SIGNED).unwrap();
+	fs::write(&output, UNSIGNED).unwrap();
+	let expected = verify(&source).unwrap();
+	let error = publish(&source, &expected, &output).unwrap_err();
+	assert!(matches!(
+		error.get_ref().and_then(|cause| cause.downcast_ref()),
+		Some(PublishError::<io::Error>::Commit(cause)) if cause.kind() == io::ErrorKind::AlreadyExists
+	));
+	assert_eq!(fs::read(&output).unwrap(), UNSIGNED);
+	assert_eq!(fs::read(&source).unwrap(), SIGNED);
 	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 2);
 }
 
@@ -136,17 +152,56 @@ fn entry_comparison_detects_a_different_inode_at_the_same_length() {
 }
 
 #[test]
-fn stale_identity_and_corrupt_payload_leave_no_output_or_staging_entry() {
+fn refuses_another_valid_image_of_the_same_size() {
 	let directory = tempfile::tempdir().unwrap();
 	let source = directory.path().join(SOURCE_NAME);
 	let output = directory.path().join(OUTPUT_NAME);
-	fs::write(&source, UNSIGNED).unwrap();
+	let options = WriteOptions {
+		profile: Profile::Udro,
+		..WriteOptions::default()
+	};
+	let write = |byte| {
+		let payload = [byte; SECTOR_BYTES as usize];
+		let mut file = File::create(&source).unwrap();
+		write_image(payload.as_slice(), SECTOR_BYTES, &mut file, &options).unwrap();
+	};
+	write(0x42);
 	let expected = verify(&source).unwrap();
+	write(0x53);
+	let observed = verify(&source).unwrap();
+	assert_eq!(observed.bytes(), expected.bytes());
+	assert_ne!(observed.sha256(), expected.sha256());
+
+	let error = publish(&source, &expected, &output).unwrap_err();
+	assert!(matches!(
+		error.get_ref().and_then(|cause| cause.downcast_ref()),
+		Some(PublishError::<io::Error>::Validate(cause)) if cause.kind() == io::ErrorKind::InvalidData
+			&& cause.to_string() == IMAGE_IDENTITY_CHANGED
+	));
+	assert!(!output.exists());
+	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
+}
+
+#[test]
+fn refuses_corrupt_payload_even_when_its_identity_matches() {
+	let directory = tempfile::tempdir().unwrap();
+	let source = directory.path().join(SOURCE_NAME);
+	let output = directory.path().join(OUTPUT_NAME);
 	let mut corrupt = UNSIGNED.to_vec();
 	corrupt[0] ^= 1;
 	fs::write(&source, corrupt).unwrap();
-	assert!(publish(&source, &expected, &output).is_err());
-	assert!(publish(&source, &observe(&source).unwrap(), &output).is_err());
+	let expected = observe(&source).unwrap();
+
+	let error = publish(&source, &expected, &output).unwrap_err();
+	let Some(PublishError::<io::Error>::Validate(cause)) =
+		error.get_ref().and_then(|cause| cause.downcast_ref())
+	else {
+		panic!("corrupt payload was not rejected during staging validation");
+	};
+	assert!(matches!(
+		cause.get_ref().and_then(|cause| cause.downcast_ref()),
+		Some(dmgez_udif::Error::ChecksumMismatch { .. })
+	));
 	assert!(!output.exists());
 	assert_eq!(fs::read_dir(directory.path()).unwrap().count(), 1);
 }
