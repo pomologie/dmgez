@@ -20,6 +20,15 @@ The optimized `aarch64-unknown-linux-gnu` CLI built and ran inside an ARM64 Ubun
 
 An optimized `x86_64-pc-windows-gnu` CLI built from dmgez `fafabd8` and HFS+ `ecef68f` with Rust 1.99.1, Clang, and MinGW passed the UDRO and UDZO project smoke under Wine 10.0 on macOS. Before the fix, the held writable stage caused a Windows sharing violation during signing. The regression test now passes, including stage cleanup. Host 7-Zip verified the payload, Apple tools verified the images and signatures, and all four DMGs matched the fresh macOS artifacts byte for byte and the previously recorded Linux digests. The native Windows MSVC build and NTFS runtime, along with the GitHub-hosted three-OS workflow, remain open.
 
+After the HFS+ catalog refactor, the CLI composed from dmgez `f38c493` and HFS+ `a1b870f` with Rust 1.99.1 passed the UDRO and UDZO project smoke on arm64 macOS 14.7.2. The smoke verified the images and signatures with Apple tools and compared independent 7-Zip and dmgez exports. The archive smoke passed with fixture notices, including installation and project build, signing, and verification from extraction. The new HFS+ revision passed 173 hosted tests with three ignored, the source architecture and size check, and bare-metal format and reader builds on both configured targets.
+
+| Project artifact | SHA-256 on macOS, matching the prior Linux and Wine runs |
+|---|---|
+| UDRO unsigned | `a3c96d2ea10974c06dab3819a78e84d0b17d16aed87663ad9eb0b9ce0b83685d` |
+| UDRO ad hoc | `369c08f17f6b7407dc72bbea53ddb3f1cc17ccfabc63f5f47dc1fd0a8e35da46` |
+| UDZO unsigned | `bcf03b6b0a0ef0114f422141171bf1858e11e6ace3c16c54c6107b26170dbd42` |
+| UDZO ad hoc | `ab7286145027ae166a6b39da31f7a45e5180d062cf80e624c1b5959fe2e38f1a` |
+
 ## Pipeline
 
 1. Plan inputs, validate credentials/capabilities without exposing secrets. Stage source apps if sign requested; default `[signing].apps="verify"` checks existing signatures and does not re-sign. `preserve` packages without claiming validity; `sign` explicit and stage only. Inspect nested Mach-O, frameworks, plugins, helpers, dylibs, bundles; per-path signing policy/entitlements, sign inside-out; no blind `codesign --deep` for signing. Preserve symlinks and resources. Validate Developer ID Application identity, secure timestamps, hardened runtime for eligible executables, and entitlement policy; signing alone does not satisfy Apple requirements.
