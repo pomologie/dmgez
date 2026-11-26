@@ -9,6 +9,8 @@ cargo kani --manifest-path "$verification_dir/../Cargo.toml" \
 cargo kani --manifest-path "$verification_dir/../Cargo.toml" \
 	--no-default-features --features write --harness write_geometry_proof
 cargo kani --manifest-path "$verification_dir/../Cargo.toml" \
+	--no-default-features --features write --harness writer_cursor_proof --output-format terse
+cargo kani --manifest-path "$verification_dir/../Cargo.toml" \
 	--no-default-features --features read \
 	--harness indexed_read_
 cargo kani --manifest-path "$verification_dir/../Cargo.toml" \

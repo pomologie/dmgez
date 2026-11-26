@@ -4,6 +4,7 @@
 pub mod cache;
 mod chunk;
 mod metadata;
+mod output;
 mod scheduler;
 mod stream;
 
@@ -322,12 +323,12 @@ impl<W: Write> DataFork<W> {
 
 	fn write(&mut self, chunk: StoredChunk) -> Result<(), Error> {
 		let len = chunk.bytes.len() as u64;
-		let end = self
-			.stored_bytes
-			.checked_add(len)
-			.filter(|&end| end <= self.max_physical_bytes - trailer::BYTES as u64)
-			.ok_or(Error::ResourceLimit("physical data fork size"))?;
-		self.sink.write_all(&chunk.bytes)?;
+		let end = output::write_payload(
+			&mut self.sink,
+			self.stored_bytes,
+			self.max_physical_bytes,
+			&chunk.bytes,
+		)?;
 		self.hash.update(&chunk.bytes);
 		if let Some(last) = self
 			.records
@@ -386,11 +387,8 @@ impl<W: Write> DataFork<W> {
 		let master_crc = checksum::master_crc([table_crc]);
 		let table = blkx::encode(self.sectors, buffer_sectors, table_crc, &self.records)?;
 		let xml = resource::encode(table, metadata.include_partition_list)?;
-		let physical_bytes = self
-			.stored_bytes
-			.checked_add(xml.len() as u64 + trailer::BYTES as u64)
-			.filter(|bytes| *bytes <= self.max_physical_bytes)
-			.ok_or(Error::ResourceLimit("physical image size"))?;
+		let physical_bytes =
+			output::image_end(self.stored_bytes, xml.len() as u64, self.max_physical_bytes)?;
 		let trailer = trailer::encode(
 			self.sectors,
 			self.stored_bytes,
