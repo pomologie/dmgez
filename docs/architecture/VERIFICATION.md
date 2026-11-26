@@ -27,6 +27,18 @@ Local logs and the bundle are under `target/verification-evidence/v0.1.0-verific
 
 Nextest passed 874 workspace tests with localhost access and skipped eight. The negative architecture checks rejected a CLI dependency on the GUI runtime and a 501-line source file. The coverage audit at `9e04fb0` measured 86.53% lines across the four selected builder, config, core and UDIF packages, and 89.87% lines and 75.00% branches in the separate UDIF run. The local coverage driver was 0.9.1. The coverage scope and uncovered critical branches remain open under D-VER-01. Its normalized coverage records are indexed in `target/verification-evidence/v0.1.0-verification/9e04fb0-apparatus-49a997ddf1a4db762b344d84861e15604b8314e6914007a2f6c535e7030c26e2.json`.
 
+The UDIF admission and reader follow-up compared `a6d6c64` with `62a85b4` on macOS arm64. Both runs used `cargo test --locked -p dmgez-udif --all-features`, nightly `2026-11-04` branch instrumentation, its bundled LLVM 23.1.5 tools, and 4,096 property cases with seed `20261126`. The tests passed 98 and 115 cases respectively. The totals cover the 30 instrumented files under `dmgez-udif/src/`.
+
+| Source | Baseline lines | Candidate lines | Baseline branches | Candidate branches |
+| --- | ---: | ---: | ---: | ---: |
+| `index.rs` | 87.88% | 98.48% | 59.62% | 88.46% |
+| `trailer.rs` | 94.19% | 100.00% | 58.33% | 91.67% |
+| `reader.rs` | 88.98% | 95.10% | 87.50% | 95.83% |
+| `reader/cache.rs` | 89.09% | 98.18% | 83.33% | 83.33% |
+| UDIF crate source | 89.87% | 91.87% | 74.78% | 80.31% |
+
+D-VER-01 remains open. The index and cache are below the proposed 90% branch floor for critical code, and the workspace coverage scope still needs review. The table decoder rejects zero records before index normalization. D-V04 records separate Kani evidence for the positioned-output range guard. The per-file export, test logs, and measurement script are in `target/verification-evidence/v0.1.0-verification/62a85b4-coverage/`. The SHA-256 of `udif-coverage.json` is `b3f1070e5367ee9b7e757d08320d6d7b40b332d8ed1f0213fc09fabe41f1c5a5`.
+
 ## Proof obligations
 
 | ID | Activation | Scope | Required evidence |
