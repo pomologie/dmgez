@@ -31,6 +31,13 @@ After the HFS+ catalog refactor, the CLI composed from dmgez `f38c493` and HFS+ 
 
 The `x86_64-unknown-linux-gnu` CLI at dmgez `e1dc40b` and HFS+ `a1b870f` was cross-built with Rust 1.99.1 and Zig 0.17.1 targeting glibc 2.36. It ran both project smokes and the offline archive test in an emulated Debian 12 x86-64 container with networking disabled. Debian's 7-Zip 26.02 verified the HFS+ payload. The four DMGs matched the digests above, and `hdiutil verify` and `codesign --verify --strict` accepted the Linux artifacts on macOS. The archive test used fixture notices.
 
+The local arm64 macOS candidate at dmgez `163a5f1` and HFS+ `a1b870f` used Rust 1.99.1 on macOS 14.7.2 (23H311). Its notice review covered 165 build packages, including checksum verification of all 149 registry archives and source review of the 39 canonical fallback entries. The archive test used those reviewed notices and passed installation and example build, signing, and verification from extraction. Both signed project fixtures passed read-only `fsck_hfs` and native mount checks. All four DMGs matched the digests above.
+
+| Local macOS candidate artifact | SHA-256 |
+|---|---|
+| `dmgez-0.1.0-aarch64-apple-darwin.tar.gz` | `dfc262861c2c2d74410a424882307e97e5ec4a770a0d3a1536bfe0dc2fdc2128` |
+| Archived `THIRD_PARTY_NOTICES.txt` | `20a8bfd54d47657615712e8d71ba253b23cdfed039b20440e630b3c219527a55` |
+
 ## Pipeline
 
 1. Plan inputs, validate credentials/capabilities without exposing secrets. Stage source apps if sign requested; default `[signing].apps="verify"` checks existing signatures and does not re-sign. `preserve` packages without claiming validity; `sign` explicit and stage only. Inspect nested Mach-O, frameworks, plugins, helpers, dylibs, bundles; per-path signing policy/entitlements, sign inside-out; no blind `codesign --deep` for signing. Preserve symlinks and resources. Validate Developer ID Application identity, secure timestamps, hardened runtime for eligible executables, and entitlement policy; signing alone does not satisfy Apple requirements.
