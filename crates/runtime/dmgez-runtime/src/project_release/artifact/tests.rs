@@ -15,6 +15,52 @@ const SIGNED: &[u8] =
 const SIGNED_SHA256: &str = "5b2bd2040ed7234affd8db97f05717a7541f821470d1451d26699f4ec1f8395e";
 
 #[test]
+fn held_stage_identity_requires_the_verified_extent() {
+	let directory = tempfile::tempdir().unwrap();
+	let output = directory.path().join(OUTPUT_NAME);
+	let mut stage = stage_new(
+		&output,
+		STAGED_SUFFIX,
+		|writer| writer.write_all(UNSIGNED),
+		|_, &()| Ok(()),
+	)
+	.unwrap();
+	let bytes = UNSIGNED.len() as u64;
+	let error = observe_stage(stage.reader().unwrap(), bytes - 1).unwrap_err();
+	assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+	assert_eq!(error.to_string(), IMAGE_IDENTITY_CHANGED);
+	assert_eq!(
+		observe_stage(stage.reader().unwrap(), bytes).unwrap(),
+		observe(stage.path()).unwrap()
+	);
+}
+
+#[cfg(unix)]
+#[test]
+fn held_stage_identity_stays_bound_after_its_name_is_replaced() {
+	let directory = tempfile::tempdir().unwrap();
+	let output = directory.path().join(OUTPUT_NAME);
+	let mut stage = stage_new(
+		&output,
+		STAGED_SUFFIX,
+		|writer| writer.write_all(UNSIGNED),
+		|_, &()| Ok(()),
+	)
+	.unwrap();
+	let bytes = UNSIGNED.len() as u64;
+	let expected = observe(stage.path()).unwrap();
+	fs::rename(stage.path(), directory.path().join(SOURCE_NAME)).unwrap();
+	fs::write(stage.path(), SIGNED).unwrap();
+
+	assert_eq!(
+		observe_stage(stage.reader().unwrap(), bytes).unwrap(),
+		expected
+	);
+	assert_ne!(verify(stage.path()).unwrap(), expected);
+	assert!(!output.exists());
+}
+
+#[test]
 fn publishes_the_exact_signed_image() {
 	let directory = tempfile::tempdir().unwrap();
 	let source = directory.path().join(SOURCE_NAME);

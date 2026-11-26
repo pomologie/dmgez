@@ -348,11 +348,12 @@ fn execute<'build>(
 			))
 		}
 		ReleaseAction::BuildUnsigned => {
-			let stage = image
+			let mut stage = image
 				.take()
 				.ok_or(STAGE_MISSING)?
 				.stage_release(&artifact::verify_stage, progress)?;
-			let identity = artifact::observe(stage.path())?;
+			let bytes = stage.report().physical_bytes;
+			let identity = artifact::observe_stage(stage.reader()?, bytes)?;
 			artifacts.current = Some(stage.path().to_owned());
 			artifacts.unsigned = Some(stage);
 			Ok(ReleaseReceipt::Built(identity))

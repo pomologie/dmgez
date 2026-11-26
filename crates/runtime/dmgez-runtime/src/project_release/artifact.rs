@@ -5,7 +5,10 @@ use std::{
 	path::Path,
 };
 
-use dmgez_core::{output::publish_new, source::CapturedFile};
+use dmgez_core::{
+	output::{StagedReader, publish_new},
+	source::CapturedFile,
+};
 use dmgez_signing::release_plan::ImageIdentity;
 use dmgez_udif::reader::{FileSource, Image, Limits, ReadAt};
 use sha2::{Digest, Sha256};
@@ -23,6 +26,22 @@ const IMAGE_IDENTITY_CHANGED: &str = "the staged image identity changed";
 /// Bind an observation to every byte of a held, finite release file.
 pub(super) fn observe(path: &Path) -> io::Result<ImageIdentity> {
 	observe_file(open_regular(path)?)
+}
+
+/// Record the identity of the same held file the builder verified.
+pub(super) fn observe_stage(
+	mut reader: StagedReader<'_>,
+	physical_bytes: u64,
+) -> io::Result<ImageIdentity> {
+	let before = reader.metadata()?;
+	if before.len() != physical_bytes {
+		return Err(invalid(IMAGE_IDENTITY_CHANGED));
+	}
+	let identity = hash_image(&mut reader, physical_bytes)?;
+	if !same_entry(&before, &reader.metadata()?) {
+		return Err(invalid(IMAGE_IDENTITY_CHANGED));
+	}
+	Ok(identity)
 }
 
 pub(super) fn observe_file(file: File) -> io::Result<ImageIdentity> {
