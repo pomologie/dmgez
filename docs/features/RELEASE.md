@@ -10,6 +10,8 @@ The cross-platform workflow runs on pushes to `main` and can also be started man
 
 The workflow exports a Cargo Audit inventory of the registry packages for each tested CLI from the compiler's built-package set and that build's composed lockfile. The hosted audit denies unmaintained, unsound, and yanked packages in those inventories. Workspace CI continues to audit the full dependency graph. [Project build workflow](../../.github/workflows/project-build.yml)
 
+The Cargo qualification job assembles and verifies one locked `dmgez` source archive. Each release host downloads that artifact, checks its SHA-256, installs the CLI, and runs a fresh Rust consumer against the extracted source. [Public Cargo package](REGISTRY_PACKAGE.md) · [Project build workflow](../../.github/workflows/project-build.yml)
+
 At dmgez `98f4442` and HFS+ `a1b870f`, the three native build, signing, and archive smoke jobs, byte comparison, and standalone CLI dependency audit all passed. [Hosted release verification](https://github.com/pomologie/dmgez/actions/runs/45813282977)
 
 At dmgez `c76fcf1` and HFS+ `a1b870f`, the hosted build, byte comparison, and standalone dependency audit passed. All three downloaded handoffs matched their published checksums and the reviewed `ec0f4bd` notice bodies and registry inventories. The exact executables passed repeatable packaging, member checksum verification, and example build, ad hoc signing, and verification on arm64 macOS, offline emulated Debian 12 x86-64, and Wine 10.0 with Windows Python 3.13.17. The macOS and Linux installer checks also passed. Native Windows CI separately passed the NTFS, signing, and archive smoke checks. [Hosted release verification](https://github.com/pomologie/dmgez/actions/runs/45817074710)

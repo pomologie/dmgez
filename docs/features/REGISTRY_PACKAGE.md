@@ -28,6 +28,14 @@ cargo add dmgez
 
 Use `dmgez::dmgbuilder` to plan or build unsigned images from a `dmg.toml`. Use `dmgez::reader` to open a DMG, read bytes in its decoded address space, and verify its declared container checksums.
 
+### Builder contract
+
+- `Project::open(path)` reads and validates the manifest. Relative source and output paths resolve from the manifest directory.
+- `project.run(Mode::Plan)` checks the inputs and seals the layout without writing an image. `Outcome::Planned` reports the intended destination and the logical disk size in bytes.
+- `project.run(Mode::Build)` prepares the inputs again, stages the unsigned DMG, and publishes it to the manifest destination. The default is to refuse an existing destination. Set `build.overwrite = true` in the manifest to allow replacement. `Outcome::Built` reports the destination, logical disk size, and actual DMG size in bytes.
+
+The plan is a report. A later build checks the current inputs and destination. The v0.1.0 release profile supports partitionless HFS+ images in UDRO and UDZO. Use the CLI's `--release` workflow to apply `[signing]`.
+
 ```rust
 use std::path::Path;
 
