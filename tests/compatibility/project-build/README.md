@@ -31,6 +31,12 @@ The default publication policy preserves an existing destination. Authorize repl
 
 The adapter uses dmgez preflight, source discovery and identity checks, Finder store generation, and staged publication. It binds generated payloads after HFS+ assigns catalog IDs, selects capacity with the same HFS+ planner used for placement, and streams the resulting image through UDIF. The manifest and sealed plan carry borrowed regular-source identities. Each bounded file read acquires an identity-checked handle and releases it before proceeding.
 
+The supplementary name check builds two separate files named U+1D15E and U+1D157 U+1D165. It verifies the exact catalog names and both payloads through 7-Zip. On macOS, `--native-filesystem` also checks lookups and payloads on a read-only mount of the generated DMG.
+
+```sh
+python3 -B check_supplementary_names.py /path/to/dmgez --seven-zip 7z
+```
+
 Select the root list layout with `[finder] default_view = "list-view"` and put its settings under `[finder.list_view]`. A folder inherits the root default view and list settings. Local scalar settings and individual width or sort-direction overrides replace inherited values. A local `columns` array sets visibility and order for that folder. The [list project fixture](tests/fixtures/finder-list.toml) demonstrates a nested override. The serial build without Finder store generation rejects a layout request during preflight.
 
 Run the native list check on macOS with `ds_store` 1.3.4 and `mac_alias` 2.2.3 available in the Python environment.

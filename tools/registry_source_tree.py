@@ -14,7 +14,7 @@ import tempfile
 
 
 ROOT = Path(__file__).resolve().parents[1]
-HFSPLUS_PIN = "a1b870fd04ef7b6ec7e9c5dbfd3f0cc1bf42c48b"
+HFSPLUS_PIN = "ba00b162234f80b1dadd1733420306941d6ff797"
 HFSPLUS_PACKAGES = {
     "hfsplus-builder": Path("crates/filesystem/hfsplus-builder"),
     "hfsplus-format": Path("crates/formats/hfsplus-format"),

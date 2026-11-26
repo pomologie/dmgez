@@ -101,6 +101,13 @@ def check(package, cargo, seven_zip, native_filesystem, expected_sha256=None):
             if native_filesystem:
                 command.append("--native-filesystem")
             subprocess.run(command, env=environment, check=True)
+        name_check = [
+            sys.executable, "-B", PROJECT_SMOKE.with_name("check_supplementary_names.py"),
+            executable, "--seven-zip", seven_zip,
+        ]
+        if native_filesystem:
+            name_check.append("--native-filesystem")
+        subprocess.run(name_check, env=environment, check=True)
 
         consumer = scratch / "consumer"
         run(cargo, ["new", "--bin", "--vcs", "none", consumer], scratch, environment)

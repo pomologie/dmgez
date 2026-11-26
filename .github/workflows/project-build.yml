@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  HFSPLUS_REVISION: a1b870fd04ef7b6ec7e9c5dbfd3f0cc1bf42c48b
+  HFSPLUS_REVISION: ba00b162234f80b1dadd1733420306941d6ff797
 
 jobs:
   registry-package:
@@ -169,6 +169,10 @@ jobs:
                   sys.executable, "-B", "tests/compatibility/project-build/check_ci_project.py",
                   executable, images / mode, "--format", mode, "--seven-zip", seven_zip, *native,
               ], check=True)
+          subprocess.run([
+              sys.executable, "-B", "tests/compatibility/project-build/check_supplementary_names.py",
+              executable, "--seven-zip", seven_zip, *native,
+          ], check=True)
           subprocess.run([*compose, "--test"], env=environment, check=True)
           commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           (handoff / "source-revisions.txt").write_text(
