@@ -7,7 +7,7 @@ import unittest
 import package_cli
 from release_notices import (
     NOTICE_DRAFT_HEADER, NOTICE_DRAFT_STATUS, NOTICE_HEADER,
-    check_built_packages, notice_binary_digest, render,
+    SUPPLEMENTAL_NOTICES, check_built_packages, notice_binary_digest, render,
 )
 
 
@@ -52,6 +52,25 @@ class ReleaseNoticeTests(unittest.TestCase):
         data["licenses"].pop()
         with self.assertRaisesRegex(ValueError, "do not cover"):
             draft(data)
+
+    def test_supplemental_notices_use_the_reported_package_source(self):
+        with TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            data = report()
+            package = data["crates"][0]["package"]
+            package.update(name="ring", version="0.17.14", manifest_path=str(directory / "Cargo.toml"))
+            paths = SUPPLEMENTAL_NOTICES["ring", "0.17.14"]
+            for relative in paths:
+                notice = directory / relative
+                notice.parent.mkdir(parents=True, exist_ok=True)
+                notice.write_text(f"Source notice from {relative}\n", encoding="utf-8")
+            text = draft(data)
+            for relative in paths:
+                self.assertIn(f"ring 0.17.14 | {relative}\n\nSource notice from {relative}\n", text)
+            self.assertNotIn(str(directory), text)
+            (directory / paths[-1]).unlink()
+            with self.assertRaises(FileNotFoundError):
+                draft(data)
 
     def test_notice_inventory_matches_the_packages_cargo_built(self):
         check_built_packages(report(), {"first-id", "second-id"})

@@ -19,6 +19,18 @@ FIELD_SEPARATOR = " = "
 CONFIG = Path(__file__).with_name("release-notices.toml").resolve()
 CLI_MANIFEST = Path("apps/dmgez-cli/Cargo.toml")
 LOCKFILE = "Cargo.lock"
+# Package files with attributions or component terms missed by the scanner.
+SUPPLEMENTAL_NOTICES = {
+    ("miniz_oxide", "0.8.9"): ("LICENSE",),
+    ("miniz_oxide", "0.9.1"): ("LICENSE",),
+    ("rasn", "0.20.2"): ("LICENCE-APACHE",),
+    ("rasn-derive", "0.20.2"): ("LICENCE-APACHE",),
+    ("ring", "0.17.14"): (
+        "LICENSE", "src/polyfill/once_cell/LICENSE-MIT", "third_party/fiat/LICENSE",
+    ),
+    ("rustix", "1.1.6"): ("COPYRIGHT",),
+    ("shlex", "2.0.1"): ("LICENSE-APACHE",),
+}
 
 
 def host_target(cargo, workspace):
@@ -62,6 +74,19 @@ def notice_binary_digest(text, target):
     if re.fullmatch(r"[0-9a-f]{64}", binary_hash) is None:
         raise ValueError("dependency notice requires a valid CLI SHA-256")
     return binary_hash
+
+
+def supplemental_notices(packages):
+    for entry in packages:
+        package = entry["package"]
+        key = (package["name"], package["version"])
+        for relative in SUPPLEMENTAL_NOTICES.get(key, ()):
+            source = Path(package["manifest_path"]).parent / relative
+            with source.open(encoding="utf-8", newline="") as file:
+                text = file.read()
+            if not text.strip():
+                raise ValueError(f"{package_label(package)} has an empty source notice: {relative}")
+            yield package_label(package), relative, text
 
 
 def render(data, target, binary_hash, lock_hash, features, no_defaults):
@@ -108,6 +133,11 @@ def render(data, target, binary_hash, lock_hash, features, no_defaults):
     for identifier, users, canonical, text in sorted(sections):
         origin = "Canonical SPDX text" if canonical else "Source license text"
         lines.extend(("", f"{identifier} | {origin}", ", ".join(users), "", text))
+    supplements = sorted(supplemental_notices(data["crates"]))
+    if supplements:
+        lines.extend(("", "Supplemental source notices"))
+        for label, relative, text in supplements:
+            lines.extend(("", f"{label} | {relative}", "", text))
     return "\n".join(lines) + "\n"
 
 
