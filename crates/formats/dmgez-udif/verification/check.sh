@@ -10,7 +10,7 @@ cargo kani --manifest-path "$verification_dir/../Cargo.toml" \
 	--no-default-features --features write --harness write_geometry_proof
 cargo kani --manifest-path "$verification_dir/../Cargo.toml" \
 	--no-default-features --features read \
-	--harness indexed_read_cursor
+	--harness indexed_read_
 cargo kani --manifest-path "$verification_dir/../Cargo.toml" \
 	--no-default-features --features read \
 	--harness run_admission --output-format terse

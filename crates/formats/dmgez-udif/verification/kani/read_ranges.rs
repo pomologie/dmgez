@@ -2,7 +2,7 @@ use std::ops::Range;
 
 use crate::blkx::Kind;
 
-use super::{ReadCursor, Run};
+use super::{ReadCursor, Run, read_output_range};
 
 const MAX_RUNS: usize = 8;
 
@@ -121,4 +121,35 @@ fn indexed_read_cursor_advances_one_exact_intersection() {
 		assert!(cursor.remaining.start < partition.ends[cursor.ordinal]);
 		kani::cover!(remaining.start < run_end && run_end < remaining.end);
 	}
+}
+
+#[kani::proof]
+fn indexed_read_output_window_matches_widened_endpoints() {
+	let (piece_start, piece_end, request_start): (u64, u64, u64) = kani::any();
+	let output_len: usize = kani::any();
+	let requested_end = u128::from(request_start) + output_len as u128;
+	let admitted = request_start <= piece_start
+		&& piece_start <= piece_end
+		&& u128::from(piece_end) <= requested_end;
+
+	let actual = read_output_range(&(piece_start..piece_end), request_start, output_len);
+	assert_eq!(actual.is_some(), admitted);
+	if let Some(window) = actual {
+		assert!(window.start <= window.end && window.end <= output_len);
+		assert_eq!(
+			u128::from(request_start) + window.start as u128,
+			u128::from(piece_start)
+		);
+		assert_eq!(
+			u128::from(request_start) + window.end as u128,
+			u128::from(piece_end)
+		);
+		assert_eq!(
+			(window.end - window.start) as u128,
+			u128::from(piece_end - piece_start)
+		);
+	}
+	kani::cover!(admitted && request_start < piece_start && u128::from(piece_end) == requested_end);
+	kani::cover!(request_start > piece_start);
+	kani::cover!(piece_start <= piece_end && u128::from(piece_end) > requested_end);
 }

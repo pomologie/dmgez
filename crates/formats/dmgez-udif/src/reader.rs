@@ -330,7 +330,8 @@ impl<S: ReadAt> Image<S> {
 		self.source.check_unchanged()?;
 		let mut cursor = index::ReadCursor::new(&self.runs, &self.logical_order, range);
 		while let Some((index, piece)) = cursor.next(&self.runs, &self.logical_order) {
-			let target = (piece.start - offset) as usize..(piece.end - offset) as usize;
+			let target = index::read_output_range(&piece, offset, output.len())
+				.ok_or(Error::Corrupt("logical fragment outside read buffer"))?;
 			self.read_run(index, piece.start, &mut output[target])?;
 		}
 		self.source.check_unchanged()

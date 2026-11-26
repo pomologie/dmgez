@@ -255,6 +255,17 @@ impl ReadCursor {
 	}
 }
 
+/// Translate a logical fragment into a checked window in the caller's output.
+pub(crate) fn read_output_range(
+	piece: &Range<u64>,
+	request_start: u64,
+	output_len: usize,
+) -> Option<Range<usize>> {
+	let start = usize::try_from(piece.start.checked_sub(request_start)?).ok()?;
+	let end = usize::try_from(piece.end.checked_sub(request_start)?).ok()?;
+	(start <= end && end <= output_len).then_some(start..end)
+}
+
 pub(crate) fn bytes(sectors: u64) -> Result<u64, Error> {
 	sector_bytes(sectors).map_err(Error::from)
 }

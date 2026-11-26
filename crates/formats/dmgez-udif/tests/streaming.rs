@@ -164,6 +164,11 @@ fn parallel_output_is_identical_at_different_worker_counts() {
 	}
 	let mut image = Image::open(reference.as_slice(), Limits::default()).unwrap();
 	image.verify().unwrap();
+	let start = 2 * SECTOR_SIZE - 1;
+	let end = 6 * SECTOR_SIZE + 1;
+	let mut window = vec![u8::MAX; end - start];
+	image.read_exact_at(start as u64, &mut window).unwrap();
+	assert_eq!(window, logical[start..end]);
 	let mut decoded = Vec::new();
 	image.write_raw_to(&mut decoded).unwrap();
 	assert_eq!(decoded, logical);
