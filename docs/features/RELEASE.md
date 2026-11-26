@@ -22,6 +22,8 @@ The `ab33cd6` distribution set is in `target/release-candidates/v0.1.0/ab33cd6-r
 
 The `ab33cd6` provenance SHA-256 is `559e0f922f80ed9c6166475ded2c173ea28b2c4c8c6b275e1f8737fbfb3372ce`. It binds the Cargo archive, three CLI archives, three SBOMs, and verified job results. The linked 18-record proof bundle remains bound to `31a280c`. The packaged production sources and dependency lockfile match that revision byte for byte. [Verification plan](../architecture/VERIFICATION.md#v010-release-evidence)
 
+On arm64 macOS, Rust and Cargo 1.98.0 installed the exact `ab33cd6` Cargo archive, built and verified the unsigned and signed examples in both formats, and ran a fresh consumer using the public builder and reader. The compiler versions and smoke log are in `target/verification-evidence/v0.1.0-verification/ab33cd6-minimum-rust/`.
+
 An independent macOS composition of dmgez `e0ac797` with the later HFS+ revision `9add11a` passed all 12 project CLI cases, the public library integration test, and 29 runtime tests.
 
 In the earlier `e0ac797` archives, the packaged CLI's dry run reported equivalent catalog paths for U+1D15E and U+1D157 U+1D165, while native HFS+ kept the spellings distinct. The historical replay remains in `target/verification-evidence/v0.1.0-verification/e0ac797-hfs-name-compatibility/result.json`. The `31a280c` candidate accepts both names in one project. The shared Cargo archive regression checks the two payloads with 7-Zip on all three hosts and reads each spelling by its exact path on an Apple-mounted HFS+ volume. [Hosted release qualification](https://github.com/pomologie/dmgez/actions/runs/45900551544)
