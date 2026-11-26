@@ -3,7 +3,7 @@
 use std::cell::Cell;
 
 use dmgez_udif::{
-	Error, TRAILER_BYTES, check_trailer_header,
+	Error, SECTOR_BYTES, TRAILER_BYTES, check_trailer_header,
 	reader::{Checksum, Image, Limits, ReadAt},
 };
 
@@ -22,11 +22,25 @@ const NATIVE_MASTER_CRC: u32 = 0xf271_439c;
 const KOLY_MAGIC: &[u8; 4] = b"koly";
 const KOLY_HEADER: &[u8; 12] = b"koly\0\0\0\x04\0\0\x02\0";
 const HEADER_LENGTH_OFFSET: usize = 8;
+const FLAGS_OFFSET: usize = 12;
+const RUNNING_DATA_FORK_OFFSET: usize = 16;
+const RESOURCE_FORK_OFFSET: usize = 40;
+const RESOURCE_FORK_LENGTH_OFFSET: usize = 48;
+const SEGMENT_NUMBER_OFFSET: usize = 56;
 const SEGMENT_COUNT_OFFSET: usize = 60;
 const XML_OFFSET: usize = 216;
 const XML_LENGTH_OFFSET: usize = 224;
+const VARIANT_OFFSET: usize = 488;
 const SECTOR_COUNT_OFFSET: usize = 492;
 const TRAILER_READ: (u64, usize) = (NATIVE_TRAILER_START as u64, TRAILER_BYTES);
+
+const UNFLATTENED_FLAGS: u32 = 0;
+const SECOND_SEGMENT: u32 = 2;
+const DEVICE_VARIANT: u32 = 1;
+const UNKNOWN_VARIANT: u32 = 3;
+const PRESENT_FORK_BYTES: u64 = 1;
+const MISSING_XML_BYTES: u64 = 0;
+const SHIFTED_FORK_START: u64 = 1;
 
 struct ReadSpy<'a> {
 	bytes: &'a [u8],
@@ -118,12 +132,113 @@ fn rejects_bad_header_length_and_counts_before_reading_xml() {
 		assert!(matches!(error, Error::Unsupported("segmented disk image")));
 	});
 
-	image.copy_from_slice(NATIVE_UDRO);
-	replace_field(&mut image, SECTOR_COUNT_OFFSET, 0u64.to_be_bytes());
+	const OVERFLOWING_SECTOR_COUNT: u64 = u64::MAX / SECTOR_BYTES + 1;
+	for sectors in [0, OVERFLOWING_SECTOR_COUNT] {
+		image.copy_from_slice(NATIVE_UDRO);
+		replace_field(&mut image, SECTOR_COUNT_OFFSET, sectors.to_be_bytes());
+		assert_refused(&image, &[TRAILER_READ], |error| {
+			assert!(matches!(
+				error,
+				Error::Corrupt("invalid logical disk length")
+			));
+		});
+	}
+}
+
+#[test]
+fn rejects_unsupported_flags_segment_number_offset_and_variant_before_reading_xml() {
+	for (offset, value, reason) in [
+		(FLAGS_OFFSET, UNFLATTENED_FLAGS, "koly flags"),
+		(
+			SEGMENT_NUMBER_OFFSET,
+			SECOND_SEGMENT,
+			"segmented disk image",
+		),
+		(VARIANT_OFFSET, UNKNOWN_VARIANT, "koly image variant"),
+	] {
+		let mut image = NATIVE_UDRO.to_vec();
+		replace_field(&mut image, offset, value.to_be_bytes());
+		assert_refused(&image, &[TRAILER_READ], |error| {
+			assert!(matches!(error, Error::Unsupported(actual) if actual == reason));
+		});
+	}
+
+	let mut image = NATIVE_UDRO.to_vec();
+	replace_field(
+		&mut image,
+		RUNNING_DATA_FORK_OFFSET,
+		SHIFTED_FORK_START.to_be_bytes(),
+	);
 	assert_refused(&image, &[TRAILER_READ], |error| {
 		assert!(matches!(
 			error,
-			Error::Corrupt("invalid logical disk length")
+			Error::Unsupported("nonzero running data-fork offset")
+		));
+	});
+}
+
+#[test]
+fn device_variant_uses_the_same_admitted_geometry() {
+	let mut image = NATIVE_UDRO.to_vec();
+	replace_field(&mut image, VARIANT_OFFSET, DEVICE_VARIANT.to_be_bytes());
+	let image = Image::open(image.as_slice(), Limits::default()).unwrap();
+	let descriptor = image.descriptor();
+	assert_eq!(descriptor.variant, DEVICE_VARIANT);
+	assert_eq!(descriptor.logical_bytes, NATIVE_LOGICAL_LENGTH);
+	assert_eq!(
+		descriptor.resource_xml,
+		NATIVE_XML_START as u64..NATIVE_TRAILER_START as u64
+	);
+}
+
+#[test]
+fn rejects_non_xml_resource_forks_and_missing_plist_before_reading_either() {
+	for (offset, value) in [
+		(RESOURCE_FORK_LENGTH_OFFSET, PRESENT_FORK_BYTES),
+		(RESOURCE_FORK_OFFSET, SHIFTED_FORK_START),
+		(XML_LENGTH_OFFSET, MISSING_XML_BYTES),
+	] {
+		let mut image = NATIVE_UDRO.to_vec();
+		replace_field(&mut image, offset, value.to_be_bytes());
+		assert_refused(&image, &[TRAILER_READ], |error| {
+			assert!(matches!(
+				error,
+				Error::Unsupported("non-XML resource fork or missing plist")
+			));
+		});
+	}
+}
+
+#[test]
+fn rejects_a_resource_fork_outside_the_body_and_xml_overlapping_data() {
+	let mut image = NATIVE_UDRO.to_vec();
+	replace_field(
+		&mut image,
+		RESOURCE_FORK_OFFSET,
+		(NATIVE_TRAILER_START as u64).to_be_bytes(),
+	);
+	replace_field(
+		&mut image,
+		RESOURCE_FORK_LENGTH_OFFSET,
+		PRESENT_FORK_BYTES.to_be_bytes(),
+	);
+	assert_refused(&image, &[TRAILER_READ], |error| {
+		assert!(matches!(
+			error,
+			Error::Corrupt("koly range outside image body")
+		));
+	});
+
+	image.copy_from_slice(NATIVE_UDRO);
+	replace_field(
+		&mut image,
+		XML_OFFSET,
+		(NATIVE_XML_START as u64 - 1).to_be_bytes(),
+	);
+	assert_refused(&image, &[TRAILER_READ], |error| {
+		assert!(matches!(
+			error,
+			Error::Corrupt("XML overlaps the data fork")
 		));
 	});
 }
