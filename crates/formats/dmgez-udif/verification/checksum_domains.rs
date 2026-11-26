@@ -331,6 +331,22 @@ struct ObservedSource<'source> {
 	payload_requests: &'source RefCell<Vec<Range<u64>>>,
 }
 
+#[test]
+fn refuses_a_master_crc_when_a_table_has_no_declared_crc() {
+	let fixture = edit_block_map(UDRO, |table| {
+		table[BLOCK_MAP_CHECKSUM_OFFSET..][..CHECKSUM_DESCRIPTOR_BYTES].fill(0);
+	});
+	let mut image = Image::open(fixture.as_slice(), Limits::default()).unwrap();
+	assert_eq!(image.descriptor().tables[0].checksum, Checksum::Absent);
+	assert!(matches!(image.descriptor().master_crc, Checksum::Crc32(_)));
+	assert!(matches!(
+		image.verify(),
+		Err(Error::Unsupported(
+			"master checksum with absent table checksums"
+		))
+	));
+}
+
 impl ReadAt for ObservedSource<'_> {
 	fn len(&self) -> u64 {
 		self.image.len() as u64

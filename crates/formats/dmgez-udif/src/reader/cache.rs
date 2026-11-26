@@ -7,6 +7,10 @@ use std::sync::Mutex;
 
 use crate::{Error, geometry::DECODER_SPARE_BYTES};
 
+#[cfg(all(test, not(dmgez_loom)))]
+#[path = "../../verification/decode_cache_limits.rs"]
+mod limits;
+
 const MAX_ENTRIES: usize = 2;
 
 #[derive(Debug)]

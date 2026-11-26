@@ -131,6 +131,50 @@ fn rejects_stored_and_decoded_runs_that_cannot_fit_a_byte_buffer() {
 }
 
 #[test]
+fn enforces_logical_capacity_and_table_count_without_reading_payload() {
+	for (limits, expected) in [
+		(
+			Limits {
+				max_logical_bytes: SECTOR_BYTES - 1,
+				..Limits::default()
+			},
+			"logical disk size",
+		),
+		(
+			Limits {
+				max_tables: 0,
+				..Limits::default()
+			},
+			"block-map tables",
+		),
+	] {
+		let source = run_metadata(Kind::Raw, ONE_SECTOR, SECTOR_BYTES);
+		assert!(matches!(
+			Image::open(source, limits),
+			Err(Error::ResourceLimit(detail)) if detail == expected
+		));
+	}
+}
+
+#[test]
+fn reads_the_run_index_without_touching_the_payload() {
+	let source = run_metadata(Kind::Raw, ONE_SECTOR, SECTOR_BYTES);
+	let image = Image::open(source, Limits::default()).unwrap();
+	assert_eq!(image.run_ordinal_at(0), Some(0));
+	assert_eq!(image.run_ordinal_at(SECTOR_BYTES - 1), Some(0));
+	assert_eq!(image.run_ordinal_at(SECTOR_BYTES), None);
+	assert_eq!(image.run_ordinal_at(u64::MAX), None);
+
+	let token = crate::Cancellation::default();
+	let mut image = image;
+	token.cancel();
+	assert!(matches!(
+		image.verify_with_cancellation(&token),
+		Err(Error::Cancelled)
+	));
+}
+
+#[test]
 fn unknown_run_cannot_supply_zero_bytes() {
 	let source = run_metadata(
 		Kind::Unsupported(UNKNOWN_RUN_TAG),

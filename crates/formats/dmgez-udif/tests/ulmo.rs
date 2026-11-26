@@ -83,7 +83,7 @@ fn rejects_budget_and_corrupt_native_footer() {
 #[cfg(all(feature = "read", not(feature = "lzma")))]
 #[test]
 fn disabled_codec_still_exposes_the_native_run_type() {
-	let mut image = Image::open(NATIVE, Limits::default()).unwrap();
+	let image = Image::open(NATIVE, Limits::default()).unwrap();
 	let first = image.runs().next().unwrap();
 	assert_eq!(first.encoding, RunEncoding::Lzma2);
 	assert!(!first.encoding.can_decode());
