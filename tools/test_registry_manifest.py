@@ -72,8 +72,8 @@ class RegistryManifestTests(unittest.TestCase):
         self.assertEqual(cargo["package"]["license"], "Apache-2.0 AND MPL-2.0")
         self.assertEqual(cargo["lib"]["path"], "src/lib.rs")
         self.assertEqual(cargo["bin"][0]["name"], "dmgez")
-        self.assertEqual(cargo["features"]["default"], ["bundle_dmgez_cli_used"])
-        self.assertNotIn("bundle_dmgez_cli_unused", cargo["features"])
+        self.assertNotIn("features", cargo)
+        self.assertEqual(inventory["local"]["dmgez-cli"]["features"], ("used",))
         self.assertEqual(cargo["dependencies"], {
             "quick-xml": {"version": "=0.1.0", "features": ["extra"]},
         })

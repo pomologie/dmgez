@@ -155,7 +155,6 @@ def analyze_target(metadata_path, tree_path, lock, cli_package):
             "edition": target["edition"],
             "license": package["license"],
             "module": module,
-            "feature_prefix": f"bundle_{module}_",
             "features": single_features(tree[key], name),
             "declared_features": sorted(package["features"]),
             "local_dependencies": {},
@@ -220,28 +219,12 @@ def render_manifest(root, local, direct):
     lines = [
         "[package]", *(f"{name} = {json.dumps(value)}" for name, value in metadata.items()),
         'resolver = "3"', "autoexamples = false", "autotests = false", "",
-        "[lib]", 'path = "src/lib.rs"', "test = false", "",
+        "[lib]", 'path = "src/lib.rs"', "test = false", "doctest = false", "",
         "[[bin]]", 'name = "dmgez"', 'path = "src/main.rs"', "test = false", "",
-        "[features]", "default = [",
+        "[lints.rust]",
+        'unexpected_cfgs = { level = "warn", check-cfg = ["cfg(kani)", "cfg(dmgez_loom)"] }',
+        "",
     ]
-    active = sorted({
-        row["feature_prefix"] + feature
-        for row in local.values()
-        for feature in row["features"]
-    })
-    declared = sorted({
-        row["feature_prefix"] + feature
-        for row in local.values()
-        for feature in row["declared_features"]
-    })
-    lines.extend(f"\t{json.dumps(feature)}," for feature in active)
-    lines.extend(("]", *(f"{json.dumps(feature)} = []" for feature in active), ""))
-    inactive = sorted(set(declared) - set(active))
-    checks = ["cfg(kani)", "cfg(dmgez_loom)"]
-    if inactive:
-        checks.append("cfg(feature, values(" + ", ".join(map(json.dumps, inactive)) + "))")
-    checks_toml = ", ".join(map(json.dumps, checks))
-    lines.extend(("[lints.rust]", f'unexpected_cfgs = {{ level = "warn", check-cfg = [{checks_toml}] }}', ""))
     for kind, suffix in ((NORMAL_KIND, "dependencies"), (BUILD_KIND, "build-dependencies")):
         common = dict(next(iter(direct.values()))[kind])
         for selected in direct.values():

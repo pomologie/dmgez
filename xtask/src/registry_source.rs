@@ -1,6 +1,12 @@
 //! Rewrite local crate paths while retaining the original source bytes around edits.
 
-use std::{collections::BTreeMap, error::Error, fs, ops::Range, path::PathBuf};
+use std::{
+	collections::{BTreeMap, BTreeSet},
+	error::Error,
+	fs,
+	ops::Range,
+	path::PathBuf,
+};
 
 use clap::Args;
 use proc_macro2::{Span, TokenStream, TokenTree};
@@ -25,9 +31,9 @@ pub(crate) struct Arguments {
 	/// Original dependency alias and private module, as ALIAS=MODULE.
 	#[arg(long, value_parser = parse_dependency)]
 	dependency: Vec<(String, String)>,
-	/// Prefix applied to Cargo feature names from this source crate.
+	/// A Cargo feature enabled in the qualified source profile.
 	#[arg(long)]
-	feature_prefix: Option<String>,
+	active_feature: Vec<String>,
 	/// Drop a crate-level no_std attribute when hosting a portable engine.
 	#[arg(long)]
 	strip_no_std: bool,
@@ -57,7 +63,11 @@ fn rewrite_source(source: &str, arguments: &Arguments) -> Result<String, Box<dyn
 	let mut transform = Transformer {
 		module: arguments.module.as_deref(),
 		dependencies: BTreeMap::new(),
-		feature_prefix: arguments.feature_prefix.as_deref(),
+		active_features: arguments
+			.active_feature
+			.iter()
+			.map(String::as_str)
+			.collect(),
 		edits: BTreeMap::new(),
 	};
 	for (alias, module) in &arguments.dependency {
@@ -97,7 +107,7 @@ fn rewrite_source(source: &str, arguments: &Arguments) -> Result<String, Box<dyn
 struct Transformer<'a> {
 	module: Option<&'a str>,
 	dependencies: BTreeMap<&'a str, &'a str>,
-	feature_prefix: Option<&'a str>,
+	active_features: BTreeSet<&'a str>,
 	edits: BTreeMap<usize, (usize, String)>,
 }
 
@@ -193,19 +203,19 @@ impl Transformer<'_> {
 			match token {
 				TokenTree::Group(group) => self.rewrite_tokens(group.stream(), cfg),
 				TokenTree::Ident(ident) if cfg && ident == "feature" => {
-					let Some(prefix) = self.feature_prefix else {
-						continue;
-					};
 					if let [TokenTree::Punct(eq), TokenTree::Literal(literal), ..] =
 						&tokens[index + 1..]
 						&& eq.as_char() == '='
 						&& let Ok(feature) = syn::parse_str::<LitStr>(&literal.to_string())
 					{
-						let value =
-							LitStr::new(&format!("{prefix}{}", feature.value()), Span::call_site());
+						let condition = if self.active_features.contains(feature.value().as_str()) {
+							"all()"
+						} else {
+							"any()"
+						};
 						self.replace(
-							literal.span().byte_range(),
-							quote::quote!(#value).to_string(),
+							ident.span().byte_range().start..literal.span().byte_range().end,
+							condition.to_owned(),
 						);
 					}
 				}

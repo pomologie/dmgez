@@ -89,8 +89,9 @@ def transform(source, destination, package, xtask, *, module=None):
         return
     command = [
         xtask, "bundle-source", "--input", source, "--output", destination,
-        "--feature-prefix", package["feature_prefix"],
     ]
+    for feature in sorted(package["features"]):
+        command.extend(("--active-feature", feature))
     if module is not None:
         command.extend(("--module", module, "--strip-no-std"))
     for alias, target in sorted(package["local_dependencies"].items()):
@@ -116,9 +117,17 @@ def stage_signer(snapshot, staging):
                 archive.addfile(member, io.BytesIO(contents))
 
 
-def append_internal_declaration(path):
-    with path.open("a", encoding="utf-8", newline="\n") as stream:
-        stream.write("\nmod internal;\n")
+def attach_internal(path):
+    source = path.read_text(encoding="utf-8")
+    if path.name == "main.rs":
+        # CLI fallback match arms still handle upstream non-exhaustive enums.
+        source = "#![allow(unreachable_patterns)]\n\n" + source
+    source += (
+        "\n// Private modules retain APIs shared by the source workspace's other profiles.\n"
+        "#[allow(dead_code, unused_imports, unreachable_patterns)]\n"
+        "mod internal;\n"
+    )
+    path.write_text(source, encoding="utf-8", newline="\n")
 
 
 def assemble(inventory, output, xtask, dmgez, hfsplus):
@@ -157,7 +166,7 @@ def assemble(inventory, output, xtask, dmgez, hfsplus):
                 for relative, path in sorted(source.items()):
                     transform(path, staging / "src" / relative, package, xtask)
                 for root in ("lib.rs", "main.rs"):
-                    append_internal_declaration(staging / "src" / root)
+                    attach_internal(staging / "src" / root)
             else:
                 module = modules[name]
                 if Path("lib.rs") not in source or source_path.name != "lib.rs":
@@ -176,6 +185,7 @@ def assemble(inventory, output, xtask, dmgez, hfsplus):
         provenance = {
             "dmgez_revision": dmgez.revision,
             "hfsplus_revision": hfsplus.revision,
+            "active_features": {name: package["features"] for name, package in packages.items()},
             "files": {
                 str(path.relative_to(staging).as_posix()): hashlib.sha256(path.read_bytes()).hexdigest()
                 for path in sorted(staging.rglob("*"))

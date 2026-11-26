@@ -6,7 +6,7 @@ fn arguments() -> Arguments {
 		output: Default::default(),
 		module: Some("engine".into()),
 		dependency: vec![("core_alias".into(), "local_core".into())],
-		feature_prefix: Some("bundle_engine_".into()),
+		active_feature: vec!["fast-path".into()],
 		strip_no_std: true,
 	}
 }
@@ -19,6 +19,7 @@ fn rewrites_paths_and_conditions_without_reformatting_the_source() {
 use {core_alias::{self as core, Type}, crate::module};
 use ::core_alias::Other;
 #[cfg(all(unix, feature = "fast-path"))]
+#[cfg_attr(not(feature = "unsupported-path"), inline)]
 pub(in crate::module) fn run(arg: core_alias::Type) {
 	let value = make!(crate::module::name, "crate::name");
 	let enabled = cfg!(feature = "fast-path");
@@ -29,10 +30,11 @@ pub(in crate::module) fn run(arg: core_alias::Type) {
 
 use {crate::internal::local_core::{self as core, Type}, crate::internal::engine::module};
 use crate::internal::local_core::Other;
-#[cfg(all(unix, feature = "bundle_engine_fast-path"))]
+#[cfg(all(unix, all()))]
+#[cfg_attr(not(any()), inline)]
 pub(in crate::internal::engine::module) fn run(arg: crate::internal::local_core::Type) {
 	let value = make!(crate::internal::engine::module::name, "crate::name");
-	let enabled = cfg!(feature = "bundle_engine_fast-path");
+	let enabled = cfg!(all());
 }
 "#;
 	assert_eq!(rewrite_source(original, &arguments()).unwrap(), expected);
