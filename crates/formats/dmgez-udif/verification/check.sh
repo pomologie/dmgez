@@ -16,3 +16,6 @@ cargo kani --manifest-path "$verification_dir/../Cargo.toml" \
 cargo kani --manifest-path "$verification_dir/../Cargo.toml" \
 	--no-default-features --features read \
 	--harness run_admission --output-format terse
+RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }--cfg dmgez_loom" \
+	cargo test --locked --manifest-path "$verification_dir/../Cargo.toml" \
+	--no-default-features --features read,write,zlib --lib decode_cache_model

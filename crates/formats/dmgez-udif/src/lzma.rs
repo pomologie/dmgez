@@ -8,7 +8,7 @@ const MAX_DECODE_WORKSPACE_KIB: u32 = 9 << 10;
 pub(crate) fn decode(stored: &[u8], length: usize) -> Option<Vec<u8>> {
 	frame::admit(stored, length)?;
 	// A spare byte lets the decoder reach the XZ footer when data ends exactly at the bound.
-	let mut decoded = vec![0; length.checked_add(1)?];
+	let mut decoded = vec![0; length.checked_add(crate::geometry::DECODER_SPARE_BYTES)?];
 	let mut decoder = XzStream::new_mem_limit(false, MAX_DECODE_WORKSPACE_KIB);
 	let result = decoder.process(stored, &mut decoded, Action::Finish).ok()?;
 	if result.status != Status::StreamEnd

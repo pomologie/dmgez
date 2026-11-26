@@ -89,7 +89,7 @@ fn rejects_out_of_budget_runs_and_missing_end_of_stream() {
 	let run = image.runs().next().unwrap();
 	let mut damaged = NATIVE.to_vec();
 	damaged[run.physical.end as usize - LAST_BYTE] = 0;
-	let mut damaged = Image::open(damaged.as_slice(), Limits::default()).unwrap();
+	let damaged = Image::open(damaged.as_slice(), Limits::default()).unwrap();
 	assert!(matches!(
 		damaged.read_exact_at(0, &mut [0]),
 		Err(Error::InvalidLzfse {

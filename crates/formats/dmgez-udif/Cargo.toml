@@ -55,5 +55,9 @@ thiserror.workspace = true
 # Property testing
 proptest.workspace = true
 
+[target.'cfg(dmgez_loom)'.dev-dependencies]
+# Schedule exploration for the production reader cache
+loom = "=0.7.2"
+
 [lints]
 workspace = true

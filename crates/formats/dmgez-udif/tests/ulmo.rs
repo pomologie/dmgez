@@ -70,7 +70,7 @@ fn rejects_budget_and_corrupt_native_footer() {
 	let first = image.runs().next().unwrap();
 	let mut damaged = NATIVE.to_vec();
 	damaged[first.physical.end as usize - 1] ^= 1;
-	let mut image = Image::open(damaged.as_slice(), Limits::default()).unwrap();
+	let image = Image::open(damaged.as_slice(), Limits::default()).unwrap();
 	assert!(matches!(
 		image.read_exact_at(0, &mut [0]),
 		Err(Error::InvalidLzma {

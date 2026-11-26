@@ -140,7 +140,7 @@ fn rejects_truncated_and_overflowing_geometry_and_budget_admission() {
 fn rejects_bad_zlib_on_first_read_before_cache() {
 	let mut corrupt = UDZO.to_vec();
 	corrupt[TINY_UDZO_DATA_FORK_BYTES - 1] ^= 1;
-	let mut image = Image::open(corrupt.as_slice(), Limits::default()).unwrap();
+	let image = Image::open(corrupt.as_slice(), Limits::default()).unwrap();
 	assert!(matches!(
 		image.read_exact_at(0, &mut [0; 1]),
 		Err(Error::InvalidZlib { .. })
@@ -151,7 +151,7 @@ proptest! {
 	#[test]
 	fn random_ranges_match_known_raw(start in 0..=RAW.len(), len in 0..=RAW.len()) {
 		for fixture in [UDRO, UDZO, ZERO, IGNORE, COMMENT] {
-			let mut image = Image::open(fixture, Limits::default()).unwrap();
+			let image = Image::open(fixture, Limits::default()).unwrap();
 			let mut output = vec![0; len];
 			let actual = image.read_exact_at(start as u64, &mut output);
 			if start + len <= RAW.len() {
@@ -186,7 +186,7 @@ fn rechecks_admitted_identity_before_serving_decoded_cache() {
 		}
 	}
 	let mutated = Cell::new(false);
-	let mut image = Image::open(Mutable(&mutated), Limits::default()).unwrap();
+	let image = Image::open(Mutable(&mutated), Limits::default()).unwrap();
 	image.read_exact_at(0, &mut [0]).unwrap();
 	mutated.set(true);
 	assert!(matches!(

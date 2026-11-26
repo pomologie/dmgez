@@ -1,5 +1,7 @@
 //! Bounded metadata inspection, random reads and checksum verification.
 
+mod cache;
+mod compressed;
 #[cfg(feature = "write")]
 mod rebuild;
 mod release;
@@ -10,6 +12,10 @@ mod source;
 #[path = "../verification/reader_limits.rs"]
 mod reader_limits;
 
+#[cfg(all(test, feature = "write", feature = "zlib"))]
+#[path = "../verification/decode_cache.rs"]
+mod decode_cache_model;
+
 use std::{io::Write, ops::Range};
 
 use crc32fast::Hasher;
@@ -19,11 +25,13 @@ use crate::{
 	Error, SECTOR_BYTES,
 	blkx::{Kind, Table},
 	checksum,
+	geometry::DECODER_SPARE_BYTES,
 	index::{self, Run},
 	resource, trailer,
 };
 
 pub use crate::checksum::Checksum;
+use cache::DecodeCache;
 use source::admitted_range;
 pub use source::{FileSource, ReadAt};
 
@@ -37,7 +45,7 @@ const DEFAULT_MAX_COMPRESSED_BYTES: usize = 32 << 20;
 const DEFAULT_MAX_DECODED_BYTES: usize = 32 << 20;
 const MAX_BYTE_BUFFER_BYTES: usize = isize::MAX as usize;
 // Zlib and LZMA use one extra byte to detect output beyond the logical run.
-const MAX_DECODED_RUN_BYTES: usize = MAX_BYTE_BUFFER_BYTES - 1;
+const MAX_DECODED_RUN_BYTES: usize = MAX_BYTE_BUFFER_BYTES - DECODER_SPARE_BYTES;
 
 /// Resource limits used before allocating metadata or inflating a run.
 /// Byte buffers must also fit the platform's allocation size limit.
@@ -55,7 +63,8 @@ pub struct Limits {
 	pub max_records: usize,
 	/// Maximum stored size of a single compressed run.
 	pub max_compressed_bytes: usize,
-	/// Maximum expanded size of a single compressed run.
+	/// Maximum expanded size of one run and decoded capacity shared by the cache.
+	/// The cache budget includes one additional byte for decoder overrun detection.
 	pub max_decoded_bytes: usize,
 }
 
@@ -184,7 +193,7 @@ pub struct Verification {
 	pub master: CheckStatus,
 }
 
-/// An immutable disk image with a byte-bounded, single-run decode cache.
+/// An immutable disk image with an instance-local, byte-bounded decode cache.
 #[derive(Debug)]
 pub struct Image<S> {
 	source: S,
@@ -193,7 +202,7 @@ pub struct Image<S> {
 	runs: Vec<Run>,
 	logical_order: Vec<usize>,
 	table_runs: Vec<Range<usize>>,
-	cache: Option<(usize, Vec<u8>)>,
+	cache: DecodeCache,
 }
 
 impl<S: ReadAt> Image<S> {
@@ -293,7 +302,7 @@ impl<S: ReadAt> Image<S> {
 			runs,
 			logical_order,
 			table_runs,
-			cache: None,
+			cache: DecodeCache::new(limits.max_decoded_bytes.min(MAX_DECODED_RUN_BYTES)),
 		})
 	}
 
@@ -323,9 +332,13 @@ impl<S: ReadAt> Image<S> {
 
 	/// Read exactly a logical byte range, including reads across run boundaries.
 	///
+	/// When the source is `Sync`, callers may share the image between threads.
+	/// Compressed runs share a cache lock through decode and copy. A source
+	/// callback must avoid reentering compressed reads on the same image.
+	///
 	/// # Errors
 	/// Rejects out-of-range reads, missing codecs, bad compressed data and I/O failures.
-	pub fn read_exact_at(&mut self, offset: u64, output: &mut [u8]) -> Result<(), Error> {
+	pub fn read_exact_at(&self, offset: u64, output: &mut [u8]) -> Result<(), Error> {
 		let range = admitted_range(offset, output.len() as u64, self.descriptor.logical_bytes)?;
 		self.source.check_unchanged()?;
 		let mut cursor = index::ReadCursor::new(&self.runs, &self.logical_order, range);
@@ -385,7 +398,7 @@ impl<S: ReadAt> Image<S> {
 	) -> Result<Verification, Error> {
 		check_cancellation()?;
 		// Require a fresh read of all verification inputs, including a cached compressed run.
-		self.cache = None;
+		self.cache.clear()?;
 		let mut buffer = vec![0; STREAM_BUFFER_BYTES];
 		let mut physical = Hasher::new();
 		let mut offset = self.descriptor.data_fork.start;
@@ -445,7 +458,7 @@ impl<S: ReadAt> Image<S> {
 		})
 	}
 
-	fn read_run(&mut self, index: usize, position: u64, output: &mut [u8]) -> Result<(), Error> {
+	fn read_run(&self, index: usize, position: u64, output: &mut [u8]) -> Result<(), Error> {
 		let run = &self.runs[index];
 		let within = position - run.logical.start;
 		match run.kind {
@@ -467,8 +480,6 @@ impl<S: ReadAt> Image<S> {
 		}
 	}
 }
-
-mod compressed;
 
 fn range_len(range: &Range<u64>) -> u64 {
 	range.end - range.start

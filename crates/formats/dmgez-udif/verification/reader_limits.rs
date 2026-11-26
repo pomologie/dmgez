@@ -117,7 +117,7 @@ fn unknown_run_cannot_supply_zero_bytes() {
 		ONE_SECTOR,
 		ONE_STORED_BYTE,
 	);
-	let mut image = Image::open(source, Limits::default()).unwrap();
+	let image = Image::open(source, Limits::default()).unwrap();
 	let mut output = [u8::MAX];
 	assert!(matches!(
 		image.read_exact_at(0, &mut output),
@@ -142,7 +142,7 @@ fn zlib_requires_exact_input_consumption_and_output_length() {
 		max_decoded_bytes: EXPECTED.len(),
 		..Limits::default()
 	};
-	let mut exact = Image::open(NATIVE_UDZO, exact_limits).unwrap();
+	let exact = Image::open(NATIVE_UDZO, exact_limits).unwrap();
 	let mut output = vec![0; EXPECTED.len()];
 	exact.read_exact_at(0, &mut output).unwrap();
 	assert_eq!(output, EXPECTED);

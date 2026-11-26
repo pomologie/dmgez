@@ -139,7 +139,7 @@ pub fn export_run(
 ) -> Result<(), InspectionExportError> {
 	check_cancellation(cancellation)?;
 	source.check_unchanged().map_err(ExportDataError::from)?;
-	let mut image = Image::open_release(BorrowedSource(source), Limits::default())
+	let image = Image::open_release(BorrowedSource(source), Limits::default())
 		.map_err(ExportDataError::from)?;
 	let run = image
 		.runs()

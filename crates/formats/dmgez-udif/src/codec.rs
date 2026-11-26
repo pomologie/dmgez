@@ -3,7 +3,7 @@ pub(crate) fn inflate(stored: &[u8], length: usize) -> Option<Vec<u8>> {
 	use flate2::{Decompress, FlushDecompress, Status};
 
 	// One extra byte distinguishes an exact stream from one that expands beyond its mapping.
-	let mut decoded = vec![0; length.checked_add(1)?];
+	let mut decoded = vec![0; length.checked_add(crate::geometry::DECODER_SPARE_BYTES)?];
 	let mut inflater = Decompress::new(true);
 	let status = inflater
 		.decompress(stored, &mut decoded, FlushDecompress::Finish)
