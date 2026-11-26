@@ -117,8 +117,7 @@ jobs:
                   sys.executable, "-B", "tests/compatibility/project-build/check_ci_project.py",
                   executable, images / mode, "--format", mode, "--seven-zip", seven_zip, *native,
               ], check=True)
-          if sys.platform == "win32":
-              subprocess.run([*compose, "--test"], env=environment, check=True)
+          subprocess.run([*compose, "--test"], env=environment, check=True)
           commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
           (handoff / "source-revisions.txt").write_text(
               f"dmgez = {commit}\nHFS+ = {revision}\nRust target = {target}\n", encoding="utf-8",

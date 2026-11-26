@@ -120,6 +120,17 @@ The `017b843` archive candidate reproduced the UDIF branch results on macOS arm6
 
 On the same revision, hosted all-feature workspace coverage was 27,762 of 32,776 lines (84.70%) and 41,613 of 50,401 regions (82.56%). All 334 reported file rows match tracked files, and their counters sum to the job's totals. The Linux job compiled the locked all-feature workspace with Rust 1.98.0. The hosted workspace figure and the separate composed HFS+ measurements remain inputs to the open D-VER-01 coverage review. The hosted inventory is `target/verification-evidence/v0.1.0-verification/017b843-release-replay/hosted-workspace-coverage.json` with SHA-256 `b8755e57ca74b3eff3b947a9be21585d694b79067ec69b3399dd57e25fa32798`. [Hosted verification](https://github.com/pomologie/dmgez/actions/runs/45795137044)
 
+The composed runtime at dmgez `641e14e` and HFS+ `a1b870f` passed 14 release tests. With the four fault cases from `48b524a`, it passed 18 tests. Both runs used nightly `2026-11-04` branch instrumentation on arm64 macOS with `project-release,signing-rust`. The new cases reject source-length changes before staging, reject empty, oversized or short input during identity calculation, detect distinct Unix inodes at the same length, and refuse ad hoc signing when the portable backend is unavailable.
+
+| Runtime module | Baseline lines | Tested lines | Baseline branches | Tested branches |
+| --- | ---: | ---: | ---: | ---: |
+| `project_release/artifact.rs` | 82 / 87 | 85 / 87 | 16 / 26 | 20 / 26 |
+| `project_release/settings.rs` | 163 / 187 | 163 / 187 | 43 / 44 | 44 / 44 |
+
+The matching runtime unit suite passed 21 tests on stable Rust, and strict Clippy passed for the same composed features. The comparison and source-location counters are in `target/verification-evidence/v0.1.0-verification/641e14e-release-guards/release-guards-coverage.json` with SHA-256 `9b2004818abf88b708c1d38acd39d7b9356b595c623ca4192d24c1fe59a9c591`. Publication branch coverage remains part of the D-VER-01 review.
+
+The local arm64 macOS replay of the hosted test command, `python3 -B tools/compose_hfsplus_cli.py --hfsplus ../hfsplus --release --features inspect --test`, passed the 12 project CLI tests and all 21 composed runtime tests. The hosted project matrix runs that command on each target.
+
 ## Proof obligations
 
 | ID | Activation | Scope | Required evidence |

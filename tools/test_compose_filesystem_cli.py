@@ -389,6 +389,8 @@ class WindowsCompositionTests(unittest.TestCase):
             compose.run_cli(["cargo"], directory, options, {compose.HFSPLUS_BUILDER: directory})
 
         command = run.call_args.args[0]
+        self.assertIn(compose.RUNTIME_PACKAGE, command)
+        self.assertIn("--lib", command)
         self.assertEqual(command[-4:], ["--test", compose.CLI_TEST, "--test", compose.WINDOWS_CLI_TEST])
 
 
