@@ -6,6 +6,10 @@ mod release;
 mod run_metadata;
 mod source;
 
+#[cfg(all(test, feature = "write"))]
+#[path = "../verification/reader_limits.rs"]
+mod reader_limits;
+
 use std::{io::Write, ops::Range};
 
 use crc32fast::Hasher;
@@ -31,8 +35,12 @@ const DEFAULT_MAX_TABLES: usize = 4096;
 const DEFAULT_MAX_RECORDS: usize = 131_072;
 const DEFAULT_MAX_COMPRESSED_BYTES: usize = 32 << 20;
 const DEFAULT_MAX_DECODED_BYTES: usize = 32 << 20;
+const MAX_BYTE_BUFFER_BYTES: usize = isize::MAX as usize;
+// Zlib and LZMA use one extra byte to detect output beyond the logical run.
+const MAX_DECODED_RUN_BYTES: usize = MAX_BYTE_BUFFER_BYTES - 1;
 
 /// Resource limits used before allocating metadata or inflating a run.
+/// Byte buffers must also fit the platform's allocation size limit.
 #[derive(Debug, Clone, Copy)]
 pub struct Limits {
 	/// Maximum actual source length.
@@ -211,7 +219,7 @@ impl<S: ReadAt> Image<S> {
 		}
 		let xml_len = usize::try_from(trailer.xml.end - trailer.xml.start)
 			.ok()
-			.filter(|n| *n <= limits.max_xml_bytes)
+			.filter(|n| *n <= limits.max_xml_bytes.min(MAX_BYTE_BUFFER_BYTES))
 			.ok_or(Error::ResourceLimit("resource XML bytes"))?;
 		let mut xml = vec![0; xml_len];
 		source.read_exact_at(trailer.xml.start, &mut xml)?;
@@ -238,10 +246,14 @@ impl<S: ReadAt> Image<S> {
 			let normalized = index::normalize(&table, trailer.logical_bytes, &trailer.data)?;
 			for run in &normalized {
 				if run.kind.is_compressed() {
-					if range_len(&run.physical) > limits.max_compressed_bytes as u64 {
+					if range_len(&run.physical)
+						> limits.max_compressed_bytes.min(MAX_BYTE_BUFFER_BYTES) as u64
+					{
 						return Err(Error::ResourceLimit("compressed run size"));
 					}
-					if range_len(&run.logical) > limits.max_decoded_bytes as u64 {
+					if range_len(&run.logical)
+						> limits.max_decoded_bytes.min(MAX_DECODED_RUN_BYTES) as u64
+					{
 						return Err(Error::ResourceLimit("decoded run size"));
 					}
 				}
