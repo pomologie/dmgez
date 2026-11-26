@@ -24,8 +24,10 @@ TREE_OPTIONS = ("-e", "normal,build", "--no-dedupe", "--prefix", "depth", "--for
 
 def extract_snapshot(snapshot, destination, archive):
     with archive.open("wb") as stream:
+        # Git archive applies checkout conversions, including the Windows CRLF default.
         subprocess.run([
-            "git", "-C", snapshot.repository, "archive", "--format=tar", snapshot.revision,
+            "git", "-C", snapshot.repository, "-c", "core.autocrlf=false", "-c", "core.eol=lf",
+            "archive", "--format=tar", snapshot.revision,
         ], stdout=stream, check=True)
     with tarfile.open(archive, "r:") as contents:
         contents.extractall(destination, filter="data")
