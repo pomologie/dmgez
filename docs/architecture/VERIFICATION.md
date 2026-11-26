@@ -73,6 +73,21 @@ These counts reflect the end-to-end project and archive smokes. The instrumented
 
 The composed CLI fault test builds a verified unsigned UDRO project, damages one payload byte, and invokes the default ad hoc signing command. It checks exit status 2, the integrity diagnostic, an empty stdout, preservation of the damaged input, and absence of a signed output or private stage. The pinned Rust build with HFS+ `a1b870f` passed 18 project CLI tests and two binary unit tests on arm64 macOS. [Project release tests](../../apps/dmgez-cli/tests/project_build/release.rs)
 
+At dmgez `017b843` and HFS+ `a1b870f`, the optimized composed CLI with default features plus `inspect` passed its 12-test project suite, the native UDRO and UDZO smokes, and the offline archive smoke. The measurement used separate process profiles from that same compiled CLI. The smoke generated 29 CLI profiles and the project tests generated 21 more. The comparison excluded 103 profiles from other binaries. The filtered merge had no LLVM warnings. A trial merge that included those binaries emitted ten function mismatches and was excluded from qualification.
+
+| Package | Lines covered by smokes → combined | Branches covered by smokes → combined |
+| --- | ---: | ---: |
+| `dmgez-cli` | 469 → 516 / 1,085 | 28 → 33 / 132 |
+| `dmgez-runtime` | 582 → 622 / 1,260 | 67 → 76 / 170 |
+| `dmgez-builder` | 1,434 → 1,532 / 4,567 | 123 → 149 / 781 |
+| `dmgez-config` | 397 → 474 / 809 | 48 → 61 / 158 |
+| `dmgez-udif` | 1,503 → 1,512 / 2,031 | 166 → 168 / 346 |
+| `dmgez-signing` | 544 → 549 / 882 | 46 → 47 / 148 |
+| `dmgez-hfsplus` | 535 → 541 / 852 | 25 → 27 / 78 |
+| `hfsplus-builder` | 1,258 → 1,258 / 1,980 | 83 → 83 / 174 |
+
+All mapped file denominators matched across the two runs. The inventory is in `target/verification-evidence/v0.1.0-verification/017b843-composed-cli-only-coverage.json` with SHA-256 `e48338f980e9ede2d1b19e64d54662c01961f36757f59a0d3cbc8fcb1e939452`. The coverage review for lower-level fault and property tests remains open under D-VER-01.
+
 The detailed UDIF replay at `9b68c63` reproduced the per-file totals above. The exported source counters showed no rejected outcome at the empty-table check and the reversed-fragment comparison. The block-map decoder rejects an empty table before normalization, and the positioned-window Kani harness tests arbitrary fragment ordering. The LLVM summary also reports one uncovered cache branch even though the merged source-location counters show both outcomes for every exported cache condition. The per-file summaries and condition counters are in `target/verification-evidence/v0.1.0-verification/9b68c63-branch-conditions.json` with SHA-256 `56fc87dfa490f2b3fe9510012353185ac7931469685311e8dca68b28415ee85d`.
 
 The positioned read-window regression at `e89d1e0` checks a reversed fragment, a fragment starting before the request, a buffer one byte too short, and exact-fit and empty windows at the end of the address space. All 19 reader-only unit tests and strict Clippy passed. The matching nightly instrumentation passed 116 all-feature tests and measured `index.rs` at 98.48% lines and 90.38% branches (47 of 52). The cache branch discrepancy and workspace coverage review remain open.
