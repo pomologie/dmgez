@@ -88,11 +88,13 @@ fn plans_and_publishes_one_verified_bundle_without_overwrite() {
 		fs::symlink_metadata(bundle.join(LINK))
 			.unwrap()
 			.permissions()
-			.mode() & MODE_BITS,
+			.mode()
+			& MODE_BITS,
 		fs::symlink_metadata(root.join(BUNDLE).join(LINK))
 			.unwrap()
 			.permissions()
-			.mode() & MODE_BITS,
+			.mode()
+			& MODE_BITS,
 	);
 	#[cfg(target_os = "macos")]
 	assert_eq!(fs::read(binary.join(NATIVE_FORK)).unwrap(), RESOURCE);

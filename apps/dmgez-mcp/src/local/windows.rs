@@ -89,7 +89,8 @@ impl LocalRoot {
 			.as_os_str()
 			.encode_wide()
 			.take(MAX_PATH_UTF16 + 1)
-			.count() > MAX_PATH_UTF16
+			.count()
+			> MAX_PATH_UTF16
 		{
 			return Err(invalid_root());
 		}

@@ -351,14 +351,16 @@ fn assert_native_reachable_data(report: &Value) -> &Value {
 			.as_str()
 			.unwrap()
 			.parse::<u64>()
-			.unwrap() > 0
+			.unwrap()
+			> 0
 	);
 	assert!(
 		check["charged_read_bytes"]
 			.as_str()
 			.unwrap()
 			.parse::<u64>()
-			.unwrap() > 0
+			.unwrap()
+			> 0
 	);
 	check
 }

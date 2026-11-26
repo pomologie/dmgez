@@ -224,7 +224,8 @@ mod unix {
 			fs::metadata(&fixture.executable)
 				.unwrap()
 				.permissions()
-				.mode() & MODE_MASK,
+				.mode()
+				& MODE_MASK,
 			EXECUTABLE_MODE
 		);
 	}
@@ -327,7 +328,8 @@ mod unix {
 			fs::metadata(&fixture.executable)
 				.unwrap()
 				.permissions()
-				.mode() & MODE_MASK,
+				.mode()
+				& MODE_MASK,
 			EXECUTABLE_MODE
 		);
 	}
@@ -373,7 +375,8 @@ mod unix {
 			fs::metadata(&fixture.executable)
 				.unwrap()
 				.permissions()
-				.mode() & MODE_MASK,
+				.mode()
+				& MODE_MASK,
 			NONEXECUTABLE_MODE
 		);
 		assert!(!fixture.output.exists());

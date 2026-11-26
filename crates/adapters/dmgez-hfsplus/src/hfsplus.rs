@@ -11,9 +11,9 @@ use dmgez_builder::{
 	},
 	progress::BuildProgress,
 };
-use dmgez_config::{Capacity, Project, VirtualPath};
 #[cfg(feature = "finder-write")]
 use dmgez_config::Filesystem;
+use dmgez_config::{Capacity, Project, VirtualPath};
 use dmgez_udif::writer::Cancellation;
 use hfsplus_builder::{
 	SealedPlan,
@@ -147,7 +147,8 @@ pub fn prepare_with_progress<'project>(
 		},
 	)?;
 	#[cfg(not(feature = "finder-write"))]
-	let build = planning::prepare_with_progress(project, config_dir, options, cancellation, progress)?;
+	let build =
+		planning::prepare_with_progress(project, config_dir, options, cancellation, progress)?;
 	Ok(PreparedHfsBuild { project, build })
 }
 

@@ -32,11 +32,15 @@ fn stored_name(name: &str) -> Result<String, Box<dyn StdError + Send + Sync>> {
 }
 
 fn comparison_key(name: &str) -> Result<Vec<u16>, Box<dyn StdError + Send + Sync>> {
-	Ok(VolumeFormat::HfsPlus.name_collation().key(normalize(name)?.as_units())?)
+	Ok(VolumeFormat::HfsPlus
+		.name_collation()
+		.key(normalize(name)?.as_units())?)
 }
 
 fn binary_comparison_key(name: &str) -> Result<Vec<u16>, Box<dyn StdError + Send + Sync>> {
-	Ok(VolumeFormat::HfsX.name_collation().key(normalize(name)?.as_units())?)
+	Ok(VolumeFormat::HfsX
+		.name_collation()
+		.key(normalize(name)?.as_units())?)
 }
 
 pub(super) fn account_assets(
