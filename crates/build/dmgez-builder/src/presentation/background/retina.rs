@@ -24,6 +24,7 @@ use super::{
 	},
 };
 
+mod orientation;
 #[cfg(test)]
 mod tests;
 
@@ -254,8 +255,11 @@ fn compatible_icc<'a>(
 	png: &[u8],
 	gray: bool,
 ) -> Result<Option<&'a [u8]>, Error> {
-	// Orientation or HDR metadata would change how the pixels are displayed.
-	if info.exif_metadata.is_some()
+	// Preserve the orientation and color appearance of the decoded samples.
+	if info
+		.exif_metadata
+		.as_deref()
+		.is_some_and(|exif| !orientation::is_top_left(exif))
 		|| info.coding_independent_code_points.is_some()
 		|| info.mastering_display_color_volume.is_some()
 		|| info.content_light_level.is_some()

@@ -131,6 +131,49 @@ fn validates_pair_dimensions_and_refuses_uncaptured_color_semantics() {
 }
 
 #[test]
+fn accepts_upright_exif_without_changing_retina_samples() {
+	// The PaintCraft artwork's EXIF has an ExifIFD pointer and no orientation.
+	const DIMENSIONS_ONLY: &[u8] = b"MM\x00*\x00\x00\x00\x08\x00\x01\x87\x69\x00\x04\
+	\x00\x00\x00\x01\x00\x00\x00\x1a\x00\x00\x00\x00\x00\x02\xa0\x02\x00\x04\
+	\x00\x00\x00\x01\x00\x00\x02\x80\xa0\x03\x00\x04\x00\x00\x00\x01\x00\x00\x00\xa0\
+	\x00\x00\x00\x00";
+	const UPRIGHT: &[u8] = b"II*\x00\x08\x00\x00\x00\x01\x00\x12\x01\x03\x00\
+	\x01\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00";
+	const ROTATED: &[u8] = b"MM\x00*\x00\x00\x00\x08\x00\x01\x01\x12\x00\x03\
+	\x00\x00\x00\x01\x00\x06\x00\x00\x00\x00\x00\x00";
+	let mut base = Info::with_size(1, 1);
+	base.exif_metadata = Some(DIMENSIONS_ONLY.into());
+	let base = png(base, &[42]);
+	let samples = [12, 13, 14, 15];
+	let mut retina = Info::with_size(2, 2);
+	retina.exif_metadata = Some(UPRIGHT.into());
+	let profile = profile();
+	let result = encode(
+		&base,
+		&png(retina.clone(), &samples),
+		MEMORY_BYTES,
+		METADATA_BYTES,
+		&profile,
+	)
+	.unwrap();
+	let mut tiff = Decoder::new(Cursor::new(result)).unwrap();
+	assert!(matches!(tiff.read_image().unwrap(), DecodingResult::U8(pixels) if pixels == [42]));
+	tiff.next_image().unwrap();
+	assert!(matches!(tiff.read_image().unwrap(), DecodingResult::U8(pixels) if pixels == samples));
+	retina.exif_metadata = Some(ROTATED.into());
+	assert!(matches!(
+		encode(
+			&base,
+			&png(retina, &samples),
+			MEMORY_BYTES,
+			METADATA_BYTES,
+			&profile
+		),
+		Err(Error::BackgroundRetinaPngFormat)
+	));
+}
+
+#[test]
 fn enforces_separate_working_and_output_caps() {
 	let base = png(Info::with_size(1, 1), &[0]);
 	let retina = png(Info::with_size(2, 2), &[12, 13, 14, 15]);
