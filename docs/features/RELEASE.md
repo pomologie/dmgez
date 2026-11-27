@@ -24,6 +24,8 @@ The `ab33cd6` provenance SHA-256 is `559e0f922f80ed9c6166475ded2c173ea28b2c4c8c6
 
 On arm64 macOS, Rust and Cargo 1.98.0 installed the exact `ab33cd6` Cargo archive, built and verified the unsigned and signed examples in both formats, and ran a fresh consumer using the public builder and reader. The compiler versions and smoke log are in `target/verification-evidence/v0.1.0-verification/ab33cd6-minimum-rust/`.
 
+The Rust 1.98.0 replay of that same archive also checked that the public builder resolves output relative to the manifest and refuses a second build without changing the existing DMG. The consumer reopened the original image and verified its checksums. The transcript is in `target/verification-evidence/v0.1.0-verification/ab33cd6-registry-no-clobber/` with SHA-256 `730dc79475b26cf282305e749560f40346797927ecadbd8bc6fde79f8ab62904`.
+
 An independent macOS composition of dmgez `e0ac797` with the later HFS+ revision `9add11a` passed all 12 project CLI cases, the public library integration test, and 29 runtime tests.
 
 An arm64 macOS source composition at dmgez `4d56633`, HFS+ `e4a1b2e`, and APFS `fe6cf42` passed 60 hosted tests across the project CLI, public Rust API, runtime, APFS verification, and volume commands. The composed CLI reproduced all four signed and unsigned UDRO and UDZO reference hashes and verified the HFS+ payloads with 7-Zip. The record and transcripts are in `target/verification-evidence/v0.1.0-verification/4d56633-sibling-main-replay/`. The record SHA-256 is `6f095debf793cc27d7bc08ff07d9a2e39259affda631f2b72ba1203da0eb16d8`.

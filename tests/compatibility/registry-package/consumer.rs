@@ -1,4 +1,4 @@
-use std::{env, error::Error, path::PathBuf};
+use std::{env, error::Error, fs, path::PathBuf};
 
 use dmgez::{
 	dmgbuilder::{Mode, Outcome, Project},
@@ -7,6 +7,7 @@ use dmgez::{
 
 fn main() -> Result<(), Box<dyn Error>> {
 	let manifest = PathBuf::from(env::args_os().nth(1).ok_or("expected a manifest path")?);
+	let project_directory = manifest.canonicalize()?.parent().unwrap().to_path_buf();
 	let project = Project::open(&manifest)?;
 	let Outcome::Planned {
 		output: Some(path),
@@ -16,6 +17,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 	else {
 		return Err("expected a file-backed plan".into());
 	};
+	assert_eq!(path.parent(), Some(project_directory.as_path()));
 	assert!(!path.exists());
 	let Outcome::Built {
 		output: Some(output),
@@ -26,6 +28,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 		return Err("expected a published image".into());
 	};
 	assert_eq!(output, path);
+	let published = fs::read(&output)?;
+	assert!(project.run(Mode::Build).is_err());
+	assert_eq!(fs::read(&output)?, published);
 	let mut image = Dmg::open(&output)?;
 	assert_eq!(image.logical_bytes(), logical_bytes);
 	assert_eq!(image.physical_bytes(), physical_bytes);
