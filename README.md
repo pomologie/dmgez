@@ -84,12 +84,12 @@ Compose `installer-test` to check the finished image with `dmgez test installer.
 
 ## Build from a TOML project
 
-The ordinary Cargo workspace builds the raw-image CLI. To enable `dmgez build`, compose the standalone CLI with the unpublished HFS+ packages on macOS, Linux, or Windows. Use Python 3.11 or newer and the Rust toolchain pinned in this checkout. Supply a sibling `hfsplus` checkout containing commit `a1b870fd04ef7b6ec7e9c5dbfd3f0cc1bf42c48b`.
+The ordinary Cargo workspace builds the raw-image CLI. To enable `dmgez build`, compose the standalone CLI with the unpublished HFS+ packages on macOS, Linux, or Windows. Use Python 3.11 or newer and the Rust toolchain pinned in this checkout. Supply a sibling `hfsplus` checkout containing commit `ba00b162234f80b1dadd1733420306941d6ff797`.
 
 Run from the dmgez checkout. Set the manifest and output paths for your project. The build resolves `[image].output` and asset paths relative to `dmg.toml`. Upload the verified output file from that path in your CI job.
 
 ```sh
-git -C ../hfsplus checkout --detach a1b870fd04ef7b6ec7e9c5dbfd3f0cc1bf42c48b
+git -C ../hfsplus checkout --detach ba00b162234f80b1dadd1733420306941d6ff797
 python3 tools/compose_hfsplus_cli.py --hfsplus ../hfsplus --fetch --release --features inspect
 target/hfsplus-cli/release/dmgez build path/to/dmg.toml --dry-run
 target/hfsplus-cli/release/dmgez build path/to/dmg.toml
@@ -99,7 +99,7 @@ target/hfsplus-cli/release/dmgez verify path/to/installer.dmg --container
 On Windows, place `dmg.toml` and its assets in a project directory on local NTFS, such as `$env:LOCALAPPDATA\Temp\dmgez-project`. Keep the output on the same local filesystem. The Windows adapter reports metadata it cannot observe. Strict builds refuse required metadata loss. [Windows source profile](docs/reference/WINDOWS_SOURCES.md)
 
 ```powershell
-git -C ..\hfsplus checkout --detach a1b870fd04ef7b6ec7e9c5dbfd3f0cc1bf42c48b
+git -C ..\hfsplus checkout --detach ba00b162234f80b1dadd1733420306941d6ff797
 py -3 tools\compose_hfsplus_cli.py --hfsplus ..\hfsplus --fetch --release --features inspect
 $projectDirectory = Join-Path $env:LOCALAPPDATA 'Temp\dmgez-project'
 $manifest = Join-Path $projectDirectory 'dmg.toml'
@@ -111,7 +111,7 @@ $image = Join-Path $projectDirectory 'installer.dmg'
 
 `--fetch` primes Cargo's cache using the workspace lockfile. The composer then builds with the supplied HFS+ packages in a temporary workspace with frozen dependencies. Use `--hfsplus-packages PATH` for unpacked 0.1.0 packages, `--no-default-features --features build` for serial builds with Finder support, or `--test` to run the build integration tests. [Project build fixtures](tests/compatibility/project-build/README.md)
 
-The workflow runs on manual dispatch from the default branch. It needs the pinned HFS+ commit available to GitHub Actions. For a private HFS+ checkout, configure `HFSPLUS_READ_TOKEN` with read-only access to that repository. The default GitHub token suffices for a public checkout. The workflow verifies and compares its own fixture artifacts. The NTFS path passed a Windows-target compilation check. Native Windows runtime qualification remains pending. [Cross-platform DMG project build workflow](.github/workflows/project-build.yml)
+The workflow runs on pushes to `main` and on manual dispatch. It checks out the pinned HFS+ revision and builds, signs, and verifies its fixtures on macOS, Linux, and Windows. The Windows job exercises the project on NTFS. [Cross-platform DMG project build workflow](.github/workflows/project-build.yml) · [Release qualification](docs/features/RELEASE.md#v010-release-profile)
 
 Compose `project-edit` to preview a typed TOML edit batch and rebuild to a verified unsigned image at a fresh path. [Edit and rebuild a project](docs/features/ADVANCED.md#edit-and-rebuild-a-project)
 
