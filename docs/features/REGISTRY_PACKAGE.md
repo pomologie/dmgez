@@ -9,22 +9,26 @@ cargo install dmgez --locked
 dmgez --version
 ```
 
-From the source package, use the included `examples/offline-cli` project. The manifest resolves input and output paths relative to its own directory.
+Copy `examples/offline-cli/dmg.toml` and `examples/offline-cli/hello.txt` from the source package or source checkout into an `examples/offline-cli` directory in your writable workspace. Run these commands from that workspace. Paths declared in the manifest resolve relative to the manifest directory.
 
 ```sh
 dmgez build examples/offline-cli/dmg.toml --dry-run
-dmgez build examples/offline-cli/dmg.toml --release
-dmgez verify examples/offline-cli/example.dmg --container
-dmgez sign verify examples/offline-cli/example.dmg --backend rust
+dmgez build examples/offline-cli/dmg.toml --release --set image.output=examples/offline-cli/example-adhoc.dmg
+dmgez verify examples/offline-cli/example-adhoc.dmg --container
+dmgez sign verify examples/offline-cli/example-adhoc.dmg --backend rust
 ```
 
-`--release` applies the example's `[signing]` section and ad hoc signs the DMG. Omit `--release` for an unsigned build.
+`--release` applies the example's `[signing]` section and ad hoc signs the DMG. The command-line output override is relative to the working directory. The Rust example below uses the manifest's default output, `example.dmg`.
 
 ## Use the Rust library
 
 ```sh
+cargo new --bin dmgez-example
+cd dmgez-example
 cargo add dmgez
 ```
+
+Copy both example files into `examples/offline-cli` inside `dmgez-example`. Put the Rust example below in `src/main.rs` and run `cargo run` from the project root.
 
 Use `dmgez::dmgbuilder` to plan or build unsigned images from a `dmg.toml`. Use `dmgez::reader` to open a DMG, read bytes in its decoded address space, and verify its declared container checksums.
 
