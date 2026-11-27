@@ -76,8 +76,8 @@ impl Project {
 	}
 
 	/// Plan or build the unsigned image. The published path follows the manifest's
-	/// output and overwrite settings. Configured signing stages require the
-	/// explicit CLI release workflow.
+	/// output and overwrite settings. On Windows, the destination must be new.
+	/// Configured signing stages require the explicit CLI release workflow.
 	///
 	/// # Errors
 	///
