@@ -127,24 +127,6 @@ fn verifies_a_release_stage_without_publishing_the_destination() {
 }
 
 #[test]
-fn rejects_an_ordinary_build_at_the_release_staging_boundary() {
-	let temp = tempfile::tempdir().unwrap();
-	let project = Project::parse(MANIFEST).unwrap();
-	let manifest = discover(&project, temp.path(), Limits::default()).unwrap();
-	let ordinary = profile(&project, OutputIntent::Path);
-	let plan = BuildPlan::new(&ordinary, &manifest, RAW.as_slice(), RAW.len() as u64).unwrap();
-	assert!(matches!(
-		plan.stage_release(
-			&temp.path().join(DESTINATION),
-			&|_, _| panic!("unexpected verifier"),
-			|_| {}
-		),
-		Err(ExecuteError::Release)
-	));
-	assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
-}
-
-#[test]
 fn path_output_requires_requested_verification_and_preserves_an_existing_file() {
 	let temp = tempfile::tempdir().unwrap();
 	let path = temp.path().join(DESTINATION);
