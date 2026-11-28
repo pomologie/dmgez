@@ -138,6 +138,21 @@ fn admits_reversed_pages_and_exact_cross_unit_resolution() {
 }
 
 #[test]
+fn admits_single_page_tiff_with_physical_resolution() {
+	let bytes = tiff(&STANDARD_PAGES[..1]);
+	validate(&bytes, TEST_WORKING_MEMORY, &execution_profile()).unwrap();
+}
+
+#[test]
+fn admits_single_page_deflate_tiff_without_physical_resolution_units() {
+	let bytes = tiff_with_compression(
+		&[(1, ResolutionUnit::None, 1, 1)],
+		Compression::Deflate(DeflateLevel::default()),
+	);
+	validate(&bytes, TEST_WORKING_MEMORY, &execution_profile()).unwrap();
+}
+
+#[test]
 fn rejects_ordinary_multipage_tiff_with_identical_page_resolutions() {
 	let bytes = tiff(&[
 		(1, ResolutionUnit::Inch, STANDARD_DPI, 1),

@@ -83,6 +83,11 @@ pub(super) fn is_tiff(bytes: &[u8]) -> bool {
 	)
 }
 
+enum Representations {
+	Single,
+	RetinaPair,
+}
+
 pub(super) fn validate(
 	bytes: &[u8],
 	available: usize,
@@ -96,7 +101,7 @@ pub(super) fn validate(
 	let working = available / DECODER_BUDGET_DIVISOR;
 	let raster_limit = (available - values - working).min(MAX_RASTER_BYTES);
 
-	validate_directories(bytes, values / BYTES_PER_IFD_VALUE)?;
+	let representations = validate_directories(bytes, values / BYTES_PER_IFD_VALUE)?;
 	let mut limits = Limits::default();
 	limits.ifd_value_size = values;
 	limits.intermediate_buffer_size = working;
@@ -105,23 +110,30 @@ pub(super) fn validate(
 	let mut decoder = Decoder::new(StripSource::new(bytes, &span))
 		.map_err(tiff_error)?
 		.with_limits(limits);
-	let first = Representation::read(&mut decoder, raster_limit)?;
-	validate_strips(&mut decoder, &span, bytes, raster_limit, profile)?;
-	decoder.next_image().map_err(tiff_error)?;
-	let second = Representation::read(&mut decoder, raster_limit)?;
-	let (base, retina) = if first.width < second.width {
-		(first, second)
-	} else {
-		(second, first)
+	let dimensions = validate_raster(&mut decoder, raster_limit)?;
+	let first = match representations {
+		Representations::Single => None,
+		Representations::RetinaPair => Some(Representation::read(&mut decoder, dimensions)?),
 	};
-	if !base.matches_retina(retina) {
-		return Err(Error::BackgroundTiffRepresentation);
-	}
 	validate_strips(&mut decoder, &span, bytes, raster_limit, profile)?;
+	if let Some(first) = first {
+		decoder.next_image().map_err(tiff_error)?;
+		let dimensions = validate_raster(&mut decoder, raster_limit)?;
+		let second = Representation::read(&mut decoder, dimensions)?;
+		let (base, retina) = if first.width < second.width {
+			(first, second)
+		} else {
+			(second, first)
+		};
+		if !base.matches_retina(retina) {
+			return Err(Error::BackgroundTiffRepresentation);
+		}
+		validate_strips(&mut decoder, &span, bytes, raster_limit, profile)?;
+	}
 	check_cancelled(profile)
 }
 
-fn validate_directories(bytes: &[u8], max_values: usize) -> Result<(), Error> {
+fn validate_directories(bytes: &[u8], max_values: usize) -> Result<Representations, Error> {
 	let order = ByteOrder::parse(bytes)
 		.filter(|&order| order.version(bytes) == Some(CLASSIC_TIFF_VERSION))
 		.ok_or(Error::BackgroundTiffRepresentation)?;
@@ -131,10 +143,13 @@ fn validate_directories(bytes: &[u8], max_values: usize) -> Result<(), Error> {
 		.and_then(|value| usize::try_from(value).ok())
 		.ok_or(Error::BackgroundTiffRepresentation)?;
 	let second_ifd = validate_directory(bytes, first_ifd, order, max_values)?;
+	if second_ifd == 0 {
+		return Ok(Representations::Single);
+	}
 	if first_ifd == second_ifd || validate_directory(bytes, second_ifd, order, max_values)? != 0 {
 		return Err(Error::BackgroundTiffRepresentation);
 	}
-	Ok(())
+	Ok(Representations::RetinaPair)
 }
 
 fn validate_directory(
@@ -342,22 +357,7 @@ struct Representation {
 }
 
 impl Representation {
-	fn read(decoder: &mut ImageDecoder<'_>, raster_limit: usize) -> Result<Self, Error> {
-		let (width, height) = decoder.dimensions().map_err(tiff_error)?;
-		let layout = decoder.image_buffer_layout().map_err(tiff_error)?;
-		if layout.complete_len > raster_limit {
-			return Err(Error::BackgroundMemory);
-		}
-		if !valid_samples(decoder)?
-			|| layout.sample_format != SampleFormat::Uint
-			|| decoder
-				.find_tag_unsigned(Tag::Orientation)
-				.map_err(tiff_error)?
-				.unwrap_or(TIFF_TOP_LEFT)
-				!= TIFF_TOP_LEFT
-		{
-			return Err(Error::BackgroundTiffRepresentation);
-		}
+	fn read(decoder: &mut ImageDecoder<'_>, (width, height): (u32, u32)) -> Result<Self, Error> {
 		let unit = ResolutionUnit::from_u16(
 			decoder
 				.find_tag_unsigned(Tag::ResolutionUnit)
@@ -379,6 +379,28 @@ impl Representation {
 			&& self.horizontal.matches_retina(retina.horizontal)
 			&& self.vertical.matches_retina(retina.vertical)
 	}
+}
+
+fn validate_raster(
+	decoder: &mut ImageDecoder<'_>,
+	raster_limit: usize,
+) -> Result<(u32, u32), Error> {
+	let dimensions = decoder.dimensions().map_err(tiff_error)?;
+	let layout = decoder.image_buffer_layout().map_err(tiff_error)?;
+	if layout.complete_len > raster_limit {
+		return Err(Error::BackgroundMemory);
+	}
+	if !valid_samples(decoder)?
+		|| layout.sample_format != SampleFormat::Uint
+		|| decoder
+			.find_tag_unsigned(Tag::Orientation)
+			.map_err(tiff_error)?
+			.unwrap_or(TIFF_TOP_LEFT)
+			!= TIFF_TOP_LEFT
+	{
+		return Err(Error::BackgroundTiffRepresentation);
+	}
+	Ok(dimensions)
 }
 
 fn valid_samples(decoder: &mut ImageDecoder<'_>) -> Result<bool, Error> {

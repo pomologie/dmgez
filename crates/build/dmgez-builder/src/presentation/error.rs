@@ -59,7 +59,7 @@ pub enum Error {
 	#[error("Finder background TIFF could not be encoded or decoded")]
 	BackgroundTiff(#[source] tiff::TiffError),
 	#[error(
-		"Finder background TIFF must contain compatible 1x and 2x representations with matching logical sizes"
+		"Finder background TIFF must contain a supported single image or a 1x and 2x pair with matching logical sizes"
 	)]
 	BackgroundTiffRepresentation,
 	#[error("Finder background alias names a different path than the captured image")]
