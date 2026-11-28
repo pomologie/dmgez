@@ -112,8 +112,13 @@ part-tables = { version = "=0.1.0", default-features = false, features = ["apm",
 ds_parser = "=0.4.0"
 
 # Image codecs
+gif = { version = "=0.14.2", default-features = false, features = ["std"] }
 icns = { version = "=0.5.0", default-features = false, features = ["pngio"] }
+image = { version = "=0.25.10", default-features = false }
+image-webp = { version = "=0.2.4", default-features = false }
 tiff = { version = "=0.11.3", default-features = false, features = ["deflate", "lzw"] }
+
+zune-jpeg = { version = "=0.5.15", default-features = false, features = ["std"] }
 
 # Serialization and configuration
 plist = { version = "=1.10.4", default-features = false }

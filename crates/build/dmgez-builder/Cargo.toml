@@ -11,7 +11,10 @@ description = "Plan and execute dmgez image builds"
 default = ["finder-write", "parallel", "zlib"]
 
 # Finder layout and icons
-finder-write = ["dep:dmgez-finder", "dep:dmgez-macho", "dep:flate2", "dep:png", "dep:tiff"]
+finder-write = [
+	"dep:dmgez-finder", "dep:dmgez-macho", "dep:flate2", "dep:gif", "dep:image",
+	"dep:image-webp", "dep:png", "dep:tiff", "dep:zune-jpeg",
+]
 volume-icon = ["finder-write", "dmgez-finder/volume-icon"]
 badge-icons = ["volume-icon", "dmgez-finder/badge-icons"]
 
@@ -44,8 +47,12 @@ dmgez-cache = { workspace = true, optional = true }
 flate2 = { workspace = true, optional = true }
 
 # Image codecs
+gif = { workspace = true, optional = true }
+image = { workspace = true, features = ["bmp"], optional = true }
+image-webp = { workspace = true, optional = true }
 png = { version = "=0.18.1", optional = true }
 tiff = { workspace = true, optional = true }
+zune-jpeg = { workspace = true, optional = true }
 
 # Partition maps and identity
 gpt = { workspace = true, optional = true }
@@ -71,6 +78,9 @@ windows-namespace-request-sys = "=0.5.1"
 windows-sys = { version = "0.61.2", features = ["Win32_Foundation", "Win32_Storage_FileSystem"] }
 
 [dev-dependencies]
+# Image fixture encoding
+image = { workspace = true, features = ["jpeg"] }
+
 # Filesystem access and staging
 tempfile.workspace = true
 

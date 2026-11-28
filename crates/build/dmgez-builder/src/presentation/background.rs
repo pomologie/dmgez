@@ -27,6 +27,7 @@ mod icc;
 mod output;
 mod prebuilt;
 mod retina;
+mod still;
 mod template;
 
 const DIRECTORY_NAME: &str = ".background";
@@ -360,13 +361,7 @@ fn capture_files(
 		(encoded, TIFF_EXTENSION)
 	} else {
 		budget.charge(bytes.capacity())?;
-		let extension = if prebuilt::is_tiff(&bytes) {
-			prebuilt::validate(&bytes, available, profile)?;
-			TIFF_EXTENSION
-		} else {
-			validate_png(&bytes, available)?;
-			PNG_EXTENSION
-		};
+		let extension = still::validate(&bytes, available, profile)?;
 		(bytes, extension)
 	};
 	check_cancelled(profile)?;

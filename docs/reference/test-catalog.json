@@ -908,9 +908,9 @@
         "D-FINDER-03"
       ],
       "milestone": "0.3.0",
-      "scenario": "1x and 2x background, root and nested folder layouts",
+      "scenario": "Static backgrounds by encoded codec and 1x and 2x backgrounds in root and nested folder layouts",
       "oracle": "native Finder; image decoder",
-      "expected": "Both resolutions/aliases correct per qualified profile",
+      "expected": "Static assets preserve source bytes and aliases target the detected format. Both Retina resolutions and aliases match the qualified profile.",
       "status": "planned",
       "evidence": null
     },

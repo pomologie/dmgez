@@ -2,7 +2,7 @@
 
 #![cfg(all(feature = "finder-write", any(unix, windows)))]
 
-use std::{fs, num::NonZeroUsize, path::Path};
+use std::{fs, io::Cursor, num::NonZeroUsize, path::Path};
 
 use dmgez_builder::{
 	manifest,
@@ -81,6 +81,84 @@ fn square_png(value: u8, side: u32) -> Vec<u8> {
 
 fn png(value: u8) -> Vec<u8> {
 	square_png(value, 1)
+}
+
+#[test]
+fn source_only_backgrounds_preserve_bytes_and_use_their_encoded_format() {
+	const SIDE: u16 = 2;
+	const PIXELS: [u8; 12] = [255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 255];
+	const GIF_INDICES: [u8; 4] = [0, 1, 2, 3];
+	let side = u32::from(SIDE);
+	let mut bmp = Vec::new();
+	image::codecs::bmp::BmpEncoder::new(&mut bmp)
+		.encode(&PIXELS, side, side, image::ExtendedColorType::Rgb8)
+		.unwrap();
+	let mut jpeg = Vec::new();
+	image::codecs::jpeg::JpegEncoder::new(&mut jpeg)
+		.encode(&PIXELS, side, side, image::ExtendedColorType::Rgb8)
+		.unwrap();
+	let mut gif = gif::Encoder::new(Vec::new(), SIDE, SIDE, &PIXELS).unwrap();
+	gif.write_frame(&gif::Frame::from_indexed_pixels(
+		SIDE,
+		SIDE,
+		GIF_INDICES,
+		None,
+	))
+	.unwrap();
+	let gif = gif.into_inner().unwrap();
+	let mut webp = Vec::new();
+	image_webp::WebPEncoder::new(&mut webp)
+		.encode(&PIXELS, side, side, image_webp::ColorType::Rgb8)
+		.unwrap();
+	let mut tiff = Vec::new();
+	tiff::encoder::TiffEncoder::new(Cursor::new(&mut tiff))
+		.unwrap()
+		.write_image::<tiff::encoder::colortype::RGB8>(side, side, &PIXELS)
+		.unwrap();
+
+	let base = tempfile::tempdir().unwrap();
+	let source = base.path().join("root.png");
+	let project = format!("{PROJECT}output = 'output.dmg'\n{ROOT_IMAGE}");
+	for (extension, bytes) in [
+		("bmp", bmp),
+		("jpg", jpeg),
+		("gif", gif),
+		("webp", webp),
+		("tiff", tiff),
+	] {
+		fs::write(&source, &bytes).unwrap();
+		let plan = prepare(&project, base.path())
+			.unwrap_or_else(|error| panic!("could not plan {extension} background: {error}"));
+		let [asset] = plan.finder_assets() else {
+			panic!("expected a single {extension} asset");
+		};
+		assert_eq!(
+			asset.path.as_str(),
+			format!("/.background/background-0.{extension}")
+		);
+		assert_eq!(asset.bytes, bytes);
+		assert_eq!(
+			plan.deferred_finder_stores()[0].background_path(),
+			&asset.path
+		);
+	}
+}
+
+#[test]
+fn rejects_animated_gif_as_a_finder_background() {
+	let base = tempfile::tempdir().unwrap();
+	let palette = [0, 0, 0, 255, 255, 255];
+	let mut encoder = gif::Encoder::new(Vec::new(), 1, 1, &palette).unwrap();
+	for index in [0, 1] {
+		let frame = gif::Frame::from_indexed_pixels(1, 1, [index], None);
+		encoder.write_frame(&frame).unwrap();
+	}
+	fs::write(base.path().join("root.png"), encoder.into_inner().unwrap()).unwrap();
+	let config = format!("{PROJECT}output = 'output.dmg'\n{ROOT_IMAGE}");
+	assert!(matches!(
+		prepare(&config, base.path()),
+		Err(planning::Error::Presentation(Error::BackgroundAnimated))
+	));
 }
 
 #[test]
@@ -286,7 +364,7 @@ fn rejects_invalid_png_and_aliased_output_and_accounts_reserved_entries() {
 	fs::write(&source, b"invalid PNG").unwrap();
 	assert!(matches!(
 		prepare(&project, base.path()),
-		Err(planning::Error::Presentation(Error::BackgroundPng(_)))
+		Err(planning::Error::Presentation(Error::BackgroundImageFormat))
 	));
 	const IMAGE_DATA: &[u8] = b"IDAT";
 	let mut corrupt = png(17);

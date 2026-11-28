@@ -44,7 +44,7 @@ pub enum Error {
 	BackgroundFileSize,
 	#[error("Finder background exceeds the admitted working memory or dimensions")]
 	BackgroundMemory,
-	#[error("animated PNG images are unsupported as Finder backgrounds")]
+	#[error("animated images are unsupported as Finder backgrounds")]
 	BackgroundAnimated,
 	#[error("Finder background source failed its identity checks")]
 	BackgroundSource(#[source] crate::manifest::Error),
@@ -52,6 +52,16 @@ pub enum Error {
 	BackgroundRead(#[source] dmgez_core::source::SourceError),
 	#[error("Finder background must be a valid PNG")]
 	BackgroundPng(#[source] png::DecodingError),
+	#[error("Finder background must be PNG, TIFF, JPEG, BMP, static GIF, or static WebP")]
+	BackgroundImageFormat,
+	#[error("could not decode the Finder background BMP")]
+	BackgroundBmp(#[source] image::ImageError),
+	#[error("could not decode the Finder background GIF")]
+	BackgroundGif(#[source] gif::DecodingError),
+	#[error("could not decode the Finder background JPEG")]
+	BackgroundJpeg(#[source] zune_jpeg::errors::DecodeErrors),
+	#[error("could not decode the Finder background WebP")]
+	BackgroundWebp(#[source] image_webp::DecodingError),
 	#[error("Retina Finder background must be twice the base width and height")]
 	BackgroundRetinaDimensions,
 	#[error("Retina Finder background PNG representation is unsupported")]

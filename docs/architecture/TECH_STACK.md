@@ -20,7 +20,7 @@ Rust edition 2024 with an explicitly pinned stable toolchain selected during boo
 | Modern codecs | `lzfse_rust`, pure Rust LZMA candidate | separate gates; exact on-disk framing requires oracle qualification; XZ wrapper is not automatically ULMO |
 | Legacy codecs | `bzip2`, native ADC decoder if needed | legacy only; choose Rust implementation if available and qualified |
 | Partition maps | `gpt`, `mbrman`, `part-tables` APM or focused candidate | optional, raw partition windows; validate independently |
-| Image processing | `png` 0.18.1, `tiff` 0.11.3, `icns`; `image` with only required codecs for GUI | Bounded Finder background capture and TIFF encoding under `finder-write`. TIFF enables LZW and Deflate for prebuilt assets. Optional project preview uses `png` and the pinned `epaint` CPU font layout. |
+| Image processing | `png` 0.18.1, `tiff` 0.11.3, `icns`, `gif` 0.14.2, `image` 0.25.10 (BMP), `image-webp` 0.2.4, `zune-jpeg` 0.5.15 | Bounded Finder background capture and TIFF encoding under `finder-write`. The GUI enables its own `image` codecs. TIFF enables LZW and Deflate for prebuilt assets. Optional project preview uses `png` and the pinned `epaint` CPU font layout. |
 | Hashing | `blake3` | diff, cache, metadata verification; not UDIF checksum replacement |
 | GUI | `egui`, `eframe`, `egui_extras`, `rfd`; native OS bindings for drag/drop | separate app, no embedded browser; own themed layout |
 | Mount | `fuser`, `winfsp`, system tools/macOS APIs, `notify` | opt-in OS adapters; drivers may be external requirements |
